@@ -1,7 +1,7 @@
 FC=gfortran
 FFLAGS_DEBUG   = -g -O3 -fcheck=all -fopenmp -Wall -fPIC
 FFLAGS_RELEASE = -O3 -fopenmp -fPIC
-FFLAGS   = $(FFLAGS_RELEASE)
+FFLAGS   = $(FFLAGS_DEBUG)
 LDFLAGS  = -lgomp $(shell pkg-config --libs cfitsio) $(shell pkg-config --libs wcslib)
 INCLUDES = wcslib-4.4.4-Fortran90
 

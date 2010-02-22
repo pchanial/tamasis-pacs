@@ -9,7 +9,7 @@ def hcssPhotProject(pacs):
         raise ValueError('Fine sampling factor should be 1 for hcssPhotProject.') # or add decimation
     model = PacsProjectionSharpEdges(pacs) 
     signal, mask = pacs.get_timeline()
-    backmap = model.transpose(applymask(signal, mask)).copy()
+    backmap = model.transpose(applymask(signal, mask)).copy('any')
     signal[:] = 1.
     weights = model.transpose(applymask(signal, mask))
     return backmap/weights
@@ -17,9 +17,11 @@ def hcssPhotProject(pacs):
 datadir = '/home/pchanial/work/pacs/data/'
 pacs = PacsObservation(filename=datadir+'transparent/NGC6946/1342184520_blue', \
                        first=20000,                 \
-                       last=86000,                  \
+                       last=30000,                  \
+                       resolution=1.,               \
                        fineSamplingFactor=1,        \
-                       npixelsPerSample=9)
+                       keepBadPixels=False,         \
+                       npixelsPerSample=19)
 
 telescope    = Identity()
 projection   = PacsProjectionSharpEdges(pacs)
@@ -31,7 +33,13 @@ compression  = CompressionAverage(pacs.compressionFactor)
 model = compression * crosstalk * multiplexing * projection * telescope
 print model
 
-map = hcssPhotProject(pacs)
+signal, mask = pacs.get_timeline()
+backmap = model.transpose(applymask(signal, mask)).copy('any')
+signal[:] = 1.
+weights = model.transpose(applymask(signal, mask))
+map = backmap/weights
+
+#map = hcssPhotProject(pacs)
 
 #ra0  = 20.
 #dec0 = 0.1

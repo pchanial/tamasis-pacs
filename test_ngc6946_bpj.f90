@@ -83,7 +83,7 @@ program test_ngc6946_bpj
     write(*,'(a)', advance='no') 'Computing the projector... '
     allocate(pmatrix(9,last-first+1,pacs%ndetectors))
     call system_clock(count1, count_rate, count_max)
-    call pacs%compute_projection_sharp_edges(pointing, time, wcs, nx, pmatrix)
+    call pacs%compute_projection_sharp_edges(pointing, time, wcs, nx, nx, pmatrix)
     call system_clock(count2, count_rate, count_max)
     write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
 

@@ -2,3 +2,21 @@
 *.mod
 *~
 
+.cproject
+.project
+.settings/
+tamasis.pyc
+tamasisfortran.so
+test_cfitsio
+test_fitstools
+test_ngc6946_bpj
+test_pacs
+test_pointing
+test_projection
+test_read_config
+test_sort
+test_stack
+test_stdio
+test_wcslib1
+test_wcslib2
+test_wcslibc

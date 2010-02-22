@@ -124,11 +124,11 @@ class AcquisitionModel(object):
         self.blocks[index] = value
         try:
             self.validate()
-        except ValidationError:
+        except ValidationError as inst:
             self.blocks[index] = oldvalue
             self.shapeIn = oldshapeIn
             self.shapeOut = oldshapeOut
-            raise ValidationError('Incompatible component.')
+            raise inst
 
     def __iter__(self):
         if len(self) == 0:
@@ -173,7 +173,7 @@ class PacsProjectionSharpEdges(AcquisitionModel):
         self.header = pacs.header
         self.shapeIn = (pacs.header["naxis1"], pacs.header["naxis2"])
         self.shapeOut = (pacs.nfineSamples, pacs.ndetectors) 
-        tmmf.pacs_pointing_matrix_array(pacs.pointingTime, pacs.ra, pacs.dec, pacs.pa, pacs.chop, pacs.fineTime, pacs.npixelsPerSample, pacs.ndetectors, pacs.array, pacs.transparentMode, str(pacs.header).replace('\n', ''), self.pmatrix)
+        tmmf.pacs_pointing_matrix(pacs.array, pacs.pointingTime, pacs.ra, pacs.dec, pacs.pa, pacs.chop, pacs.fineTime, pacs.npixelsPerSample, pacs.ndetectors, pacs.transparentMode, pacs.badPixelMask.astype('int8'), pacs.keepBadPixels, str(pacs.header).replace('\n', ''), self.pmatrix)
 
     def direct(self, map2d):
         self._ensureAllocatedDirect(self.validateDirect(map2d.shape))
@@ -384,16 +384,16 @@ class _Pacs():
         
         if badPixelMask is None:
             badPixelMaskFile = join(getenv('TAMASIS_DIR'),'data','PCalPhotometer_BadPixelMask_FM_v3.fits')
-            badPixelMask = fitsopen(badPixelMaskFile)[self.array].data
+            badPixelMask = numpy.array(fitsopen(badPixelMaskFile)[self.array].data, order='fortran')
         else:
             arrayShapes = {'blue':(32,64), 'green':(32,64), 'red':(16,32)}
             if badPixelMask.shape != arrayShapes[self.array]:
                 raise ValueError('Input bad pixel mask has incorrect shape '+str(badPixelMask.shape)+' instead of '+str(arrayShapes[self.array]))
-        self.badPixelMask = badPixelMask.copy()
+        self.badPixelMask = badPixelMask.copy('fortran').astype(bool)
         if self.transparentMode:
-            self.badPixelMask[:,0:16] = 1
-            self.badPixelMask[16:32,16:32] = 1
-            self.badPixelMask[:,32:] = 1
+            self.badPixelMask[:,0:16] = True
+            self.badPixelMask[16:32,16:32] = True
+            self.badPixelMask[:,32:] = True
         self.keepBadPixels = keepBadPixels
 
         self.ndetectors = self.badPixelMask.size
@@ -497,7 +497,8 @@ class PacsObservation(_Pacs):
         if resolution is None:
             resolution = 3.
         if header is None:
-            header = self._str2fitsheader(tmmf.pacs_map_header_file(filename, self.transparentMode, first, last, self.fineSamplingFactor, self.compressionFactor, resolution))
+            header = self._str2fitsheader(tmmf.pacs_map_header(array, time, ra, dec, pa, chop, fineTime, self.transparentMode, self.badPixelMask.astype('int8'), keepBadPixels, resolution))
+
         self.header = header
 
         self.filename = filename
@@ -511,8 +512,12 @@ class PacsObservation(_Pacs):
         """
         Returns the signal and mask timelines as fortran arrays.
         """
-        signal, mask = tmmf.pacs_timeline(self.filename, self.transparentMode, self.first+1, self.last, self.ndetectors)
+        signal, mask = tmmf.pacs_timeline(self.filename, self.array, self.first+1, self.last, self.ndetectors, self.transparentMode, self.badPixelMask, self.keepBadPixels)
         mask = numpy.array(mask, dtype=bool)
+        if self.keepBadPixels:
+           for idetector, badPixel in enumerate(self.badPixelMask.flat):
+               if badPixel:
+                   mask[:,idetector] = True
         return signal, mask
    
 
@@ -560,7 +565,272 @@ class PacsSimulation(_Pacs):
         """
         Returns simulated signal and mask (=None) timelines.
         """
-        return model.direct(self.inputmap), None
+        signal = model.direct(self.inputmap)
+        if self.keepBadPixels:
+            mask = numpy.zeros(signal.shape, dtype=bool, order='fortran')
+            for idetector, badPixel in enumerate(self.badPixelMask.flat):
+                if badPixel:
+                    mask[:,idetector] = True
+        else:
+            mask = None
+
+        return signal, mask
+    
+
+
+
+#-------------------------------------------------------------------------------
+#
+# Map class
+#
+#-------------------------------------------------------------------------------
+
+
+
+class Map(numpy.ndarray):
+    """
+    A class containing  data and metadata representing a  sky map or a
+    projection  It is  an numpy  array supplemented  with localization
+    metadata and pixel physical size.
+    Author: N. Barbey
+    """
+    def __new__(subtype, shape, dtype='float64', buffer=None, offset=0,
+                strides=None, order='F',
+                position=numpy.array((0, 0)), rotation=0,
+                step=numpy.array((1, 1)), chop=0, crpix=numpy.array((1, 1))):
+        # Create the ndarray instance of our type, given the usual
+        # input arguments.  This will call the standard ndarray
+        # constructor, but return an object of our type
+        obj = numpy.ndarray.__new__(
+            subtype, shape, dtype, buffer, offset, strides, order)
+        # add the new attribute to the created instance
+        obj.position = numpy.array(position)
+        obj.rotation = rotation
+        obj.step = numpy.array(step)
+        obj.chop = chop
+        obj.crpix = numpy.array(crpix)
+        return obj
+
+    def __array_finalize__(self, obj):
+        # reset the attribute from passed original object
+        self.position = getattr(obj, 'position', numpy.array((0, 0)))
+        self.rotation = getattr(obj, 'rotation', 0)
+        self.step = getattr(obj, 'step', numpy.array((1, 1)))
+        self.chop = getattr(obj, 'chop', 0)
+        self.crpix = getattr(obj, 'crpix', numpy.array((1, 1)))
+        # We do not need to return anything
+
+    def __repr__(self):
+        str_rep = "values:\n %s" % self
+        str_rep += "\n position:\n %s" % self.position
+        str_rep += "\n rotation:\n %s" % self.rotation
+        str_rep += "\n step:\n %s" % self.step
+        str_rep += "\n chop:\n %s" % self.chop
+        str_rep += "\n crpix:\n %s" % self.crpix
+        return str_rep
+
+    def __copy__(self, order='C'):
+        array_copy = numpy.ndarray.__copy__(self[:], order)
+        new_map = Map(array_copy.shape, position=self.position,
+                      rotation=self.rotation, step=self.step,
+                      chop=self.chop, crpix=self.crpix)
+        new_map[:] = array_copy
+        return new_map
+
+    def __reduce__(self):
+        object_state = list(numpy.ndarray.__reduce__(self))
+        subclass_state = (self.position, self.rotation, self.step, 
+                          self.chop, self.crpix)
+        object_state[2] = (object_state[2], subclass_state)
+        return tuple(object_state)
+
+    def __setstate__(self, state):
+        nd_state, own_state = state
+        numpy.ndarray.__setstate__(self, nd_state)
+        position, rotation, step, chop = own_state
+        self.position = position
+        self.rotation = rotation
+        self.step = step
+        self.chop = chop
+        self.crpix = crpix
+
+    def copy(self):
+        return self.__copy__()
+
+    def zeros(self):
+        """Copy a Map instance replacing data values with zeros"""
+        new_map = self.copy()
+        new_map[:] = numpy.zeros(new_map.shape)
+        return new_map
+
+    def ones(self):
+        """Copy a Map instance replacing data values with zeros"""
+        new_map = self.copy()
+        new_map[:] = numpy.ones(new_map.shape)
+        return new_map
+
+    def imshow(self, n_figure=None, axis=True, title_str=None):
+        """A simple graphical display function for the Map class"""
+        from matplotlib.pyplot import gray, figure, imshow, colorbar, \
+            draw, show, xlabel, ylabel, title
+        gray()
+        if n_figure==None:
+            figure()
+        else:
+            figure(n_figure)
+        no_nan = self.copy()
+        no_nan[numpy.where(numpy.isnan(no_nan))] = 0
+        if axis:
+            (x, y) = self.axis()
+            imshow(no_nan, extent=(numpy.min(y), numpy.max(y),
+                                   numpy.min(x), numpy.max(x)),
+                   interpolation='nearest')
+            xlabel("right ascension (degrees)")
+            ylabel("declination")
+        else:
+            imshow(no_nan, interpolation='nearest')
+        if title_str is not None:
+            title(title_str)
+        if n_figure==None:
+            colorbar()
+        draw()
+
+    def axis(self):
+        """Returns axis vectors of a Map"""
+        return [self.position[i] + self.step[i] *
+                numpy.array(range(self.shape[i])) for i in xrange(2)]
+
+    @property
+    def header(self):
+        return self.header
+
+    @header.setter
+    def header(self, header):
+        import pyfits
+        if header is not None and not isinstance(header, pyfits.Header):
+            raise TypeError('Incorrect type for the input header.') 
+        self.header = header
+
+#    def header(self):
+#        """Convert a Map instance parameters to a fits-like header"""
+#        header = {
+#            'NAXIS' : len(self.shape),
+#            'NAXIS1': self.shape[0],
+#            'NAXIS2': self.shape[1],
+#            'CTYPE1': 'RA---TAN',
+#            'CUNIT1': 'deg',
+#            'CRVAL1': self.position[0],
+#            'CRPIX1': self.crpix[0],
+#            'CDELT1': self.step[0],
+#            'CTYPE2': 'DEC--TAN',
+#            'CUNIT2': 'deg',
+#            'CRVAL2': self.position[1],
+#            'CRPIX2': self.crpix[1],
+#            'CDELT2': self.step[1],
+#            'CROTA2': self.rotation
+#            }
+#        return header
+
+
+#    def pyfits_header(self):
+#        h_dict = self.header()
+#        cards = list()
+#        for key in h_dict.keys():
+#            cards.append(pyfits.Card(key=key, value=h_dict[key]))
+#        cardlist = pyfits.CardList(cards)
+#        header = pyfits.Header(cardlist)
+#        return header
+
+#    def header_str(self):
+#        hs = self.pyfits_header().__str__()
+#        hs = hs.replace('\n', '')
+#        return hs
+
+#    def str2fitsheader(string):
+#        """
+#        Convert a string into a pyfits.Header object
+#        All cards are extracted from the input string until the END keyword is reached
+#        """
+#        import pyfits
+#        header = pyfits.Header()
+#        cards = header.ascardlist()
+#        iline = 0
+#        while (iline*80 < len(string)):
+#            line = string[iline*80:(iline+1)*80]
+#            cards.append(pyfits.Card().fromstring(line))
+#            if line[0:3] == 'END': break
+#            iline += 1
+#        return header
+
+    def writefits(self, filename):
+        """Save map instance to a fits file given a filename
+        
+        If the same file already exist it overwrites it.
+        It should correspond to the input required by the PACS simulator
+        """
+        from pyfits import PrimaryHDU
+        from os.path import isfile
+        from os import remove
+        hdu = PrimaryHDU(self, self.header)
+        try:
+            remove(filename)
+        except OSError:
+            pass
+        try:
+            hdu.writeto(filename)
+        except IOError:
+            pass
+
+#    def to_fits(self, filename):
+#        """Save map instance to a fits file given a filename
+#        
+#        If the same file already exist it overwrites it.
+#        It should correspond to the input required by the PACS simulator
+#        """
+#        from pyfits import PrimaryHDU
+#        from os.path import isfile
+#        from os import remove
+#        hdu = PrimaryHDU(self)
+#        h = self.header()
+#        for key in h.keys():
+#            hdu.header.update(key, h[key])
+#        try:
+#            remove(filename)
+#        except OSError:
+#            pass
+#        try:
+#            hdu.writeto(filename)
+#        except IOError:
+#            pass
+
+    def bin(self, factor):
+        """Bin the Map image and change step accordingly"""
+        from scipy.signal import convolve2d
+        from csh import map_data
+        out = self[:]
+        mask = numpy.ones((factor, factor))
+        out = convolve2d(out, mask, 'same')[1::factor, 1::factor]
+        out = map_data(out,
+                       position=self.position,
+                       rotation=self.rotation,
+                       step=self.step * factor,
+                       chop=self.chop, crpix=self.crpix)
+        return out
+
+    def crop(self, rect):
+        from csh import map_data
+        """Crop the Map image according to a rectangle in pixel
+        coordinates"""
+        out = self[:]
+        out = out[rect[0]:rect[2], rect[1]:rect[3]]
+        new_position = self.position + rect[0:2] * self.step
+        out = map_data(out,
+                       position=new_position,
+                       rotation=self.rotation,
+                       step=self.step,
+                       chop=self.chop,
+                       crpix=self.crpix)
+        return out
 
     
 

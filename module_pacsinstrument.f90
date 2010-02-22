@@ -8,8 +8,8 @@ module module_pacsinstrument
     use string, only : strlowcase
     implicit none
 
-    integer, parameter :: shape_blue(2) = [64, 32]
-    integer, parameter :: shape_red (2) = [32, 16]
+    integer, parameter :: shape_blue(2) = [32, 64]
+    integer, parameter :: shape_red (2) = [16, 32]
     integer, parameter :: ndims = 2
     integer, parameter :: nvertices = 4
     integer, parameter :: distortion_degree = 3
@@ -101,24 +101,24 @@ contains
 
         call ft_readextension(get_calfile(filename_bpm) // '[blue]', tmplogical, status)
         call ft_printerror(status, filename_bpm // '[blue]')
-        this%mask_blue = tmplogical
+        this%mask_blue = transpose(tmplogical)
 
         call ft_readextension(get_calfile(filename_bpm) // '[red]', tmplogical, status)
         call ft_printerror(status, filename_bpm // '[red]')
-        this%mask_red = tmplogical
+        this%mask_red = transpose(tmplogical)
 
 
         ! read flat fields
 
         call ft_readextension(get_calfile(filename_ff) // '+5',  tmp2, status)
         call ft_printerror(status, filename_ff // '+5')
-        this%flatfield_blue = tmp2
+        this%flatfield_blue = transpose(tmp2)
         call ft_readextension(get_calfile(filename_ff) // '+8', tmp2, status)
         call ft_printerror(status, filename_ff // '+8')
-        this%flatfield_green = tmp2
+        this%flatfield_green = transpose(tmp2)
         call ft_readextension(get_calfile(filename_ff) // '+2',   tmp2, status)
         call ft_printerror(status, filename_ff // '+2')
-        this%flatfield_red = tmp2
+        this%flatfield_red = transpose(tmp2)
 
 
         ! read detector corners in the (u,v) plane
@@ -127,16 +127,16 @@ contains
 
             call ft_readextension(get_calfile(filename_saa), tmp2, status, hdu_blue(ivertex)  )
             call ft_printerror(status, filename_saa)
-            this%corners_uv_blue(1,ivertex,:,:) = tmp2
+            this%corners_uv_blue(1,ivertex,:,:) = transpose(tmp2)
             call ft_readextension(get_calfile(filename_saa), tmp2, status, hdu_blue(ivertex)+1)
             call ft_printerror(status, filename_saa)
-            this%corners_uv_blue(2,ivertex,:,:) = tmp2
+            this%corners_uv_blue(2,ivertex,:,:) = transpose(tmp2)
             call ft_readextension(get_calfile(filename_saa), tmp2, status, hdu_red (ivertex)  )
             call ft_printerror(status, filename_saa)
-            this%corners_uv_red (1,ivertex,:,:) = tmp2
+            this%corners_uv_red (1,ivertex,:,:) = transpose(tmp2)
             call ft_readextension(get_calfile(filename_saa), tmp2, status, hdu_red (ivertex)+1)
             call ft_printerror(status, filename_saa)
-            this%corners_uv_red (2,ivertex,:,:) = tmp2
+            this%corners_uv_red (2,ivertex,:,:) = transpose(tmp2)
 
         end do
 
@@ -254,21 +254,24 @@ contains
     !-------------------------------------------------------------------------------
 
 
-    subroutine filter_detectors(this, side, transparent_mode)
+    subroutine filter_detectors(this, side, transparent_mode, keep_bad_pixels)
 
         class(pacsinstrument), intent(inout)   :: this
         character(len=*), intent(in), optional :: side
         logical, intent(in), optional          :: transparent_mode
+        logical, intent(in), optional          :: keep_bad_pixels
 
         if (present(side)) then
             if (strlowcase(side) == 'red') then
                 call filter_detectors_array(this, this%mask_red, this%corners_uv_red, this%distortion_yz_red, &
-                                            this%flatfield_red, transparent_mode=transparent_mode)
+                                            this%flatfield_red, transparent_mode=transparent_mode,            &
+                                            keep_bad_pixels=keep_bad_pixels)
                 return
             else if (strlowcase(side) == 'green') then
                 write(*,*) 'Check calibration files for the green band...'
                 call filter_detectors_array(this, this%mask_blue, this%corners_uv_blue, this%distortion_yz_blue, &
-                                            this%flatfield_green, transparent_mode=transparent_mode)
+                                            this%flatfield_green, transparent_mode=transparent_mode,             &
+                                            keep_bad_pixels=keep_bad_pixels)
                 return
             else if (strlowcase(side) /= 'blue') then
                 write (*,*) "FILTER_DETECTORS: invalid array side ('blue', 'green' or 'red'): " // strlowcase(side)
@@ -277,7 +280,8 @@ contains
         endif
 
         call filter_detectors_array(this, this%mask_blue, this%corners_uv_blue, this%distortion_yz_blue, &
-                                    this%flatfield_blue, transparent_mode=transparent_mode)
+                                    this%flatfield_blue, transparent_mode=transparent_mode,              &
+                                    keep_bad_pixels=keep_bad_pixels)
 
     end subroutine filter_detectors
 
@@ -285,7 +289,7 @@ contains
     !-------------------------------------------------------------------------------
 
 
-    subroutine filter_detectors_array(this, mask, uv, distortion, flatfield, transparent_mode)
+    subroutine filter_detectors_array(this, mask, uv, distortion, flatfield, transparent_mode, keep_bad_pixels)
 
         class(pacsinstrument), intent(inout)    :: this
         logical*1, intent(in), target :: mask(:,:)
@@ -293,9 +297,10 @@ contains
         real*8, intent(in)            :: distortion(:,:,:,:)
         real*8, intent(in)            :: flatfield(:,:)
         logical, intent(in), optional :: transparent_mode
+        logical, intent(in), optional :: keep_bad_pixels
 
         integer                       :: idetector, p, q
-        logical                       :: transmode
+        logical                       :: transmode, keepbadpixels
 
         if (present(transparent_mode)) then
             transmode = transparent_mode
@@ -303,18 +308,27 @@ contains
             transmode = .false.
         end if
 
-        this%nrows    = size(mask, 2)
-        this%ncolumns = size(mask, 1)
+        if (present(keep_bad_pixels)) then
+            keepbadpixels = keep_bad_pixels
+        else
+            keepbadpixels = .false.
+        end if
 
-        allocate(this%mask(this%ncolumns, this%nrows))
+        this%nrows    = size(mask, 1)
+        this%ncolumns = size(mask, 2)
+
+        allocate(this%mask(this%nrows, this%ncolumns))
         this%mask => mask
 
         if (transmode) then
             this%mask(1:16,1:16) = .true.
-            this%mask(33: ,1:16) = .true.
-            this%mask(:,17:)     = .true.
-        endif
-        this%ndetectors = size(this%mask) - count(this%mask)
+            this%mask(1:16,33:)  = .true.
+            this%mask(17:,:)     = .true.
+        end if
+        this%ndetectors = size(this%mask)
+        if (.not. keepbadpixels) then
+            this%ndetectors = this%ndetectors - count(this%mask)
+        end if
 
         allocate(this%ij(ndims, this%ndetectors))
         allocate(this%pq(ndims, this%ndetectors))
@@ -327,13 +341,13 @@ contains
 
         do p = 0, this%nrows - 1
             do q = 0, this%ncolumns - 1
-                if (this%mask(q+1, p+1)) cycle
+                if (this%mask(p+1,q+1) .and. .not. keepbadpixels) cycle
                 this%pq(1, idetector) = p
                 this%pq(2, idetector) = q
                 this%ij(1, idetector) = mod(p, 16)
                 this%ij(2, idetector) = mod(q, 16)
-                this%corners_uv(:,nvertices * (idetector-1)+1:nvertices*idetector) = uv(:,:,q+1, p+1)
-                this%flatfield(idetector) = flatfield(q+1, p+1)
+                this%corners_uv(:,nvertices * (idetector-1)+1:nvertices*idetector) = uv(:,:,p+1,q+1)
+                this%flatfield(idetector) = flatfield(p+1,q+1)
                 idetector = idetector + 1
             end do
         end do
@@ -392,22 +406,21 @@ contains
 
         real*8             :: a_pow, ratio
         integer            :: n, i, j, k, l
-        real*8             :: u_pow(size(uv,2)), v_pow(size(uv,2)), ones(size(uv,2))
+        real*8             :: u_pow(size(uv,2)), v_pow(size(uv,2))
 
         yz = 0
         n = size(uv,2)
-        ones = 1
         do k = 1, distortion_degree
             if (k /= 1) then
                 u_pow = u_pow * uv(1,:)
             else
-                u_pow = ones
+                u_pow = 1.d0
             endif
             do j = 1, distortion_degree
               if (j /= 1) then
                   v_pow = v_pow * uv(2,:)
               else
-                  v_pow = ones
+                  v_pow = 1.d0
               end if
               do i = 1, distortion_degree
                   if (i /= 1) then
@@ -478,9 +491,9 @@ contains
 
 
     recursive function xy2roi(xy) result(roi)
-        real*8, intent(in)  :: xy(:,:)
-        real*8              :: roi(ndims,2,size(xy,2)/nvertices)
-        integer             :: idetector
+        real*8, intent(in) :: xy(:,:)
+        real*8             :: roi(ndims,2,size(xy,2)/nvertices)
+        integer            :: idetector
 
         do idetector = 1, size(xy,2) / nvertices
             roi(:,1,idetector) = nint(minval(xy(:,nvertices * (idetector-1)+1:nvertices*idetector),2))
@@ -493,45 +506,43 @@ contains
     !------------------------------------------------------------------------------
 
 
-    recursive subroutine roi2pmatrix(this, roi, coords, nx, isample, pmatrix)
+    recursive subroutine roi2pmatrix(this, roi, coords, nx, ny, isample, nroi, pmatrix)
         class(pacsinstrument), intent(in)    :: this
         integer, intent(in)                  :: roi(ndims,2,this%ndetectors)
         real*8, intent(in)                   :: coords(ndims,this%ndetectors*nvertices)
         type(pointingelement), intent(inout) :: pmatrix(:,:,:)
-        integer, intent(in)                  :: nx, isample
+        integer, intent(in)                  :: nx, ny, isample
+        integer, intent(out)                 :: nroi
         real*8                               :: polygon(2,nvertices)
 
         integer                              :: npixels_per_sample, idetector, ix, iy, iroi, ipixel, ibad
         real*8                               :: weight
 
+        ipixel = 0
         ibad = 0
+        nroi = 0
         npixels_per_sample = size(pmatrix, 1)
         do idetector = 1, this%ndetectors
             iroi = 1
-            do_roi: do iy = roi(2,1,idetector), roi(2,2,idetector)
-                do ix = roi(1,1,idetector), roi(1,2,idetector)
+            do_roi: do iy = max(roi(2,1,idetector),1), min(roi(2,2,idetector),ny)
+                do ix = max(roi(1,1,idetector),1), min(roi(1,2,idetector),nx)
                     ipixel = ix - 1 + (iy - 1) * nx
-                    if (ipixel < 0) then
-                        ibad = ibad + 1
-                        write (*,'(5(a,i5),2(a,i5,",",i5),2(a,4f8.5))') 'det: ', idetector, &
-                              'isample: ', isample, 'ix: ', ix, ', iy: ', iy, ', iroi: ', iroi, &
-                              ', xminmax: ', roi(1,:,idetector), ', yminmax: ', roi(2,:,idetector), &
-                              ', xcoords: ', coords(1,(idetector-1)*nvertices+1:idetector*nvertices), &
-                              ', ycoords: ', coords(2,(idetector-1)*nvertices+1:idetector*nvertices)
-                        if (ibad == 100) stop "too many bad pixels"
-                    end if
-
                     polygon(1,:) = coords(1,(idetector-1)*nvertices+1:idetector*nvertices) - (ix-0.5d0)
                     polygon(2,:) = coords(2,(idetector-1)*nvertices+1:idetector*nvertices) - (iy-0.5d0)
                     weight = abs(intersection_polygon_unity_square(polygon, nvertices))
-                    !XXX SHOULD DO: if weight less than threshold skip it (don't increment iroi
-                    pmatrix(iroi,isample,idetector)%pixel  = ipixel
-                    pmatrix(iroi,isample,idetector)%weight = weight
+                    !XXX SHOULD DO: if weight less than threshold skip it
+                    if (weight <= 0) cycle
+                    if (iroi <= npixels_per_sample) then
+                        pmatrix(iroi,isample,idetector)%pixel  = ipixel
+                        pmatrix(iroi,isample,idetector)%weight = weight
+                    end if
                     iroi = iroi + 1
-                    if (iroi > npixels_per_sample) exit do_roi
                 end do
             end do do_roi
-            ! if iroi /= npixels_per_sample + 1, fill the rest of pointing matrix
+            ! fill the rest of the pointing matrix
+            pmatrix(iroi:,isample,idetector)%pixel  = ipixel
+            pmatrix(iroi:,isample,idetector)%weight = 0
+            nroi = max(nroi, iroi-1)
         end do
 
     end subroutine roi2pmatrix
@@ -635,17 +646,17 @@ contains
     !------------------------------------------------------------------------------
 
 
-    subroutine compute_projection_sharp_edges(this, pointing, time, wcs, nx, pmatrix)
+    subroutine compute_projection_sharp_edges(this, pointing, time, wcs, nx, ny, pmatrix)
 
         class(pacsinstrument), intent(in)    :: this
         class(pacspointing), intent(in)      :: pointing
         real*8, intent(in)                   :: time(:)
         integer, intent(in)                  :: wcs(WCSLEN)
-        integer, intent(in)                  :: nx
+        integer, intent(in)                  :: nx, ny
         type(pointingelement), intent(out)   :: pmatrix(:,:,:)
 
         real*8  :: coords(ndims,this%ndetectors*nvertices), ra, dec, pa, chop
-        integer :: roi(ndims,2,this%ndetectors), isample, nsamples, npixels_per_sample, index
+        integer :: roi(ndims,2,this%ndetectors), isample, nsamples, npixels_per_sample, nroi, index
 
         nsamples = size(time)
         npixels_per_sample = -1
@@ -659,8 +670,8 @@ contains
             coords = this%yz2ad(coords, ra, dec, pa)
             coords = this%ad2xy(coords, wcs)
             roi    = this%xy2roi(coords) ! [1=x|2=y,1=min|2=max,idetector]
-            npixels_per_sample = max(npixels_per_sample, maxval((roi(1,2,:)-roi(1,1,:)+1)*(roi(2,2,:)-roi(2,1,:)+1)))
-            call this%roi2pmatrix(roi, coords, nx, isample, pmatrix)
+            call this%roi2pmatrix(roi, coords, nx, ny, isample, nroi, pmatrix)
+            npixels_per_sample = max(npixels_per_sample, nroi)
         end do
         !$omp end parallel do
         if (npixels_per_sample /= size(pmatrix,1)) then
