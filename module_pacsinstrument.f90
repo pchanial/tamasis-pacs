@@ -52,9 +52,9 @@ module module_pacsinstrument
     contains
 
         procedure         :: read_calibration_files
+        procedure         :: filter_detectors
         procedure         :: read_signal_file
         procedure         :: read_mask_file
-        procedure         :: filter_detectors
         procedure         :: compute_mapheader
         procedure         :: find_minmax
         procedure         :: compute_projection_sharp_edges
@@ -254,24 +254,24 @@ contains
     !-------------------------------------------------------------------------------
 
 
-    subroutine filter_detectors(this, side, transparent_mode, keep_bad_pixels)
+    subroutine filter_detectors(this, side, transparent_mode, keep_bad_detectors)
 
         class(pacsinstrument), intent(inout)   :: this
         character(len=*), intent(in), optional :: side
         logical, intent(in), optional          :: transparent_mode
-        logical, intent(in), optional          :: keep_bad_pixels
+        logical, intent(in), optional          :: keep_bad_detectors
 
         if (present(side)) then
             if (strlowcase(side) == 'red') then
                 call filter_detectors_array(this, this%mask_red, this%corners_uv_red, this%distortion_yz_red, &
                                             this%flatfield_red, transparent_mode=transparent_mode,            &
-                                            keep_bad_pixels=keep_bad_pixels)
+                                            keep_bad_detectors=keep_bad_detectors)
                 return
             else if (strlowcase(side) == 'green') then
                 write(*,*) 'Check calibration files for the green band...'
                 call filter_detectors_array(this, this%mask_blue, this%corners_uv_blue, this%distortion_yz_blue, &
                                             this%flatfield_green, transparent_mode=transparent_mode,             &
-                                            keep_bad_pixels=keep_bad_pixels)
+                                            keep_bad_detectors=keep_bad_detectors)
                 return
             else if (strlowcase(side) /= 'blue') then
                 write (*,*) "FILTER_DETECTORS: invalid array side ('blue', 'green' or 'red'): " // strlowcase(side)
@@ -281,7 +281,7 @@ contains
 
         call filter_detectors_array(this, this%mask_blue, this%corners_uv_blue, this%distortion_yz_blue, &
                                     this%flatfield_blue, transparent_mode=transparent_mode,              &
-                                    keep_bad_pixels=keep_bad_pixels)
+                                    keep_bad_detectors=keep_bad_detectors)
 
     end subroutine filter_detectors
 
@@ -289,7 +289,7 @@ contains
     !-------------------------------------------------------------------------------
 
 
-    subroutine filter_detectors_array(this, mask, uv, distortion, flatfield, transparent_mode, keep_bad_pixels)
+    subroutine filter_detectors_array(this, mask, uv, distortion, flatfield, transparent_mode, keep_bad_detectors)
 
         class(pacsinstrument), intent(inout)    :: this
         logical*1, intent(in), target :: mask(:,:)
@@ -297,10 +297,10 @@ contains
         real*8, intent(in)            :: distortion(:,:,:,:)
         real*8, intent(in)            :: flatfield(:,:)
         logical, intent(in), optional :: transparent_mode
-        logical, intent(in), optional :: keep_bad_pixels
+        logical, intent(in), optional :: keep_bad_detectors
 
         integer                       :: idetector, p, q
-        logical                       :: transmode, keepbadpixels
+        logical                       :: transmode, keepbaddetectors
 
         if (present(transparent_mode)) then
             transmode = transparent_mode
@@ -308,10 +308,10 @@ contains
             transmode = .false.
         end if
 
-        if (present(keep_bad_pixels)) then
-            keepbadpixels = keep_bad_pixels
+        if (present(keep_bad_detectors)) then
+            keepbaddetectors = keep_bad_detectors
         else
-            keepbadpixels = .false.
+            keepbaddetectors = .false.
         end if
 
         this%nrows    = size(mask, 1)
@@ -326,7 +326,7 @@ contains
             this%mask(17:,:)     = .true.
         end if
         this%ndetectors = size(this%mask)
-        if (.not. keepbadpixels) then
+        if (.not. keepbaddetectors) then
             this%ndetectors = this%ndetectors - count(this%mask)
         end if
 
@@ -341,7 +341,7 @@ contains
 
         do p = 0, this%nrows - 1
             do q = 0, this%ncolumns - 1
-                if (this%mask(p+1,q+1) .and. .not. keepbadpixels) cycle
+                if (this%mask(p+1,q+1) .and. .not. keepbaddetectors) cycle
                 this%pq(1, idetector) = p
                 this%pq(2, idetector) = q
                 this%ij(1, idetector) = mod(p, 16)
