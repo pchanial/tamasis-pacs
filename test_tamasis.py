@@ -1,43 +1,31 @@
-from tamasis import Identity, CompressionAverage, PacsProjectionSharpEdges, PacsMultiplexing, PacsObservation, applymask
-
-def hcssPhotProject(pacs):
-    """
-    Returns a map, as calculated by HCSS's PhotProject
-    Inplace substitutions can affect inputs.
-    """
-    if pacs.fineSamplingFactor != 1:
-        raise ValueError('Fine sampling factor should be 1 for hcssPhotProject.') # or add decimation
-    model = PacsProjectionSharpEdges(pacs) 
-    signal, mask = pacs.get_timeline()
-    backmap = model.transpose(applymask(signal, mask)).copy('any')
-    signal[:] = 1.
-    weights = model.transpose(applymask(signal, mask))
-    return backmap/weights
+from tamasis import Identity, CompressionAverage, PacsProjectionSharpEdges, PacsMultiplexing, Masking, PacsObservation, PacsSimulation, Map, Tod
 
 datadir = '/home/pchanial/work/pacs/data/'
 pacs = PacsObservation(filename=datadir+'transparent/NGC6946/1342184520_blue', \
                        first=20000,                 \
-                       last=30000,                  \
-                       resolution=1.,               \
+                       last=21000,                  \
+                       resolution=3.,               \
                        fineSamplingFactor=1,        \
-                       keepBadPixels=False,         \
-                       npixelsPerSample=19)
+                       keepBadDetectors=False,         \
+                       npixelsPerSample=6)
+tod = pacs.get_tod()
 
-telescope    = Identity()
+telescope    = Identity('Telescope PSF')
 projection   = PacsProjectionSharpEdges(pacs)
 #multiplexing = PacsMultiplexing(pacs)
-multiplexing = CompressionAverage(pacs.fineSamplingFactor)
-crosstalk    = Identity()
+multiplexing = CompressionAverage(pacs.fineSamplingFactor, 'Multiplexing')
+crosstalk    = Identity('Crosstalk')
 compression  = CompressionAverage(pacs.compressionFactor)
+masking      = Masking(tod.mask)
 
-model = compression * crosstalk * multiplexing * projection * telescope
+model = masking * compression * crosstalk * multiplexing * projection * telescope
 print model
 
-signal, mask = pacs.get_timeline()
-backmap = model.transpose(applymask(signal, mask)).copy('any')
-signal[:] = 1.
-weights = model.transpose(applymask(signal, mask))
-map = backmap/weights
+mymap = model.transpose(tod).copy()
+tod[:] = 1.
+weights = model.transpose(tod)
+mymap /= weights
+mymap.writefits('/home/pchanial/work/tamasis/ngc6946.fits')
 
 #map = hcssPhotProject(pacs)
 
