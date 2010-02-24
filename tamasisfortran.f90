@@ -84,8 +84,8 @@ end subroutine pacs_info_nsamples
 !-------------------------------------------------------------------------------
 
 
-subroutine pacs_timeline(filename, array, first, last, ndetectors, transparent_mode, bad_pixel_mask, nrow, ncol, keep_bad_pixels,  &
-                         signal, mask)
+subroutine pacs_timeline(filename, array, first, last, ndetectors, transparent_mode, bad_pixel_mask, nrow, ncol, &
+                         keep_bad_detectors, signal, mask)
     use module_pacsinstrument
     use module_preprocessor
     implicit none
@@ -99,7 +99,7 @@ subroutine pacs_timeline(filename, array, first, last, ndetectors, transparent_m
     !f2py intent(in)  :: transparent_mode
     !f2py intent(in)  :: bad_pixel_mask
     !f2py intent(hide), depend(bad_pixel_mask) :: nrow = shape(bad_pixel_mask,0), ncol = shape(bad_pixel_mask,1)
-    !f2py intent(in)  :: keep_bad_pixels
+    !f2py intent(in)  :: keep_bad_detectors
     !f2py intent(out) :: signal
     !f2py intent(out) :: mask
     character(len=*), intent(in) :: filename
@@ -109,7 +109,7 @@ subroutine pacs_timeline(filename, array, first, last, ndetectors, transparent_m
     logical, intent(in)          :: transparent_mode
     logical, intent(in)          :: bad_pixel_mask(nrow,ncol)
     integer, intent(in)          :: nrow, ncol
-    logical, intent(in)          :: keep_bad_pixels
+    logical, intent(in)          :: keep_bad_detectors
     real*8, intent(out)          :: signal(last-first+1, ndetectors)
     logical*1, intent(out)       :: mask(last-first+1, ndetectors)
 
@@ -122,7 +122,7 @@ subroutine pacs_timeline(filename, array, first, last, ndetectors, transparent_m
     else
         pacs%mask_red = bad_pixel_mask
     end if
-    call pacs%filter_detectors(array, transparent_mode=transparent_mode, keep_bad_pixels=keep_bad_pixels)
+    call pacs%filter_detectors(array, transparent_mode=transparent_mode, keep_bad_detectors=keep_bad_detectors)
     call pacs%read_signal_file(filename // '_Signal.fits', first, last, signal)
     call pacs%read_mask_file(filename // '_Mask.fits', first, last, mask)
     call divide_vectordim2(signal, pacs%flatfield)
@@ -135,7 +135,7 @@ end subroutine pacs_timeline
 
 
 subroutine pacs_map_header(array, time, ra, dec, pa, chop, npointings, finetime, nfinesamples, &
-                           transparent_mode, bad_pixel_mask, nrow, ncol, keep_bad_pixels, resolution, header)
+                           transparent_mode, bad_pixel_mask, nrow, ncol, keep_bad_detectors, resolution, header)
 
     use module_fitstools
     use module_pacsinstrument
@@ -151,7 +151,7 @@ subroutine pacs_map_header(array, time, ra, dec, pa, chop, npointings, finetime,
     !f2py intent(in)   :: transparent_mode
     !f2py intent(in)   :: bad_pixel_mask
     !f2py intent(hide), depend(bad_pixel_mask) :: nrow = shape(bad_pixel_mask,0), ncol = shape(bad_pixel_mask,1)
-    !f2py intent(in)   :: keep_bad_pixels
+    !f2py intent(in)   :: keep_bad_detectors
     !f2py intent(in)   :: resolution
     !f2py intent(out)  :: header
 
@@ -163,7 +163,7 @@ subroutine pacs_map_header(array, time, ra, dec, pa, chop, npointings, finetime,
     logical, intent(in)                :: transparent_mode
     logical, intent(in)                :: bad_pixel_mask(nrow,ncol)
     integer, intent(in)                :: nrow, ncol
-    logical, intent(in)                :: keep_bad_pixels
+    logical, intent(in)                :: keep_bad_detectors
     real*8, intent(in)                 :: resolution
     character(len=2880), intent(out)   :: header
 
@@ -182,7 +182,7 @@ subroutine pacs_map_header(array, time, ra, dec, pa, chop, npointings, finetime,
     else
         pacs%mask_red = bad_pixel_mask
     end if
-    call pacs%filter_detectors(array, transparent_mode=transparent_mode, keep_bad_pixels=keep_bad_pixels)
+    call pacs%filter_detectors(array, transparent_mode=transparent_mode, keep_bad_detectors=keep_bad_detectors)
     if (any(pacs%mask .neqv. bad_pixel_mask)) then
         write (*,'(a)') 'Info: using user bad pixel mask for the blue array.'
     end if
@@ -196,7 +196,7 @@ end subroutine pacs_map_header
 
 
 subroutine pacs_pointing_matrix(array, time, ra, dec, pa, chop, npointings, finetime, nfinesamples, npixels_per_sample, &
-                                ndetectors, transparent_mode, bad_pixel_mask, nrow, ncol, keep_bad_pixels, header, pmatrix)
+                                ndetectors, transparent_mode, bad_pixel_mask, nrow, ncol, keep_bad_detectors, header, pmatrix)
 
     use module_fitstools
     use module_pacsinstrument
@@ -215,7 +215,7 @@ subroutine pacs_pointing_matrix(array, time, ra, dec, pa, chop, npointings, fine
     !f2py intent(in)   :: transparent_mode
     !f2py intent(in)   :: bad_pixel_mask
     !f2py intent(hide), depend(bad_pixel_mask) :: nrow = shape(bad_pixel_mask,0), ncol = shape(bad_pixel_mask,1)
-    !f2py intent(in)   :: keep_bad_pixels
+    !f2py intent(in)   :: keep_bad_detectors
     !f2py intent(in)   :: header
     !f2py integer*8, dimension(npixels_per_sample*nfinesamples*ndetectors), intent(inout) :: pmatrix
 
@@ -229,7 +229,7 @@ subroutine pacs_pointing_matrix(array, time, ra, dec, pa, chop, npointings, fine
     logical, intent(in)                  :: transparent_mode
     logical, intent(in)                  :: bad_pixel_mask(nrow,ncol)
     integer, intent(in)                  :: nrow, ncol
-    logical, intent(in)                  :: keep_bad_pixels
+    logical, intent(in)                  :: keep_bad_detectors
     character(len=*), intent(in)         :: header
     type(pointingelement), intent(inout) :: pmatrix(npixels_per_sample, nfinesamples, ndetectors)
 
@@ -249,7 +249,7 @@ subroutine pacs_pointing_matrix(array, time, ra, dec, pa, chop, npointings, fine
     else
         pacs%mask_red = bad_pixel_mask
     end if
-    call pacs%filter_detectors(array, transparent_mode=transparent_mode, keep_bad_pixels=keep_bad_pixels)
+    call pacs%filter_detectors(array, transparent_mode=transparent_mode, keep_bad_detectors=keep_bad_detectors)
     if (any(pacs%mask .neqv. bad_pixel_mask)) then
         write (*,'(a)') 'Info: using user bad pixel mask for the blue array.'
     end if
