@@ -1,12 +1,13 @@
 from tamasis import Identity, CompressionAverage, PacsProjectionSharpEdges, PacsMultiplexing, Masking, PacsObservation, PacsSimulation, Map, Tod
+from copy import copy
 
 datadir = '/home/pchanial/work/pacs/data/'
 pacs = PacsObservation(filename=datadir+'transparent/NGC6946/1342184520_blue', \
                        first=20000,                 \
-                       last=21000,                  \
+                       last=26000,                  \
                        resolution=3.,               \
                        fineSamplingFactor=1,        \
-                       keepBadDetectors=False,         \
+                       keepBadDetectors=False,      \
                        npixelsPerSample=6)
 tod = pacs.get_tod()
 
@@ -21,7 +22,7 @@ masking      = Masking(tod.mask)
 model = masking * compression * crosstalk * multiplexing * projection * telescope
 print model
 
-mymap = model.transpose(tod).copy()
+mymap = copy(model.transpose(tod))
 tod[:] = 1.
 weights = model.transpose(tod)
 mymap /= weights
