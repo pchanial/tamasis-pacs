@@ -96,8 +96,7 @@ class AcquisitionModel(object):
         if self.outputDirect is not None and shapeOut == self.outputDirect.shape:
             return
         print 'Info: allocating '+str(numpy.product(shapeOut)/2.**17)+' MiB for the output of '+self.__class__.__name__
-        self.outputDirect = numpy.ndarray.__new__(cls, shapeOut, dtype=numpy.float64, order='fortran')
-        self.outputDirect.__init__(options)
+        self.outputDirect = cls.empty(shapeOut, dtype=numpy.float64, order='fortran', **options)
 
     def validateOutputTranspose(self, cls, shapeIn, **options):
         if shapeIn is None:
@@ -105,8 +104,7 @@ class AcquisitionModel(object):
         if self.outputTranspose is not None and shapeIn == self.outputTranspose.shape:
             return
         print 'Info: allocating '+str(numpy.product(shapeIn)/2.**17)+' MiB for the output of the transpose of '+self.__class__.__name__
-        self.outputTranspose = numpy.ndarray.__new__(cls, shapeIn, dtype=numpy.float64, order='fortran')
-        self.outputTranspose.__init__(options)
+        self.outputTranspose = cls.empty(shapeIn, dtype=numpy.float64, order='fortran', **options)
 
     shapeIn         = None   # input is unconstrained
     shapeOut        = None   # output is unconstrained
@@ -646,13 +644,38 @@ class PacsSimulation(_Pacs):
 
 class FitsMaskedArray(numpy.ma.MaskedArray):
 
-    def __init__(self, data, header=None, **options):
-        self.header = header
-        self.set_fill_value(0)
+    def __new__(cls, data, dtype=None, copy=False, mask=numpy.ma.nomask, header=None):
+        result = numpy.ma.MaskedArray(data, dtype=dtype, copy=copy, mask=mask)
+        result = result.view(cls)
+        if header is not None:
+            result.header = header
+        elif hasattr(data, 'header'):
+            result.header = data.header
+        else:
+            result.header = None
+        return result
 
-    def copy(self, order='any'):
-        newheader = None if self.header is None else self.header.copy()
-        return FitsMaskedArray(super(FitsMaskedArray,self).copy(order), header=newheader)
+    def __array_finalize__(self, obj):
+        numpy.ma.MaskedArray.__array_finalize__(self, obj)
+        if obj is None: return
+        self.header = getattr(obj, '_header', None)
+
+    def __array_wrap__(self, obj, context=None):
+        result = numpy.ma.MaskedArray.__array_wrap__(self, obj, context=context).view(type(self))
+        result.header = self.header
+        return result
+
+    @staticmethod
+    def empty(shape, dtype='float64', order='C', header=None):
+        return FitsMaskedArray(numpy.ma.empty(shape, dtype, order), header=header)
+
+    @staticmethod
+    def ones(shape, dtype='float64', order='C', header=None):
+        return FitsMaskedArray(numpy.ma.ones(shape, dtype, order), header=header)
+
+    @staticmethod
+    def zeros(shape, dtype='float64', order='C', header=None):
+        return FitsMaskedArray(numpy.ma.zeros(shape, dtype, order), header=header)
 
     @property
     def header(self):
@@ -693,6 +716,33 @@ class FitsMaskedArray(numpy.ma.MaskedArray):
 
 class Map(FitsMaskedArray):
 
+    def __new__(cls, data, dtype=None, copy=False, mask=numpy.ma.nomask, header=None):
+        result = FitsMaskedArray(data, dtype=dtype, copy=copy, mask=mask, header=header)
+        result = result.view(cls)
+        return result
+
+    def __array_finalize__(self, obj):
+        FitsMaskedArray.__array_finalize__(self, obj)
+        if obj is None: return
+        self.mytoddata = getattr(obj, 'mytoddata', None)
+
+    def __array_wrap__(self, obj, context=None):
+        result = FitsMaskedArray.__array_wrap__(self, obj, context=context).view(type(self))
+        result.header = self.header
+        return result
+
+    @staticmethod
+    def empty(shape, dtype='float64', order='C', header=None):
+        return Map(FitsMaskedArray.empty(shape, dtype, order, header=header))
+
+    @staticmethod
+    def ones(shape, dtype='float64', order='C', header=None):
+        return Map(FitsMaskedArray.ones(shape, dtype, order, header=header))
+
+    @staticmethod
+    def zeros(shape, dtype='float64', order='C', header=None):
+        return Map(FitsMaskedArray.zeros(shape, dtype, order, header=header))
+
     def imshow(self, num=None, axis=True, title=None):
         """A simple graphical display function for the Map class"""
         from matplotlib.pyplot import gray, figure, imshow, colorbar, \
@@ -719,8 +769,32 @@ class Map(FitsMaskedArray):
 
 class Tod(FitsMaskedArray):
 
-     def __init__(self, bad_detectors=None, **options):
-         self.bad_detectors = bad_detectors
+    def __new__(cls, data, dtype=None, copy=False, mask=numpy.ma.nomask, header=None):
+        result = FitsMaskedArray(data, dtype=dtype, copy=copy, mask=mask, header=header)
+        result = result.view(cls)
+        return result
+
+    def __array_finalize__(self, obj):
+        FitsMaskedArray.__array_finalize__(self, obj)
+        if obj is None: return
+        self.mytoddata = getattr(obj, 'mytoddata', None)
+
+    def __array_wrap__(self, obj, context=None):
+        result = FitsMaskedArray.__array_wrap__(self, obj, context=context).view(type(self))
+        result.header = self.header
+        return result
+
+    @staticmethod
+    def empty(shape, dtype='float64', order='C', header=None):
+        return Tod(FitsMaskedArray.empty(shape, dtype, order, header=header))
+
+    @staticmethod
+    def ones(shape, dtype='float64', order='C', header=None):
+        return Tod(FitsMaskedArray.ones(shape, dtype, order, header=header))
+
+    @staticmethod
+    def zeros(shape, dtype='float64', order='C', header=None):
+        return Tod(FitsMaskedArray.zeros(shape, dtype, order, header=header))
 
 
 
