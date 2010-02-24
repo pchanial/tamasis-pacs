@@ -96,13 +96,13 @@ contains
 
         ! check that the input time is monotonous (and increasing)
         if (any(time(2:)-time(1:this%nsamples-1) <= 0)) then
-            write (*,*) "Input time is not strictly increasing"
+            write (*,*) "Error: the pointing time is not strictly increasing"
             stop
         endif
 
         ! check there is no time drifts to ensure that fast interpolation can be relied upon
         if (any(abs([(this%delta * (isample-1), isample = 1, this%nsamples)] - (time-time(1))) > tol * this%delta)) then
-            write (*,'(a)') "Warning: input time is not evenly spaced or is drifting."
+            write (*,'(a)') "Warning: the pointing time is not evenly spaced or is drifting."
             this%get_position => get_position_gen
         else
             this%get_position => get_position_ev
