@@ -1,22 +1,22 @@
-from tamasis import Identity, CompressionAverage, PacsProjectionSharpEdges, PacsMultiplexing, Masking, PacsObservation, PacsSimulation, Map, Tod
+from tamasis import Identity, CompressionAverage, PacsProjectionSharpEdges, PacsMultiplexing, Masking, PacsObservation, PacsSimulation, Map, Tod, hcss_photproject
 from copy import copy
 
 datadir = '/home/pchanial/work/pacs/data/'
 pacs = PacsObservation(filename=datadir+'transparent/NGC6946/1342184520_blue', \
                        first=20000,                 \
-                       last=26000,                  \
+                       last=86000,                  \
                        resolution=3.,               \
-                       fineSamplingFactor=1,        \
-                       keepBadDetectors=False,      \
-                       npixelsPerSample=6)
+                       fine_sampling_factor=1,      \
+                       keep_bad_detectors=False,    \
+                       npixels_per_sample=6)
 tod = pacs.get_tod()
 
 telescope    = Identity('Telescope PSF')
 projection   = PacsProjectionSharpEdges(pacs)
 #multiplexing = PacsMultiplexing(pacs)
-multiplexing = CompressionAverage(pacs.fineSamplingFactor, 'Multiplexing')
+multiplexing = CompressionAverage(pacs.fine_sampling_factor, 'Multiplexing')
 crosstalk    = Identity('Crosstalk')
-compression  = CompressionAverage(pacs.compressionFactor)
+compression  = CompressionAverage(pacs.compression_factor)
 masking      = Masking(tod.mask)
 
 model = masking * compression * crosstalk * multiplexing * projection * telescope
@@ -28,7 +28,7 @@ weights = model.transpose(tod)
 mymap /= weights
 mymap.writefits('/home/pchanial/work/tamasis/ngc6946.fits')
 
-#map = hcssPhotProject(pacs)
+#map = hcss_photproject(pacs)
 
 #ra0  = 20.
 #dec0 = 0.1

@@ -46,81 +46,81 @@ class AcquisitionModel(object):
             data = model.transpose(data)
         return data
 
-    def validateChainDirect(self, shapeIn):
-        self.shapeOut = shapeIn
+    def __validate_chain_direct(self, shapein):
+        self.shapeout = shapein
         for model in self:
-            self.shapeOut = model.validateShapeDirect(self.shapeOut)
+            self.shapeout = model._validate_shape_direct(self.shapeout)
 
-    def validateChainTranspose(self, shapeOut):
-        self.shapeIn = shapeOut
+    def __validate_chain_transpose(self, shapeout):
+        self.shapein = shapeout
         for model in reversed(self):
-            self.shapeIn = model.validateShapeTranspose(self.shapeIn)
+            self.shapein = model._validate_shape_transpose(self.shapein)
 
-    def validateChain(self):
-        self.validateChainDirect(None)
-        self.validateChainTranspose(None)
+    def _validate_chain(self):
+        self.__validate_chain_direct(None)
+        self.__validate_chain_transpose(None)
 
-    def validateShapeDirect(self, shapeIn):
-        if shapeIn is None or self.shapeIn is None:
-            if self.shapeOut is not None:
-               return self.shapeOut
+    def _validate_shape_direct(self, shapein):
+        if shapein is None or self.shapein is None:
+            if self.shapeout is not None:
+               return self.shapeout
             else:
-               return shapeIn
-        if shapeIn != self.shapeIn:
-            raise ValidationError('The input of '+self.__class__.__name__+' has incompatible shape '+str(shapeIn)+' instead of '+str(self.shapeIn)+'.')
-        return self.shapeOut
+               return shapein
+        if shapein != self.shapein:
+            raise ValidationError('The input of '+self.__class__.__name__+' has incompatible shape '+str(shapein)+' instead of '+str(self.shapein)+'.')
+        return self.shapeout
 
-    def validateShapeTranspose(self, shapeOut):
-        if shapeOut is None or self.shapeOut is None:
-            if self.shapeIn is not None:
-                return self.shapeIn
+    def _validate_shape_transpose(self, shapeout):
+        if shapeout is None or self.shapeout is None:
+            if self.shapein is not None:
+                return self.shapein
             else:
-                return shapeOut
-        if shapeOut != self.shapeOut:
-            raise ValidationError('The input of '+self.__class__.__name__+' transpose has incompatible shape '+str(shapeOut)+' instead of '+str(self.shapeOut)+'.')
-        return self.shapeIn
+                return shapeout
+        if shapeout != self.shapeout:
+            raise ValidationError('The input of '+self.__class__.__name__+' transpose has incompatible shape '+str(shapeout)+' instead of '+str(self.shapeout)+'.')
+        return self.shapein
 
-    def validateInputDirect(self, cls, data):
+    def _validate_input_direct(self, cls, data):
         if not isinstance(data, cls):
             raise TypeError("The input of '+self.__class__.__name+' has an invalid type '"+cls.__name__+"'.")
-        return self.validateShapeDirect(data.shape)
+        return self._validate_shape_direct(data.shape)
 
-    def validateInputTranspose(self, cls, data):
+    def _validate_input_transpose(self, cls, data):
         if not isinstance(data, cls):
             raise TypeError("The input of '+self.__class__.__name+' transpose has an invalid type '"+cls.__name__+"'.")
-        return self.validateShapeTranspose(data.shape)
+        return self._validate_shape_transpose(data.shape)
 
-    def validateOutputDirect(self, cls, shapeOut, **options):
-        if shapeOut is None:
+    def _validate_output_direct(self, cls, shapeout, **options):
+        if shapeout is None:
             raise ValueError('The shape of the output of '+self.__class__.__name__+' is not known.')
-        if self.outputDirect is not None and shapeOut == self.outputDirect.shape:
+        if self._output_direct is not None and shapeout == self._output_direct.shape:
             return
-        print 'Info: allocating '+str(numpy.product(shapeOut)/2.**17)+' MiB for the output of '+self.__class__.__name__
-        self.outputDirect = cls.empty(shapeOut, dtype=numpy.float64, order='fortran', **options)
+        print 'Info: allocating '+str(numpy.product(shapeout)/2.**17)+' MiB for the output of '+self.__class__.__name__
+        self._output_direct = cls.empty(shapeout, dtype=numpy.float64, order='fortran', **options)
 
-    def validateOutputTranspose(self, cls, shapeIn, **options):
-        if shapeIn is None:
+    def _validate_output_transpose(self, cls, shapein, **options):
+        if shapein is None:
             raise ValueError('The shape of the input of '+self.__class__.__name__+' is not known.')
-        if self.outputTranspose is not None and shapeIn == self.outputTranspose.shape:
+        if self._output_transpose is not None and shapein == self._output_transpose.shape:
             return
-        print 'Info: allocating '+str(numpy.product(shapeIn)/2.**17)+' MiB for the output of the transpose of '+self.__class__.__name__
-        self.outputTranspose = cls.empty(shapeIn, dtype=numpy.float64, order='fortran', **options)
+        print 'Info: allocating '+str(numpy.product(shapein)/2.**17)+' MiB for the output of the transpose of '+self.__class__.__name__
+        self._output_transpose = cls.empty(shapein, dtype=numpy.float64, order='fortran', **options)
 
-    shapeIn         = None   # input is unconstrained
-    shapeOut        = None   # output is unconstrained
-    outputDirect    = None   # stores the input of the transpose model. Its memory allocation is re-used as the output of the direct model
-    outputTranspose = None   # stores the input of the direct model. Its memory allocation is re-used as the output of the transpose model
-    blocks          = []     # components are ordered as in the direct order
+    shapein           = None   # input is unconstrained
+    shapeout          = None   # output is unconstrained
+    _output_direct    = None   # stores the input of the transpose model. Its memory allocation is re-used as the output of the direct model
+    _output_transpose = None   # stores the input of the direct model. Its memory allocation is re-used as the output of the transpose model
+    blocks            = []     # components are ordered as in the direct order
 
     def __mul__(self, other):
-        newModel = AcquisitionModel(None)
-        newModel.blocks = []
+        newmodel = AcquisitionModel(None)
+        newmodel.blocks = []
         for block in other:
-            newModel.blocks.append(block)
+            newmodel.blocks.append(block)
         for block in self:
-            newModel.blocks.append(block)
-        newModel.validateChain()
-        return newModel
+            newmodel.blocks.append(block)
+        newmodel._validate_chain()
+        return newmodel
 
     def __getitem__(self, index):
         if len(self) == 0:
@@ -133,8 +133,8 @@ class AcquisitionModel(object):
 
         try:
             oldvalue = self[index]
-            oldshapeIn = self.shapeIn
-            oldshapeOut = self.shapeOut
+            oldshapein = self.shapein
+            oldshapeout = self.shapeout
         except:
             raise IndexError('Only substitutions are allowed in an acquisition model.')
 
@@ -143,8 +143,8 @@ class AcquisitionModel(object):
             self.validate()
         except ValidationError as inst:
             self.blocks[index] = oldvalue
-            self.shapeIn = oldshapeIn
-            self.shapeOut = oldshapeOut
+            self.shapein = oldshapein
+            self.shapeout = oldshapeout
             raise inst
 
     def __iter__(self):
@@ -166,11 +166,11 @@ class AcquisitionModel(object):
             result = self.description+' ('+self.__class__.__name__+')'
         else:
             result = self.__class__.__name__
-        if self.shapeIn is not None or self.shapeOut is not None:
+        if self.shapein is not None or self.shapeout is not None:
             result += ' [input:'
-            result += 'unconstrained' if self.shapeIn is None else str(self.shapeIn).replace(' ','')
+            result += 'unconstrained' if self.shapein is None else str(self.shapein).replace(' ','')
             result += ', output:'
-            result += 'unconstrained' if self.shapeOut is None else str(self.shapeOut).replace(' ','')
+            result += 'unconstrained' if self.shapeout is None else str(self.shapeout).replace(' ','')
             result += ']'
         if len(self) == 0:
             return result
@@ -190,27 +190,27 @@ class PacsProjectionSharpEdges(AcquisitionModel):
     """
     def __init__(self, pacs, description=None):
         AcquisitionModel.__init__(self, description)
-        self.npixelsPerSample = pacs.npixelsPerSample
-        sizeofpmatrix = pacs.npixelsPerSample * pacs.nfineSamples * pacs.ndetectors
+        self.npixels_per_sample = pacs.npixels_per_sample
+        sizeofpmatrix = pacs.npixels_per_sample * pacs.nfinesamples * pacs.ndetectors
         print 'Info: allocating '+str(sizeofpmatrix/2.**17)+' MiB for the pointing matrix.'
         self.pmatrix = numpy.zeros(sizeofpmatrix, dtype=numpy.int64)
         self.header = pacs.header
-        self.shapeIn = (pacs.header["naxis1"], pacs.header["naxis2"])
-        self.shapeOut = (pacs.nfineSamples, pacs.ndetectors) 
-        tmmf.pacs_pointing_matrix(pacs.array, pacs.pointingTime, pacs.ra, pacs.dec, pacs.pa, pacs.chop, pacs.fineTime, pacs.npixelsPerSample, pacs.ndetectors, pacs.transparentMode, pacs.badPixelMask.astype('int8'), pacs.keepBadDetectors, str(pacs.header).replace('\n', ''), self.pmatrix)
+        self.shapein = (pacs.header["naxis1"], pacs.header["naxis2"])
+        self.shapeout = (pacs.nfinesamples, pacs.ndetectors) 
+        tmmf.pacs_pointing_matrix(pacs.array, pacs.pointing_time, pacs.ra, pacs.dec, pacs.pa, pacs.chop, pacs.fine_time, pacs.npixels_per_sample, pacs.ndetectors, pacs.transparent_mode, pacs.bad_pixel_mask.astype('int8'), pacs.keep_bad_detectors, str(pacs.header).replace('\n', ''), self.pmatrix)
 
     def direct(self, map2d):
-        self.validateOutputDirect(Tod, self.validateInputDirect(Map, map2d))
+        self._validate_output_direct(Tod, self._validate_input_direct(Map, map2d))
         map2d.header = self.header
-        self.outputTranspose = map2d
-        tmmf.pacs_projection_sharp_edges_direct(self.pmatrix, map2d, self.outputDirect, self.npixelsPerSample)
-        return self.outputDirect
+        self._output_transpose = map2d
+        tmmf.pacs_projection_sharp_edges_direct(self.pmatrix, map2d, self._output_direct, self.npixels_per_sample)
+        return self._output_direct
 
     def transpose(self, signal):
-        self.validateOutputTranspose(Map, self.validateInputTranspose(Tod, signal), header=self.header)
-        self.outputDirect = signal
-        tmmf.pacs_projection_sharp_edges_transpose(self.pmatrix, signal, self.outputTranspose,  self.npixelsPerSample)
-        return self.outputTranspose
+        self._validate_output_transpose(Map, self._validate_input_transpose(Tod, signal), header=self.header)
+        self._output_direct = signal
+        tmmf.pacs_projection_sharp_edges_transpose(self.pmatrix, signal, self._output_transpose,  self.npixels_per_sample)
+        return self._output_transpose
 
     def __str__(self):
         return super(PacsProjectionSharpEdges, self).__str__()#+' => '+self.filename+' ['+str(self.first)+','+str(self.last)+']'
@@ -227,38 +227,38 @@ class PacsMultiplexing(AcquisitionModel):
     """
     def __init__(self, pacs, description=None):
         AcquisitionModel.__init__(self, description)
-        self.fineSamplingFactor = pacs.fineSamplingFactor
+        self.fine_sampling_factor = pacs.fine_sampling_factor
         self.ij = pacs.ij
 
     def direct(self, signal):
-        self.validateOutputDirect(Tod, self.validateInputDirect(Tod, signal))
-        self.outputTranspose = signal
-        tmmf.pacs_multiplexing_direct(signal, self.outputDirect, self.fineSamplingFactor, self.ij)
-        return self.outputDirect
+        self._validate_output_direct(Tod, self._validate_input_direct(Tod, signal))
+        self._output_transpose = signal
+        tmmf.pacs_multiplexing_direct(signal, self._output_direct, self.fine_sampling_factor, self.ij)
+        return self._output_direct
 
     def transpose(self, signal):
-        self.validateOutputTranspose(Tod, self.validateInputTranspose(Tod, signal))
-        self.outputDirect = signal
-        tmmf.pacs_multiplexing_transpose(signal, self.outputTranspose, self.fineSamplingFactor, self.ij)
-        return self.outputTranspose
+        self._validate_output_transpose(Tod, self._validate_input_transpose(Tod, signal))
+        self._output_direct = signal
+        tmmf.pacs_multiplexing_transpose(signal, self._output_transpose, self.fine_sampling_factor, self.ij)
+        return self._output_transpose
 
-    def validateShapeDirect(self, shapeIn):
-        if shapeIn is None:
+    def _validate_shape_direct(self, shapein):
+        if shapein is None:
             return None
-        super(PacsMultiplexing, self).validateShapeDirect(shapeIn)
-        if shapeIn[0] % self.fineSamplingFactor != 0:
-            raise ValidationError('The input timeline size ('+str(shapeIn[0])+') is not an integer times the fine sampling factor ('+str(self.fineSamplingFactor)+').')
-        shapeOut = list(shapeIn)
-        shapeOut[0] = shapeOut[0] / self.fineSamplingFactor
-        return tuple(shapeOut)
+        super(PacsMultiplexing, self)._validate_shape_direct(shapein)
+        if shapein[0] % self.fine_sampling_factor != 0:
+            raise ValidationError('The input timeline size ('+str(shapein[0])+') is not an integer times the fine sampling factor ('+str(self.fine_sampling_factor)+').')
+        shapeout = list(shapein)
+        shapeout[0] = shapeout[0] / self.fine_sampling_factor
+        return tuple(shapeout)
 
-    def validateShapeTranspose(self, shapeOut):
-        if shapeOut is None:
+    def _validate_shape_transpose(self, shapeout):
+        if shapeout is None:
             return
-        super(PacsMultiplexing, self).validateShapeTranspose(shapeOut)
-        shapeIn = list(shapeOut)
-        shapeIn[0] = shapeIn[0] * self.fineSamplingFactor
-        return tuple(shapeIn)
+        super(PacsMultiplexing, self)._validate_shape_transpose(shapeout)
+        shapein = list(shapeout)
+        shapein[0] = shapein[0] * self.fine_sampling_factor
+        return tuple(shapein)
 
 
 #-------------------------------------------------------------------------------
@@ -269,48 +269,48 @@ class Compression(AcquisitionModel):
     Superclass for compressing the input signal.
     Author: P. Chanial
     """
-    def __init__(self, compressionDirect, compressionTranspose, compressionFactor, description):
+    def __init__(self, compression_direct, compression_transpose, compression_factor, description):
         AcquisitionModel.__init__(self, description)
-        self.compressionDirect = compressionDirect
-        self.compressionTranspose = compressionTranspose
-        self.compressionFactor = compressionFactor
+        self.compression_direct = compression_direct
+        self.compression_transpose = compression_transpose
+        self.compression_factor = compression_factor
 
     def direct(self, signal):
-        if self.compressionFactor == 1:
+        if self.compression_factor == 1:
             return signal
-        self.validateOutputDirect(Tod, self.validateInputDirect(Tod, signal))
-        self.outputTranspose = signal
-        self.compressionDirect(signal, self.outputDirect, self.compressionFactor)
-        return self.outputDirect
+        self._validate_output_direct(Tod, self._validate_input_direct(Tod, signal))
+        self._output_transpose = signal
+        self.compression_direct(signal, self._output_direct, self.compression_factor)
+        return self._output_direct
 
     def transpose(self, compressed):
-        if self.compressionFactor == 1:
+        if self.compression_factor == 1:
             return compressed
-        self.validateOutputTranspose(Tod, self.validateInputTranspose(Tod, compressed))
-        self.outputDirect = compressed
-        self.compressionTranspose(compressed, self.outputTranspose, self.compressionFactor)
-        return self.outputTranspose
+        self._validate_output_transpose(Tod, self._validate_input_transpose(Tod, compressed))
+        self._output_direct = compressed
+        self.compression_transpose(compressed, self._output_transpose, self.compression_factor)
+        return self._output_transpose
 
-    def validateShapeDirect(self, shapeIn):
-        if shapeIn is None:
+    def _validate_shape_direct(self, shapein):
+        if shapein is None:
             return None
-        super(Compression, self).validateShapeDirect(shapeIn)
-        if shapeIn[0] % self.compressionFactor != 0:
-            raise ValidationError('The input timeline size ('+str(shapeIn[0])+') is not an integer times the compression factor ('+str(self.compressionFactor)+').')
-        shapeOut = list(shapeIn)
-        shapeOut[0] /= self.compressionFactor
-        return tuple(shapeOut)
+        super(Compression, self)._validate_shape_direct(shapein)
+        if shapein[0] % self.compression_factor != 0:
+            raise ValidationError('The input timeline size ('+str(shapein[0])+') is not an integer times the compression factor ('+str(self.compression_factor)+').')
+        shapeout = list(shapein)
+        shapeout[0] /= self.compression_factor
+        return tuple(shapeout)
 
-    def validateShapeTranspose(self, shapeOut):
-        if shapeOut is None:
+    def _validate_shape_transpose(self, shapeout):
+        if shapeout is None:
             return
-        super(Compression, self).validateShapeTranspose(shapeOut)
-        shapeIn = list(shapeOut)
-        shapeIn[0] *= self.compressionFactor
-        return tuple(shapeIn)
+        super(Compression, self)._validate_shape_transpose(shapeout)
+        shapein = list(shapeout)
+        shapein[0] *= self.compression_factor
+        return tuple(shapein)
 
     def __str__(self):
-        return super(Compression, self).__str__()+' (x'+str(self.compressionFactor)+')'
+        return super(Compression, self).__str__()+' (x'+str(self.compression_factor)+')'
         
 
 #-------------------------------------------------------------------------------
@@ -321,8 +321,8 @@ class CompressionAverage(Compression):
     Compress the input signal by averaging blocks of specified size.
     Author: P. Chanial
     """
-    def __init__(self, compressionFactor, description=None):
-        Compression.__init__(self, tmmf.compression_average_direct, tmmf.compression_average_transpose, compressionFactor, description)
+    def __init__(self, compression_factor, description=None):
+        Compression.__init__(self, tmmf.compression_average_direct, tmmf.compression_average_transpose, compression_factor, description)
         
 
 #-------------------------------------------------------------------------------
@@ -390,7 +390,7 @@ class _Pacs():
 
     sampling = 0.025 # 40 Hz sampling
 
-    def __init__(self, array, pointingTime, ra, dec, pa, chop, fineTime, npixelsPerSample, observingMode, fineSamplingFactor, compressionFactor, badPixelMask, keepBadDetectors):
+    def __init__(self, array, pointing_time, ra, dec, pa, chop, fine_time, npixels_per_sample, observing_mode, fine_sampling_factor, compression_factor, bad_pixel_mask, keep_bad_detectors):
 
         from os import getenv
         from os.path import join
@@ -399,32 +399,32 @@ class _Pacs():
         if array.lower() not in ('blue', 'green', 'red'):
             raise ValueError("The input array is not 'blue', 'green' nor 'red'.")
 
-        if observingMode is not None:
-            observingMode = observingMode.lower()
+        if observing_mode is not None:
+            observing_mode = observing_mode.lower()
 
-        if observingMode not in (None, 'prime', 'parallel', 'transparent'):
+        if observing_mode not in (None, 'prime', 'parallel', 'transparent'):
             raise ValueError("Observing mode is not 'prime', 'parallel' nor 'transparent'.")
 
-        if compressionFactor is None:
-            if observingMode is None:
+        if compression_factor is None:
+            if observing_mode is None:
                 raise ValueError('The compression factor is not specified.')
-            compressionFactor = {'prime':4, 'parallel':8, 'transparent':1}[observingMode]
+            compression_factor = {'prime':4, 'parallel':8, 'transparent':1}[observing_mode]
 
-        self.transparentMode = observingMode == 'transparent'
+        self.transparent_mode = observing_mode == 'transparent'
 
-        if (fineSamplingFactor not in (1,2,4,8,16)):
+        if (fine_sampling_factor not in (1,2,4,8,16)):
             raise ValueError('Invalid fine sampling factor. It may be 1, 2, 4, 8 or 16')
  
         # 'blue', 'green' or 'red' array
         self.array = array.lower()
 
         # astrometry
-        if pointingTime is None or ra is None or dec is None or pa is None or chop is None:
+        if pointing_time is None or ra is None or dec is None or pa is None or chop is None:
             raise ValueError('The simulated scan astrometry is not defined.')
-        shape = pointingTime.shape
+        shape = pointing_time.shape
         if ra.shape != shape or dec.shape != shape or pa.shape != shape or chop.shape != shape:
             raise ValueError('The input time, ra, dec, pa, chope do not have the same shape.')
-        self.pointingTime = pointingTime
+        self.pointing_time = pointing_time
         self.ra = ra
         self.dec = dec
         self.pa = pa
@@ -432,29 +432,29 @@ class _Pacs():
         self.header = None
 
         # sampling information
-        self.fineTime = fineTime
-        self.nfineSamples = fineTime.size
-        self.npixelsPerSample = npixelsPerSample
-        self.fineSamplingFactor = fineSamplingFactor
-        self.compressionFactor = compressionFactor
+        self.fine_time = fine_time
+        self.nfinesamples = fine_time.size
+        self.npixels_per_sample = npixels_per_sample
+        self.fine_sampling_factor = fine_sampling_factor
+        self.compression_factor = compression_factor
         
-        if badPixelMask is None:
-            badPixelMaskFile = join(getenv('TAMASIS_DIR'),'data','PCalPhotometer_BadPixelMask_FM_v3.fits')
-            badPixelMask = numpy.array(fitsopen(badPixelMaskFile)[self.array].data, order='fortran')
+        if bad_pixel_mask is None:
+            bad_pixel_maskFile = join(getenv('TAMASIS_DIR'),'data','PCalPhotometer_BadPixelMask_FM_v3.fits')
+            bad_pixel_mask = numpy.array(fitsopen(bad_pixel_maskFile)[self.array].data, order='fortran')
         else:
-            arrayShapes = {'blue':(32,64), 'green':(32,64), 'red':(16,32)}
-            if badPixelMask.shape != arrayShapes[self.array]:
-                raise ValueError('Input bad pixel mask has incorrect shape '+str(badPixelMask.shape)+' instead of '+str(arrayShapes[self.array]))
-        self.badPixelMask = badPixelMask.copy('fortran').astype(bool)
-        if self.transparentMode:
-            self.badPixelMask[:,0:16] = True
-            self.badPixelMask[16:32,16:32] = True
-            self.badPixelMask[:,32:] = True
-        self.keepBadDetectors = keepBadDetectors
+            array_shapes = {'blue':(32,64), 'green':(32,64), 'red':(16,32)}
+            if bad_pixel_mask.shape != array_shapes[self.array]:
+                raise ValueError('Input bad pixel mask has incorrect shape '+str(bad_pixel_mask.shape)+' instead of '+str(array_shapes[self.array]))
+        self.bad_pixel_mask = bad_pixel_mask.copy('fortran').astype(bool)
+        if self.transparent_mode:
+            self.bad_pixel_mask[:,0:16] = True
+            self.bad_pixel_mask[16:32,16:32] = True
+            self.bad_pixel_mask[:,32:] = True
+        self.keep_bad_detectors = keep_bad_detectors
 
-        self.ndetectors = self.badPixelMask.size
-        if not self.keepBadDetectors:
-            self.ndetectors -= int(numpy.sum(self.badPixelMask))
+        self.ndetectors = self.bad_pixel_mask.size
+        if not self.keep_bad_detectors:
+            self.ndetectors -= int(numpy.sum(self.bad_pixel_mask))
         
         #XXX NOT IMPLEMENTED!
         self.ij = None
@@ -491,18 +491,18 @@ class PacsObservation(_Pacs):
                            The associated time from the Time file is the time of the first projection.
     - last               : last sample to be read in the FITS files (excluded)
     - header             : pyfits header of the input sky map
-    - npixelsPerSample   : number of sky pixels which intersect a PACS detector
-    - observingMode      : 'prime', 'parallel' or 'transparent'
-    - fineSamplingFactor : number of frames to be processed during the 0.025s period.
-    - compressionFactor  : number of frames which are collapsed during the compression stage
+    - npixels_per_sample   : number of sky pixels which intersect a PACS detector
+    - observing_mode      : 'prime', 'parallel' or 'transparent'
+    - fine_sampling_factor : number of frames to be processed during the 0.025s period.
+    - compression_factor  : number of frames which are collapsed during the compression stage
     - array              : 'blue', 'green' or 'red' array name
     - ndetectors         : number of detectors involved in the processing
-    - badPixelMask       : (nx,ny) mask of uint8 values (0 or 1). 1 means dead pixel.
-    - keepBadDetectors : if set to True, force the processing to include all pixels
+    - bad_pixel_mask       : (nx,ny) mask of uint8 values (0 or 1). 1 means dead pixel.
+    - keep_bad_detectors : if set to True, force the processing to include all pixels
     - ij(2,ndetectors)   : the row and column number (starting from 0) of the detectors
     Author: P. Chanial
     """
-    def __init__(self, filename, first=0, last=None, header=None, resolution=None, npixelsPerSample=9, fineSamplingFactor=1, badPixelMask=None, keepBadDetectors=False):
+    def __init__(self, filename, first=0, last=None, header=None, resolution=None, npixels_per_sample=9, fine_sampling_factor=1, bad_pixel_mask=None, keep_bad_detectors=False):
 
         import pyfits
 
@@ -532,28 +532,28 @@ class PacsObservation(_Pacs):
 
         #because telemetry drops can occur, we compute a fine time for each sample in the files
         compression = (time[1]-time[0]) / _Pacs.sampling
-        compressionFactor = int(compression + 0.5)
-        if abs(compressionFactor - compression) > 1.001 * compression:
+        compression_factor = int(compression + 0.5)
+        if abs(compression_factor - compression) > 1.001 * compression:
             raise ValueError('The file '+filename+'_Time.fits is not sampled an integer time of '+str(_Pacs.sampling)+'s.')
-        if compressionFactor == 1:
-            observingMode = 'transparent'
-        elif compressionFactor == 4:
-            observingMode = 'prime'
-        elif compressionFactor == 8:
-            observingMode = 'parallel'
+        if compression_factor == 1:
+            observing_mode = 'transparent'
+        elif compression_factor == 4:
+            observing_mode = 'prime'
+        elif compression_factor == 8:
+            observing_mode = 'parallel'
         else:
-            observingMode = None
-        samplingFactor = fineSamplingFactor * compressionFactor
-        fineTime = numpy.zeros((last - first) * samplingFactor, dtype='float64')
-        for i in range(samplingFactor):
-            fineTime[i::samplingFactor] = time + i * _Pacs.sampling / fineSamplingFactor
+            observing_mode = None
+        sampling_factor = fine_sampling_factor * compression_factor
+        fine_time = numpy.zeros((last - first) * sampling_factor, dtype='float64')
+        for i in range(sampling_factor):
+            fine_time[i::sampling_factor] = time + i * _Pacs.sampling / fine_sampling_factor
 
-        _Pacs.__init__(self, array, time, ra, dec, pa, chop, fineTime, npixelsPerSample, observingMode, fineSamplingFactor, compressionFactor, badPixelMask, keepBadDetectors)
+        _Pacs.__init__(self, array, time, ra, dec, pa, chop, fine_time, npixels_per_sample, observing_mode, fine_sampling_factor, compression_factor, bad_pixel_mask, keep_bad_detectors)
 
         if resolution is None:
             resolution = 3.
         if header is None:
-            header = self._str2fitsheader(tmmf.pacs_map_header(array, time, ra, dec, pa, chop, fineTime, self.transparentMode, self.badPixelMask.astype('int8'), keepBadDetectors, resolution))
+            header = self._str2fitsheader(tmmf.pacs_map_header(array, time, ra, dec, pa, chop, fine_time, self.transparent_mode, self.bad_pixel_mask.astype('int8'), keep_bad_detectors, resolution))
 
         self.header = header
 
@@ -568,11 +568,11 @@ class PacsObservation(_Pacs):
         """
         Returns the signal and mask timelines as fortran arrays.
         """
-        signal, mask = tmmf.pacs_timeline(self.filename, self.array, self.first+1, self.last, self.ndetectors, self.transparentMode, self.badPixelMask, self.keepBadDetectors)
+        signal, mask = tmmf.pacs_timeline(self.filename, self.array, self.first+1, self.last, self.ndetectors, self.transparent_mode, self.bad_pixel_mask, self.keep_bad_detectors)
         mask = numpy.array(mask, dtype=bool)
-        if self.keepBadDetectors:
-           for idetector, badPixel in enumerate(self.badPixelMask.flat):
-               if badPixel:
+        if self.keep_bad_detectors:
+           for idetector, badpixel in enumerate(self.bad_pixel_mask.flat):
+               if badpixel:
                    mask[:,idetector] = True
         return Tod(signal, mask=mask)
    
@@ -591,18 +591,18 @@ class PacsSimulation(_Pacs):
     - chop               : chop angle vector
     - header             : pyfits header of the input sky map
     - ndetectors         : number of detectors involved in the processing
-    - npixelsPerSample   : number of sky pixels which intersect a PACS detector
-    - observingMode      : 'prime', 'parallel' or 'transparent'
-    - fineSamplingFactor : number of frames to be processed during the 1/40Hz period.
-    - compressionFactor  : number of frames which are collapsed during the compression stage
+    - npixels_per_sample   : number of sky pixels which intersect a PACS detector
+    - observing_mode      : 'prime', 'parallel' or 'transparent'
+    - fine_sampling_factor : number of frames to be processed during the 1/40Hz period.
+    - compression_factor  : number of frames which are collapsed during the compression stage
     - array              : 'blue', 'green' or 'red' array name
     - ndetectors         : number of detectors involved in the processing
-    - badPixelMask       : (nx,ny) mask of uint8 values (0 or 1). 1 means dead pixel.
-    - keepBadDetectors : if set to True, force the processing to include all pixels
+    - bad_pixel_mask       : (nx,ny) mask of uint8 values (0 or 1). 1 means dead pixel.
+    - keep_bad_detectors : if set to True, force the processing to include all pixels
     - ij(2,ndetectors)   : the row and column number (starting from 0) of the detectors
     Author: P. Chanial
     """
-    def __init__(self, inputmap, time=None, ra=None, pa=None, chop=None, array='blue', npixelsPerSample=9, observingMode='prime', fineSamplingFactor=1, compressionFactor=None, badPixelMask=None, keepBadDetectors=False):
+    def __init__(self, inputmap, time=None, ra=None, pa=None, chop=None, array='blue', npixels_per_sample=9, observing_mode='prime', fine_sampling_factor=1, compression_factor=None, bad_pixel_mask=None, keep_bad_detectors=False):
 
         if not isinstance(inputmap, Map):
             raise TypeError('The input is not a Map.')
@@ -610,9 +610,9 @@ class PacsSimulation(_Pacs):
         if inputmap.header is None:
             raise TypeError('The input map header is not known.')
 
-        fineTime = numpy.arange(time[0], floor((time[-1] - time[0]) / pacs.sampling) * fineSamplingFactor, _Pacs.sampling/fineSamplingFactor)
+        fine_time = numpy.arange(time[0], floor((time[-1] - time[0]) / pacs.sampling) * fine_sampling_factor, _Pacs.sampling/fine_sampling_factor)
 
-        _Pacs.__init__(self, array, time, ra, dec, pa, chop, fineTime, npixelsPerSample, observingMode, fineSamplingFactor, compressionFactor, badPixelMask, keepBadDetectors)
+        _Pacs.__init__(self, array, time, ra, dec, pa, chop, fine_time, npixels_per_sample, observing_mode, fine_sampling_factor, compression_factor, bad_pixel_mask, keep_bad_detectors)
  
         self.inputmap
         self.header = inputmap.header
@@ -622,10 +622,10 @@ class PacsSimulation(_Pacs):
         Returns simulated signal and mask (=None) timelines.
         """
         signal = model.direct(self.inputmap)
-        if self.keepBadDetectors:
+        if self.keep_bad_detectors:
             mask = numpy.zeros(signal.shape, dtype=bool, order='fortran')
-            for idetector, badPixel in enumerate(self.badPixelMask.flat):
-                if badPixel:
+            for idetector, badpixel in enumerate(self.bad_pixel_mask.flat):
+                if badpixel:
                     mask[:,idetector] = True
         else:
             mask = None
@@ -807,15 +807,16 @@ class Tod(FitsMaskedArray):
 
 
 
-def hcssPhotProject(pacs):
+def hcss_photproject(pacs):
     """
     Returns a map, as calculated by HCSS's PhotProject
     """
-    if pacs.fineSamplingFactor != 1:
+    from copy import copy
+    if pacs.fine_sampling_factor != 1:
         raise ValueError('Fine sampling factor should be 1 for hcssPhotProject.') # or add decimation
     tod = pacs.get_tod()
     model = Masking(tod.mask) * PacsProjectionSharpEdges(pacs)
-    mymap = model.transpose(tod).copy('any')
+    mymap = copy(model.transpose(tod))
     tod[:] = 1.
     weights = model.transpose(tod)
     mymap /= weights
