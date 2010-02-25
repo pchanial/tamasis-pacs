@@ -1,12 +1,12 @@
-from tamasis import Identity, CompressionAverage, PacsProjectionSharpEdges, PacsMultiplexing, Masking, PacsObservation, PacsSimulation, Map, Tod, hcss_photproject, LeastSquareMatvec, Matmat, PcgCallback
+from tamasis import Identity, CompressionAverage, PacsProjectionSharpEdges, PacsMultiplexing, Masking, PacsObservation, PacsSimulation, Map, Tod, hcss_photproject, LeastSquareMatvec, RLSMatvec,  PcgCallback
 from copy import copy
 import numpy
 import scipy
 from scipy.sparse import dia_matrix
 from scipy.sparse.linalg import LinearOperator, cgs
 
-datadir = '/home/pchanial/work/pacs/data/'
-pacs = PacsObservation(filename=datadir+'transparent/NGC6946/1342184520_blue',
+datadir = '/home/nbarbey/data/csh/transpScan/'
+pacs = PacsObservation(filename=datadir+'NGC6946/1342184520_blue',
                        first=20000,
                        last=86000,
                        resolution=3.,
@@ -35,12 +35,12 @@ map0 = Map(backmap / weights, mask=weights <= 1)
 backmap.mask = map0.mask
 
 shape = 2*(map0.count(),)
-matvec = LeastSquareMatvec(model, map0.mask)
+matvec = RLSMatvec(1e-3, model, map0.mask)
 operator = LinearOperator(matvec=matvec, dtype=numpy.float64, shape=shape)
 b  = backmap.compressed()
 x0 = map0.compressed()
 M  = dia_matrix(((1./weights)[weights > 1], 0), shape=shape)
-solution, nit = cgs(operator, b, x0=x0, M=M, tol=1.e-4, maxiter=200, callback=PcgCallback())
+solution, nit = cgs(operator, b, x0=x0, M=M, tol=1.e-4, maxiter=20, callback=PcgCallback())
 mymap = copy(map0)
 mymap[mymap.mask == False] = solution
 

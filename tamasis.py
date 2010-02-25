@@ -826,6 +826,50 @@ class PcgCallback():
         print 'PCG Iteration '+str(self.count)
         self.count += 1
 
+class RLSMatvec(LeastSquareMatvec):
+    def __init__(self, hyper, *args, **kargs):
+        LeastSquareMatvec.__init__(self, *args, **kargs)
+        # to enforce 2d hyper
+        if numpy.size(hyper) == 1:
+            hyper = 2 * (hyper,)
+        self.hyper = hyper
+        # define smooth prior
+        self.prior_direct = [Smooth(i) for i in xrange(len(hyper))]
+        self.prior_transpose = [SmoothT(i) for i in xrange(len(hyper))]
+    def __call__(self, x):
+        # likelihood
+        self.xmap[self.xmap.mask == False] = x
+        xout = self.model.transpose(self.model.direct(self.xmap))
+        # add prior component
+        for i in xrange(len(self.hyper)):
+            xout += self.hyper[i] * self.prior_transpose[i](self.prior_direct[i](self.xmap))
+        self.xmap = xout
+        xout = self.xmap.compressed()
+        return xout
+
+# Priors
+class Smooth():
+    """Define smoothness priors along specific axis"""
+    def __init__(self, axis):
+        self.axis = axis
+    def __call__(self, arr):
+        d =  numpy.diff(arr, axis=self.axis)
+        return d
+class SmoothT(Smooth):
+    """Define smoothness priors along specific axis
+    This is the transpose model
+    """
+    def __call__(self, arr):
+        d = diffT(arr, axis=self.axis)
+        return d
+
+def diffT(arr, axis=-1):
+    """transpose of diff for n=1"""
+    shape = list(arr.shape)
+    shape[axis] = 1
+    border = numpy.zeros(shape)
+    out = numpy.concatenate((border, arr, border), axis=axis)
+    return - numpy.diff(out, axis=axis)
 
 
 #-------------------------------------------------------------------------------
