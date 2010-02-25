@@ -1,5 +1,6 @@
 import tamasisfortran as tmmf
 import numpy
+import scipy.sparse.linalg
     
 
 
@@ -82,12 +83,12 @@ class AcquisitionModel(object):
 
     def _validate_input_direct(self, cls, data):
         if not isinstance(data, cls):
-            raise TypeError("The input of '+self.__class__.__name+' has an invalid type '"+cls.__name__+"'.")
+            raise TypeError("The input of '"+self.__class__.__name__+"' has an invalid type '"+cls.__name__+"'.")
         return self._validate_shape_direct(data.shape)
 
     def _validate_input_transpose(self, cls, data):
         if not isinstance(data, cls):
-            raise TypeError("The input of '+self.__class__.__name+' transpose has an invalid type '"+cls.__name__+"'.")
+            raise TypeError("The input of '"+self.__class__.__name__+"' transpose has an invalid type '"+cls.__name__+"'.")
         return self._validate_shape_transpose(data.shape)
 
     def _validate_output_direct(self, cls, shapeout, **options):
@@ -642,6 +643,7 @@ class PacsSimulation(_Pacs):
 #-------------------------------------------------------------------------------
 
 
+
 class FitsMaskedArray(numpy.ma.MaskedArray):
 
     def __new__(cls, data, dtype=None, copy=False, mask=numpy.ma.nomask, header=None):
@@ -666,16 +668,16 @@ class FitsMaskedArray(numpy.ma.MaskedArray):
         return result
 
     @staticmethod
-    def empty(shape, dtype='float64', order='C', header=None):
-        return FitsMaskedArray(numpy.ma.empty(shape, dtype, order), header=header)
+    def empty(shape, dtype='float64', order='C', header=None, mask=numpy.ma.nomask):
+        return FitsMaskedArray(numpy.ma.empty(shape, dtype, order), header=header, mask=mask)
 
     @staticmethod
-    def ones(shape, dtype='float64', order='C', header=None):
-        return FitsMaskedArray(numpy.ma.ones(shape, dtype, order), header=header)
+    def ones(shape, dtype='float64', order='C', header=None, mask=numpy.ma.nomask):
+        return FitsMaskedArray(numpy.ma.ones(shape, dtype, order), header=header, mask=mask)
 
     @staticmethod
-    def zeros(shape, dtype='float64', order='C', header=None):
-        return FitsMaskedArray(numpy.ma.zeros(shape, dtype, order), header=header)
+    def zeros(shape, dtype='float64', order='C', header=None, mask=numpy.ma.nomask):
+        return FitsMaskedArray(numpy.ma.zeros(shape, dtype, order), header=header, mask=mask)
 
     @property
     def header(self):
@@ -732,16 +734,16 @@ class Map(FitsMaskedArray):
         return result
 
     @staticmethod
-    def empty(shape, dtype='float64', order='C', header=None):
-        return Map(FitsMaskedArray.empty(shape, dtype, order, header=header))
+    def empty(shape, dtype='float64', order='C', header=None, mask=numpy.ma.nomask):
+        return Map(FitsMaskedArray.empty(shape, dtype, order, header=header, mask=mask))
 
     @staticmethod
-    def ones(shape, dtype='float64', order='C', header=None):
-        return Map(FitsMaskedArray.ones(shape, dtype, order, header=header))
+    def ones(shape, dtype='float64', order='C', header=None, mask=numpy.ma.nomask):
+        return Map(FitsMaskedArray.ones(shape, dtype, order, header=header, mask=mask))
 
     @staticmethod
-    def zeros(shape, dtype='float64', order='C', header=None):
-        return Map(FitsMaskedArray.zeros(shape, dtype, order, header=header))
+    def zeros(shape, dtype='float64', order='C', header=None, mask=numpy.ma.nomask):
+        return Map(FitsMaskedArray.zeros(shape, dtype, order, header=header, mask=mask))
 
     def imshow(self, num=None, axis=True, title=None):
         """A simple graphical display function for the Map class"""
@@ -785,17 +787,44 @@ class Tod(FitsMaskedArray):
         return result
 
     @staticmethod
-    def empty(shape, dtype='float64', order='C', header=None):
-        return Tod(FitsMaskedArray.empty(shape, dtype, order, header=header))
+    def empty(shape, dtype='float64', order='C', header=None, mask=numpy.ma.nomask):
+        return Tod(FitsMaskedArray.empty(shape, dtype, order, header=header, mask=mask))
 
     @staticmethod
-    def ones(shape, dtype='float64', order='C', header=None):
-        return Tod(FitsMaskedArray.ones(shape, dtype, order, header=header))
+    def ones(shape, dtype='float64', order='C', header=None, mask=numpy.ma.nomask):
+        return Tod(FitsMaskedArray.ones(shape, dtype, order, header=header, mask=mask))
 
     @staticmethod
-    def zeros(shape, dtype='float64', order='C', header=None):
-        return Tod(FitsMaskedArray.zeros(shape, dtype, order, header=header))
+    def zeros(shape, dtype='float64', order='C', header=None, mask=numpy.ma.nomask):
+        return Tod(FitsMaskedArray.zeros(shape, dtype, order, header=header, mask=mask))
+    
 
+
+
+#-------------------------------------------------------------------------------
+#
+# Linear operator
+#
+#-------------------------------------------------------------------------------
+
+
+class LeastSquareMatvec():
+    def __init__(self, model, mask=numpy.ma.nomask):
+        from copy import copy
+        self.model = model
+        self.xmap = Map.empty(model.shapein, mask=mask, order='f')
+    def __call__(self, x):
+        self.xmap[self.xmap.mask == False] = x
+        self.xmap = self.model.transpose(self.model.direct(self.xmap))
+        xout = self.xmap.compressed()
+        return xout
+
+class PcgCallback():
+    def __init__(self):
+        self.count = 1
+    def __call__(self, x):
+        print 'PCG Iteration '+str(self.count)
+        self.count += 1
 
 
 
