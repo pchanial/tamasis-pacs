@@ -6,6 +6,7 @@ program test_ngc6946_bpj
     use module_pacspointing
     use module_preprocessor
     use module_projection
+    use module_wcs, only : init_wcslib, ad2xy_wcslib, free_wcslib
     use module_wcslib, only : WCSLEN, wcsfree
     use precision
     implicit none
@@ -83,7 +84,7 @@ program test_ngc6946_bpj
     write(*,'(a)', advance='no') 'Computing the projector... '
     allocate(pmatrix(9,last-first+1,pacs%ndetectors))
     call system_clock(count1, count_rate, count_max)
-    call pacs%compute_projection_sharp_edges(pointing, time, wcs, nx, nx, pmatrix)
+    call pacs%compute_projection_sharp_edges(pointing, time, header, nx, nx, pmatrix)
     call system_clock(count2, count_rate, count_max)
     write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
 
@@ -93,6 +94,9 @@ program test_ngc6946_bpj
     allocate(surface1(nsamples, pacs%ndetectors))
     allocate(surface2(nsamples, pacs%ndetectors))
     allocate(coords(ndims, pacs%ndetectors*nvertices))
+
+    call init_wcslib(header)
+
     index = 2
     !$omp parallel do default(none) firstprivate(index) private(isample, ra, dec, pa, chop, coords) &
     !$omp shared(time, pointing, nx, pacs, pmatrix, wcs, surface1, surface2)
@@ -100,7 +104,7 @@ program test_ngc6946_bpj
         call pointing%get_position(time(isample), ra, dec, pa, chop, index)
         coords = pacs%uv2yz(pacs%corners_uv, pacs%distortion_yz_blue, chop)
         coords = pacs%yz2ad(coords, ra, dec, pa)
-        coords = pacs%ad2xy(coords, wcs)
+        coords = ad2xy_wcslib(coords)
         do idetector = 1, pacs%ndetectors
             surface1(isample,idetector) = abs(surface_convex_polygon(coords(:,(idetector-1)*nvertices+1:idetector*nvertices)))
             surface2(isample,idetector) = sum(pmatrix(:,isample,idetector)%weight)
@@ -141,8 +145,7 @@ program test_ngc6946_bpj
     call ft_write(outputdir // 'ngc6946_bpj.fits', reshape(map1d, [nx,ny]), wcs, status)
     call ft_printerror(status, outputdir // 'ngc6946_bpj.fits')
 
-    ! free the wcs
-    status = wcsfree(wcs)
+    call free_wcslib()
 
     call system_clock(count2, count_rate, count_max)
     write(*,'(a,f6.2,a)') 'Total elapsed time: ', real(count2-count0)/count_rate, 's'

@@ -2,6 +2,7 @@ program test_pacs
 
     use, intrinsic :: ISO_C_BINDING
     use module_fitstools
+    use module_wcs, only : init_wcslib, ad2xy_wcslib, free_wcslib
     use module_wcslib, only : WCSLEN, wcsfree
     use module_pacsinstrument
     use module_pacspointing
@@ -43,7 +44,7 @@ program test_pacs
     call pacs%filter_detectors(pacs%get_array_color(filename), transparent_mode=.true.)
     call ft_header2str(filename_header, header, status)
     call ft_printerror(status, filename_header)
-    call ft_header2wcs(header, wcs, nx, ny)
+    call init_wcslib(header)
 
     write (*,*) 'Number of valid detectors:', pacs%ndetectors
     write (*,*) 'Number of samples:', size(time)
@@ -78,7 +79,7 @@ program test_pacs
        write (*,*) 'Dec: ', i, (ad(2, (i-1)*4+j), j = 1,4)
     end do
 
-    xy = pacs%ad2xy(ad, wcs)
+    xy = ad2xy_wcslib(ad)
 
     do i=1, 1
         write (*,*) 'x: ', i, (xy(1, (i-1)*4+j), j = 1,4)
@@ -102,7 +103,7 @@ program test_pacs
     !R.A.: 308.722596918714
     !Dec:   60.156005722598
 
-    call pacs%find_minmax(pointing, time, wcs, xmin, xmax, ymin, ymax)
+    call pacs%find_minmax(pointing, time, xmin, xmax, ymin, ymax)
     write (*,*) 'X = ', xmin, xmax
     write (*,*) 'Y = ', ymin, ymax
 
@@ -127,7 +128,7 @@ program test_pacs
     !!+yz2ad: 40.10s,40.72s
     !!+ad2xy: 71.54s,76.74s,69.16s
     !!+if: 70.52s
-    status = wcsfree(wcs)
+    call free_wcslib()
 
     stop "OK."
 

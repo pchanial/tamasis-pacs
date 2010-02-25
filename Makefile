@@ -23,10 +23,11 @@ all : $(EXECS) tamasisfortran.so
 	$(FC) $(FFLAGS) -I$(INCLUDES) -c -o $@ $<
 
 module_fitstools.o : module_cfitsio.mod module_wcslib.mod
-module_pacsinstrument.o : string.mod module_fitstools.mod module_pacspointing.mod module_pointingmatrix.mod module_projection.mod module_wcslib.mod 
+module_pacsinstrument.o : string.mod module_fitstools.mod module_pacspointing.mod module_pointingmatrix.mod module_projection.mod module_wcs.mod module_wcslib.mod 
 module_pacspointing.o : precision.mod module_fitstools.mod
 module_pointingmatrix.o : module_pointingelement.mod
 module_projection.o : precision.mod module_sort.mod module_stack.mod
+module_wcs.o : module_fitstools.mod module_wcslib.mod
 
 test_cfitsio.o : module_cfitsio.mod module_stdio.mod
 test_fitstools.o : module_fitstools.mod module_wcslib.mod
@@ -44,8 +45,8 @@ test_wcslibc.o : module_wcslibc.mod module_cfitsio.mod
 
 test_cfitsio : module_cfitsio.o module_stdio.o
 test_fitstools : module_cfitsio.o module_fitstools.o module_wcslib.o
-test_ngc6946_bpj : module_cfitsio.o module_fitstools.o module_pacsinstrument.o module_pacsinstrument.o module_pacspointing.o module_pointingelement.o module_pointingmatrix.o module_projection.o module_preprocessor.o module_sort.o module_stack.o module_wcslib.o precision.o string.o
-test_pacs : module_pacsinstrument.o string.o module_fitstools.o module_cfitsio.o module_stack.o module_sort.o module_projection.o module_pacspointing.o module_pointingelement.o module_pointingmatrix.o module_wcslib.o
+test_ngc6946_bpj : module_cfitsio.o module_fitstools.o module_pacsinstrument.o module_pacsinstrument.o module_pacspointing.o module_pointingelement.o module_pointingmatrix.o module_projection.o module_preprocessor.o module_sort.o module_stack.o module_wcs.o module_wcslib.o precision.o string.o
+test_pacs : module_pacsinstrument.o string.o module_fitstools.o module_cfitsio.o module_stack.o module_sort.o module_projection.o module_pacspointing.o module_pointingelement.o module_pointingmatrix.o module_wcs.o module_wcslib.o
 test_pointing : module_pacspointing.o precision.o module_fitstools.o module_cfitsio.o
 test_projection : module_projection.o module_sort.o module_stack.o
 test_read_config :  module_instrument.o precision.o string.o

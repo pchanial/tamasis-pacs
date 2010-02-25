@@ -258,7 +258,7 @@ subroutine pacs_pointing_matrix(array, time, ra, dec, pa, chop, npointings, fine
     ! compute the projector
     write(*,'(a)', advance='no') 'Info: computing the projector... '
     call system_clock(count1, count_rate, count_max)
-    call pacs%compute_projection_sharp_edges(pointing, finetime, wcs, nx, ny, pmatrix)
+    call pacs%compute_projection_sharp_edges(pointing, finetime, header, nx, ny, pmatrix)
     call system_clock(count2, count_rate, count_max)
     write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
 

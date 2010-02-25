@@ -61,7 +61,6 @@ module module_pacsinstrument
         procedure, nopass :: get_array_color
         procedure, nopass :: uv2yz
         procedure, nopass :: yz2ad
-        procedure, nopass :: ad2xy
         procedure, nopass :: xy2roi
         procedure         :: roi2pmatrix
         procedure, nopass :: multiplexing_direct
@@ -474,23 +473,7 @@ contains
     !-------------------------------------------------------------------------------
 
 
-    recursive function ad2xy(ad, wcs) result(xy)
-        use module_wcslib
-        real*8, intent(in)  :: ad(:,:)
-        integer, intent(in) :: wcs(WCSLEN)
-        real*8              :: xy(ndims,size(ad,2))
-        integer             :: status, stat(size(ad,2))
-        real*8              :: phi(size(ad,2)), theta(size(ad,2)), imgcrd(ndims,size(ad,2))
-
-        status = wcss2p(wcs, size(ad,2), 2, ad, phi, theta, imgcrd, xy, stat)
-
-    end function ad2xy
-
-
-    !-------------------------------------------------------------------------------
-
-
-    recursive function xy2roi(xy) result(roi)
+   recursive function xy2roi(xy) result(roi)
         real*8, intent(in) :: xy(:,:)
         real*8             :: roi(ndims,2,size(xy,2)/nvertices)
         integer            :: idetector
@@ -555,6 +538,7 @@ contains
 
         use module_fitstools, only : ft_create_header, ft_header2wcs
         use module_wcslib, only : wcsfree
+        use module_wcs, only : init_wcslib
 
         class(pacsinstrument), intent(in) :: this
         class(pacspointing), intent(in)   :: pointing
@@ -562,17 +546,16 @@ contains
         real*8, intent(in)                :: resolution
         character(len=2880), intent(out)  :: header
 
-        integer                           :: wcs(WCSLEN), nx, ny, status
+        integer                           :: nx, ny, status
         integer                           :: ixmin, ixmax, iymin, iymax
         real*8                            :: ra0, dec0, xmin, xmax, ymin, ymax
 
         call pointing%compute_center(times, ra0, dec0)
 
         call ft_create_header(0, 0, -resolution/3600.d0, resolution/3600.d0, 0.d0, ra0, dec0, 1.d0, 1.d0, header)
-        call ft_header2wcs(header, wcs, nx, ny)
+        call init_wcslib(header)
 
-        call this%find_minmax(pointing, times, wcs, xmin, xmax, ymin, ymax)
-        status = wcsfree(wcs)
+        call this%find_minmax(pointing, times, xmin, xmax, ymin, ymax)
 
         ixmin = nint(xmin)
         ixmax = nint(xmax)
@@ -585,7 +568,6 @@ contains
         ! move the reference pixels (not the reference values!)
         call ft_create_header(nx, ny, -resolution/3600.d0, resolution/3600.d0, 0.d0, &
                               ra0, dec0, -ixmin+2.d0, -iymin+2.d0, header)
-        call ft_header2wcs(header, wcs, nx, ny)
 
     end subroutine compute_mapheader
 
@@ -594,13 +576,13 @@ contains
 
 
     ! find minimum and maximum pixel coordinates in maps
-    subroutine find_minmax(this, pointing, times, wcs, xmin, xmax, ymin, ymax)
+    subroutine find_minmax(this, pointing, times, xmin, xmax, ymin, ymax)
 
         use module_projection, only: convex_hull
+        use module_wcs, only : ad2xy_wcslib, init_wcslib
         class(pacsinstrument), intent(in) :: this
         class(pacspointing), intent(in)   :: pointing
         real*8, intent(in)                :: times(:)  ! times at which the PACS array should be considered as inside the map
-        integer, intent(in)               :: wcs(WCSLEN)
         real*8, intent(out)               :: xmin, xmax, ymin, ymax
 
         real*8                            :: ra, dec, pa, chop
@@ -632,7 +614,7 @@ contains
            call pointing%get_position(times(isample), ra, dec, pa, chop, index)
            hull = uv2yz(hull_uv, this%distortion_yz_blue, chop)
            hull = yz2ad(hull, ra, dec, pa)
-           hull = ad2xy(hull, wcs)
+           hull = ad2xy_wcslib(hull)
            xmin = min(xmin, minval(hull(1,:)))
            xmax = max(xmax, maxval(hull(1,:)))
            ymin = min(ymin, minval(hull(2,:)))
@@ -646,12 +628,13 @@ contains
     !------------------------------------------------------------------------------
 
 
-    subroutine compute_projection_sharp_edges(this, pointing, time, wcs, nx, ny, pmatrix)
+    subroutine compute_projection_sharp_edges(this, pointing, time, header, nx, ny, pmatrix)
 
+        use module_wcs, only : init_wcslib, ad2xy_wcslib, free_wcslib
         class(pacsinstrument), intent(in)    :: this
         class(pacspointing), intent(in)      :: pointing
+        character(len=*), intent(in)         :: header
         real*8, intent(in)                   :: time(:)
-        integer, intent(in)                  :: wcs(WCSLEN)
         integer, intent(in)                  :: nx, ny
         type(pointingelement), intent(out)   :: pmatrix(:,:,:)
 
@@ -661,6 +644,8 @@ contains
         nsamples = size(time)
         npixels_per_sample = -1
 
+        call init_wcslib(header)
+
         index = 2
         !$omp parallel do default(shared) firstprivate(index) private(isample, ra, dec, pa, chop, coords, roi) &
         !$omp reduction(max : npixels_per_sample)
@@ -668,7 +653,7 @@ contains
             call pointing%get_position(time(isample), ra, dec, pa, chop, index)
             coords = this%uv2yz(this%corners_uv, this%distortion_yz_blue, chop)
             coords = this%yz2ad(coords, ra, dec, pa)
-            coords = this%ad2xy(coords, wcs)
+            coords = ad2xy_wcslib(coords)
             roi    = this%xy2roi(coords) ! [1=x|2=y,1=min|2=max,idetector]
             call this%roi2pmatrix(roi, coords, nx, ny, isample, nroi, pmatrix)
             npixels_per_sample = max(npixels_per_sample, nroi)
@@ -677,6 +662,8 @@ contains
         if (npixels_per_sample /= size(pmatrix,1)) then
             write(*,'(a,i0,a)') 'Warning: For the Pointing Matrix, npixels_per_sample may be updated to ', npixels_per_sample, '.'
         end if
+
+        call free_wcslib()
 
     end subroutine compute_projection_sharp_edges
 
