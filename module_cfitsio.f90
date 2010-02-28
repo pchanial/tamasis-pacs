@@ -2,6 +2,7 @@
 module module_cfitsio
 
     use, intrinsic :: ISO_C_BINDING
+    use, intrinsic :: ISO_FORTRAN_ENV
     implicit none
 
     integer(kind=C_INT), bind(C, name='READONLY')  :: CFITSIO_READONLY
@@ -45,5 +46,21 @@ module module_cfitsio
         end subroutine fits_report_error
 
     end interface
+
+    public :: fits_report_error
+
+
+contains
+
+
+    subroutine cfitsio_report_error(status)
+        use module_stdio, only : stderr, init_stdio
+        integer, intent(in) :: status
+
+        call init_stdio()
+        call fits_report_error(stderr, int(status, kind=C_INT))
+
+    end subroutine cfitsio_report_error
+
 
 end module module_cfitsio
