@@ -18,4 +18,6 @@ program test_stdio
     call fits_report_error(stdout, status)
     call fits_report_error(stderr, status)
 
+    stop 'OK.'
+
 end program test_stdio
