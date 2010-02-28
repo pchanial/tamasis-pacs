@@ -1,6 +1,7 @@
 ! A stack implementation
 module module_stack
 
+    use, intrinsic :: ISO_FORTRAN_ENV
     implicit none
 
     type stack_int
@@ -30,7 +31,9 @@ contains
         type(stackcell_int), pointer    :: current
 
         if (this%is_empty()) then
-            stop "Stack is empty."
+            write (ERROR_UNIT,'(a)') "Stack is empty."
+            pop = 0
+            return
         end if
         current => this%head
         pop = current%value
@@ -41,7 +44,7 @@ contains
     end function pop
 
 
-    !-------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
     subroutine push(this, value)
@@ -52,7 +55,11 @@ contains
         type(stackcell_int), pointer    :: current
 
         allocate(current, stat=istat)
-        if (istat /= 0) stop "Error allocating new cell in stack."
+        if (istat /= 0) then
+            write (ERROR_UNIT,'(a)') "Error allocating new cell in stack."
+            return
+        end if
+
         current%value = value
         if (.not. this%is_empty()) then
             current%next => this%head
@@ -63,7 +70,7 @@ contains
     end subroutine push
 
 
-    !-------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
     function is_empty(this)
@@ -76,24 +83,27 @@ contains
     end function
 
 
-    !-------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
     subroutine print(this)
 
         class(stack_int), intent(in) :: this
-        integer :: i
+        integer                      :: i, nformat
         type(stackcell_int), pointer :: current
+        character(len=10)            :: fmt
 
         if (this%is_empty()) then
            write (*,*) "Stack is empty"
            return
         end if
 
+        nformat = ceiling(alog(real(this%nelements)))+1
+        write (fmt,'(a,i0,a)') '(i', nformat, ',a,i0)'
         current => this%head
         i = 1
         do while (.true.)
-           write (*,*) i, current%value
+           write (*,fmt) i, ': ', current%value
            i = i + 1
            if (.not. associated(current%next)) exit
            current => current%next
@@ -102,7 +112,7 @@ contains
     end subroutine print
 
 
-    !-------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
     subroutine to_array(this, array)
