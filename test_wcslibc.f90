@@ -134,4 +134,6 @@ program test_wcslibc
 
   !status = wcsvfree(&nwcs, &wcs);
 
+  stop 'OK.'
+
 end program test_wcslibc

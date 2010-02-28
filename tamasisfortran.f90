@@ -3,6 +3,7 @@
 
 
 subroutine pacs_info_ndetectors(filename, transparent_mode, ndetectors)
+    use, intrinsic :: ISO_FORTRAN_ENV
     use module_pacsinstrument
     implicit none
 
@@ -14,11 +15,19 @@ subroutine pacs_info_ndetectors(filename, transparent_mode, ndetectors)
     integer, intent(out)         :: ndetectors
 
     class(pacsinstrument), allocatable :: pacs
+    integer                            :: status
 
     allocate(pacs)
-    call pacs%read_calibration_files()
-    call pacs%filter_detectors(pacs%get_array_color(filename), transparent_mode=transparent_mode)
+    call pacs%read_calibration_files(status)
+    if (status /= 0) goto 999
+
+    call pacs%filter_detectors(pacs%get_array_color(filename), transparent_mode=transparent_mode, status=status)
+    if (status /= 0) goto 999
+
     ndetectors = pacs%ndetectors
+    return
+
+999 write (ERROR_UNIT, '(a)') 'Aborting.'
 
 end subroutine pacs_info_ndetectors
 
@@ -27,6 +36,7 @@ end subroutine pacs_info_ndetectors
 
 
 subroutine pacs_info_ij(filename, transparent_mode, ndetectors, ij)
+    use, intrinsic :: ISO_FORTRAN_ENV
     use module_pacsinstrument
     implicit none
 
@@ -40,11 +50,19 @@ subroutine pacs_info_ij(filename, transparent_mode, ndetectors, ij)
     integer, intent(out)         :: ij(2,ndetectors)
 
     class(pacsinstrument), allocatable :: pacs
+    integer                            :: status
 
     allocate(pacs)
-    call pacs%read_calibration_files()
-    call pacs%filter_detectors(pacs%get_array_color(filename), transparent_mode=transparent_mode)
+    call pacs%read_calibration_files(status)
+    if (status /= 0) goto 999
+
+    call pacs%filter_detectors(pacs%get_array_color(filename), transparent_mode=transparent_mode, status=status)
+    if (status /= 0) goto 999
+
     ij = pacs%ij
+    return
+
+999 write (ERROR_UNIT, '(a)') 'Aborting.'
 
 end subroutine pacs_info_ij
 
@@ -64,19 +82,23 @@ subroutine pacs_info_nsamples(filename, nsamples)
     character(len=*), intent(in) :: filename
     integer, intent(out)         :: nsamples
 
-    integer, allocatable               :: imageshape(:)
-    integer                            :: unit, status
-    status = 0
-    call ft_openimage(filename // "_Signal.fits", unit, 3, imageshape, status)
-    call ft_close(unit, status)
-    call ft_printerror(status, filename)
-    if (status /= 0) return
+    integer, allocatable         :: imageshape(:)
+    integer                      :: unit, status
 
-    if (size(imageshape) /= 3) then
-        write(ERROR_UNIT, *) 'Number of dimensions is not 3 in ' // filename // "_Signal.fits"
+    call ft_openimage(filename // "_Signal.fits", unit, 3, imageshape, status)
+    if (status /= 0) goto 999
+    call ft_close(unit, status)
+    if (status /= 0) goto 999
+
+    if (size(imageshape) == 3) then
+        nsamples = imageshape(1)
         return
     endif
-    nsamples = imageshape(1)
+
+    status = 1
+    write (ERROR_UNIT, '(a)') 'Number of dimensions is not 3 in ' // filename // "_Signal.fits"
+
+999 write (ERROR_UNIT, '(a)') 'Aborting.'
 
 end subroutine pacs_info_nsamples
 
@@ -86,6 +108,7 @@ end subroutine pacs_info_nsamples
 
 subroutine pacs_timeline(filename, array, first, last, ndetectors, transparent_mode, bad_pixel_mask, nrow, ncol, &
                          keep_bad_detectors, signal, mask)
+    use, intrinsic :: ISO_FORTRAN_ENV
     use module_pacsinstrument
     use module_preprocessor
     implicit none
@@ -114,19 +137,28 @@ subroutine pacs_timeline(filename, array, first, last, ndetectors, transparent_m
     logical*1, intent(out)       :: mask(last-first+1, ndetectors)
 
     class(pacsinstrument), allocatable :: pacs
+    integer                            :: status
 
     allocate(pacs)
-    call pacs%read_calibration_files()
+    call pacs%read_calibration_files(status)
+    if (status /= 0) goto 999
+
     if (array == 'blue' .or. array == 'green') then
         pacs%mask_blue = bad_pixel_mask
     else
         pacs%mask_red = bad_pixel_mask
     end if
-    call pacs%filter_detectors(array, transparent_mode=transparent_mode, keep_bad_detectors=keep_bad_detectors)
-    call pacs%read_signal_file(filename // '_Signal.fits', first, last, signal)
-    call pacs%read_mask_file(filename // '_Mask.fits', first, last, mask)
+    call pacs%filter_detectors(array, transparent_mode=transparent_mode, keep_bad_detectors=keep_bad_detectors, status=status)
+    if (status /= 0) goto 999
+    call pacs%read_signal_file(filename // '_Signal.fits', first, last, signal, status)
+    if (status /= 0) goto 999
+    call pacs%read_mask_file(filename // '_Mask.fits', first, last, mask, status)
+    if (status /= 0) goto 999
     call divide_vectordim2(signal, pacs%flatfield)
     call subtract_meandim1(signal)
+    return
+
+999 write (ERROR_UNIT,'(a)') 'Aborting.'
 
 end subroutine pacs_timeline
 
@@ -137,6 +169,7 @@ end subroutine pacs_timeline
 subroutine pacs_map_header(array, time, ra, dec, pa, chop, npointings, finetime, nfinesamples, &
                            transparent_mode, bad_pixel_mask, nrow, ncol, keep_bad_detectors, resolution, header)
 
+    use, intrinsic :: ISO_FORTRAN_ENV
     use module_fitstools
     use module_pacsinstrument
     use module_pacspointing
@@ -169,25 +202,35 @@ subroutine pacs_map_header(array, time, ra, dec, pa, chop, npointings, finetime,
 
     class(pacsinstrument), allocatable :: pacs
     class(pacspointing), allocatable   :: pointing
+    integer                            :: status
 
     ! read pointing information
     allocate(pointing)
-    call pointing%load_array(time, ra, dec, pa, chop)
+    call pointing%load_array(time, ra, dec, pa, chop, status)
+    if (status /= 0) goto 999
 
     ! get the pacs instance, read the calibration files
     allocate(pacs)
-    call pacs%read_calibration_files()
+    call pacs%read_calibration_files(status)
+    if (status /= 0) goto 999
+
     if (array == 'blue' .or. array == 'green') then
         pacs%mask_blue = bad_pixel_mask
     else
         pacs%mask_red = bad_pixel_mask
     end if
-    call pacs%filter_detectors(array, transparent_mode=transparent_mode, keep_bad_detectors=keep_bad_detectors)
+
+    call pacs%filter_detectors(array, transparent_mode=transparent_mode, keep_bad_detectors=keep_bad_detectors, status=status)
+    if (status /= 0) goto 999
+
     if (any(pacs%mask .neqv. bad_pixel_mask)) then
         write (*,'(a)') 'Info: using user bad pixel mask for the blue array.'
     end if
 
-    call pacs%compute_mapheader(pointing, finetime, resolution, header)
+    call pacs%compute_mapheader(pointing, finetime, resolution, header, status)
+    if (status == 0) return
+
+999 write(ERROR_UNIT,'(a)') 'Aborting.'
 
 end subroutine pacs_map_header
 
@@ -198,6 +241,7 @@ end subroutine pacs_map_header
 subroutine pacs_pointing_matrix(array, time, ra, dec, pa, chop, npointings, finetime, nfinesamples, npixels_per_sample, &
                                 ndetectors, transparent_mode, bad_pixel_mask, nrow, ncol, keep_bad_detectors, header, pmatrix)
 
+    use, intrinsic :: ISO_FORTRAN_ENV
     use module_fitstools
     use module_pacsinstrument
     use module_pacspointing
@@ -239,31 +283,42 @@ subroutine pacs_pointing_matrix(array, time, ra, dec, pa, chop, npointings, fine
 
     ! read pointing information
     allocate(pointing)
-    call pointing%load_array(time, ra, dec, pa, chop)
+    call pointing%load_array(time, ra, dec, pa, chop, status)
+    if (status /= 0) goto 999
 
     ! get the pacs instance, read the calibration files
     allocate(pacs)
-    call pacs%read_calibration_files()
+    call pacs%read_calibration_files(status)
+    if (status /= 0) goto 999
+
     if (array == 'blue' .or. array == 'green') then
         pacs%mask_blue = bad_pixel_mask
     else
         pacs%mask_red = bad_pixel_mask
     end if
-    call pacs%filter_detectors(array, transparent_mode=transparent_mode, keep_bad_detectors=keep_bad_detectors)
+    call pacs%filter_detectors(array, transparent_mode=transparent_mode, keep_bad_detectors=keep_bad_detectors, status=status)
+    if (status /= 0) goto 999
+
     if (any(pacs%mask .neqv. bad_pixel_mask)) then
-        write (*,'(a)') 'Info: using user bad pixel mask for the blue array.'
+        write (*,'(a)') "Info: using user's bad pixel mask."
     end if
-    call ft_header2wcs(header, wcs, nx, ny)
+
+    call ft_header2wcs(header, wcs, nx, ny, status)
+    if (status /= 0) goto 999
 
     ! compute the projector
     write(*,'(a)', advance='no') 'Info: computing the projector... '
     call system_clock(count1, count_rate, count_max)
-    call pacs%compute_projection_sharp_edges(pointing, finetime, header, nx, ny, pmatrix)
+    call pacs%compute_projection_sharp_edges(pointing, finetime, header, nx, ny, pmatrix, status)
     call system_clock(count2, count_rate, count_max)
     write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
 
+
     ! free the wcs
     status = wcsfree(wcs)
+    if (status == 0) return
+
+999 write(ERROR_UNIT,'(a)') 'Aborting.'
 
 end subroutine pacs_pointing_matrix
 

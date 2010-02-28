@@ -11,13 +11,13 @@ program test_pacs
     class(pacsinstrument), allocatable  :: pacs
     class(pacspointing), allocatable :: pointing
     character(len=*), parameter :: filename = '/home/pchanial/work/pacs/data/transparent/NGC6946/1342184520_blue'
-    character(len=*), parameter :: filename_header = '/home/pchanial/work/tamasis/csh_header_ngc6946.fits'
+    character(len=*), parameter :: filename_header = 'tests/csh_header_ngc6946.fits'
 
     real*8, allocatable    :: yz(:,:), ad(:,:), xy(:,:), time(:)
     integer*8, allocatable :: timeus(:)
     integer                :: wcs(WCSLEN)
     integer                :: status, i, j, nx, ny, index
-   !integer                :: count, count2, count_rate, count_max
+    !integer                :: count, count2, count_rate, count_max
     integer*8              :: first, last
     real*8                 :: ra, dec, pa, chop, xmin, xmax, ymin, ymax, ra0, dec0
     character(len=2880)    :: header
@@ -25,26 +25,30 @@ program test_pacs
     ! read observation
 
     allocate(pointing)
-    call pointing%load(filename)
+    call pointing%load(filename, status)
+    if (status /= 0) stop 'pointing%load: FAILED.'
     call pointing%print()
 
-    status = 0
     first = 12001
     last  = 86936
     allocate(time(last-first+1))
     allocate(timeus(last-first+1))
     call ft_readslice(filename // '_Time.fits+1', first, last, timeus, status)
-    call ft_printerror(status, filename // '_Time.fits+1')
-    if (status /= 0) stop
+    if (status /= 0) stop 'ft_readslice: FAILED.'
 
     time = timeus * 1.0d-6
     allocate(pacs)
 
-    call pacs%read_calibration_files()
-    call pacs%filter_detectors(pacs%get_array_color(filename), transparent_mode=.true.)
+    call pacs%read_calibration_files(status)
+    if (status /= 0) stop 'ft_readslice: FAILED.'
+    call pacs%filter_detectors(pacs%get_array_color(filename), transparent_mode=.true., status=status)
+    if (status /= 0) stop 'filter_detectors: FAILED.'
+
     call ft_header2str(filename_header, header, status)
-    call ft_printerror(status, filename_header)
-    call init_wcslib(header)
+    if (status /= 0) stop 'ft_header2str: FAILED.'
+
+    call init_wcslib(header, status)
+    if (status /= 0) stop 'init_wcslib: FAILED.'
 
     write (*,*) 'Number of valid detectors:', pacs%ndetectors
     write (*,*) 'Number of samples:', size(time)
@@ -107,8 +111,10 @@ program test_pacs
     write (*,*) 'X = ', xmin, xmax
     write (*,*) 'Y = ', ymin, ymax
 
-    call pacs%compute_mapheader(pointing, time, 3.d0, header)
-    call ft_header2wcs(header, wcs, nx, ny)
+    call pacs%compute_mapheader(pointing, time, 3.d0, header, status)
+    if (status /= 0) stop 'compute_mapheader: FAILED.'
+    call ft_header2wcs(header, wcs, nx, ny, status)
+    if (status /= 0) stop 'ft_header2wcs: FAILED.'
 
     !! check that all detector corners are inside the map
     !call system_clock(count, count_rate, count_max)

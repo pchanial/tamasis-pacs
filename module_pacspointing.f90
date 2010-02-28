@@ -25,80 +25,82 @@ module module_pacspointing
 contains
 
 
-    subroutine load_filename(this, filename)
+    subroutine load_filename(this, filename, status)
         use precision, only : test_real_eq
-        use module_fitstools, only : ft_readextension, ft_printerror
+        use module_fitstools, only : ft_readextension
 
         class(pacspointing), intent(inout) :: this
         character(len=*), intent(in)       :: filename
+        integer, intent(out)               :: status
         real*8, allocatable                :: time(:), ra(:), dec(:), pa(:), chop(:)
         integer*8, allocatable             :: timeus(:)
-        integer                            :: status
 
-        status = 0
         call ft_readextension(filename // '_Time.fits', timeus, status)
-        call ft_printerror(status, filename // '_Time.fits')
+        if (status /= 0) return
         allocate(time(size(timeus)))
         time = timeus * 1.0d-6
 
         call ft_readextension(filename // '_RaArray.fits', ra, status)
-        call ft_printerror(status, filename // '_RaArray.fits')
+        if (status /= 0) return
 
         call ft_readextension(filename // '_DecArray.fits', dec, status)
-        call ft_printerror(status, filename // '_DecArray.fits')
+        if (status /= 0) return
 
         call ft_readextension(filename // '_PaArray.fits', pa, status)
-        call ft_printerror(status, filename // '_PaArray.fits')
+        if (status /= 0) return
 
         call ft_readextension(filename // '_ChopFpuAngle.fits', chop, status)
-        call ft_printerror(status, filename // '_ChopFpuAngle.fits')
+        if (status /= 0) return
 
-        if (status /= 0) stop
-
-        call this%load(time, ra, dec, pa, chop)
+        call this%load(time, ra, dec, pa, chop, status)
 
     end subroutine load_filename
 
 
     !---------------------------------------------------------------------------
 
-    subroutine load_array(this, time, ra, dec, pa, chop)
+    subroutine load_array(this, time, ra, dec, pa, chop, status)
         use precision, only : test_real_eq
-
+        use, intrinsic :: ISO_FORTRAN_ENV
         class(pacspointing), intent(inout) :: this
         real*8, intent(in)                 :: time(:), ra(:), dec(:), pa(:), chop(:)
+        integer, intent(out)               :: status
         real*8, parameter                  :: tol = 0.001d0 ! fractional threshold of sampling above which sampling is considered uneven
         integer                            :: isample
+
+        status = 1
 
         ! check conformity of time, ra, dec, pa
         this%nsamples = size(time)
         if (this%nsamples <= 1) then
-            write (*,*) "Input time has less than two time samples."
-            stop
+            write (ERROR_UNIT,'(a)') "Input time has less than two time samples."
+            return
         endif
         if (size(ra) /= this%nsamples) then
-            write (*,*) "Input R.A. has an invalid number of samples."
-            stop
+            write (ERROR_UNIT,'(a)') "Input R.A. has an invalid number of samples."
+            return
         endif
         if (size(dec) /= this%nsamples) then
-            write (*,*) "Input declination has an invalid number of samples."
-            stop
+            write (ERROR_UNIT,'(a)') "Input declination has an invalid number of samples."
+            return
         endif
         if (size(pa) /= this%nsamples) then
-            write (*,*) "Input P.A. has an invalid number of samples."
-            stop
+            write (ERROR_UNIT,'(a)') "Input P.A. has an invalid number of samples."
+            return
         endif
         if (size(chop) /= this%nsamples) then
-            write (*,*) "Input chop angle has an invalid number of samples."
-            stop
+            write (ERROR_UNIT,'(a)') "Input chop angle has an invalid number of samples."
+            return
         endif
         this%delta = time(2) - time(1)
 
         ! check that the input time is monotonous (and increasing)
         if (any(time(2:)-time(1:this%nsamples-1) <= 0)) then
-            write (*,*) "Error: the pointing time is not strictly increasing"
-            stop
+            write (ERROR_UNIT,'(a)') "Error: the pointing time is not strictly increasing"
+            return
         endif
+
+        status = 0
 
         ! check there is no time drifts to ensure that fast interpolation can be relied upon
         if (any(abs([(this%delta * (isample-1), isample = 1, this%nsamples)] - (time-time(1))) > tol * this%delta)) then

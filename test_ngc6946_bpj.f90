@@ -40,7 +40,8 @@ program test_ngc6946_bpj
 
     ! read pointing information
     allocate(pointing)
-    call pointing%load(filename)
+    call pointing%load(filename, status)
+    if (status /= 0) stop 'pointing%load_filename: FAILED.'
 
     ! read the time file
     status = 0
@@ -51,15 +52,22 @@ program test_ngc6946_bpj
     allocate(time(last-first+1))
     allocate(timeus(last-first+1))
     call ft_readslice(filename_time // '+1', first, last, timeus, status)
-    call ft_printerror(status, filename_time // '+1')
+    if (status /= 0) stop 'ft_readslice: FAILED.'
     time = timeus * 1.0d-6
 
     ! get the pacs instance, read the calibration files
     allocate(pacs)
-    call pacs%read_calibration_files()
-    call pacs%filter_detectors('blue', transparent_mode=.true.)
-    call pacs%compute_mapheader(pointing, time, 3.d0, header)
-    call ft_header2wcs(header, wcs, nx, ny)
+    call pacs%read_calibration_files(status)
+    if (status /= 0) stop 'read_calibration_files: FAILED.'
+
+    call pacs%filter_detectors('blue', transparent_mode=.true., status=status)
+    if (status /= 0) stop 'filter_detectors: FAILED.'
+
+    call pacs%compute_mapheader(pointing, time, 3.d0, header, status)
+    if (status /= 0) stop 'compute_mapheader: FAILED.'
+
+    call ft_header2wcs(header, wcs, nx, ny, status)
+    if (status /= 0) stop 'ft_header2wcs: FAILED.'
 
     ! allocate memory for the map
     allocate(map1d(0:nx*ny-1))
@@ -68,7 +76,8 @@ program test_ngc6946_bpj
     write(*,'(a)', advance='no') 'Reading signal file... '
     call system_clock(count1, count_rate, count_max)
     allocate(signal(last-first+1, pacs%ndetectors))
-    call pacs%read_signal_file(filename_signal, first, last, signal)
+    call pacs%read_signal_file(filename_signal, first, last, signal, status)
+    if (status /= 0) stop 'read_signal_filte: FAILED.'
     call system_clock(count2, count_rate, count_max)
     write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
 
@@ -84,7 +93,8 @@ program test_ngc6946_bpj
     write(*,'(a)', advance='no') 'Computing the projector... '
     allocate(pmatrix(9,last-first+1,pacs%ndetectors))
     call system_clock(count1, count_rate, count_max)
-    call pacs%compute_projection_sharp_edges(pointing, time, header, nx, nx, pmatrix)
+    call pacs%compute_projection_sharp_edges(pointing, time, header, nx, nx, pmatrix, status)
+    if (status /= 0) stop 'compute_projection_sharp_edges: FAILED.'
     call system_clock(count2, count_rate, count_max)
     write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
 
@@ -95,7 +105,8 @@ program test_ngc6946_bpj
     allocate(surface2(nsamples, pacs%ndetectors))
     allocate(coords(ndims, pacs%ndetectors*nvertices))
 
-    call init_wcslib(header)
+    call init_wcslib(header, status)
+    if (status /= 0) stop 'init_wcslib: FAILED.'
 
     index = 2
     !$omp parallel do default(none) firstprivate(index) private(isample, ra, dec, pa, chop, coords) &
@@ -110,7 +121,7 @@ program test_ngc6946_bpj
             surface2(isample,idetector) = sum(pmatrix(:,isample,idetector)%weight)
         end do
     end do
-    !!$omp end parallel do
+    !$omp end parallel do
     call system_clock(count2, count_rate, count_max)
     write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
     write(*,*) 'Difference: ', maxval(abs((surface1-surface2)/surface1))
@@ -143,7 +154,7 @@ program test_ngc6946_bpj
     ! write the map as fits file
     write(*,'(a)') 'Writing FITS file... '
     call ft_write(outputdir // 'ngc6946_bpj.fits', reshape(map1d, [nx,ny]), wcs, status)
-    call ft_printerror(status, outputdir // 'ngc6946_bpj.fits')
+    if (status /= 0) stop 'ft_write: FAILED.'
 
     call free_wcslib()
 

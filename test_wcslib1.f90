@@ -6,7 +6,7 @@ program test_wcslib1
 
     INTEGER   ALTS(0:26), CTRL, I, IERR, J, K, NKEYRC, NREJECT, NWCS, RELAX, WCSP
     CHARACTER CALTS(0:26)*2, KEYREC*80, HEADER*288001
-    character(len=*), parameter :: infile = '/home/pchanial/software/wcslib-4.4.4/Fortran/pih.fits'
+    character(len=*), parameter :: infile = 'tests/pih.fits'
 
     INTEGER WCS(WCSLEN), STAT(WCSFIX_NWCS)
 
@@ -126,5 +126,7 @@ program test_wcslib1
 
 !     Free the memory allocated by WCSPIH.
       IERR = WCSVFREE (NWCS, WCSP)
+
+      stop 'OK.'
 
 end program test_wcslib1

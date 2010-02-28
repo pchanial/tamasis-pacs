@@ -6,7 +6,7 @@ program test_read_config
  
  type(receiver) :: pacs
 
- pacs = read_instrument_configfile('example_geometry.txt')
+ pacs = read_instrument_configfile('/home/pchanial/work/tamasis/example_geometry.txt')
 
  call write_configuration(pacs)
 
@@ -14,5 +14,7 @@ program test_read_config
  if (allocated(pacs%id))     deallocate(pacs%id)
  if (allocated(pacs%vertex)) deallocate(pacs%vertex)
  if (allocated(pacs%flag))   deallocate(pacs%flag)
+
+ stop 'OK.'
 
 end program test_read_config

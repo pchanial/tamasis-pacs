@@ -19,7 +19,7 @@ module module_fitstools
     public :: ft_write
     public :: ft_header2str
     public :: ft_header2wcs
-    public :: ft_printerror
+    public :: ft_readparam
 
     interface ft_readextension
         module procedure readext_logical_1d, readext_int64_1d, readext_double_1d, &
@@ -38,6 +38,10 @@ module module_fitstools
         module procedure writefits_double_1d, writefits_double_2d
     end interface ft_write
 
+    interface ft_readparam
+        module procedure ft_readparam_logical, ft_readparam_int32, ft_readparam_int64, ft_readparam_double, ft_readparam_character
+    end interface ft_readparam
+
 
 contains
 
@@ -46,13 +50,11 @@ contains
 
         character(len=*), intent(in)        :: filename
         logical*1, allocatable, intent(out) :: output(:)
-        integer, intent(inout)              :: status
+        integer, intent(out)                :: status
         integer, optional, intent(in)       :: hdu
 
         integer                             :: unit, firstpix, anynull
         integer, allocatable                :: imageshape(:)
-
-        if (status /= 0) return
 
         call ft_openimage(filename, unit, 1, imageshape, status, hdu=hdu)
         if (status /= 0) return
@@ -62,27 +64,25 @@ contains
         allocate(output(imageshape(1)))
 
         call ftgpvb(unit, GROUP, firstpix, imageshape(1), NULLVAL, output, anynull, status)
-        if (status /= 0) return
+        if (ft_checkerror_cfitsio(status, filename)) return
 
         call ft_close(unit, status)
 
     end subroutine readext_logical_1d
 
 
-    !-------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
     recursive subroutine readext_int64_1d(filename, output, status, hdu)
 
         character(len=*), intent(in)        :: filename
         integer*8, allocatable, intent(out) :: output(:)
-        integer, intent(inout)              :: status
+        integer, intent(out)                :: status
         integer, optional, intent(in)       :: hdu
 
         integer                             :: unit, firstpix, anynull
         integer, allocatable                :: imageshape(:)
-
-        if (status /= 0) return
 
         call ft_openimage(filename, unit, 1, imageshape, status, hdu=hdu)
         if (status /= 0) return
@@ -92,27 +92,25 @@ contains
         allocate(output(imageshape(1)))
 
         call ftgpvk(unit, GROUP, firstpix, imageshape(1), NULLVAL, output, anynull, status)
-        if (status /= 0) return
+        if (ft_checkerror_cfitsio(status, filename)) return
 
         call ft_close(unit, status)
 
     end subroutine readext_int64_1d
 
 
-    !-------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
     recursive subroutine readext_double_1d(filename, output, status, hdu)
 
         character(len=*), intent(in)     :: filename
         real*8, allocatable, intent(out) :: output(:)
-        integer, intent(inout)           :: status
+        integer, intent(out)             :: status
         integer, optional, intent(in)    :: hdu
 
         integer                          :: unit, firstpix, anynull
         integer, allocatable             :: imageshape(:)
-
-        if (status /= 0) return
 
         call ft_openimage(filename, unit, 1, imageshape, status, hdu=hdu)
         if (status /= 0) return
@@ -122,27 +120,25 @@ contains
         allocate(output(imageshape(1)))
 
         call ftgpvd(unit, GROUP, firstpix, imageshape(1), NULLVAL, output, anynull, status)
-        if (status /= 0) return
+        if (ft_checkerror_cfitsio(status, filename)) return
 
         call ft_close(unit, status)
 
     end subroutine readext_double_1d
 
 
-    !-------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
     recursive subroutine readext_logical_2d(filename, output, status, hdu)
 
         character(len=*), intent(in)        :: filename
-        integer, intent(inout)              :: status
+        integer, intent(out)                :: status
         logical*1, allocatable, intent(out) :: output(:,:)
         integer, optional, intent(in)       :: hdu
 
         integer                             :: unit, BUFFERSIZE, firstpix, anynull, j
         integer, allocatable                :: imageshape(:)
-
-        if (status /= 0) return
 
         call ft_openimage(filename, unit, 2, imageshape, status, hdu=hdu)
         if (status /= 0) return
@@ -155,7 +151,7 @@ contains
         do j = 1, imageshape(2)
 
            call ftgpvb(unit, GROUP, firstpix, BUFFERSIZE, NULLVAL, output(:, j), anynull, status)
-           if (status /= 0) exit
+           if (ft_checkerror_cfitsio(status, filename)) return
 
            firstpix = firstpix + BUFFERSIZE
 
@@ -166,20 +162,18 @@ contains
     end subroutine readext_logical_2d
 
 
-    !-------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
     recursive subroutine readext_double_2d(filename, output, status, hdu)
     
         character(len=*), intent(in)     :: filename
         real*8, allocatable, intent(out) :: output(:,:)
-        integer, intent(inout)           :: status
+        integer, intent(out)             :: status
         integer, optional, intent(in)    :: hdu
 
         integer                          :: unit, BUFFERSIZE, firstpix, anynull, j
         integer, allocatable             :: imageshape(:)
-
-        if (status /= 0) return
     
         call ft_openimage(filename, unit, 2, imageshape, status, hdu=hdu)
         if (status /= 0) return
@@ -192,7 +186,7 @@ contains
         do j = 1, imageshape(2)
     
             call ftgpvd(unit, GROUP, firstpix, BUFFERSIZE, NULLVAL, output(:,j), anynull, status)
-            if (status /= 0) exit
+            if (ft_checkerror_cfitsio(status, filename)) return
 
             firstpix = firstpix + BUFFERSIZE
 
@@ -203,19 +197,17 @@ contains
     end subroutine readext_double_2d
 
 
-    !-------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
     recursive subroutine readext_logical_3d(filename, output, status)
 
         character(len=*), intent(in)        :: filename
         logical*1, allocatable, intent(out) :: output(:,:,:)
-        integer, intent(inout)              :: status
+        integer, intent(out)                :: status
 
         integer                             :: unit, BUFFERSIZE, firstpix, anynull, j, k
         integer, allocatable                :: imageshape(:)
-
-        if (status /= 0) return
 
         call ft_openimage(filename, unit, 3, imageshape, status)
         if (status /= 0) return
@@ -229,7 +221,7 @@ contains
             do j = 1, imageshape(2)
 
                 call ftgpvb(unit, GROUP, firstpix, BUFFERSIZE, NULLVAL, output(:,j,k), anynull, status)
-                if (status /= 0) exit outer
+                if (ft_checkerror_cfitsio(status, filename)) exit outer
 
                 firstpix = firstpix + BUFFERSIZE
 
@@ -241,19 +233,17 @@ contains
     end subroutine readext_logical_3d
 
 
-    !-------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
     recursive subroutine readext_double_3d(filename, output, status)
 
         character(len=*), intent(in)     :: filename
         real*8, allocatable, intent(out) :: output(:,:,:)
-        integer, intent(inout)           :: status
+        integer, intent(out)             :: status
 
         integer                          :: unit, BUFFERSIZE, firstpix, anynull, j, k
         integer, allocatable             :: imageshape(:)
-
-        if (status /= 0) return
 
         call ft_openimage(filename, unit, 3, imageshape, status)
         if (status /= 0) return
@@ -268,7 +258,7 @@ contains
             do j = 1, imageshape(2)
 
                 call ftgpvd(unit, GROUP, firstpix, BUFFERSIZE, NULLVAL, output(:,j,k), anynull, status)
-                if (status /= 0) exit outer
+                if (ft_checkerror_cfitsio(status, filename)) exit outer
 
                 firstpix = firstpix + BUFFERSIZE
 
@@ -281,7 +271,7 @@ contains
     end subroutine readext_double_3d
 
 
-    !-------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
     recursive subroutine readslice_logical_filename(filename, x1, x2, array, status)
@@ -289,20 +279,20 @@ contains
         character(len=*), intent(in) :: filename
         integer*8, intent(in)        :: x1, x2
         logical*1, intent(inout)     :: array(x2 - x1 + 1)
-        integer, intent(inout)       :: status
+        integer, intent(out)         :: status
 
         integer                      :: unit
 
-        if (status /= 0) return
-
         call readext_open(filename, unit, status)
+        if (status /= 0) return
         call readslice_logical_unit(unit, x1, x2, array, status)
+        if (status /= 0) return
         call ft_close(unit, status)
 
     end subroutine readslice_logical_filename
 
 
-    !-------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
     recursive subroutine readslice_logical_unit(unit, x1, x2, array, status)
@@ -310,18 +300,18 @@ contains
         integer, intent(in)      :: unit
         integer*8, intent(in)    :: x1, x2
         logical*1, intent(inout) :: array(x2 - x1 + 1)
-        integer, intent(inout)   :: status
+        integer, intent(out)     :: status
 
         integer                  :: anynull
 
-        if (status /= 0) return
-
+        status = 0
         call ftgpvd(unit, GROUP, x1, x2 - x1 + 1, NULLVAL, array, anynull, status)
+        if (ft_checkerror_cfitsio(status)) return
 
     end subroutine readslice_logical_unit
 
 
-    !-------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
     recursive subroutine readslice_int64_filename(filename, x1, x2, array, status)
@@ -329,20 +319,20 @@ contains
         character(len=*), intent(in) :: filename
         integer*8, intent(in)        :: x1, x2
         integer*8, intent(inout)     :: array(x2 - x1 + 1)
-        integer, intent(inout)       :: status
+        integer, intent(out)         :: status
 
         integer                      :: unit
 
-        if (status /= 0) return
-
         call readext_open(filename, unit, status)
+        if (status /= 0) return
         call readslice_int64_unit(unit, x1, x2, array, status)
+        if (status /= 0) return
         call ft_close(unit, status)
 
     end subroutine readslice_int64_filename
 
 
-    !-------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
     recursive subroutine readslice_int64_unit(unit, x1, x2, array, status)
@@ -350,18 +340,18 @@ contains
         integer, intent(in)      :: unit
         integer*8, intent(in)    :: x1, x2
         integer*8, intent(inout) :: array(x2 - x1 + 1)
-        integer, intent(inout)   :: status
+        integer, intent(out)     :: status
 
         integer                  :: anynull
 
-        if (status /= 0) return
-
+        status = 0
         call ftgpvk(unit, GROUP, x1, x2 - x1 + 1, NULLVAL, array, anynull, status)
+        if (ft_checkerror_cfitsio(status)) return
 
     end subroutine readslice_int64_unit
 
 
-    !-------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
     recursive subroutine readslice_double_filename(filename, x1, x2, array, status)
@@ -369,20 +359,20 @@ contains
         character(len=*), intent(in) :: filename
         integer*8, intent(in)        :: x1, x2
         real*8, intent(inout)        :: array(x2 - x1 + 1)
-        integer, intent(inout)       :: status
+        integer, intent(out)         :: status
 
         integer                      :: unit
 
-        if (status /= 0) return
-
         call readext_open(filename, unit, status)
+        if (status /= 0) return
         call readslice_double_unit(unit, x1, x2, array, status)
+        if (status /= 0) return
         call ft_close(unit, status)
 
     end subroutine readslice_double_filename
 
 
-    !-------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
     recursive subroutine readslice_double_unit(unit, x1, x2, array, status)
@@ -390,18 +380,18 @@ contains
         integer, intent(in)    :: unit
         integer*8, intent(in)  :: x1, x2
         real*8, intent(inout)  :: array(x2 - x1 + 1)
-        integer, intent(inout) :: status
+        integer, intent(out)   :: status
 
         integer                :: anynull
 
-        if (status /= 0) return
-
+        status = 0
         call ftgpvd(unit, GROUP, x1, x2 - x1 + 1, NULLVAL, array, anynull, status)
+        if (ft_checkerror_cfitsio(status)) return
 
     end subroutine readslice_double_unit
 
 
-    !-------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
     recursive subroutine readslice_logical_3d(unit, x1, x2, y, z, naxes, array, status)
@@ -411,61 +401,63 @@ contains
         integer*8, intent(in)    :: y, z
         integer, intent(in)      :: naxes(3)
         logical*1, intent(inout) :: array(x2 - x1 + 1)
-        integer, intent(inout)   :: status
+        integer, intent(out)     :: status
 
         integer                  :: anynull
         integer*8                :: firstpix
 
-        if (status /= 0) return
-
+        status = 0
         firstpix = x1 + naxes(1) * (y - 1 + naxes(2) * (z - 1))
         call ftgpvb(unit, GROUP, firstpix, x2 - x1 + 1, NULLVAL, array, anynull, status)
+        if (ft_checkerror_cfitsio(status)) return
 
     end subroutine readslice_logical_3d
 
 
-    !-------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
     recursive subroutine readslice_double_3d(unit, x1, x2, y, z, naxes, array, status)
 
-        integer, intent(in)    :: unit
-        integer*8, intent(in)  :: x1, x2
-        integer*8, intent(in)  :: y, z
-        integer, intent(in)    :: naxes(3)
-        real*8, intent(inout)  :: array(x2 - x1 + 1)
-        integer, intent(inout) :: status
+        integer, intent(in)   :: unit
+        integer*8, intent(in) :: x1, x2
+        integer*8, intent(in) :: y, z
+        integer, intent(in)   :: naxes(3)
+        real*8, intent(inout) :: array(x2 - x1 + 1)
+        integer, intent(out)  :: status
 
-        integer                :: anynull
-        integer*8              :: firstpix
+        integer               :: anynull
+        integer*8             :: firstpix
 
-        if (status /= 0) return
-
+        status = 0
         firstpix = x1 + naxes(1) * (y - 1 + naxes(2) * (z - 1))
         call ftgpvd(unit, GROUP, firstpix, x2 - x1 + 1, NULLVAL, array, anynull, status)
+        if (ft_checkerror_cfitsio(status)) return
 
     end subroutine readslice_double_3d
 
 
-    !-------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
     recursive subroutine readext_open(filename, unit, status)
 
-        character(len=*), intent(in)  :: filename
-        integer, intent(out)          :: unit
-        integer, intent(inout)        :: status
+        character(len=*), intent(in) :: filename
+        integer, intent(out)         :: unit
+        integer, intent(out)         :: status
 
-        if (status /= 0) return
+        status = 0
         call ftgiou(unit, status)
+        if (ft_checkerror_cfitsio(status, filename)) return
 
         ! open the fits file and move to the HDU specified in the filename
         call ftnopn(unit, filename, CFITSIO_READONLY, status)
+        if (ft_checkerror_cfitsio(status, filename)) return
 
     end subroutine readext_open
 
 
-    !-------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
     recursive subroutine ft_openimage(filename, unit, imagerank, imageshape, status, hdu)
@@ -474,21 +466,22 @@ contains
         integer, intent(out)                :: unit
         integer, intent(in)                 :: imagerank
         integer, allocatable, intent(inout) :: imageshape(:)
-        integer, intent(inout)              :: status
+        integer, intent(out)                :: status
         integer, intent(in), optional       :: hdu
 
         integer                             :: nfound, hdutype, blocksize
         character(len=80)                   :: errmsg
         integer                             :: imageshape_(8)
 
-        if (status /= 0) return
-
+        status = 0
         call ftgiou(unit, status)
+        if (ft_checkerror_cfitsio(status, filename)) return
 
         if (present(hdu)) then
 
             ! open the fits file and point to the primary header
             call ftopen(unit, filename, CFITSIO_READONLY, blocksize, status)
+            if (ft_checkerror_cfitsio(status, filename)) return
 
             ! move to the specified HDU
             call ftmahd(unit, hdu, hdutype, status)
@@ -503,13 +496,13 @@ contains
             ! open the fits file and move to the HDU specified in the filename
             ! otherwise, move to the first image in FITS file
             call ftiopn(unit, filename, CFITSIO_READONLY, status)
+            if (ft_checkerror_cfitsio(status, filename)) return
 
         end if
 
-        if (status /= 0) return
-
         !  Determine the size of the image.
         call ftgknj(unit, 'NAXIS', 1, imagerank, imageshape_, nfound, status)
+        if (ft_checkerror_cfitsio(status, filename)) return
 
         !  Check that it found the NAXISn keywords.
         if (nfound /= imagerank) then
@@ -524,27 +517,29 @@ contains
     end subroutine ft_openimage
 
 
-    !-------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
     recursive subroutine ft_close(unit, status)
 
-        integer, intent(in)    :: unit
-        integer, intent(inout) :: status
+        integer, intent(in)  :: unit
+        integer, intent(out) :: status
 
         !  The FITS file must always be closed before exiting the program.
         !  Any unit numbers allocated with FTGIOU must be freed with FTFIOU.
+        status = 0
         call ftclos(unit, status)
+        if (ft_checkerror_cfitsio(status)) return
         call ftfiou(unit, status)
-        call ft_printerror(status)
+        if (ft_checkerror_cfitsio(status)) return
 
     end subroutine ft_close
 
 
-    !-------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
-    recursive subroutine ft_printerror(status, filename, hdu)
+    recursive function ft_checkerror_cfitsio(status, filename, hdu) result(error)
 
         !  This subroutine prints out the descriptive text corresponding to the
         !  error status value and prints out the contents of the internal
@@ -553,10 +548,13 @@ contains
         integer, intent(in)                    :: status
         character(len=*), intent(in), optional :: filename
         integer, intent(in), optional          :: hdu
+        logical                                :: error
         character                              :: errtext*30, errmessage*80
 
+        error = status /= 0
+
         !  Check if status is OK (no error); if so, simply return
-        if (status == 0) return
+        if (.not. error) return
 
         ! flush the output unit
         flush(OUTPUT_UNIT)
@@ -589,10 +587,10 @@ contains
             call ftgmsg(errmessage)
         end do
 
-    end subroutine ft_printerror
+    end function ft_checkerror_cfitsio
 
 
-    !-------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
     subroutine ft_create_header(naxis1, naxis2, cdelt1, cdelt2, crota2, crval1, crval2, crpix1, crpix2, header)
@@ -626,7 +624,7 @@ contains
     end subroutine ft_create_header
 
 
-    !-------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
     subroutine writefits_double_1d(filename, data, wcs, status)
@@ -634,7 +632,7 @@ contains
         character(len=*), intent(in)    :: filename
         real*8, intent(in)              :: data(:)
         integer, intent(in), optional   :: wcs(WCSLEN)
-        integer, intent(inout)          :: status
+        integer, intent(out)            :: status
         integer                         :: nkeyrec, irec, unit, blocksize, bitpix, naxis, naxes(1)
         logical                         :: simple, extend
         type(C_PTR)                     :: c_header
@@ -675,7 +673,7 @@ contains
     end subroutine writefits_double_1d
 
 
-    !-------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
     subroutine writefits_double_2d(filename, data, wcs, status)
@@ -683,7 +681,7 @@ contains
         character(len=*), intent(in)    :: filename
         real*8, intent(in)              :: data(:,:)
         integer, intent(in), optional   :: wcs(WCSLEN)
-        integer, intent(inout)          :: status
+        integer, intent(out)            :: status
         integer                         :: nkeyrec, irec, unit, blocksize, bitpix, naxis, naxes(2)
         logical                         :: simple, extend
         type(C_PTR)                     :: c_header
@@ -724,105 +722,377 @@ contains
     end subroutine writefits_double_2d
 
 
-    !-------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
+
+
+    subroutine ft_header2str(filename, header, status)
+
+        use, intrinsic :: ISO_C_BINDING
+        use module_cfitsio, only : CFITSIO_READONLY, fits_open_file, fits_hdr2str, fits_close_file, cfitsio_report_error
+        character(len=*), intent(in)     :: filename
+        character(len=2880), intent(out) :: header
+        integer, intent(out)             :: status
+
+        integer(kind=C_INT)              :: fits_status
+        character(len=2880), pointer     :: f_header
+        type(C_PTR)                      :: fptr, c_header
+        integer                          :: nkeyrec
+
+        fits_status = 0
+
+        call fits_open_file(fptr, filename // C_NULL_CHAR, CFITSIO_READONLY, fits_status)
+        if (fits_status /= 0) goto 999
+
+        call fits_hdr2str(fptr, 1, C_NULL_PTR, 0, c_header, nkeyrec, fits_status)
+        if (fits_status /= 0) goto 999
+
+        call fits_close_file(fptr, fits_status)
+        if (fits_status /= 0) goto 999
+
+        call c_f_pointer(c_header, f_header)
+        header = f_header(1:nkeyrec*80)
+        header(nkeyrec*80+1:) = ' '
+        status = 0
+        return
+
+    999 call cfitsio_report_error(fits_status)
+        status = fits_status
+
+    end subroutine ft_header2str
+
+
+    !---------------------------------------------------------------------------
 
 
     ! translate the astrometry in a FITS header into a wcslib wcs
     ! XXX this routine currently leaks wcsp
     ! investigate how to keep wcs without wcsp
-    subroutine ft_header2str(filename, header, status)
-
-        use, intrinsic :: ISO_C_BINDING
-        use module_cfitsio, only : CFITSIO_READONLY, fits_open_file, fits_hdr2str, fits_close_file, fits_report_error
-        character(len=*), intent(in)     :: filename
-        character(len=2880), intent(out) :: header
-        integer, intent(inout)           :: status
-
-        character(len=2880), pointer     :: f_header
-        type(C_PTR)                      :: fptr, c_header
-        integer                          :: nkeyrec
-
-        if (status /= 0) return
-
-        call fits_open_file(fptr, filename // C_NULL_CHAR, CFITSIO_READONLY, status)
-        if (status /= 0) return
-
-        call fits_hdr2str(fptr, 1, C_NULL_PTR, 0, c_header, nkeyrec, status)
-        if (status /= 0) return
-
-        call fits_close_file(fptr, status)
-        if (status /= 0) return
-
-        call c_f_pointer(c_header, f_header)
-        header = f_header(1:nkeyrec*80)
-        header(nkeyrec*80+1:) = ' '
-
-    end subroutine ft_header2str
-
-
-    !-------------------------------------------------------------------------------
-
-
-    subroutine ft_header2wcs(header, wcs, nx, ny)
+    subroutine ft_header2wcs(header, wcs, nx, ny, status)
 
         use, intrinsic :: ISO_C_BINDING
         use module_wcslib
         character(len=*), intent(in)     :: header
         integer(kind=C_INT), intent(out) :: wcs(WCSLEN)
         integer, intent(out)             :: nx, ny
+        integer, intent(out)             :: status
         integer(kind=C_INT)              :: wcs_(WCSLEN)
 
-        integer(kind=C_INT) :: wcsp, status
-        integer                          :: nreject, nwcs, statfix(WCSFIX_NWCS), iline
-        character(len=80)                :: record
+        integer(kind=C_INT)              :: wcsp
+        integer                          :: nreject, nwcs, statfix(WCSFIX_NWCS), count1, count2
 
         status = wcspih(header // C_NULL_CHAR, len(header)/80, WCSHDR_all, 0, nreject, nwcs, wcsp)
         if (status /= 0) then
-            write (*,*) 'WCSPIH error: ', status
-            stop
+            write (ERROR_UNIT,'(a)') 'WCSPIH error: ', status
+            return
         end if
 
-        if (nwcs == 0) stop "Header has no astrometry."
+        if (nwcs == 0) then
+            status = 1
+            write (ERROR_UNIT,'(a)') 'ft_header2wcs: Header has no astrometry.'
+            return
+        end if
 
-        if (wcsp < 0) stop "wcsp negative"
+        if (wcsp < 0) then
+            status = 1
+            write (ERROR_UNIT,'(a)') 'ft_header2wcs: wcsp negative. Unrecoverable error.'
+            return
+        end if
+
         status = wcsvcopy(wcsp, 0, wcs_)
+        if (status /= 0) then
+            write (ERROR_UNIT,'(a)') 'ft_header2wcs: wcsvcopy error: ', status
+            return
+        end if
         status = wcsput(wcs, WCS_FLAG, -1_C_INT, 0_C_INT, 0_C_INT)
+        if (status /= 0) then
+            write (ERROR_UNIT,'(a)') 'ft_header2wcs: wcsput error: ', status
+            return
+        end if
         status = wcscopy(wcs_, wcs)
+        if (status /= 0) then
+            write (ERROR_UNIT,'(a)') 'ft_header2wcs: wcscopy error: ', status
+            return
+        end if
         status = wcsfree(wcs_)
+        if (status /= 0) then
+            write (ERROR_UNIT,'(a)') 'ft_header2wcs: wcsfree error: ', status
+            return
+        end if
         status = wcsvfree(nwcs, wcsp)
+        if (status /= 0) then
+            write (ERROR_UNIT,'(a)') 'ft_header2wcs: wcsvfree error: ', status
+            return
+        end if
 
         !Fix non-standard WCS keyvalues.
         status = wcsfix(ctrl=7, naxis=c_null_ptr, wcs=wcs, stat=statfix)
         if (status /= 0) then
-            write (*,*) 'WCSFIX error: ', status
-            stop
+            write (ERROR_UNIT,'(a)') 'ft_header2wcs: wcsfix error: ', status
+            return
         end if
 
         status = wcsset(wcs)
+        if (status /= 0) then
+            write (ERROR_UNIT,'(a)') 'ft_header2wcs: wcsset error: ', status
+            return
+        end if
 
         ! extract NAXIS1 and NAXIS2 keywords
-        nx = -1
-        ny = -1
-        do iline = 1, len(header) / 80
-           record = header((iline-1)*80+1:iline*80)
-           if (record(1:8) == 'NAXIS1  ') then
-              read(record, '(10x,i20)') nx
-           end if
-           if (record(1:8) == 'NAXIS2  ') then
-              read(record, '(10x,i20)') ny
-           end if
-        end do
-        if (nx < 0 .or. ny < 0) then
-            write (*,'(a)') 'START header:'
-            do iline = 1, len(header) / 80
-                record = header((iline-1)*80+1:iline*80)
-                write (*,'(a,a)') '>', record
-            end do
-            write (*,'(a)') 'END header.'
-            stop "Invalid or missing NAXISn keywords in header."
+        call ft_readparam(header, 'naxis1', count1, nx, status=status)
+        if (status /= 0) return
+        call ft_readparam(header, 'naxis2', count2, ny, status=status)
+        if (status /= 0) return
+
+        if (count1 == 0 .or. count2 == 0) then
+            status = 1
+            write (ERROR_UNIT,'(a)') "Missing NAXISn keyword(s) in header."
+            return
         end if
 
     end subroutine ft_header2wcs
+
+
+    !---------------------------------------------------------------------------
+
+
+    subroutine ft_getparam(header, param, count, value, comment, must_exist, status)
+        use string, only : strlowcase, strupcase
+        character(len=*), intent(in)   :: header
+        character(len=*), intent(in)   :: param
+        integer, intent(out)           :: count
+        character(len=70), intent(out) :: value
+        character(len=70), intent(out), optional :: comment
+        logical, intent(in), optional  :: must_exist
+        integer, intent(out)           :: status
+        character(len=70)              :: buffer
+        character(len=len(param))      :: strlowparam
+        integer                        :: ncards, i, iparam
+
+        status = 1
+        value = ' '
+
+        ncards = (len(header)-1) / 80 + 1! allow for an additional \0
+        iparam = 0
+        count = 0
+        if (present(comment)) comment = ' '
+        strlowparam = strlowcase(param)
+
+        ! find the record number associated to the parameter
+        do i = 1, ncards
+           if (strlowcase(header((i-1)*80+1:(i-1)*80+8)) /= strlowparam) cycle
+           count = count + 1
+           if (iparam > 0) cycle
+           iparam = i
+        end do
+
+        ! the parameter is not found
+        if (count == 0) then
+            if (present(must_exist)) then
+                if (must_exist) then
+                    status = 1
+                    write (ERROR_UNIT, '(a)') "Missing keyword '" // strupcase(param) // "' in FITS header."
+                    return
+                end if
+            end if
+            goto 999
+        end if
+
+        buffer = adjustl(header((iparam-1)*80+11:iparam*80))
+
+        ! simple case, the value is not enclosed in quotes
+        if (buffer(1:1) /= "'") then
+            i = index(buffer, '/')
+            if (i == 0) i = 71
+            goto 888 ! end of slash
+        end if
+
+        ! find ending quote
+        i = 2
+        do while (i <= 70)
+            if (buffer(i:i) == "'") then
+                i = i + 1
+                if (i == 71) goto 888 ! end of slash
+                if (buffer(i:i) /= "'") exit
+            end if
+            i = i + 1
+        end do
+
+        if (i == 71) then
+            write (ERROR_UNIT,'(a)') 'FITS card value not properly terminated by a quote.' // header((iparam-1)*80:iparam*80)
+            return
+        end if
+
+        ! i points right after ending quote, let's find '/'
+        do while (i <= 70)
+            if (buffer(i:i) == '/') exit
+            if (buffer(i:i) /= ' ') then
+                write (ERROR_UNIT,'(a)') 'FITS card value is malformed. ' // header((iparam-1)*80:iparam*80)
+                return
+            end if
+            i = i + 1
+        end do
+
+        ! i points to '/' or is 71
+    888 value   = buffer(1:i-1)
+        if (present(comment)) comment = buffer(i+1:)
+
+    999 status  = 0
+
+    end subroutine ft_getparam
+
+
+    !---------------------------------------------------------------------------
+
+
+    subroutine ft_readparam_logical(header, param, count, value, comment, must_exist, status)
+        character(len=*), intent(in)             :: header
+        character(len=*), intent(in)             :: param
+        integer, intent(out)                     :: count
+        logical, intent(out)                     :: value
+        character(len=70), optional, intent(out) :: comment
+        logical, optional, intent(in)            :: must_exist
+        integer, intent(out)                     :: status
+        character(len=70)                        :: charvalue
+
+        value = .false.
+
+        call ft_getparam(header, param, count, charvalue, comment, must_exist, status)
+        if (status /= 0 .or. count == 0) return
+
+        if (charvalue /= 'F' .and. charvalue /= 'T') then
+            status = 1
+            write (ERROR_UNIT,'(a)') "ft_readparam_logical: invalid logical value '" // trim(charvalue) // "' for parameter '" // &
+                                     param // "' in FITS header."
+            return
+        end if
+
+        if (charvalue == 'T') value = .true.
+
+    end subroutine ft_readparam_logical
+
+
+    !---------------------------------------------------------------------------
+
+
+    subroutine ft_readparam_int32(header, param, count, value, comment, must_exist, status)
+        character(len=*), intent(in)             :: header
+        character(len=*), intent(in)             :: param
+        integer, intent(out)                     :: count
+        integer*4, intent(out)                   :: value
+        character(len=70), optional, intent(out) :: comment
+        logical, optional, intent(in)            :: must_exist
+        integer, intent(out)                     :: status
+        character(len=70)                        :: charvalue
+
+        value = 0
+
+        call ft_getparam(header, param, count, charvalue, comment, must_exist, status)
+        if (status /= 0 .or. count == 0) return
+
+        read (charvalue,'(i20)',iostat=status) value
+        if (status /= 0) then
+            write (ERROR_UNIT,'(a)') "ft_readparam_int32: invalid integer value '" // trim(charvalue) // "' for parameter '" // &
+                                     param // "' in FITS header."
+            return
+        end if
+
+    end subroutine ft_readparam_int32
+
+
+    !---------------------------------------------------------------------------
+
+
+    subroutine ft_readparam_int64(header, param, count, value, comment, must_exist, status)
+        character(len=*), intent(in)             :: header
+        character(len=*), intent(in)             :: param
+        integer, intent(out)                     :: count
+        integer*8, intent(out)                   :: value
+        character(len=70), optional, intent(out) :: comment
+        logical, optional, intent(in)            :: must_exist
+        integer, intent(out)                     :: status
+        character(len=70)                        :: charvalue
+
+        value = 0
+
+        call ft_getparam(header, param, count, charvalue, comment, must_exist, status)
+        if (status /= 0 .or. count == 0) return
+
+        read (charvalue,'(i20)',iostat=status) value
+        if (status /= 0) then
+            write (ERROR_UNIT,'(a)') "ft_readparam_int64: invalid integer value '" // trim(charvalue) // "' for parameter '" // &
+                                     param // "' in FITS header."
+            return
+        end if
+
+    end subroutine ft_readparam_int64
+
+
+    !---------------------------------------------------------------------------
+
+
+    subroutine ft_readparam_double(header, param, count, value, comment, must_exist, status)
+        character(len=*), intent(in)             :: header
+        character(len=*), intent(in)             :: param
+        integer, intent(out)                     :: count
+        real*8, intent(out)                      :: value
+        character(len=70), optional, intent(out) :: comment
+        logical, optional, intent(in)            :: must_exist
+        integer, intent(out)                     :: status
+        character(len=70)                        :: charvalue
+
+        value = 0.d0
+
+        call ft_getparam(header, param, count, charvalue, comment, must_exist, status)
+        if (status /= 0 .or. count == 0) return
+
+        read (charvalue,'(bn,f20.0)',iostat=status) value
+        if (status /= 0) then
+            write (ERROR_UNIT,'(a)') "ft_readparam_double: invalid real value '" // trim(charvalue) // "' for parameter '" // &
+                                     param // "' in FITS header."
+            return
+        end if
+
+    end subroutine ft_readparam_double
+
+
+    !---------------------------------------------------------------------------
+
+
+    subroutine ft_readparam_character(header, param, count, value, comment, must_exist, status)
+        character(len=*), intent(in)             :: header
+        character(len=*), intent(in)             :: param
+        integer, intent(out)                     :: count
+        character(len=70), intent(out)           :: value
+        character(len=70), optional, intent(out) :: comment
+        logical, optional, intent(in)            :: must_exist
+        integer, intent(out)                     :: status
+        character(len=70)                        :: charvalue
+        integer                                  :: ncharvalue, i, j
+
+        value = " "
+
+        call ft_getparam(header, param, count, charvalue, comment, must_exist, status)
+        if (status /= 0 .or. count == 0) return
+
+        ! remove quotes
+        if (charvalue(1:1) == "'") then
+           charvalue = charvalue(2:len_trim(charvalue)-1)
+        end if
+
+        ! make double quotes single
+        ncharvalue = len_trim(charvalue)
+        i = 1
+        j = 1
+        do while (j <= ncharvalue)
+           value(i:i) = charvalue(j:j)
+           i = i + 1
+           if (j /= ncharvalue) then
+               if (charvalue(j:j+1) == "''") j = j + 1
+           end if
+           j = j + 1
+        end do
+
+    end subroutine ft_readparam_character
 
 
 end module module_fitstools

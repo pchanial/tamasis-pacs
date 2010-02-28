@@ -72,9 +72,10 @@ module module_pacsinstrument
 contains
 
 
-    subroutine read_calibration_files(this)
+    subroutine read_calibration_files(this, status)
 
-        class(pacsinstrument), intent(inout)  :: this
+        class(pacsinstrument), intent(inout) :: this
+        integer, intent(out)                 :: status
 
         character(len=*), parameter :: filename_saa = 'PCalPhotometer_SubArrayArray_FM_v5.fits'
         character(len=*), parameter :: filename_ai  = 'PCalPhotometer_ArrayInstrument_FM_v4.fits'
@@ -84,39 +85,38 @@ contains
         integer,          parameter :: hdu_blue(4) = [8, 12, 16, 20]
         integer,          parameter :: hdu_red (4) = [6, 10, 14, 18]
 
-        integer                     :: ivertex, status
+        integer                     :: ivertex
         logical*1, allocatable      :: tmplogical(:,:)
         real*8, allocatable         :: tmp2(:,:)
         real*8, allocatable         :: tmp3(:,:,:)
-        character(len=100) :: value
+        character(len=100)          :: value
 
         ! might be moved elsewhere
         call get_environment_variable('TAMASIS_DIR', value, length=tamasis_dir_len)
         if (tamasis_dir_len == 0) tamasis_dir_len = len('/home/pchanial/work/tamasis')
 
-        status = 0
 
         ! read bad pixel mask
 
         call ft_readextension(get_calfile(filename_bpm) // '[blue]', tmplogical, status)
-        call ft_printerror(status, filename_bpm // '[blue]')
+        if (status /= 0) return
         this%mask_blue = transpose(tmplogical)
 
         call ft_readextension(get_calfile(filename_bpm) // '[red]', tmplogical, status)
-        call ft_printerror(status, filename_bpm // '[red]')
+        if (status /= 0) return
         this%mask_red = transpose(tmplogical)
 
 
         ! read flat fields
 
         call ft_readextension(get_calfile(filename_ff) // '+5',  tmp2, status)
-        call ft_printerror(status, filename_ff // '+5')
+        if (status /= 0) return
         this%flatfield_blue = transpose(tmp2)
         call ft_readextension(get_calfile(filename_ff) // '+8', tmp2, status)
-        call ft_printerror(status, filename_ff // '+8')
+        if (status /= 0) return
         this%flatfield_green = transpose(tmp2)
         call ft_readextension(get_calfile(filename_ff) // '+2',   tmp2, status)
-        call ft_printerror(status, filename_ff // '+2')
+        if (status /= 0) return
         this%flatfield_red = transpose(tmp2)
 
 
@@ -125,16 +125,16 @@ contains
         do ivertex=1, nvertices
 
             call ft_readextension(get_calfile(filename_saa), tmp2, status, hdu_blue(ivertex)  )
-            call ft_printerror(status, filename_saa)
+            if (status /= 0) return
             this%corners_uv_blue(1,ivertex,:,:) = transpose(tmp2)
             call ft_readextension(get_calfile(filename_saa), tmp2, status, hdu_blue(ivertex)+1)
-            call ft_printerror(status, filename_saa)
+            if (status /= 0) return
             this%corners_uv_blue(2,ivertex,:,:) = transpose(tmp2)
             call ft_readextension(get_calfile(filename_saa), tmp2, status, hdu_red (ivertex)  )
-            call ft_printerror(status, filename_saa)
+            if (status /= 0) return
             this%corners_uv_red (1,ivertex,:,:) = transpose(tmp2)
             call ft_readextension(get_calfile(filename_saa), tmp2, status, hdu_red (ivertex)+1)
-            call ft_printerror(status, filename_saa)
+            if (status /= 0) return
             this%corners_uv_red (2,ivertex,:,:) = transpose(tmp2)
 
         end do
@@ -143,22 +143,22 @@ contains
         ! read the distortion coefficients in the (y,z) plane
 
         call ft_readextension(get_calfile(filename_ai) // '[ycoeffblue]', tmp3, status)
-        call ft_printerror(status, filename_ai // '[ycoeffblue]')
+        if (status /= 0) return
         this%distortion_yz_blue(1,:,:,:) = tmp3
         call ft_readextension(get_calfile(filename_ai) // '[zcoeffblue]', tmp3, status)
-        call ft_printerror(status, filename_ai // '[zcoeffblue]')
+        if (status /= 0) return
         this%distortion_yz_blue(2,:,:,:) = tmp3
         call ft_readextension(get_calfile(filename_ai) // '[ycoeffred]', tmp3, status)
-        call ft_printerror(status, filename_ai // '[ycoeffred]')
+        if (status /= 0) return
         this%distortion_yz_red (1,:,:,:) = tmp3
         call ft_readextension(get_calfile(filename_ai) // '[zcoeffred]', tmp3, status)
-        call ft_printerror(status, filename_ai // '[zcoeffred]')
+        if (status /= 0) return
         this%distortion_yz_red (2,:,:,:) = tmp3
 
     end subroutine read_calibration_files
 
 
-    !-------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
     function get_calfile(filename)
@@ -174,37 +174,39 @@ contains
     end function get_calfile
 
 
-    !-------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
-    subroutine read_signal_file(this, filename, first, last, signal)
+    subroutine read_signal_file(this, filename, first, last, signal, status)
 
-        class(pacsinstrument), intent(in)  :: this
-        character(len=*), intent(in)       :: filename
-        integer*8, intent(in)              :: first, last
-        real*8, intent(out)                :: signal(last-first+1, this%ndetectors)
-        integer*8                          :: p, q
-        integer                            :: idetector, status, unit
-        integer, allocatable               :: imageshape(:)
+        class(pacsinstrument), intent(in) :: this
+        character(len=*), intent(in)      :: filename
+        integer*8, intent(in)             :: first, last
+        real*8, intent(out)               :: signal(last-first+1, this%ndetectors)
+        integer, intent(out)              :: status
+        integer*8                         :: p, q
+        integer                           :: idetector, unit
+        integer, allocatable              :: imageshape(:)
+        logical                           :: keep_bad_detectors
 
-        status = 0
+        keep_bad_detectors = size(this%mask) > this%ndetectors
+
         !should be tested with cfitsio compiled with ./configure --enable-reentrant
         !!$omp parallel default(shared) private(idetector, p, q, unit, imageshape) firstprivate(status)
+        status = 0
         call ft_openimage(filename, unit, 3, imageshape, status)
-        if (status /= 0) then
-            call ft_printerror(status, filename)
-        end if
+        if (status /= 0) return
 
-        !$omp do
+        !!$omp do
         do idetector = 1, this%ndetectors
 
             p = this%pq(1,idetector)
             q = this%pq(2,idetector)
             call ft_readslice(unit, first, last, q+1, p+1, imageshape, signal(:,idetector), status)
-            if (status /= 0) stop "ERROR in read_signal_file: ft_readslice."
+            if (status /= 0) return
 
         end do
-        !$omp end do
+        !!$omp end do
 
         call ft_close(unit, status)
         !!$omp end parallel
@@ -212,37 +214,35 @@ contains
     end subroutine read_signal_file
 
 
-    !-------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
-    subroutine read_mask_file(this, filename, first, last, mask)
+    subroutine read_mask_file(this, filename, first, last, mask, status)
 
-        class(pacsinstrument), intent(in)  :: this
-        character(len=*), intent(in)       :: filename
-        integer*8, intent(in)              :: first, last
-        logical*1, intent(out)             :: mask(last-first+1, this%ndetectors)
-        integer*8                          :: p, q
-        integer                            :: idetector, status, unit
-        integer, allocatable               :: imageshape(:)
+        class(pacsinstrument), intent(in) :: this
+        character(len=*), intent(in)      :: filename
+        integer*8, intent(in)             :: first, last
+        logical*1, intent(out)            :: mask(last-first+1, this%ndetectors)
+        integer, intent(out)              :: status
+        integer*8                         :: p, q
+        integer                           :: idetector, unit
+        integer, allocatable              :: imageshape(:)
 
-        status = 0
         !should be tested with cfitsio compiled with ./configure --enable-reentrant
         !!$omp parallel default(shared) private(idetector, p, q, unit, imageshape) firstprivate(status)
         call ft_openimage(filename, unit, 3, imageshape, status)
-        if (status /= 0) then
-            call ft_printerror(status, filename)
-        end if
+        if (status /= 0) return
 
-        !$omp do
+        !!$omp do
         do idetector = 1, this%ndetectors
 
             p = this%pq(1,idetector)
             q = this%pq(2,idetector)
             call ft_readslice(unit, first, last, q+1, p+1, imageshape, mask(:,idetector), status)
-            if (status /= 0) stop "ERROR in read_mask_file: ft_readslice."
+            if (status /= 0) return
 
         end do
-        !$omp end do
+        !!$omp end do
 
         call ft_close(unit, status)
         !!$omp end parallel
@@ -250,16 +250,18 @@ contains
     end subroutine read_mask_file
 
 
-    !-------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
-    subroutine filter_detectors(this, side, transparent_mode, keep_bad_detectors)
-
+    subroutine filter_detectors(this, side, transparent_mode, keep_bad_detectors, status)
+        use, intrinsic :: ISO_FORTRAN_ENV
         class(pacsinstrument), intent(inout)   :: this
         character(len=*), intent(in), optional :: side
         logical, intent(in), optional          :: transparent_mode
         logical, intent(in), optional          :: keep_bad_detectors
+        integer, intent(out)                   :: status
 
+        status = 0
         if (present(side)) then
             if (strlowcase(side) == 'red') then
                 call filter_detectors_array(this, this%mask_red, this%corners_uv_red, this%distortion_yz_red, &
@@ -273,8 +275,9 @@ contains
                                             keep_bad_detectors=keep_bad_detectors)
                 return
             else if (strlowcase(side) /= 'blue') then
-                write (*,*) "FILTER_DETECTORS: invalid array side ('blue', 'green' or 'red'): " // strlowcase(side)
-                stop
+                status = 1
+                write (ERROR_UNIT,'(a)') "FILTER_DETECTORS: invalid array side ('blue', 'green' or 'red'): " // strlowcase(side)
+                return
             endif
         endif
 
@@ -285,7 +288,7 @@ contains
     end subroutine filter_detectors
 
 
-    !-------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
     subroutine filter_detectors_array(this, mask, uv, distortion, flatfield, transparent_mode, keep_bad_detectors)
@@ -354,7 +357,7 @@ contains
     end subroutine filter_detectors_array
 
 
-    !-------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
     function get_array_color(filename) result(color)
@@ -374,7 +377,7 @@ contains
     end function get_array_color
 
 
-    !-------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
     pure function get_array_color_len(filename) result(length)
@@ -390,10 +393,11 @@ contains
         else
             length = 0
         end if
+
     end function get_array_color_len
 
 
-    !-------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
     recursive function uv2yz(uv, distortion_yz, chop) result(yz)
@@ -442,7 +446,7 @@ contains
     end function uv2yz
  
 
-    !-------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
     recursive function yz2ad(yz, ra0, dec0, pa0) result (ad)
@@ -470,7 +474,7 @@ contains
     end function yz2ad
 
 
-    !-------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
    recursive function xy2roi(xy) result(roi)
@@ -534,7 +538,7 @@ contains
     !------------------------------------------------------------------------------
 
 
-    subroutine compute_mapheader(this, pointing, times, resolution, header)
+    subroutine compute_mapheader(this, pointing, times, resolution, header, status)
 
         use module_fitstools, only : ft_create_header, ft_header2wcs
         use module_wcslib, only : wcsfree
@@ -545,15 +549,18 @@ contains
         real*8, intent(in)                :: times(:)  ! times at which the PACS array should be considered as inside the map
         real*8, intent(in)                :: resolution
         character(len=2880), intent(out)  :: header
+        integer, intent(out)              :: status
 
-        integer                           :: nx, ny, status
+        integer                           :: nx, ny
         integer                           :: ixmin, ixmax, iymin, iymax
         real*8                            :: ra0, dec0, xmin, xmax, ymin, ymax
 
         call pointing%compute_center(times, ra0, dec0)
 
         call ft_create_header(0, 0, -resolution/3600.d0, resolution/3600.d0, 0.d0, ra0, dec0, 1.d0, 1.d0, header)
-        call init_wcslib(header)
+
+        call init_wcslib(header, status)
+        if (status /= 0) return
 
         call this%find_minmax(pointing, times, xmin, xmax, ymin, ymax)
 
@@ -628,7 +635,7 @@ contains
     !------------------------------------------------------------------------------
 
 
-    subroutine compute_projection_sharp_edges(this, pointing, time, header, nx, ny, pmatrix)
+    subroutine compute_projection_sharp_edges(this, pointing, time, header, nx, ny, pmatrix, status)
 
         use module_wcs, only : init_wcslib, ad2xy_wcslib, free_wcslib
         class(pacsinstrument), intent(in)    :: this
@@ -637,14 +644,17 @@ contains
         real*8, intent(in)                   :: time(:)
         integer, intent(in)                  :: nx, ny
         type(pointingelement), intent(out)   :: pmatrix(:,:,:)
+        integer, intent(out)                 :: status
 
         real*8  :: coords(ndims,this%ndetectors*nvertices), ra, dec, pa, chop
         integer :: roi(ndims,2,this%ndetectors), isample, nsamples, npixels_per_sample, nroi, index
 
+        call init_wcslib(header, status)
+        if (status /= 0) return
+
         nsamples = size(time)
         npixels_per_sample = -1
 
-        call init_wcslib(header)
 
         index = 2
         !$omp parallel do default(shared) firstprivate(index) private(isample, ra, dec, pa, chop, coords, roi) &

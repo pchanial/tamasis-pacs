@@ -1,13 +1,14 @@
 program test_wcslib2
 
     use, intrinsic :: ISO_C_BINDING
+    use precision, only : test_real_eq
+    use module_fitstools, only : ft_header2str
     use module_wcslib
-    use module_fitstools
 
     implicit none
 
     integer, parameter          :: ncoords = 3
-    character(len=*), parameter :: filename = '/home/pchanial/work/pacs/tamasis/csh_header_ngc6946.fits'
+    character(len=*), parameter :: filename = 'tests/csh_header_ngc6946.fits'
     character(len=2880)         :: header
     integer                     :: wcs(WCSLEN), statfix(WCSFIX_NWCS), statproj(ncoords)
     integer                     :: alts(0:26)
@@ -17,13 +18,11 @@ program test_wcslib2
     real*8                      :: ad(2*ncoords), xy(2*ncoords), imgcrd(2*ncoords), ra_
     real*8                      :: phi(ncoords), theta(ncoords)
 
-    status = 0
     call ft_header2str(filename, header, status)
-    call ft_printerror(status, filename)
+    if (status /= 0) stop 'ft_header2str: FAILED.'
 
     relax = WCSHDR_all
     ctrl  = 0
-    write(*,*) header
     status = wcspih(header, len(header)/80, relax, ctrl, nreject, nwcs, wcsp)
 
     write (*,*) 'nwcs:', nwcs
@@ -70,10 +69,11 @@ program test_wcslib2
         end do
     end if
 
-    !IDL> forprint, ra, dec, x+1, y+1
-    !   300.00000       50.000000      -9113.9278       10412.664
-    !   300.00000       60.000000      -4896.1894      -1012.9964
-    !   300.00000       62.000000      -4062.7907      -3270.6355
+    if (any(.not. test_real_eq(xy, [-6538.19790689358d0,12196.226642292400d0,  &
+        -4998.77434749560d0,114.620164770842d0,-4694.59388530175d0,            &
+        -2272.629672963080d0], 12))) then
+        stop 'wcss2p: Wrong result.'
+    end if
 
     ! some cleanup
     status = wcsfree(wcs)

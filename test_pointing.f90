@@ -10,6 +10,7 @@ program test_pointing
  real*8, allocatable         :: times(:), ras(:), decs(:), pas(:)
  real*8, parameter           :: timetest(5) = [1632946094.374053d0, 1632946094.399055d0, 1632946094.424049d0, 1632946094.449043d0, &
                                                1632946094.474037d0]
+ integer                     :: status
 
 
  zero = 0.d0
@@ -23,7 +24,9 @@ program test_pointing
  !      1632946094474037       258.53164       66.965305       252.37419
 
  allocate(ptg)
- call ptg%load(filename)
+ call ptg%load(filename, status)
+ if (status /= 0) stop 'ptg%load: FAILED.'
+
  index = 2
  do i = 1, 5
      call ptg%get_position(timetest(i), ra, dec, pa, chop, index)
@@ -41,7 +44,9 @@ program test_pointing
 
  ! test fast interpolation (evenly spaced sampling)
  allocate(ptg)
- call ptg%load([1.d0, 2.d0], [0.d0, 1.d0], [3.d0, 3.d0], [2.d0, 1.d0], [0.d0, 0.d0])
+ call ptg%load([1.d0, 2.d0], [0.d0, 1.d0], [3.d0, 3.d0], [2.d0, 1.d0], [0.d0, 0.d0], status)
+ if (status /= 0) stop 'ptg%load: FAILED.'
+
  index = 2
  do i = 1, 10
      call ptg%get_position(times(i), ra, dec, pa, chop, index)
@@ -61,7 +66,9 @@ program test_pointing
 
  ! test slow interpolation (unevenly spaced sampling)
  allocate(ptg)
- call ptg%load([1.d0, 2.d0, 2.5d0], [0.d0, 1.d0, 1.5d0], [3.d0, 3.d0, 3.d0], [2.d0, 1.d0, 0.5d0], [0.d0, 0.d0, 0.d0])
+ call ptg%load([1.d0, 2.d0, 2.5d0], [0.d0, 1.d0, 1.5d0], [3.d0, 3.d0, 3.d0], [2.d0, 1.d0, 0.5d0], [0.d0, 0.d0, 0.d0], status)
+ if (status /= 0) stop 'ptg%load: FAILED.'
+
  index = 2
  do i = 1, 10
      call ptg%get_position(times(i), ra, dec, pa, chop, index)

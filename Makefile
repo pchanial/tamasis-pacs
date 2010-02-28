@@ -19,6 +19,7 @@ map = $(foreach a,$(2),$(call $(1),$(a)))
 finddeps = $(1).o $(if $($(1)),$(call map,finddeps,$($(1))))
 
 # define module dependencies
+module_cfitsio = module_stdio
 module_fitstools = string module_cfitsio module_wcslib
 module_instrument = precision string
 module_pacsinstrument = string module_fitstools module_pacspointing module_pointingmatrix module_projection module_wcs module_wcslib 
@@ -28,7 +29,7 @@ module_projection = precision module_sort module_stack
 module_wcs = module_fitstools module_wcslib
 
 # define executable dependencies
-test_cfitsio = module_cfitsio module_stdio
+test_cfitsio = module_cfitsio
 test_fitstools = module_fitstools module_wcslib
 test_ngc6946_bpj = module_fitstools module_pacsinstrument module_pacspointing module_pointingmatrix module_preprocessor module_projection module_wcslib precision
 test_pacs = module_pacsinstrument module_pacspointing module_fitstools module_wcslib
@@ -39,10 +40,10 @@ test_sort = module_sort
 test_stack = module_stack
 test_stdio = module_stdio module_cfitsio
 test_wcslib1 = module_wcslib module_cfitsio 
-test_wcslib2 = module_wcslib module_fitstools
+test_wcslib2 = module_wcslib module_fitstools precision
 test_wcslibc = module_wcslibc module_cfitsio
 
-.PHONY : all
+.PHONY : all tests
 all : $(EXECS) tamasisfortran.so
 
 # if %.mod doesn't exist, make %.o. It will create %.mod with the same 
