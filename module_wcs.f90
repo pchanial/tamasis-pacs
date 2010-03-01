@@ -1,5 +1,6 @@
 module module_wcs
 
+    use, intrinsic :: ISO_FORTRAN_ENV
     implicit none
 
     private
@@ -8,13 +9,15 @@ module module_wcs
 
     type, public :: astrometry
         integer :: naxis(2)
-        real*8  :: crval(2), crpix(2), cdelt(2), cd(2,2)
+        real*8  :: cdelt(2), crpix(2), crval(2), cd(2,2)
         character(len=8) :: ctype(2), cunit(2)
     end type astrometry
 
     public :: init_astrometry
+    public :: print_astrometry
     public :: init_gnomonic
     public :: ad2xy_gnomonic
+    public :: ad2xy_gnomonic_vect
     public :: init_rotation
     public :: xy2xy_rotation
     public :: init_wcslib
@@ -26,49 +29,150 @@ contains
 
 
     subroutine init_astrometry(header, astr, status)
+        use string, only : strlowcase, strupcase
         use module_fitstools, only : ft_readparam
         character(len=*), intent(in)  :: header
         type(astrometry), intent(out) :: astr
         integer, intent(out)          :: status
         integer                       :: count
+        integer                       :: has_cd, has_cdelt
+        real*8                        :: crota2
+        character(len=70)             :: buffer
+
+        has_cd = 0
+        has_cdelt = 0
 
         call ft_readparam(header, 'naxis1', count, astr%naxis(1), must_exist=.true., status=status)
         if (status /= 0) return
+
         call ft_readparam(header, 'naxis2', count, astr%naxis(2), must_exist=.true., status=status)
         if (status /= 0) return
+
         call ft_readparam(header, 'crpix1', count, astr%crpix(1), must_exist=.true., status=status)
         if (status /= 0) return
+
         call ft_readparam(header, 'crpix2', count, astr%crpix(2), must_exist=.true., status=status)
         if (status /= 0) return
+
         call ft_readparam(header, 'crval1', count, astr%crval(1), must_exist=.true., status=status)
         if (status /= 0) return
+
         call ft_readparam(header, 'crval2', count, astr%crval(2), must_exist=.true., status=status)
         if (status /= 0) return
+
         call ft_readparam(header, 'cdelt1', count, astr%cdelt(1), must_exist=.true., status=status)
         if (status /= 0) return
+        if (count /= 0) has_cdelt = has_cdelt + 1
+
         call ft_readparam(header, 'cdelt2', count, astr%cdelt(2), must_exist=.true., status=status)
         if (status /= 0) return
+        if (count /= 0) has_cdelt = has_cdelt + 1
+
         call ft_readparam(header, 'cd1_1', count, astr%cd(1,1), must_exist=.false., status=status)
         if (status /= 0) return
+        if (count /= 0) has_cd = has_cd + 1
+
         call ft_readparam(header, 'cd2_1', count, astr%cd(2,1), must_exist=.false., status=status)
         if (status /= 0) return
+        if (count /= 0) has_cd = has_cd + 1
+
         call ft_readparam(header, 'cd1_2', count, astr%cd(1,2), must_exist=.false., status=status)
         if (status /= 0) return
+        if (count /= 0) has_cd = has_cd + 1
+
         call ft_readparam(header, 'cd2_2', count, astr%cd(2,2), must_exist=.false., status=status)
         if (status /= 0) return
-        call ft_readparam(header, 'ctype1', count, astr%ctype(1), must_exist=.true., status=status)
+        if (count /= 0) has_cd = has_cd + 1
+
+        call ft_readparam(header, 'cd2_2', count, astr%cd(2,2), must_exist=.false., status=status)
         if (status /= 0) return
-        call ft_readparam(header, 'ctype2', count, astr%ctype(2), must_exist=.true., status=status)
+
+        call ft_readparam(header, 'ctype1', count, buffer, must_exist=.true., status=status)
         if (status /= 0) return
-        call ft_readparam(header, 'cunit1', count, astr%cunit(1), must_exist=.false., status=status)
+        astr%ctype(1) = strupcase(buffer(1:8))
+
+        call ft_readparam(header, 'ctype2', count, buffer, must_exist=.true., status=status)
         if (status /= 0) return
-        call ft_readparam(header, 'cunit2', count, astr%cunit(2), must_exist=.false., status=status)
+        astr%ctype(2) = strupcase(buffer(1:8))
+
+        call ft_readparam(header, 'cunit1', count, buffer, must_exist=.false., status=status)
         if (status /= 0) return
+        astr%cunit(1) = strlowcase(buffer(1:8))
+
+        call ft_readparam(header, 'cunit2', count, buffer, must_exist=.false., status=status)
+        if (status /= 0) return
+        astr%cunit(2) = strlowcase(buffer(1:8))
+
+        if (has_cd /= 0 .and. has_cd /= 4) then
+            write (ERROR_UNIT,'(a)') 'Header has incomplete CD matrix.'
+            status = 1
+            return
+        end if
+
+        if (has_cd == 0) then
+            call ft_readparam(header, 'crota2', count, crota2, must_exist=.false., status=status)
+            if (status /= 0) return
+            if (count == 0) then
+                write (ERROR_UNIT,'(a)') 'Header has no definition for the CD matrix'
+                status = 1
+                return
+            end if
+            
+            crota2 = crota2 / radeg
+            astr%cd(1,1) =  cos(crota2)
+            astr%cd(2,1) = -sin(crota2)
+            astr%cd(1,2) =  sin(crota2)
+            astr%cd(2,2) =  cos(crota2)
+        end if
+
+        if (has_cdelt /=0 .and. has_cdelt /= 2) then
+            write (ERROR_UNIT,'(a)') 'Header has incomplete CDELTi.'
+            status = 1
+            return
+        end if
+
+        if (has_cdelt == 0) then
+            astr%cdelt = 1.d0
+        end if
+
+        if (astr%ctype(1) == 'RA---TAN' .and. astr%ctype(2) == 'DEC--TAN') then
+            call init_gnomonic(astr)
+        else
+            write (ERROR_UNIT,'(a)') "Type '" // astr%ctype(1) // "', '" // astr%ctype(2) // "' is not implemented."
+            status = 1
+            return
+        end if
+
+        call init_rotation(astr)
 
     end subroutine init_astrometry
 
 
-    !-------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
+
+
+    subroutine print_astrometry(astr)
+        use string, only : strinteger
+        type(astrometry), intent(in) :: astr
+        integer :: naxis, i
+
+        naxis = 0
+        do i=1, size(astr%naxis)
+            if (astr%naxis(i) /= 0) naxis = naxis + 1
+        end do
+
+        write (*,*) 'NAXIS: ', strinteger(naxis), ' (', strinteger(astr%naxis(1)), ',', strinteger(astr%naxis(2)),')'
+        write (*,*) 'CDELT: ', astr%cdelt
+        write (*,*) 'CRPIX: ', astr%crpix
+        write (*,*) 'CRVAL: ', astr%crval
+        write (*,*) 'CD   : ', astr%cd(1,:)
+        write (*,*) '       ', astr%cd(2,:)
+        write (*,*) 'CUNIT: ', astr%cunit(1), ', ', astr%cunit(2)
+        write (*,*) 'CTYPE: ', astr%ctype(1), ', ', astr%ctype(2)
+
+    end subroutine print_astrometry
+
+    !---------------------------------------------------------------------------
 
 
     subroutine init_gnomonic(astr)
@@ -85,66 +189,91 @@ contains
     end subroutine init_gnomonic
 
 
-    !-------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
-    pure subroutine ad2xy_gnomonic(a, d, x, y)
+    pure function ad2xy_gnomonic(ad) result(xy)
+        real*8, intent(in) :: ad(:,:)          ! R.A. and declination in degrees
+        real*8             :: xy(size(ad,1),size(ad,2))
+        real*8             :: lambda, phi, invcosc, xsi, eta
+        integer            :: i
+        real*8             :: lambda0          ! crval[0] in rad
+        real*8             :: cosphi1, sinphi1 ! cos and sin of crval[1]
+        common /ad2xy_gnomonic/ lambda0, cosphi1, sinphi1
+
+        do i = 1, size(ad,2)
+            lambda = ad(1,i) / radeg
+            phi = ad(2,i) / radeg
+            invcosc = radeg/(sinphi1*sin(phi)+cosphi1*cos(phi)*cos(lambda-lambda0))
+            xsi = invcosc * cos(phi)*sin(lambda-lambda0)
+            eta = invcosc * (cosphi1*sin(phi)-sinphi1*cos(phi)*cos(lambda-lambda0))
+
+            call xy2xy_rotation(xsi, eta, xy(1,i), xy(2,i))
+        end do
+
+    end function ad2xy_gnomonic
+
+
+    !---------------------------------------------------------------------------
+
+
+    pure elemental subroutine ad2xy_gnomonic_vect(a, d, x, y)
         real*8, intent(in)  :: a, d             ! R.A. and declination in degrees
         real*8, intent(out) :: x, y
-        real*8              :: lambda, phi, invcosc
+        real*8              :: lambda, phi, invcosc, xsi, eta
         real*8              :: lambda0          ! crval[0] in rad
         real*8              :: cosphi1, sinphi1 ! cos and sin of crval[1]
         common /ad2xy_gnomonic/ lambda0, cosphi1, sinphi1
 
         lambda = a / radeg
         phi = d / radeg
-        invcosc = 1.d0/(sinphi1*sin(phi)+cosphi1*cos(phi)*cos(lambda-lambda0))
-        x = radeg * invcosc * cos(phi)*sin(lambda-lambda0)
-        y = radeg * invcosc * (cosphi1*sin(phi)-sinphi1*cos(phi)*cos(lambda-lambda0))
+        invcosc = radeg /(sinphi1*sin(phi)+cosphi1*cos(phi)*cos(lambda-lambda0))
+        xsi = invcosc * cos(phi)*sin(lambda-lambda0)
+        eta = invcosc * (cosphi1*sin(phi)-sinphi1*cos(phi)*cos(lambda-lambda0))
 
-    end subroutine ad2xy_gnomonic
+        call xy2xy_rotation(xsi, eta, x, y)
+
+    end subroutine ad2xy_gnomonic_vect
 
 
-    !-------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
     subroutine init_rotation(astr)
 
         type(astrometry), intent(in) :: astr
         real*8 :: cdinv(2,2), crpix(2)
-        real*8 :: cd(2,2), det
-        common /xy2xy_rotation_params/ cdinv,crpix
+        real*8 :: cd(2,2)
+        common /xy2xy_rotation/ cdinv,crpix
 
-        if (astr%cdelt(1) /= 1.0d0) then
-            cd(1,:) = astr%cd(1,:) * astr%cdelt(1)
-            cd(2,:) = astr%cd(2,:) * astr%cdelt(2)
-        endif
+        cd(1,:) = astr%cd(1,:) * astr%cdelt(1)
+        cd(2,:) = astr%cd(2,:) * astr%cdelt(2)
 
-        crpix = astr%crpix - 1
-        det = 1.d0/(astr%cd(1,1)*astr%cd(2,2)-astr%cd(2,1)*astr%cd(1,2))
-        cdinv = reshape([astr%cd(2,2), -astr%cd(2,1), -astr%cd(1,2), astr%cd(1,1)], [2,2])
-        cdinv = cdinv / det
+        cdinv = reshape([cd(2,2), -cd(2,1), -cd(1,2), cd(1,1)], [2,2]) / &
+                (cd(1,1)*cd(2,2) - cd(2,1)*cd(1,2))
+        crpix = astr%crpix
 
     end subroutine init_rotation
 
 
-    !-------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
-    pure subroutine xy2xy_rotation(xsi, eta, x, y)
+    pure elemental subroutine xy2xy_rotation(xsi, eta, x, y)
 
         real*8, intent(in)  :: xsi, eta
         real*8, intent(out) :: x, y
         real*8              :: cdinv(2,2), crpix(2)
         common /xy2xy_rotation/ cdinv, crpix
 !check in place
+
         x = cdinv(1,1)*xsi + cdinv(1,2)*eta + crpix(1)
         y = cdinv(2,1)*xsi + cdinv(2,2)*eta + crpix(2)
 
     end subroutine xy2xy_rotation
 
 
-    !-------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
     subroutine init_wcslib(header, status)
@@ -160,7 +289,7 @@ contains
     end subroutine init_wcslib
 
 
-    !-------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
     recursive function ad2xy_wcslib(ad) result(xy)
@@ -178,7 +307,7 @@ contains
     end function ad2xy_wcslib
 
 
-    !-------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
     subroutine free_wcslib()

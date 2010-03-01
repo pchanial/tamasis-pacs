@@ -4,7 +4,7 @@
 FC=gfortran
 FFLAGS_DEBUG   = -g -O3 -fcheck=all -fopenmp -Wall -fPIC
 FFLAGS_RELEASE = -O3 -fopenmp -fPIC
-FFLAGS   = $(FFLAGS_DEBUG)
+FFLAGS   = $(FFLAGS_RELEASE)
 LDFLAGS  = -lgomp $(shell pkg-config --libs cfitsio) $(shell pkg-config --libs wcslib)
 INCLUDES = wcslib-4.4.4-Fortran90
 
@@ -26,7 +26,7 @@ module_pacsinstrument = string module_fitstools module_pacspointing module_point
 module_pacspointing = precision module_fitstools
 module_pointingmatrix = module_pointingelement
 module_projection = precision module_sort module_stack
-module_wcs = module_fitstools module_wcslib
+module_wcs = module_fitstools module_wcslib string
 
 # define executable dependencies
 test_cfitsio = module_cfitsio
@@ -39,6 +39,7 @@ test_read_config = module_instrument
 test_sort = module_sort
 test_stack = module_stack
 test_stdio = module_stdio module_cfitsio
+test_wcs = module_wcs module_fitstools precision
 test_wcslib1 = module_wcslib module_cfitsio 
 test_wcslib2 = module_wcslib module_fitstools precision
 test_wcslibc = module_wcslibc module_cfitsio
