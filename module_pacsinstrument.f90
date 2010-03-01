@@ -477,7 +477,7 @@ contains
     !---------------------------------------------------------------------------
 
 
-   recursive function xy2roi(xy) result(roi)
+    recursive function xy2roi(xy) result(roi)
         real*8, intent(in) :: xy(:,:)
         real*8             :: roi(ndims,2,size(xy,2)/nvertices)
         integer            :: idetector
@@ -502,22 +502,20 @@ contains
         integer, intent(out)                 :: nroi
         real*8                               :: polygon(2,nvertices)
 
-        integer                              :: npixels_per_sample, idetector, ix, iy, iroi, ipixel, ibad
+        integer                              :: npixels_per_sample, idetector, ix, iy, iroi, ipixel
         real*8                               :: weight
 
         ipixel = 0
-        ibad = 0
         nroi = 0
         npixels_per_sample = size(pmatrix, 1)
         do idetector = 1, this%ndetectors
             iroi = 1
-            do_roi: do iy = max(roi(2,1,idetector),1), min(roi(2,2,idetector),ny)
+            do iy = max(roi(2,1,idetector),1), min(roi(2,2,idetector),ny)
                 do ix = max(roi(1,1,idetector),1), min(roi(1,2,idetector),nx)
                     ipixel = ix - 1 + (iy - 1) * nx
                     polygon(1,:) = coords(1,(idetector-1)*nvertices+1:idetector*nvertices) - (ix-0.5d0)
                     polygon(2,:) = coords(2,(idetector-1)*nvertices+1:idetector*nvertices) - (iy-0.5d0)
                     weight = abs(intersection_polygon_unity_square(polygon, nvertices))
-                    !XXX SHOULD DO: if weight less than threshold skip it
                     if (weight <= 0) cycle
                     if (iroi <= npixels_per_sample) then
                         pmatrix(iroi,isample,idetector)%pixel  = ipixel
@@ -525,7 +523,7 @@ contains
                     end if
                     iroi = iroi + 1
                 end do
-            end do do_roi
+            end do
             ! fill the rest of the pointing matrix
             pmatrix(iroi:,isample,idetector)%pixel  = ipixel
             pmatrix(iroi:,isample,idetector)%weight = 0
@@ -672,7 +670,6 @@ contains
         if (npixels_per_sample /= size(pmatrix,1)) then
             write(*,'(a,i0,a)') 'Warning: For the Pointing Matrix, npixels_per_sample may be updated to ', npixels_per_sample, '.'
         end if
-
         call free_wcslib()
 
     end subroutine compute_projection_sharp_edges
