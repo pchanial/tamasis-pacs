@@ -18,7 +18,6 @@ program test_fitstools
     character(len=70)           :: cvalue
 
     ! test extract of wcs in FITS header
-    status = 0
     call ft_header2str(filename_header, header, status=status)
     if (status /= 0) stop 'FAILED.'
     call ft_header2wcs(header, wcs, nx, ny, status=status)
