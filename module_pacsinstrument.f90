@@ -644,7 +644,8 @@ contains
         type(pointingelement), intent(out)   :: pmatrix(:,:,:)
         integer, intent(out)                 :: status
 
-        real*8  :: coords(ndims,this%ndetectors*nvertices), ra, dec, pa, chop
+        real*8  :: coords(ndims,this%ndetectors*nvertices), coords_yz(ndims,this%ndetectors*nvertices)
+        real*8  :: ra, dec, pa, chop, chop_old
         integer :: roi(ndims,2,this%ndetectors), isample, nsamples, npixels_per_sample, nroi, index
 
         call init_wcslib(header, status)
@@ -653,14 +654,17 @@ contains
         nsamples = size(time)
         npixels_per_sample = -1
 
-
+        chop_old = -9999999999.0d0 ! XXX should be NaN
         index = 2
-        !$omp parallel do default(shared) firstprivate(index) private(isample, ra, dec, pa, chop, coords, roi) &
+        !$omp parallel do default(shared) firstprivate(index, chop_old) private(isample, ra, dec, pa, chop, coords, coords_yz,roi) &
         !$omp reduction(max : npixels_per_sample)
         do isample = 1, nsamples
             call pointing%get_position(time(isample), ra, dec, pa, chop, index)
-            coords = this%uv2yz(this%corners_uv, this%distortion_yz_blue, chop)
-            coords = this%yz2ad(coords, ra, dec, pa)
+            if (abs(chop-chop_old) > 1.d-2) then
+                coords_yz = this%uv2yz(this%corners_uv, this%distortion_yz_blue, chop)
+                chop_old = chop
+            end if
+            coords = this%yz2ad(coords_yz, ra, dec, pa)
             coords = ad2xy_wcslib(coords)
             roi    = this%xy2roi(coords) ! [1=x|2=y,1=min|2=max,idetector]
             call this%roi2pmatrix(roi, coords, nx, ny, isample, nroi, pmatrix)
