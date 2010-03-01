@@ -137,8 +137,9 @@ program test_ngc6946_bpj
     write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
 
     ! test the back projected map
-    if (.not. test_real_eq(sum(map1d), -0.19967872d0, 5)) then
-        write (ERROR_UNIT,*) 'Sum in map is ', sum(map1d), ' instead of ', -0.19967872
+    if (.not. test_real_eq(sum(map1d), -0.213708304d0, 5)) then
+        write (ERROR_UNIT,*) 'Sum in map is ', sum(map1d), ' instead of ', -0.213708304d0
+        stop 'FAILED.'
     end if
 
     ! project the map
@@ -147,11 +148,12 @@ program test_ngc6946_bpj
     call pmatrix_direct(pmatrix, map1d, signal)
     call system_clock(count2, count_rate, count_max)
     write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
-    write(*,*) 'total: ', sum(signal) ! -4883185.7722900705
+    write(*,*) 'total: ', sum(signal)
 
     ! test the back projected map
-    if (.not. test_real_eq(sum(signal), -4883185.772d0, 5)) then
-        write (ERROR_UNIT,*) 'Sum in timeline is ', sum(signal), ' instead of ', -4883185.772d0
+    if (.not. test_real_eq(sum(signal), -4964192.1027288409d0, 5)) then
+        write (ERROR_UNIT,*) 'Sum in timeline is ', sum(signal), ' instead of ', -4964192.10d0
+        stop 'FAILED.'
     end if
 
     ! write the map as fits file
