@@ -23,6 +23,7 @@ module module_wcs
     public :: init_wcslib
     public :: ad2xy_wcslib
     public :: free_wcslib
+    public :: header2wcslib
 
 
 contains
@@ -32,8 +33,10 @@ contains
         use string, only : strlowcase, strupcase
         use module_fitstools, only : ft_readparam
         character(len=*), intent(in)  :: header
-        type(astrometry), intent(out) :: astr
+        type(astrometry), intent(out), optional :: astr
         integer, intent(out)          :: status
+
+        type(astrometry)              :: myastr
         integer                       :: count
         integer                       :: has_cd, has_cdelt
         real*8                        :: crota2
@@ -42,66 +45,66 @@ contains
         has_cd = 0
         has_cdelt = 0
 
-        call ft_readparam(header, 'naxis1', count, astr%naxis(1), must_exist=.true., status=status)
+        call ft_readparam(header, 'naxis1', count, myastr%naxis(1), must_exist=.true., status=status)
         if (status /= 0) return
 
-        call ft_readparam(header, 'naxis2', count, astr%naxis(2), must_exist=.true., status=status)
+        call ft_readparam(header, 'naxis2', count, myastr%naxis(2), must_exist=.true., status=status)
         if (status /= 0) return
 
-        call ft_readparam(header, 'crpix1', count, astr%crpix(1), must_exist=.true., status=status)
+        call ft_readparam(header, 'crpix1', count, myastr%crpix(1), must_exist=.true., status=status)
         if (status /= 0) return
 
-        call ft_readparam(header, 'crpix2', count, astr%crpix(2), must_exist=.true., status=status)
+        call ft_readparam(header, 'crpix2', count, myastr%crpix(2), must_exist=.true., status=status)
         if (status /= 0) return
 
-        call ft_readparam(header, 'crval1', count, astr%crval(1), must_exist=.true., status=status)
+        call ft_readparam(header, 'crval1', count, myastr%crval(1), must_exist=.true., status=status)
         if (status /= 0) return
 
-        call ft_readparam(header, 'crval2', count, astr%crval(2), must_exist=.true., status=status)
+        call ft_readparam(header, 'crval2', count, myastr%crval(2), must_exist=.true., status=status)
         if (status /= 0) return
 
-        call ft_readparam(header, 'cdelt1', count, astr%cdelt(1), must_exist=.true., status=status)
-        if (status /= 0) return
-        if (count /= 0) has_cdelt = has_cdelt + 1
-
-        call ft_readparam(header, 'cdelt2', count, astr%cdelt(2), must_exist=.true., status=status)
+        call ft_readparam(header, 'cdelt1', count, myastr%cdelt(1), must_exist=.true., status=status)
         if (status /= 0) return
         if (count /= 0) has_cdelt = has_cdelt + 1
 
-        call ft_readparam(header, 'cd1_1', count, astr%cd(1,1), must_exist=.false., status=status)
+        call ft_readparam(header, 'cdelt2', count, myastr%cdelt(2), must_exist=.true., status=status)
+        if (status /= 0) return
+        if (count /= 0) has_cdelt = has_cdelt + 1
+
+        call ft_readparam(header, 'cd1_1', count, myastr%cd(1,1), must_exist=.false., status=status)
         if (status /= 0) return
         if (count /= 0) has_cd = has_cd + 1
 
-        call ft_readparam(header, 'cd2_1', count, astr%cd(2,1), must_exist=.false., status=status)
+        call ft_readparam(header, 'cd2_1', count, myastr%cd(2,1), must_exist=.false., status=status)
         if (status /= 0) return
         if (count /= 0) has_cd = has_cd + 1
 
-        call ft_readparam(header, 'cd1_2', count, astr%cd(1,2), must_exist=.false., status=status)
+        call ft_readparam(header, 'cd1_2', count, myastr%cd(1,2), must_exist=.false., status=status)
         if (status /= 0) return
         if (count /= 0) has_cd = has_cd + 1
 
-        call ft_readparam(header, 'cd2_2', count, astr%cd(2,2), must_exist=.false., status=status)
+        call ft_readparam(header, 'cd2_2', count, myastr%cd(2,2), must_exist=.false., status=status)
         if (status /= 0) return
         if (count /= 0) has_cd = has_cd + 1
 
-        call ft_readparam(header, 'cd2_2', count, astr%cd(2,2), must_exist=.false., status=status)
+        call ft_readparam(header, 'cd2_2', count, myastr%cd(2,2), must_exist=.false., status=status)
         if (status /= 0) return
 
         call ft_readparam(header, 'ctype1', count, buffer, must_exist=.true., status=status)
         if (status /= 0) return
-        astr%ctype(1) = strupcase(buffer(1:8))
+        myastr%ctype(1) = strupcase(buffer(1:8))
 
         call ft_readparam(header, 'ctype2', count, buffer, must_exist=.true., status=status)
         if (status /= 0) return
-        astr%ctype(2) = strupcase(buffer(1:8))
+        myastr%ctype(2) = strupcase(buffer(1:8))
 
         call ft_readparam(header, 'cunit1', count, buffer, must_exist=.false., status=status)
         if (status /= 0) return
-        astr%cunit(1) = strlowcase(buffer(1:8))
+        myastr%cunit(1) = strlowcase(buffer(1:8))
 
         call ft_readparam(header, 'cunit2', count, buffer, must_exist=.false., status=status)
         if (status /= 0) return
-        astr%cunit(2) = strlowcase(buffer(1:8))
+        myastr%cunit(2) = strlowcase(buffer(1:8))
 
         if (has_cd /= 0 .and. has_cd /= 4) then
             write (ERROR_UNIT,'(a)') 'Header has incomplete CD matrix.'
@@ -119,10 +122,10 @@ contains
             end if
             
             crota2 = crota2 / radeg
-            astr%cd(1,1) =  cos(crota2)
-            astr%cd(2,1) = -sin(crota2)
-            astr%cd(1,2) =  sin(crota2)
-            astr%cd(2,2) =  cos(crota2)
+            myastr%cd(1,1) =  cos(crota2)
+            myastr%cd(2,1) = -sin(crota2)
+            myastr%cd(1,2) =  sin(crota2)
+            myastr%cd(2,2) =  cos(crota2)
         end if
 
         if (has_cdelt /=0 .and. has_cdelt /= 2) then
@@ -132,18 +135,20 @@ contains
         end if
 
         if (has_cdelt == 0) then
-            astr%cdelt = 1.d0
+            myastr%cdelt = 1.d0
         end if
 
-        if (astr%ctype(1) == 'RA---TAN' .and. astr%ctype(2) == 'DEC--TAN') then
-            call init_gnomonic(astr)
+        if (myastr%ctype(1) == 'RA---TAN' .and. myastr%ctype(2) == 'DEC--TAN') then
+            call init_gnomonic(myastr)
         else
-            write (ERROR_UNIT,'(a)') "Type '" // astr%ctype(1) // "', '" // astr%ctype(2) // "' is not implemented."
+            write (ERROR_UNIT,'(a)') "Type '" // myastr%ctype(1) // "', '" // myastr%ctype(2) // "' is not implemented."
             status = 1
             return
         end if
 
-        call init_rotation(astr)
+        call init_rotation(myastr)
+
+        if (present(astr)) astr = myastr
 
     end subroutine init_astrometry
 
@@ -277,14 +282,14 @@ contains
 
 
     subroutine init_wcslib(header, status)
-        use module_wcslib
         use module_fitstools
+        use module_wcslib, only : WCSLEN
         character(len=*), intent(in) :: header
         integer, intent(out)         :: status
         integer                      :: wcs(WCSLEN), nx, ny
         common /wcslib/ wcs
 
-        call ft_header2wcs(header, wcs, nx, ny, status)
+        call header2wcslib(header, wcs, nx, ny, status)
 
     end subroutine init_wcslib
 
@@ -305,6 +310,98 @@ contains
         status = wcss2p(wcs, size(ad,2), 2, ad, phi, theta, imgcrd, xy, stat)
 
     end function ad2xy_wcslib
+
+
+    !---------------------------------------------------------------------------
+
+
+    ! translate the astrometry in a FITS header into a wcslib wcs
+    ! XXX this routine currently leaks wcsp
+    ! investigate how to keep wcs without wcsp
+    subroutine header2wcslib(header, wcs, nx, ny, status)
+
+        use, intrinsic :: ISO_C_BINDING
+        use module_fitstools, only : ft_readparam
+        use module_wcslib
+        character(len=*), intent(in)     :: header
+        integer(kind=C_INT), intent(out) :: wcs(WCSLEN)
+        integer, intent(out)             :: nx, ny
+        integer, intent(out)             :: status
+        integer(kind=C_INT)              :: wcs_(WCSLEN)
+
+        integer(kind=C_INT)              :: wcsp
+        integer                          :: nreject, nwcs, statfix(WCSFIX_NWCS), count1, count2
+
+        status = wcspih(header // C_NULL_CHAR, len(header)/80, WCSHDR_all, 0, nreject, nwcs, wcsp)
+        if (status /= 0) then
+            write (ERROR_UNIT,'(a)') 'WCSPIH error: ', status
+            return
+        end if
+
+        if (nwcs == 0) then
+            status = 1
+            write (ERROR_UNIT,'(a)') 'ft_header2wcs: Header has no astrometry.'
+            return
+        end if
+
+        if (wcsp < 0) then
+            status = 1
+            write (ERROR_UNIT,'(a)') 'ft_header2wcs: wcsp negative. Unrecoverable error.'
+            return
+        end if
+
+        status = wcsvcopy(wcsp, 0, wcs_)
+        if (status /= 0) then
+            write (ERROR_UNIT,'(a)') 'ft_header2wcs: wcsvcopy error: ', status
+            return
+        end if
+        status = wcsput(wcs, WCS_FLAG, -1_C_INT, 0_C_INT, 0_C_INT)
+        if (status /= 0) then
+            write (ERROR_UNIT,'(a)') 'ft_header2wcs: wcsput error: ', status
+            return
+        end if
+        status = wcscopy(wcs_, wcs)
+        if (status /= 0) then
+            write (ERROR_UNIT,'(a)') 'ft_header2wcs: wcscopy error: ', status
+            return
+        end if
+        status = wcsfree(wcs_)
+        if (status /= 0) then
+            write (ERROR_UNIT,'(a)') 'ft_header2wcs: wcsfree error: ', status
+            return
+        end if
+        status = wcsvfree(nwcs, wcsp)
+        if (status /= 0) then
+            write (ERROR_UNIT,'(a)') 'ft_header2wcs: wcsvfree error: ', status
+            return
+        end if
+
+        !Fix non-standard WCS keyvalues.
+        status = wcsfix(ctrl=7, naxis=c_null_ptr, wcs=wcs, stat=statfix)
+        if (status /= 0) then
+            write (ERROR_UNIT,'(a)') 'ft_header2wcs: wcsfix error: ', status
+            return
+        end if
+
+        status = wcsset(wcs)
+        if (status /= 0) then
+            write (ERROR_UNIT,'(a)') 'ft_header2wcs: wcsset error: ', status
+            return
+        end if
+
+        ! extract NAXIS1 and NAXIS2 keywords
+        call ft_readparam(header, 'naxis1', count1, nx, status=status)
+        if (status /= 0) return
+        call ft_readparam(header, 'naxis2', count2, ny, status=status)
+        if (status /= 0) return
+
+        if (count1 == 0 .or. count2 == 0) then
+            status = 1
+            write (ERROR_UNIT,'(a)') "Missing NAXISn keyword(s) in header."
+            return
+        end if
+
+    end subroutine header2wcslib
 
 
     !---------------------------------------------------------------------------

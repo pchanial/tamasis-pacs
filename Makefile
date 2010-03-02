@@ -20,9 +20,9 @@ finddeps = $(1).o $(if $($(1)),$(call map,finddeps,$($(1))))
 
 # define module dependencies
 module_cfitsio = module_stdio
-module_fitstools = string module_cfitsio module_wcslib
+module_fitstools = string module_cfitsio
 module_instrument = precision string
-module_pacsinstrument = string module_fitstools module_pacspointing module_pointingmatrix module_projection module_wcs module_wcslib 
+module_pacsinstrument = string module_fitstools module_pacspointing module_pointingmatrix module_projection module_wcs 
 module_pacspointing = precision module_fitstools
 module_pointingmatrix = module_pointingelement
 module_projection = precision module_sort module_stack
@@ -30,9 +30,9 @@ module_wcs = module_fitstools module_wcslib string
 
 # define executable dependencies
 test_cfitsio = module_cfitsio
-test_fitstools = module_fitstools module_wcslib
-test_ngc6946_bpj = module_fitstools module_pacsinstrument module_pacspointing module_pointingmatrix module_preprocessor module_projection module_wcslib precision
-test_pacs = module_pacsinstrument module_pacspointing module_fitstools module_wcslib
+test_fitstools = module_fitstools
+test_ngc6946_bpj = module_fitstools module_pacsinstrument module_pacspointing module_pointingmatrix module_preprocessor module_projection precision
+test_pacs = module_pacsinstrument module_pacspointing module_fitstools
 test_pointing = module_pacspointing
 test_projection = module_projection module_sort
 test_read_config = module_instrument

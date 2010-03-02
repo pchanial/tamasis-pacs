@@ -245,7 +245,6 @@ subroutine pacs_pointing_matrix(array, time, ra, dec, pa, chop, npointings, fine
     use module_fitstools
     use module_pacsinstrument
     use module_pacspointing
-    use module_wcslib, only : WCSLEN, wcsfree
     implicit none
 
     !f2py threadsafe
@@ -279,7 +278,7 @@ subroutine pacs_pointing_matrix(array, time, ra, dec, pa, chop, npointings, fine
 
     class(pacsinstrument), allocatable   :: pacs
     class(pacspointing), allocatable     :: pointing
-    integer                              :: wcs(WCSLEN), nx, ny, status, count1, count2, count_rate, count_max
+    integer                              :: status, count,  count1, count2, count_rate, count_max, nx, ny
 
     ! read pointing information
     allocate(pointing)
@@ -303,8 +302,10 @@ subroutine pacs_pointing_matrix(array, time, ra, dec, pa, chop, npointings, fine
         write (*,'(a)') "Info: using user's bad pixel mask."
     end if
 
-    call ft_header2wcs(header, wcs, nx, ny, status)
-    if (status /= 0) goto 999
+    call ft_readparam(header, 'naxis1', count, nx, status=status)
+    if (status /= 0 .or. count == 0) goto 999
+    call ft_readparam(header, 'naxis2', count, ny, status=status)
+    if (status /= 0 .or. count == 0) goto 999
 
     ! compute the projector
     write(*,'(a)', advance='no') 'Info: computing the projector... '
@@ -313,10 +314,7 @@ subroutine pacs_pointing_matrix(array, time, ra, dec, pa, chop, npointings, fine
     call system_clock(count2, count_rate, count_max)
     write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
 
-
-    ! free the wcs
-    status = wcsfree(wcs)
-    if (status == 0) return
+    return
 
 999 write(ERROR_UNIT,'(a)') 'Aborting.'
 

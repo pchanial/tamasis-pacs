@@ -2,8 +2,7 @@ program test_pacs
 
     use, intrinsic :: ISO_C_BINDING
     use module_fitstools
-    use module_wcs, only : init_wcslib, ad2xy_wcslib, free_wcslib
-    use module_wcslib, only : WCSLEN, wcsfree
+    use module_wcs, only : init_astrometry, ad2xy_gnomonic
     use module_pacsinstrument
     use module_pacspointing
     implicit none
@@ -15,7 +14,6 @@ program test_pacs
 
     real*8, allocatable    :: yz(:,:), ad(:,:), xy(:,:), time(:)
     integer*8, allocatable :: timeus(:)
-    integer                :: wcs(WCSLEN)
     integer                :: status, i, j, nx, ny, index
     !integer                :: count, count2, count_rate, count_max
     integer*8              :: first, last
@@ -47,8 +45,8 @@ program test_pacs
     call ft_header2str(filename_header, header, status)
     if (status /= 0) stop 'ft_header2str: FAILED.'
 
-    call init_wcslib(header, status)
-    if (status /= 0) stop 'init_wcslib: FAILED.'
+    call init_astrometry(header, status=status)
+    if (status /= 0) stop 'init_astrometry: FAILED.'
 
     write (*,*) 'Number of valid detectors:', pacs%ndetectors
     write (*,*) 'Number of samples:', size(time)
@@ -83,7 +81,7 @@ program test_pacs
        write (*,*) 'Dec: ', i, (ad(2, (i-1)*4+j), j = 1,4)
     end do
 
-    xy = ad2xy_wcslib(ad)
+    xy = ad2xy_gnomonic(ad)
 
     do i=1, 1
         write (*,*) 'x: ', i, (xy(1, (i-1)*4+j), j = 1,4)
@@ -113,8 +111,6 @@ program test_pacs
 
     call pacs%compute_mapheader(pointing, time, 3.d0, header, status)
     if (status /= 0) stop 'compute_mapheader: FAILED.'
-    call ft_header2wcs(header, wcs, nx, ny, status)
-    if (status /= 0) stop 'ft_header2wcs: FAILED.'
 
     !! check that all detector corners are inside the map
     !call system_clock(count, count_rate, count_max)
@@ -134,7 +130,6 @@ program test_pacs
     !!+yz2ad: 40.10s,40.72s
     !!+ad2xy: 71.54s,76.74s,69.16s
     !!+if: 70.52s
-    call free_wcslib()
 
     stop "OK."
 

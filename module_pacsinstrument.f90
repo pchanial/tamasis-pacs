@@ -4,7 +4,6 @@ module module_pacsinstrument
     use module_pacspointing
     use module_pointingmatrix
     use module_projection
-    use module_wcslib, only: WCSLEN
     use string, only : strlowcase
     implicit none
 
@@ -490,7 +489,7 @@ contains
     end function xy2roi
 
 
-    !------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
     recursive subroutine roi2pmatrix(this, roi, coords, nx, ny, isample, nroi, pmatrix)
@@ -533,14 +532,13 @@ contains
     end subroutine roi2pmatrix
 
 
-    !------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
     subroutine compute_mapheader(this, pointing, times, resolution, header, status)
 
-        use module_fitstools, only : ft_create_header, ft_header2wcs
-        use module_wcslib, only : wcsfree
-        use module_wcs, only : init_wcslib
+        use module_fitstools, only : ft_create_header
+        use module_wcs, only : init_astrometry
 
         class(pacsinstrument), intent(in) :: this
         class(pacspointing), intent(in)   :: pointing
@@ -557,7 +555,7 @@ contains
 
         call ft_create_header(0, 0, -resolution/3600.d0, resolution/3600.d0, 0.d0, ra0, dec0, 1.d0, 1.d0, header)
 
-        call init_wcslib(header, status)
+        call init_astrometry(header, status=status)
         if (status /= 0) return
 
         call this%find_minmax(pointing, times, xmin, xmax, ymin, ymax)
@@ -577,14 +575,14 @@ contains
     end subroutine compute_mapheader
 
 
-    !------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
     ! find minimum and maximum pixel coordinates in maps
     subroutine find_minmax(this, pointing, times, xmin, xmax, ymin, ymax)
 
         use module_projection, only: convex_hull
-        use module_wcs, only : ad2xy_wcslib, init_wcslib
+        use module_wcs, only : ad2xy_gnomonic
         class(pacsinstrument), intent(in) :: this
         class(pacspointing), intent(in)   :: pointing
         real*8, intent(in)                :: times(:)  ! times at which the PACS array should be considered as inside the map
@@ -619,7 +617,7 @@ contains
            call pointing%get_position(times(isample), ra, dec, pa, chop, index)
            hull = uv2yz(hull_uv, this%distortion_yz_blue, chop)
            hull = yz2ad(hull, ra, dec, pa)
-           hull = ad2xy_wcslib(hull)
+           hull = ad2xy_gnomonic(hull)
            xmin = min(xmin, minval(hull(1,:)))
            xmax = max(xmax, maxval(hull(1,:)))
            ymin = min(ymin, minval(hull(2,:)))
@@ -630,12 +628,12 @@ contains
     end subroutine find_minmax
 
 
-    !------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
     subroutine compute_projection_sharp_edges(this, pointing, time, header, nx, ny, pmatrix, status)
 
-        use module_wcs, only : init_wcslib, ad2xy_wcslib, free_wcslib
+        use module_wcs, only : init_astrometry, ad2xy_gnomonic
         class(pacsinstrument), intent(in)    :: this
         class(pacspointing), intent(in)      :: pointing
         character(len=*), intent(in)         :: header
@@ -648,7 +646,7 @@ contains
         real*8  :: ra, dec, pa, chop, chop_old
         integer :: roi(ndims,2,this%ndetectors), isample, nsamples, npixels_per_sample, nroi, index
 
-        call init_wcslib(header, status)
+        call init_astrometry(header, status=status)
         if (status /= 0) return
 
         nsamples = size(time)
@@ -665,21 +663,20 @@ contains
                 chop_old = chop
             end if
             coords = this%yz2ad(coords_yz, ra, dec, pa)
-            coords = ad2xy_wcslib(coords)
+            coords = ad2xy_gnomonic(coords)
             roi    = this%xy2roi(coords) ! [1=x|2=y,1=min|2=max,idetector]
             call this%roi2pmatrix(roi, coords, nx, ny, isample, nroi, pmatrix)
             npixels_per_sample = max(npixels_per_sample, nroi)
         end do
         !$omp end parallel do
         if (npixels_per_sample /= size(pmatrix,1)) then
-            write(*,'(a,i0,a)') 'Warning: For the Pointing Matrix, npixels_per_sample may be updated to ', npixels_per_sample, '.'
+            write(*,'(a,i0,a)') 'Warning: to compute the Pointing Matrix, npixels_per_sample may be updated to ', npixels_per_sample, '.'
         end if
-        call free_wcslib()
 
     end subroutine compute_projection_sharp_edges
 
 
-    !------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
     subroutine multiplexing_direct(signal, sampled_signal, sampling, ij)
@@ -716,7 +713,7 @@ contains
     end subroutine multiplexing_direct
 
 
-    !------------------------------------------------------------------------------
+    !---------------------------------------------------------------------------
 
 
     subroutine multiplexing_transpose(sampled_signal, signal, sampling, ij)

@@ -6,8 +6,7 @@ program test_ngc6946_bpj
     use module_pacspointing
     use module_preprocessor
     use module_projection
-    use module_wcs, only : init_wcslib, ad2xy_wcslib, free_wcslib
-    use module_wcslib, only : WCSLEN, wcsfree
+    use module_wcs, only : init_astrometry, ad2xy_gnomonic
     use precision
     implicit none
 
@@ -27,8 +26,8 @@ program test_ngc6946_bpj
     real*8, allocatable                :: time(:)
     integer*8, allocatable             :: timeus(:)
     character(len=2880)                :: header
-    integer                            :: wcs(WCSLEN), nx, ny, index
-    integer                            :: status, count0, count1, count2, count_rate, count_max, idetector, isample
+    integer                            :: nx, ny, index
+    integer                            :: status, count, count0, count1, count2, count_rate, count_max, idetector, isample
     integer*8                          :: first, last, nsamples
     real*8, allocatable                :: map1d(:)
     type(pointingelement), allocatable :: pmatrix(:,:,:)
@@ -64,8 +63,10 @@ program test_ngc6946_bpj
     call pacs%compute_mapheader(pointing, time, 3.d0, header, status)
     if (status /= 0) stop 'FAILED: compute_mapheader.'
 
-    call ft_header2wcs(header, wcs, nx, ny, status)
-    if (status /= 0) stop 'FAILED: ft_header2wcs.'
+    call ft_readparam(header, 'naxis1', count, nx, status=status)
+    if (status /= 0 .or. count == 0) stop 'FAILED: compute_mapheader 2.'
+    call ft_readparam(header, 'naxis2', count, ny, status=status)
+    if (status /= 0 .or. count == 0) stop 'FAILED: compute_mapheader 3.'
 
     ! allocate memory for the map
     allocate(map1d(0:nx*ny-1))
@@ -103,19 +104,19 @@ program test_ngc6946_bpj
     allocate(surface2(nsamples, pacs%ndetectors))
     allocate(coords(ndims, pacs%ndetectors*nvertices))
 
-    call init_wcslib(header, status)
-    if (status /= 0) stop 'FAILED: init_wcslib.'
+    call init_astrometry(header, status=status)
+    if (status /= 0) stop 'FAILED: init_astrometry'
 
     index = 2
     write(*,*) 'surfaces:'
     !$omp parallel do default(none) firstprivate(index) private(isample, ra, dec, pa, chop, coords, idetector) &
-    !$omp shared(time, pointing, nx, pacs, pmatrix, wcs, surface1, surface2)
+    !$omp shared(time, pointing, nx, pacs, pmatrix, surface1, surface2)
     do isample = 1, nsamples
         call pointing%get_position(time(isample), ra, dec, pa, chop, index)
         !write(*,*) isample, ', Time:',time(isample),'RA:',ra,'Dec',dec
         coords = pacs%uv2yz(pacs%corners_uv, pacs%distortion_yz_blue, chop)
         coords = pacs%yz2ad(coords, ra, dec, pa)
-        coords = ad2xy_wcslib(coords)
+        coords = ad2xy_gnomonic(coords)
         do idetector = 1, pacs%ndetectors
             surface1(isample,idetector) = abs(surface_convex_polygon(coords(:,(idetector-1)*nvertices+1:idetector*nvertices)))
             surface2(isample,idetector) = sum(pmatrix(:,isample,idetector)%weight)
@@ -158,10 +159,8 @@ program test_ngc6946_bpj
 
     ! write the map as fits file
     write(*,'(a)') 'Writing FITS file... '
-    call ft_write(outputdir // 'ngc6946_bpj.fits', reshape(map1d, [nx,ny]), wcs, status)
+    call ft_write(outputdir // 'ngc6946_bpj.fits', reshape(map1d, [nx,ny]), header, status)
     if (status /= 0) stop 'FAILED: ft_write.'
-
-    call free_wcslib()
 
     call system_clock(count2, count_rate, count_max)
     write(*,'(a,f6.2,a)') 'Total elapsed time: ', real(count2-count0)/count_rate, 's'

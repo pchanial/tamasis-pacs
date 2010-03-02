@@ -1,12 +1,10 @@
 program test_fitstools
 
     use module_fitstools
-    use module_wcslib, only : wcsfree, WCSLEN
     implicit none
 
     character(len=*), parameter :: filename_header = 'tests/csh_header_ngc6946.fits'
 
-    integer                     :: wcs(WCSLEN)
     integer                     :: count, status, nx, ny
     character(len=2880)         :: header
     real*8                      :: image(10,15)
@@ -17,10 +15,8 @@ program test_fitstools
     real*8                      :: dvalue
     character(len=70)           :: cvalue
 
-    ! test extract of wcs in FITS header
+    ! test extraction of header in FITS file
     call ft_header2str(filename_header, header, status=status)
-    if (status /= 0) stop 'FAILED.'
-    call ft_header2wcs(header, wcs, nx, ny, status=status)
     if (status /= 0) stop 'FAILED.'
 
     test = .true.
@@ -112,10 +108,8 @@ program test_fitstools
     status = 0
     image = 0
     image(1,2) = 1
-    call ft_write('/tmp/test_fitstools.fits', image, wcs, status)
+    call ft_write('/tmp/test_fitstools.fits', image, header, status)
     if (status /= 0) stop 'FAILED.'
-
-    status = wcsfree(wcs)
 
     if (.not. test) stop 'FAILED.'
     stop 'OK.'

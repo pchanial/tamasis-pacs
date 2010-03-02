@@ -3,7 +3,6 @@ module module_fitstools
     use, intrinsic :: ISO_C_BINDING
     use, intrinsic :: ISO_FORTRAN_ENV
     use module_cfitsio, only: CFITSIO_READONLY, CFITSIO_READWRITE
-    use module_wcslib, only: WCSLEN, wcshdo
     implicit none
 
     private
@@ -18,7 +17,6 @@ module module_fitstools
     public :: ft_create_header
     public :: ft_write
     public :: ft_header2str
-    public :: ft_header2wcs
     public :: ft_readparam
 
     interface ft_readextension
@@ -627,48 +625,49 @@ contains
     !---------------------------------------------------------------------------
 
 
-    subroutine writefits_double_1d(filename, data, wcs, status)
-
+    subroutine writefits_double_1d(filename, data, header, status)
         character(len=*), intent(in)    :: filename
         real*8, intent(in)              :: data(:)
-        integer, intent(in), optional   :: wcs(WCSLEN)
+        character(len=*), intent(in), optional :: header
         integer, intent(out)            :: status
-        integer                         :: nkeyrec, irec, unit, blocksize, bitpix, naxis, naxes(1)
-        logical                         :: simple, extend
-        type(C_PTR)                     :: c_header
-        character(len=1000*80), pointer :: header => null()
 
-        if (status /= 0) return
+        integer                         :: irec, unit, blocksize, bitpix, naxis, naxes(1)
+        logical                         :: simple, extend
 
         ! delete file if it exists
         open(10, file=filename, status='unknown')
         close(10, status='delete')
 
         ! open and initialise the fits file
+        status = 0
         call ftgiou(unit, status)
+        if (ft_checkerror_cfitsio(status, filename)) return
+
         call ftinit(unit, filename, blocksize, status)
+        if (ft_checkerror_cfitsio(status, filename)) return
         simple = .true.
         bitpix = -64
         naxis  = 1
         naxes  = [ size(data) ]
         extend = .true.
         call FTPHPR(unit,simple,bitpix,naxis,naxes,0,1,extend,status)
+        if (ft_checkerror_cfitsio(status, filename)) return
 
         ! write the astrometry keywords
-        if (present(wcs)) then
-            status = wcshdo(0, wcs, nkeyrec, c_header)
-            call c_f_pointer(c_header, header)
-
-            do irec=1, nkeyrec
+        if (present(header)) then
+            do irec=1, len(header) / 80
                 call FTPREC(unit,header((irec-1)*80+1:irec*80), status)
             end do
+            if (ft_checkerror_cfitsio(status, filename)) return
         end if
 
         ! write the image data
         call FTPPRD(unit, GROUP, 1, size(data), data, status)
+        if (ft_checkerror_cfitsio(status, filename)) return
 
         ! close the fits file
         call ft_close(unit, status)
+        if (ft_checkerror_cfitsio(status, filename)) return
 
     end subroutine writefits_double_1d
 
@@ -676,48 +675,49 @@ contains
     !---------------------------------------------------------------------------
 
 
-    subroutine writefits_double_2d(filename, data, wcs, status)
-
+    subroutine writefits_double_2d(filename, data, header, status)
         character(len=*), intent(in)    :: filename
         real*8, intent(in)              :: data(:,:)
-        integer, intent(in), optional   :: wcs(WCSLEN)
+        character(len=*), intent(in), optional :: header
         integer, intent(out)            :: status
-        integer                         :: nkeyrec, irec, unit, blocksize, bitpix, naxis, naxes(2)
-        logical                         :: simple, extend
-        type(C_PTR)                     :: c_header
-        character(len=1000*80), pointer :: header => null()
 
-        if (status /= 0) return
+        integer                         :: irec, unit, blocksize, bitpix, naxis, naxes(2)
+        logical                         :: simple, extend
 
         ! delete file if it exists
         open(10, file=filename, status='unknown')
         close(10, status='delete')
 
         ! open and initialise the fits file
+        status = 0
         call ftgiou(unit, status)
+        if (ft_checkerror_cfitsio(status, filename)) return
+
         call ftinit(unit, filename, blocksize, status)
+        if (ft_checkerror_cfitsio(status, filename)) return
         simple = .true.
         bitpix = -64
         naxis  = 2
-        naxes  = [ size(data,1), size(data,2) ]
+        naxes  = [size(data,1), size(data,2)]
         extend = .true.
         call FTPHPR(unit,simple,bitpix,naxis,naxes,0,1,extend,status)
+        if (ft_checkerror_cfitsio(status, filename)) return
 
         ! write the astrometry keywords
-        if (present(wcs)) then
-            status = wcshdo(0, wcs, nkeyrec, c_header)
-            call c_f_pointer(c_header, header)
-
-            do irec=1, nkeyrec
+        if (present(header)) then
+            do irec=1, len(header) / 80
                 call FTPREC(unit,header((irec-1)*80+1:irec*80), status)
             end do
+            if (ft_checkerror_cfitsio(status, filename)) return
         end if
 
         ! write the image data
         call FTPPRD(unit, GROUP, 1, size(data), data, status)
+        if (ft_checkerror_cfitsio(status, filename)) return
 
         ! close the fits file
         call ft_close(unit, status)
+        if (ft_checkerror_cfitsio(status, filename)) return
 
     end subroutine writefits_double_2d
 
@@ -759,97 +759,6 @@ contains
         status = fits_status
 
     end subroutine ft_header2str
-
-
-    !---------------------------------------------------------------------------
-
-
-    ! translate the astrometry in a FITS header into a wcslib wcs
-    ! XXX this routine currently leaks wcsp
-    ! investigate how to keep wcs without wcsp
-    subroutine ft_header2wcs(header, wcs, nx, ny, status)
-
-        use, intrinsic :: ISO_C_BINDING
-        use module_wcslib
-        character(len=*), intent(in)     :: header
-        integer(kind=C_INT), intent(out) :: wcs(WCSLEN)
-        integer, intent(out)             :: nx, ny
-        integer, intent(out)             :: status
-        integer(kind=C_INT)              :: wcs_(WCSLEN)
-
-        integer(kind=C_INT)              :: wcsp
-        integer                          :: nreject, nwcs, statfix(WCSFIX_NWCS), count1, count2
-
-        status = wcspih(header // C_NULL_CHAR, len(header)/80, WCSHDR_all, 0, nreject, nwcs, wcsp)
-        if (status /= 0) then
-            write (ERROR_UNIT,'(a)') 'WCSPIH error: ', status
-            return
-        end if
-
-        if (nwcs == 0) then
-            status = 1
-            write (ERROR_UNIT,'(a)') 'ft_header2wcs: Header has no astrometry.'
-            return
-        end if
-
-        if (wcsp < 0) then
-            status = 1
-            write (ERROR_UNIT,'(a)') 'ft_header2wcs: wcsp negative. Unrecoverable error.'
-            return
-        end if
-
-        status = wcsvcopy(wcsp, 0, wcs_)
-        if (status /= 0) then
-            write (ERROR_UNIT,'(a)') 'ft_header2wcs: wcsvcopy error: ', status
-            return
-        end if
-        status = wcsput(wcs, WCS_FLAG, -1_C_INT, 0_C_INT, 0_C_INT)
-        if (status /= 0) then
-            write (ERROR_UNIT,'(a)') 'ft_header2wcs: wcsput error: ', status
-            return
-        end if
-        status = wcscopy(wcs_, wcs)
-        if (status /= 0) then
-            write (ERROR_UNIT,'(a)') 'ft_header2wcs: wcscopy error: ', status
-            return
-        end if
-        status = wcsfree(wcs_)
-        if (status /= 0) then
-            write (ERROR_UNIT,'(a)') 'ft_header2wcs: wcsfree error: ', status
-            return
-        end if
-        status = wcsvfree(nwcs, wcsp)
-        if (status /= 0) then
-            write (ERROR_UNIT,'(a)') 'ft_header2wcs: wcsvfree error: ', status
-            return
-        end if
-
-        !Fix non-standard WCS keyvalues.
-        status = wcsfix(ctrl=7, naxis=c_null_ptr, wcs=wcs, stat=statfix)
-        if (status /= 0) then
-            write (ERROR_UNIT,'(a)') 'ft_header2wcs: wcsfix error: ', status
-            return
-        end if
-
-        status = wcsset(wcs)
-        if (status /= 0) then
-            write (ERROR_UNIT,'(a)') 'ft_header2wcs: wcsset error: ', status
-            return
-        end if
-
-        ! extract NAXIS1 and NAXIS2 keywords
-        call ft_readparam(header, 'naxis1', count1, nx, status=status)
-        if (status /= 0) return
-        call ft_readparam(header, 'naxis2', count2, ny, status=status)
-        if (status /= 0) return
-
-        if (count1 == 0 .or. count2 == 0) then
-            status = 1
-            write (ERROR_UNIT,'(a)') "Missing NAXISn keyword(s) in header."
-            return
-        end if
-
-    end subroutine ft_header2wcs
 
 
     !---------------------------------------------------------------------------
