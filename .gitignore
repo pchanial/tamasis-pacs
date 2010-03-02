@@ -17,6 +17,7 @@ test_read_config
 test_sort
 test_stack
 test_stdio
+test_wcs
 test_wcslib1
 test_wcslib2
 test_wcslibc
