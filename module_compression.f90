@@ -12,8 +12,8 @@ contains
     subroutine compression_average_direct(data, compressed, factor)
 
         real*8, intent(in)  :: data(:,:)
-        real*8, intent(out) :: compressed(size(data,1)/factor,size(data,2))
         integer, intent(in) :: factor
+        real*8, intent(out) :: compressed(size(data,1)/factor,size(data,2))
         integer             :: nsamples, ndetectors, isample, idetector
 
         nsamples   = size(compressed,1)
@@ -35,8 +35,8 @@ contains
     subroutine compression_average_transpose(compressed, data, factor)
 
         real*8, intent(in)  :: compressed(:,:)
-        real*8, intent(out) :: data(size(compressed,1)*factor,size(compressed,2))
         integer, intent(in) :: factor
+        real*8, intent(out) :: data(size(compressed,1)*factor,size(compressed,2))
         integer             :: nsamples, ndetectors, isample, idetector
 
         nsamples   = size(compressed,1)

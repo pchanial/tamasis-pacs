@@ -23,7 +23,7 @@ program test_pacs
     ! read observation
 
     allocate(pointing)
-    call pointing%load(filename, status)
+    call pointing%load_filename(filename, status)
     if (status /= 0) stop 'pointing%load: FAILED.'
     call pointing%print()
 

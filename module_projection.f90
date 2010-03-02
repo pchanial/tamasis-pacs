@@ -192,11 +192,9 @@ contains
 
     recursive pure function surface_convex_polygon(xy) result(output)
 
-        use precision, only : p
-
-        real(kind=p), intent(in) :: xy(:,:)
-        real(kind=p)             :: output
-        integer                  :: i, j
+        real*8, intent(in) :: xy(:,:)
+        real*8             :: output
+        integer            :: i, j
 
         output = 0
         j = size(xy,2)

@@ -24,7 +24,7 @@ program test_pointing
  !      1632946094474037       258.53164       66.965305       252.37419
 
  allocate(ptg)
- call ptg%load(filename, status)
+ call ptg%load_filename(filename, status)
  if (status /= 0) stop 'ptg%load: FAILED.'
 
  index = 2
@@ -44,7 +44,7 @@ program test_pointing
 
  ! test fast interpolation (evenly spaced sampling)
  allocate(ptg)
- call ptg%load([1.d0, 2.d0], [0.d0, 1.d0], [3.d0, 3.d0], [2.d0, 1.d0], [0.d0, 0.d0], status)
+ call ptg%load_array([1.d0, 2.d0], [0.d0, 1.d0], [3.d0, 3.d0], [2.d0, 1.d0], [0.d0, 0.d0], status)
  if (status /= 0) stop 'ptg%load: FAILED.'
 
  index = 2
@@ -66,7 +66,7 @@ program test_pointing
 
  ! test slow interpolation (unevenly spaced sampling)
  allocate(ptg)
- call ptg%load([1.d0, 2.d0, 2.5d0], [0.d0, 1.d0, 1.5d0], [3.d0, 3.d0, 3.d0], [2.d0, 1.d0, 0.5d0], [0.d0, 0.d0, 0.d0], status)
+ call ptg%load_array([1.d0, 2.d0, 2.5d0], [0.d0, 1.d0, 1.5d0], [3.d0, 3.d0, 3.d0], [2.d0, 1.d0, 0.5d0], [0.d0, 0.d0, 0.d0], status)
  if (status /= 0) stop 'ptg%load: FAILED.'
 
  index = 2

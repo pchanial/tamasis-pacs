@@ -1,12 +1,20 @@
 # Makefile for project TAMASIS
 # Author: P. Chanial
 
+FC=ifort
+FFLAGS_DEBUG = -g -fast -warn all -openmp
+FFLAGS_RELEASE = -fast -openmp -ftz -ip  -ipo -march=native 
+LDFLAGS  = -liomp5 $(shell pkg-config --libs cfitsio) $(shell pkg-config --libs wcslib)
+FCOMPILER = intelem
+
 FC=gfortran
-FFLAGS_DEBUG   = -g -O3 -fcheck=all -fopenmp -Wall -fPIC
+FFLAGS_DEBUG = -g -O3 -fcheck=all -fopenmp -Wall -fPIC
 FFLAGS_RELEASE = -O3 -fopenmp -fPIC
-FFLAGS   = $(FFLAGS_RELEASE)
 LDFLAGS  = -lgomp $(shell pkg-config --libs cfitsio) $(shell pkg-config --libs wcslib)
+FCOMPILER=gnu95
+
 INCLUDES = wcslib-4.4.4-Fortran90
+FFLAGS   = $(FFLAGS_RELEASE)
 
 MODULES = precision.f90 string.f90 $(wildcard module_*.f90)
 SOURCES = $(wildcard test_*.f90)
@@ -67,7 +75,7 @@ $(EXECS):%:$$(sort $$(call finddeps,$$*))
 
 tamasisfortran.so: tamasisfortran.f90 $(MODULES:.f90=.o)
 	unset LDFLAGS ; \
-	f2py --fcompiler=gnu95 --f90exec=$(FC) --f90flags="-fopenmp" -DF2PY_REPORT_ON_ARRAY_COPY=1 -c $^ -m tamasisfortran $(LDFLAGS)
+	f2py --fcompiler=${FCOMPILER} --f90exec=$(FC) --f90flags="$(FFLAGS)" -DF2PY_REPORT_ON_ARRAY_COPY=1 -c $^ -m tamasisfortran $(LDFLAGS)
 
 clean:
 	rm -f *.o *.mod *.so $(EXECS)

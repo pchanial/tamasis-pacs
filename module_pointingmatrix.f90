@@ -28,7 +28,7 @@ contains
                 timeline(isample,idetector) = 0
                 do ipixel = 1, npixels
                     timeline(isample,idetector) = timeline(isample,idetector) + map(pmatrix(ipixel,isample,idetector)%pixel) * &
-                                                  pmatrix(ipixel,isample,idetector)%weight
+                                                  real(pmatrix(ipixel,isample,idetector)%weight, kind=8)
                 end do
             end do
         end do
@@ -41,7 +41,6 @@ contains
 
 
     subroutine pmatrix_transpose(pmatrix, timeline, map)
-
         type(pointingelement), intent(in) :: pmatrix(:,:,:)
         real*8, intent(in)                :: timeline(:,:)
         real*8, intent(out)               :: map(0:)
@@ -50,18 +49,17 @@ contains
         npixels    = size(pmatrix, 1)
         nsamples   = size(pmatrix, 2)
         ndetectors = size(pmatrix, 3)
-        map = 0
 
-        !$omp parallel do reduction(+:map) private(idetector, isample, ipixel)
+!!$        !$omp parallel do reduction(+:map) private(idetector, isample, ipixel)
         do idetector = 1, ndetectors
             do isample = 1, nsamples
                 do ipixel = 1, npixels
                     map(pmatrix(ipixel,isample,idetector)%pixel) = map(pmatrix(ipixel,isample,idetector)%pixel) + &
-                        pmatrix(ipixel,isample,idetector)%weight * timeline(isample,idetector)
+                        real(pmatrix(ipixel,isample,idetector)%weight,kind=8) * timeline(isample,idetector)
                 end do
             end do
         end do
-        !$omp end parallel do
+!!$        !$omp end parallel do
 
     end subroutine pmatrix_transpose
 

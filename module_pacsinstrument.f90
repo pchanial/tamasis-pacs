@@ -681,8 +681,8 @@ contains
 
     subroutine multiplexing_direct(signal, sampled_signal, sampling, ij)
         real*8, intent(in)  :: signal(:,:)
-        real*8, intent(out) :: sampled_signal(size(signal,1)/sampling,size(signal,2))
         integer, intent(in) :: sampling
+        real*8, intent(out) :: sampled_signal(size(signal,1)/sampling,size(signal,2))
         integer, intent(in) :: ij(2,size(signal,2))
         integer             :: ndetectors, idetector, isample, j
         real*8              :: frac
@@ -718,8 +718,8 @@ contains
 
     subroutine multiplexing_transpose(sampled_signal, signal, sampling, ij)
         real*8, intent(in)  :: sampled_signal(:,:)
-        real*8, intent(out) :: signal(size(sampled_signal,1)*sampling,size(sampled_signal,2))
         integer, intent(in) :: sampling
+        real*8, intent(out) :: signal(size(sampled_signal,1)*sampling,size(sampled_signal,2))
         integer, intent(in) :: ij(2,size(sampled_signal,2))
         integer             :: ndetectors, isample, idetector, j
         real*8              :: frac

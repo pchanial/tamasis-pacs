@@ -10,7 +10,7 @@ program test_wcs
 
     type(astrometry)            :: astr
     character(len=2880)         :: header
-    integer                     :: status, i
+    integer                     :: status, i, j
     real*8, dimension(5)        :: a, d, x, y, xref, yref
     real*8, dimension(:), allocatable   :: a_vect, d_vect, x_vect, y_vect
     real*8, dimension(:,:), allocatable :: ad_vect, xy_vect
@@ -42,18 +42,14 @@ program test_wcs
 
     do i=1,5
         call ad2xy_gnomonic_vect(a(i), d(i), x(i), y(i))
-
         if (.not. test_real_eq(x(i), xref(i), 7)) stop 'FAILED: ad2xy_gnomonic'
         if (.not. test_real_eq(y(i), yref(i), 7)) stop 'FAILED: ad2xy_gnomonic'
     end do
 
-    n = 100000000
+    n = 10000000
     allocate(a_vect(n))
     allocate(d_vect(n))
-    allocate(x_vect(n))
-    allocate(y_vect(n))
     allocate(ad_vect(2,n))
-    allocate(xy_vect(2,n))
 
     a_vect = [(a(1)+(10.d0*i)/n, i=1,n)]
     d_vect = [(d(1)+(10.d0*i)/n, i=1,n)]
@@ -61,16 +57,12 @@ program test_wcs
     ad_vect(2,:) = d_vect
 
     call system_clock(count1, count_rate, count_max)
-    do i=1,1
-        call ad2xy_gnomonic_vect(a_vect, d_vect, x_vect, y_vect)
-    end do
+    call ad2xy_gnomonic_vect(a_vect, d_vect, a_vect, d_vect)
     call system_clock(count2, count_rate, count_max)
     write(*,'(a,f6.2,a)') 'ad2xy_vect: ',real(count2-count1)/count_rate, 's'
 
     call system_clock(count1, count_rate, count_max)
-    do i=1,1
-        ad_vect = ad2xy_gnomonic(ad_vect)
-    enddo
+    ad_vect = ad2xy_gnomonic(ad_vect)
     call system_clock(count2, count_rate, count_max)
     write(*,'(a,f6.2,a)') 'ad2xy: ',real(count2-count1)/count_rate, 's'
 

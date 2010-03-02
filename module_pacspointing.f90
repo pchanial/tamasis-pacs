@@ -12,12 +12,13 @@ module module_pacspointing
 
     contains
 
-        generic, public    :: load => load_filename, load_array
-        procedure          :: load_filename
-        procedure          :: load_array
-        procedure, public  :: compute_center
-        procedure, public  :: print
-        procedure          :: destructor ! XXX should be final, but not handled by gfortran 4.5
+!        generic          :: load => load_filename, load_array
+        procedure, public :: load_filename
+        procedure, public :: load_array
+        procedure, public :: compute_center
+        procedure, public :: print
+        procedure, public :: get_position_gen
+        procedure         :: destructor ! XXX should be final, but not handled by gfortran 4.5
 
     end type pacspointing
 
@@ -52,7 +53,7 @@ contains
         call ft_readextension(filename // '_ChopFpuAngle.fits', chop, status)
         if (status /= 0) return
 
-        call this%load(time, ra, dec, pa, chop, status)
+        call this%load_array(time, ra, dec, pa, chop, status)
 
     end subroutine load_filename
 
@@ -131,6 +132,7 @@ contains
     ! time samples are not evenly spaced, slow linear interpolation
     recursive subroutine get_position_gen(this, time, ra, dec, pa, chop, index)
         !use, intrinsic :: ieee_arithmetic (not implemented in gfortran 4.5)
+        use, intrinsic :: ISO_FORTRAN_ENV, only : OUTPUT_UNIT
         class(pacspointing), intent(in) :: this
         real*8, intent(in)              :: time
         real*8, intent(out)             :: ra, dec, pa, chop

@@ -14,8 +14,8 @@ subroutine pacs_info_ndetectors(filename, transparent_mode, ndetectors)
     logical, intent(in)          :: transparent_mode
     integer, intent(out)         :: ndetectors
 
-    class(pacsinstrument), allocatable :: pacs
-    integer                            :: status
+    type(pacsinstrument), allocatable :: pacs
+    integer                           :: status
 
     allocate(pacs)
     call pacs%read_calibration_files(status)
@@ -49,8 +49,8 @@ subroutine pacs_info_ij(filename, transparent_mode, ndetectors, ij)
     integer, intent(in)          :: ndetectors
     integer, intent(out)         :: ij(2,ndetectors)
 
-    class(pacsinstrument), allocatable :: pacs
-    integer                            :: status
+    type(pacsinstrument), allocatable :: pacs
+    integer                           :: status
 
     allocate(pacs)
     call pacs%read_calibration_files(status)
@@ -136,8 +136,8 @@ subroutine pacs_timeline(filename, array, first, last, ndetectors, transparent_m
     real*8, intent(out)          :: signal(last-first+1, ndetectors)
     logical*1, intent(out)       :: mask(last-first+1, ndetectors)
 
-    class(pacsinstrument), allocatable :: pacs
-    integer                            :: status
+    type(pacsinstrument), allocatable :: pacs
+    integer                           :: status
 
     allocate(pacs)
     call pacs%read_calibration_files(status)
@@ -200,8 +200,8 @@ subroutine pacs_map_header(array, time, ra, dec, pa, chop, npointings, finetime,
     real*8, intent(in)                 :: resolution
     character(len=2880), intent(out)   :: header
 
-    class(pacsinstrument), allocatable :: pacs
-    class(pacspointing), allocatable   :: pointing
+    type(pacsinstrument), allocatable  :: pacs
+    type(pacspointing), allocatable    :: pointing
     integer                            :: status
 
     ! read pointing information
@@ -276,8 +276,8 @@ subroutine pacs_pointing_matrix(array, time, ra, dec, pa, chop, npointings, fine
     character(len=*), intent(in)         :: header
     type(pointingelement), intent(inout) :: pmatrix(npixels_per_sample, nfinesamples, ndetectors)
 
-    class(pacsinstrument), allocatable   :: pacs
-    class(pacspointing), allocatable     :: pointing
+    type(pacsinstrument), allocatable    :: pacs
+    type(pacspointing), allocatable      :: pointing
     integer                              :: status, count,  count1, count2, count_rate, count_max, nx, ny
 
     ! read pointing information
@@ -388,9 +388,10 @@ subroutine pacs_multiplexing_direct(signal, multiplexed, fine_sampling_factor, i
     !f2py intent(in)      :: ij
     !f2py intent(hide)    :: nsamples = shape(signal,0)
     !f2py intent(hide)    :: ndetectors = shape(signal,1)
+    integer, intent(in)   :: nsamples, ndetectors
     real*8, intent(in)    :: signal(nsamples, ndetectors)
+    integer, intent(in)   :: fine_sampling_factor, ij(2, ndetectors)
     real*8, intent(inout) :: multiplexed(nsamples/fine_sampling_factor, ndetectors)
-    integer, intent(in)   :: fine_sampling_factor, ij(2, ndetectors), nsamples, ndetectors
 
     call multiplexing_direct(signal, multiplexed, fine_sampling_factor, ij)
 
@@ -412,9 +413,11 @@ subroutine pacs_multiplexing_transpose(multiplexed, signal, fine_sampling_factor
     !f2py intent(in)      :: ij
     !f2py intent(hide)    :: nsamples = shape(signal,0)
     !f2py intent(hide)    :: ndetectors = shape(signal,1)
+    
+    integer, intent(in)   :: nsamples, ndetectors, fine_sampling_factor
     real*8, intent(in)    :: multiplexed(nsamples/fine_sampling_factor, ndetectors)
+    integer, intent(in)   :: ij(2, ndetectors)
     real*8, intent(inout) :: signal(nsamples, ndetectors)
-    integer, intent(in)   :: fine_sampling_factor, ij(2, ndetectors), nsamples, ndetectors
 
     call multiplexing_transpose(multiplexed, signal, fine_sampling_factor, ij)
 
@@ -435,9 +438,9 @@ subroutine compression_average_direct(data, compressed, factor, nsamples, ndetec
     !f2py intent(in)      :: factor
     !f2py intent(hide)    :: nsamples = shape(data,0)/factor
     !f2py intent(hide)    :: ndetectors = shape(data,1)
+    integer, intent(in)   :: factor, nsamples, ndetectors
     real*8, intent(in)    :: data(nsamples*factor,ndetectors)
     real*8, intent(out)   :: compressed(nsamples,ndetectors)
-    integer, intent(in)   :: factor, nsamples, ndetectors
 
     call direct(data, compressed, factor)
 
@@ -458,9 +461,9 @@ subroutine compression_average_transpose(compressed, data, factor, nsamples, nde
     !f2py intent(in)      :: factor
     !f2py intent(hide)    :: nsamples = shape(data,0)/factor
     !f2py intent(hide)    :: ndetectors = shape(data,1)
+    integer, intent(in)   :: factor, nsamples, ndetectors
     real*8, intent(in)    :: compressed(nsamples,ndetectors)
     real*8, intent(out)   :: data(nsamples*factor,ndetectors)
-    integer, intent(in)   :: factor, nsamples, ndetectors
 
     call transpos(compressed, data, factor)
 

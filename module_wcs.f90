@@ -184,7 +184,7 @@ contains
         type(astrometry), intent(in) :: astr
         real*8 :: lambda0                ! crval(1) in rad
         real*8 :: phi1, cosphi1, sinphi1 ! cos and sin of crval(2)
-        common /ad2xy_gnomonic/ lambda0, cosphi1, sinphi1
+        common /gnomonic/ lambda0, cosphi1, sinphi1
 
         lambda0 = astr%crval(1) / radeg
         phi1 = astr%crval(2) / radeg
@@ -204,7 +204,7 @@ contains
         integer            :: i
         real*8             :: lambda0          ! crval[0] in rad
         real*8             :: cosphi1, sinphi1 ! cos and sin of crval[1]
-        common /ad2xy_gnomonic/ lambda0, cosphi1, sinphi1
+        common /gnomonic/ lambda0, cosphi1, sinphi1
 
         do i = 1, size(ad,2)
             lambda = ad(1,i) / radeg
@@ -228,7 +228,7 @@ contains
         real*8              :: lambda, phi, invcosc, xsi, eta
         real*8              :: lambda0          ! crval[0] in rad
         real*8              :: cosphi1, sinphi1 ! cos and sin of crval[1]
-        common /ad2xy_gnomonic/ lambda0, cosphi1, sinphi1
+        common /gnomonic/ lambda0, cosphi1, sinphi1
 
         lambda = a / radeg
         phi = d / radeg
@@ -249,7 +249,7 @@ contains
         type(astrometry), intent(in) :: astr
         real*8 :: cdinv(2,2), crpix(2)
         real*8 :: cd(2,2)
-        common /xy2xy_rotation/ cdinv,crpix
+        common /rotation/ cdinv,crpix
 
         cd(1,:) = astr%cd(1,:) * astr%cdelt(1)
         cd(2,:) = astr%cd(2,:) * astr%cdelt(2)
@@ -264,12 +264,12 @@ contains
     !---------------------------------------------------------------------------
 
 
-    pure elemental subroutine xy2xy_rotation(xsi, eta, x, y)
+    elemental subroutine xy2xy_rotation(xsi, eta, x, y)
 
         real*8, intent(in)  :: xsi, eta
         real*8, intent(out) :: x, y
         real*8              :: cdinv(2,2), crpix(2)
-        common /xy2xy_rotation/ cdinv, crpix
+        common /rotation/ cdinv, crpix
 !check in place
 
         x = cdinv(1,1)*xsi + cdinv(1,2)*eta + crpix(1)
