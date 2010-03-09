@@ -798,7 +798,6 @@ contains
         if (count == 0) then
             if (present(must_exist)) then
                 if (must_exist) then
-                    status = 1
                     write (ERROR_UNIT, '(a)') "Missing keyword '" // strupcase(param) // "' in FITS header."
                     return
                 end if
