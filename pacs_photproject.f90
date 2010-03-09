@@ -74,7 +74,7 @@ program pacs_photproject
     ! read pointing information
     allocate(pointing)
     call pointing%load_filename(filename, status)
-    if (status /= 0) stop 'pointing%load_filename: FAILED.'
+    if (status /= 0) stop 'FAILED: pointing%load_filename'
 
     ! read the time file
     status = 0
@@ -89,18 +89,19 @@ program pacs_photproject
     ! get the pacs instance, read the calibration files
     allocate(pacs)
     call pacs%read_calibration_files(status)
-    if (status /= 0) stop 'FAILED: read_calibration_files.'
+    if (status /= 0) stop 'FAILED: read_calibration_files'
 
     call pacs%filter_detectors('blue', transparent_mode=.true., status=status)
-    if (status /= 0) stop 'FAILED: filter_detectors.'
+    if (status /= 0) stop 'FAILED: filter_detectors'
 
     call pacs%compute_mapheader(pointing, time, resolution, header, status)
-    if (status /= 0) stop 'FAILED: compute_mapheader.'
+    if (status /= 0) stop 'FAILED: compute_mapheader'
 
     call ft_readparam(header, 'naxis1', count, nx, status=status)
-    if (status /= 0 .or. count == 0) stop 'FAILED: compute_mapheader 2.'
+    if (status /= 0 .or. count == 0) stop 'FAILED: compute_mapheader 2'
+
     call ft_readparam(header, 'naxis2', count, ny, status=status)
-    if (status /= 0 .or. count == 0) stop 'FAILED: compute_mapheader 3.'
+    if (status /= 0 .or. count == 0) stop 'FAILED: compute_mapheader 3'
 
     ! allocate memory for the maps
     allocate(map1d(0:nx*ny-1))
