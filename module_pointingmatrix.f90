@@ -50,6 +50,7 @@ contains
         nsamples   = size(pmatrix, 2)
         ndetectors = size(pmatrix, 3)
 
+        map = 0
         !$omp parallel do reduction(+:map) private(idetector, isample, ipixel)
         do idetector = 1, ndetectors
             do isample = 1, nsamples
