@@ -50,20 +50,22 @@ module module_pacsinstrument
 
     contains
 
-        procedure         :: read_calibration_files
-        procedure         :: filter_detectors
-        procedure         :: read_signal_file
-        procedure         :: read_mask_file
-        procedure         :: compute_mapheader
-        procedure         :: find_minmax
-        procedure         :: compute_projection_sharp_edges
-        procedure, nopass :: get_array_color
-        procedure, nopass :: uv2yz
-        procedure, nopass :: yz2ad
-        procedure, nopass :: xy2roi
-        procedure         :: roi2pmatrix
-        procedure, nopass :: multiplexing_direct
-        procedure, nopass :: multiplexing_transpose
+        procedure          :: read_calibration_files
+        procedure          :: filter_detectors
+        procedure          :: read_signal_file
+        procedure          :: read_mask_file
+        procedure          :: compute_mapheader
+        procedure          :: find_minmax
+        procedure          :: compute_projection_sharp_edges
+        procedure, nopass  :: get_array_color
+        procedure, nopass  :: uv2yz
+        procedure, nopass  :: yz2ad
+        procedure, nopass  :: xy2roi
+        procedure          :: roi2pmatrix
+        procedure, nopass  :: multiplexing_direct
+        procedure, nopass  :: multiplexing_transpose
+
+        procedure, private :: filter_detectors_array
 
     end type pacsinstrument
 
@@ -263,13 +265,13 @@ contains
         status = 0
         if (present(side)) then
             if (strlowcase(side) == 'red') then
-                call filter_detectors_array(this, this%mask_red, this%corners_uv_red, this%distortion_yz_red, &
+                call this%filter_detectors_array(this%mask_red, this%corners_uv_red, this%distortion_yz_red, &
                                             this%flatfield_red, transparent_mode=transparent_mode,            &
                                             keep_bad_detectors=keep_bad_detectors)
                 return
             else if (strlowcase(side) == 'green') then
                 write(*,*) 'Check calibration files for the green band...'
-                call filter_detectors_array(this, this%mask_blue, this%corners_uv_blue, this%distortion_yz_blue, &
+                call this%filter_detectors_array(this%mask_blue, this%corners_uv_blue, this%distortion_yz_blue, &
                                             this%flatfield_green, transparent_mode=transparent_mode,             &
                                             keep_bad_detectors=keep_bad_detectors)
                 return
@@ -509,7 +511,13 @@ contains
         npixels_per_sample = size(pmatrix, 1)
         do idetector = 1, this%ndetectors
             iroi = 1
+if (roi(2,1,idetector) < 1 .or. roi(2,2,idetector) > ny) then
+    write(*,*) 'roi2pmatrix: map y too small', roi(2,:,idetector), ny
+end if
             do iy = max(roi(2,1,idetector),1), min(roi(2,2,idetector),ny)
+if (roi(1,1,idetector) < 1 .or. roi(1,2,idetector) > nx) then
+    write(*,*) 'roi2pmatrix: map x too small', roi(1,:,idetector), nx
+end if
                 do ix = max(roi(1,1,idetector),1), min(roi(1,2,idetector),nx)
                     ipixel = ix - 1 + (iy - 1) * nx
                     polygon(1,:) = coords(1,(idetector-1)*nvertices+1:idetector*nvertices) - (ix-0.5d0)
@@ -654,14 +662,15 @@ contains
 
         chop_old = -9999999999.0d0 ! XXX should be NaN
         index = 2
-        !$omp parallel do default(shared) firstprivate(index, chop_old) private(isample, ra, dec, pa, chop, coords, coords_yz,roi) &
+        !$omp parallel do default(shared) firstprivate(index, chop_old)   &
+        !$omp private(isample, ra, dec, pa, chop, coords, coords_yz, roi) &
         !$omp reduction(max : npixels_per_sample)
         do isample = 1, nsamples
             call pointing%get_position(time(isample), ra, dec, pa, chop, index)
-            if (abs(chop-chop_old) > 1.d-2) then
-                coords_yz = this%uv2yz(this%corners_uv, this%distortion_yz_blue, chop)
-                chop_old = chop
-            end if
+            !if (abs(chop-chop_old) > 1.d-2) then
+                coords_yz = this%uv2yz(this%corners_uv, this%distortion_yz, chop)
+            !    chop_old = chop
+            !end if
             coords = this%yz2ad(coords_yz, ra, dec, pa)
             coords = ad2xy_gnomonic(coords)
             roi    = this%xy2roi(coords) ! [1=x|2=y,1=min|2=max,idetector]
