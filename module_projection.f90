@@ -2,19 +2,18 @@ module module_projection
 
     implicit none
 
-    private
-    public :: intersection_polygon_unity_square
-    public :: intersection_segment_unity_square
-    public :: surface_parallelogram
-    public :: surface_convex_polygon
-    public :: point_in_polygon
-    public :: convex_hull
-    public :: set_pivot
-    public :: qsorti_point
-    public :: compare_point
+    public  :: intersection_polygon_unity_square
+    public  :: intersection_segment_unity_square
+    public  :: surface_parallelogram
+    public  :: surface_convex_polygon
+    public  :: point_in_polygon
+    public  :: convex_hull
+    public  :: set_pivot
+    public  :: qsorti_point
+    private :: compare_point
 
-    real*8          :: pivot_(2)
-    real*8, pointer :: array_point(:,:)
+    real*8, private          :: pivot_(2)
+    real*8, pointer, private :: array_point(:,:)
 
 
 contains
