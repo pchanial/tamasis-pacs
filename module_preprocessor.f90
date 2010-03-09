@@ -8,7 +8,6 @@ module module_preprocessor
     public :: multiply_vectordim2
     public :: divide_vectordim2
     public :: apply_mask
-    public :: sum_kahan
 
     interface sum_kahan
         module procedure sum_kahan_1d, sum_kahan_2d, sum_kahan_3d
