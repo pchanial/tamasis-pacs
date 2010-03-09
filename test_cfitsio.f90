@@ -24,8 +24,8 @@ program test_cfitsio
     end if
 
     call c_f_pointer(c_header, header)
-    do i=1, nkeyrec
-       write(*,'(i3,a,a)') i, ' : ', header((i-1)*80+1:i*80)
+    do i=1, 5
+       write(*,'(i3,a,a)') i, ' : ', trim(header((i-1)*80+1:i*80))
     end do
 
     call fits_close_file(fptr, status)
