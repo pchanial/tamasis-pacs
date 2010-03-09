@@ -14,7 +14,7 @@ LDFLAGS  = -lgomp $(shell pkg-config --libs cfitsio) $(shell pkg-config --libs w
 FCOMPILER=gnu95
 
 INCLUDES = wcslib-4.4.4-Fortran90
-FFLAGS   = $(FFLAGS_RELEASE)
+FFLAGS   = $(FFLAGS_DEBUG)
 
 MODULES = precision.f90 string.f90 $(wildcard module_*.f90)
 SOURCES = $(wildcard test_*.f90) pacs_photproject.f90
@@ -83,8 +83,8 @@ tamasisfortran.so: tamasisfortran.f90 $(MODULES:.f90=.o)
 clean:
 	rm -f *.o *.mod *.so $(EXECS)
 
-tests:
-	@for test in $(EXECS); do \
+tests: $$(filter-out test_wcslib%,$$(filter test_%,$$(EXECS)))
+	@for test in $^; do \
 	echo;\
 	echo "Running test: "$$test"...";\
 	echo "=============";\
