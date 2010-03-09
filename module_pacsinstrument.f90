@@ -504,7 +504,7 @@ contains
         real*8                               :: polygon(2,nvertices)
 
         integer                              :: npixels_per_sample, idetector, ix, iy, iroi, ipixel
-        real*8                               :: weight
+        real*4                               :: weight
 
         ipixel = 0
         nroi = 0
@@ -667,10 +667,10 @@ end if
         !$omp reduction(max : npixels_per_sample)
         do isample = 1, nsamples
             call pointing%get_position(time(isample), ra, dec, pa, chop, index)
-            !if (abs(chop-chop_old) > 1.d-2) then
+            if (abs(chop-chop_old) > 1.d-2) then
                 coords_yz = this%uv2yz(this%corners_uv, this%distortion_yz, chop)
-            !    chop_old = chop
-            !end if
+                chop_old = chop
+            end if
             coords = this%yz2ad(coords_yz, ra, dec, pa)
             coords = ad2xy_gnomonic(coords)
             roi    = this%xy2roi(coords) ! [1=x|2=y,1=min|2=max,idetector]
