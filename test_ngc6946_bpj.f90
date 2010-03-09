@@ -1,13 +1,15 @@
 program test_ngc6946_bpj
 
     use, intrinsic :: ISO_FORTRAN_ENV
-    use module_fitstools
-    use module_pacsinstrument
-    use module_pacspointing
-    use module_preprocessor
-    use module_projection
-    use module_wcs
-    use precision
+    use            :: module_fitstools
+    use            :: module_pacsinstrument
+    use            :: module_pacspointing
+    use            :: module_preprocessor
+    use            :: module_projection
+    use            :: module_wcs
+    use            :: omp_lib
+    use            :: precision
+    use            :: string, only : strinteger
     implicit none
 
     type(pacsinstrument), allocatable :: pacs
@@ -24,6 +26,7 @@ program test_ngc6946_bpj
     logical*1, allocatable             :: mask(:,:)
     real*8, allocatable                :: time(:)
     integer*8, allocatable             :: timeus(:)
+    character(len=80)                  :: outfile
     character(len=2880)                :: header
     integer                            :: nx, ny, index
     integer                            :: status, count, count0, count1
@@ -50,7 +53,7 @@ program test_ngc6946_bpj
     call ft_readslice(filename_time // '+1', first, last, timeus, status)
     if (status /= 0) stop 'FAILED: ft_readslice'
     time = timeus * 1.0d-6
-    npixels_per_sample = 6
+    npixels_per_sample = 25
 
     ! get the pacs instance, read the calibration files
     allocate(pacs)
@@ -117,7 +120,7 @@ program test_ngc6946_bpj
         call ad2xy_gnomonic_vect(coords(1,:), coords(2,:), coords(1,:), coords(2,:))
         do idetector = 1, pacs%ndetectors
             surface1(isample,idetector) = abs(surface_convex_polygon(coords(:,(idetector-1)*nvertices+1:idetector*nvertices)))
-            surface2(isample,idetector) = sum(pmatrix(:,isample,idetector)%weight)
+            surface2(isample,idetector) = sum_kahan(real(pmatrix(:,isample,idetector)%weight, kind=8))
         end do
     end do
     !$omp end parallel do
@@ -125,9 +128,10 @@ program test_ngc6946_bpj
     call system_clock(count2, count_rate, count_max)
     write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
     write(*,*) 'Difference: ', maxval(abs((surface1-surface2)/surface1))
-    write(*,*) 'Sum surfaces: ', sum(surface1), sum(surface2), nx, ny
-    write(*,*) 'Sum pmatrix: ', sum(real(pmatrix%weight,kind=8)), 'max:', maxval(pmatrix%weight)
-    write(*,*) 'Sum signal: ', sum(signal), 'max:', maxval(signal)
+    write(*,*) 'Sum surfaces: ', sum_kahan(surface1), sum_kahan(surface2), nx, ny
+    write(*,*) 'Sum pmatrix weight: ', sum_kahan(real(pmatrix%weight,kind=8)), 'max:', maxval(pmatrix%weight)
+    write(*,*) 'Sum pmatrix pixel: ', sum(int(pmatrix%pixel,kind=8)), 'max:', maxval(pmatrix%pixel)
+    write(*,*) 'Sum signal: ', sum_kahan(signal), 'max:', maxval(signal)
     !XXX
 
     ! back project the timeline
@@ -138,13 +142,15 @@ program test_ngc6946_bpj
     write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
 
     ! write the map as fits file
-    write(*,'(a)') 'Writing FITS file... '
-    call ft_write('/tmp/ngc6946_bpj.fits', reshape(map1d, [nx,ny]), header, status)
+    outfile = '/tmp/ngc6946_bpj_' // strinteger(omp_get_max_threads()) //'.fits'
+    write(*,'(a)') 'Writing FITS file... ' // trim(outfile)
+    call ft_write(trim(outfile), reshape(map1d, [nx,ny]), header, status)
     if (status /= 0) stop 'FAILED: ft_write.'
 
     ! test the back projected map
-    if (.not. test_real_eq(sum(map1d), -0.213708304d0, 5)) then
-        write (ERROR_UNIT,*) 'Sum in map is ', sum(map1d), ' instead of ', -0.213708304d0
+    write (ERROR_UNIT,*) 'Sum in map is ', sum_kahan(map1d)
+    if (.not. test_real_eq(sum_kahan(map1d), -0.18323538717660148d0, 5)) then
+        write (ERROR_UNIT,*) '...instead of ', -0.18323538717660148d0
         stop 'FAILED.'
     end if
 
@@ -154,11 +160,11 @@ program test_ngc6946_bpj
     call pmatrix_direct(pmatrix, map1d, signal)
     call system_clock(count2, count_rate, count_max)
     write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
-    write(*,*) 'total: ', sum(signal)
+    write(*,*) 'total: ', sum_kahan(signal)
 
     ! test the back projected map
-    if (.not. test_real_eq(sum(signal), -4964192.1027288409d0, 5)) then
-        write (ERROR_UNIT,*) 'Sum in timeline is ', sum(signal), ' instead of ', -4964192.10d0
+    if (.not. test_real_eq(sum_kahan(signal), -4964778.8002200415d0, 5)) then
+        write (ERROR_UNIT,*) 'Sum in timeline is ', sum_kahan(signal), ' instead of ', -4964778.8002200415d0
         stop 'FAILED.'
     end if
 
