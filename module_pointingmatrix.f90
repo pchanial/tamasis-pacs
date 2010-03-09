@@ -50,7 +50,7 @@ contains
         nsamples   = size(pmatrix, 2)
         ndetectors = size(pmatrix, 3)
 
-!!$        !$omp parallel do reduction(+:map) private(idetector, isample, ipixel)
+        !$omp parallel do reduction(+:map) private(idetector, isample, ipixel)
         do idetector = 1, ndetectors
             do isample = 1, nsamples
                 do ipixel = 1, npixels
@@ -59,7 +59,7 @@ contains
                 end do
             end do
         end do
-!!$        !$omp end parallel do
+        !$omp end parallel do
 
     end subroutine pmatrix_transpose
 
