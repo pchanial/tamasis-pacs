@@ -28,8 +28,11 @@ contains
                 timeline(isample,idetector) = 0
                 do ipixel = 1, npixels
                     timeline(isample,idetector) = timeline(isample,idetector) + map(pmatrix(ipixel,isample,idetector)%pixel) * &
-                                                  real(pmatrix(ipixel,isample,idetector)%weight, kind=8)
+                        pmatrix(ipixel,isample,idetector)%weight
                 end do
+                !faster with ifort:
+                !timeline(isample,idetector) = sum(map(pmatrix(:,isample,idetector)%pixel)* &
+                !                              pmatrix(:,isample,idetector)%weight)
             end do
         end do
         !$omp end parallel do
@@ -55,8 +58,9 @@ contains
         do idetector = 1, ndetectors
             do isample = 1, nsamples
                 do ipixel = 1, npixels
-                    map(pmatrix(ipixel,isample,idetector)%pixel) = map(pmatrix(ipixel,isample,idetector)%pixel) + &
-                        real(pmatrix(ipixel,isample,idetector)%weight,kind=8) * timeline(isample,idetector)
+                    map(pmatrix(ipixel,isample,idetector)%pixel) =     &
+                        map(pmatrix(ipixel,isample,idetector)%pixel) + &
+                        pmatrix(ipixel,isample,idetector)%weight * timeline(isample,idetector)
                 end do
             end do
         end do
