@@ -20,8 +20,8 @@ program test_ngc6946_bpj
     character(len=*), parameter :: filename_mask   = inputdir // '1342184520_blue_Mask.fits'
     character(len=*), parameter :: filename_time   = inputdir // '1342184520_blue_Time.fits'
 
-    real*8, allocatable                :: signal(:,:), coords(:,:)
-    real*8                             :: ra, dec, pa, chop
+    real*8, allocatable                :: signal(:,:), coords(:,:), coords_yz(:,:)
+    real*8                             :: ra, dec, pa, chop, chop_old
     real*8, allocatable                :: surface1(:,:), surface2(:,:)
     logical*1, allocatable             :: mask(:,:)
     real*8, allocatable                :: time(:)
@@ -53,7 +53,7 @@ program test_ngc6946_bpj
     call ft_readslice(filename_time // '+1', first, last, timeus, status)
     if (status /= 0) stop 'FAILED: ft_readslice'
     time = timeus * 1.0d-6
-    npixels_per_sample = 25
+    npixels_per_sample = 6
 
     ! get the pacs instance, read the calibration files
     allocate(pacs)
@@ -106,17 +106,23 @@ program test_ngc6946_bpj
     allocate(surface1(nsamples, pacs%ndetectors))
     allocate(surface2(nsamples, pacs%ndetectors))
     allocate(coords(ndims, pacs%ndetectors*nvertices))
+    allocate(coords_yz(ndims, pacs%ndetectors*nvertices))
 
     call init_astrometry(header, status=status)
     if (status /= 0) stop 'FAILED: init_astrometry'
 
+        chop_old = -9999999999.0d0 ! XXX should be NaN
     index = 2
     write(*,*) 'surfaces:'
-    !$omp parallel do default(shared) firstprivate(index) private(isample, ra, dec, pa, chop, coords, idetector)
+    !$omp parallel do default(shared) firstprivate(index, chop_old)   &
+    !$omp private(isample, ra, dec, pa, chop, coords, coords_yz)
     do isample = 1, nsamples
         call pointing%get_position(time(isample), ra, dec, pa, chop, index)
-        coords = pacs%uv2yz(pacs%corners_uv, pacs%distortion_yz_blue, chop)
-        coords = pacs%yz2ad(coords, ra, dec, pa)
+        if (abs(chop-chop_old) > 1.d-2) then
+            coords_yz = pacs%uv2yz(pacs%corners_uv, pacs%distortion_yz, chop)
+            chop_old = chop
+        end if
+        coords = pacs%yz2ad(coords_yz, ra, dec, pa)
         call ad2xy_gnomonic_vect(coords(1,:), coords(2,:), coords(1,:), coords(2,:))
         do idetector = 1, pacs%ndetectors
             surface1(isample,idetector) = abs(surface_convex_polygon(coords(:,(idetector-1)*nvertices+1:idetector*nvertices)))
@@ -129,13 +135,14 @@ program test_ngc6946_bpj
     write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
     write(*,*) 'Difference: ', maxval(abs((surface1-surface2)/surface1))
     write(*,*) 'Sum surfaces: ', sum_kahan(surface1), sum_kahan(surface2), nx, ny
-    write(*,*) 'Sum pmatrix weight: ', sum_kahan(real(pmatrix%weight,kind=8)), 'max:', maxval(pmatrix%weight)
+    write(*,*) 'Sum pmatrix weight: ', sum(pmatrix%weight), 'max:', maxval(pmatrix%weight)
     write(*,*) 'Sum pmatrix pixel: ', sum(int(pmatrix%pixel,kind=8)), 'max:', maxval(pmatrix%pixel)
     write(*,*) 'Sum signal: ', sum_kahan(signal), 'max:', maxval(signal)
     !XXX
 
     ! back project the timeline
     write(*,'(a)', advance='no') 'Computing the back projection... '
+    signal = 1.d0 / surface1
     call system_clock(count1, count_rate, count_max)
     call pmatrix_transpose(pmatrix, signal, map1d)
     call system_clock(count2, count_rate, count_max)
@@ -148,23 +155,22 @@ program test_ngc6946_bpj
     if (status /= 0) stop 'FAILED: ft_write.'
 
     ! test the back projected map
-    write (ERROR_UNIT,*) 'Sum in map is ', sum_kahan(map1d)
-    if (.not. test_real_eq(sum_kahan(map1d), -0.18323538717660148d0, 5)) then
-        write (ERROR_UNIT,*) '...instead of ', -0.18323538717660148d0
+    write (ERROR_UNIT,*) 'Sum in map is ', sum_kahan(map1d), ' ...instead of ', strinteger(int(pacs%ndetectors*nsamples, kind=4))
+    if (.not. test_real_eq(sum_kahan(map1d), real(pacs%ndetectors*nsamples,kind=8), 6)) then
         stop 'FAILED.'
     end if
 
     ! project the map
     write(*,'(a)', advance='no') 'Computing the forward projection... '
+    map1d = 1.d0
     call system_clock(count1, count_rate, count_max)
     call pmatrix_direct(pmatrix, map1d, signal)
     call system_clock(count2, count_rate, count_max)
     write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
-    write(*,*) 'total: ', sum_kahan(signal)
 
     ! test the back projected map
-    if (.not. test_real_eq(sum_kahan(signal), -4964778.8002200415d0, 5)) then
-        write (ERROR_UNIT,*) 'Sum in timeline is ', sum_kahan(signal), ' instead of ', -4964778.8002200415d0
+    if (any(.not. test_real_eq(signal, surface1, 5))) then
+        write (ERROR_UNIT,*) 'Invalid signal.'
         stop 'FAILED.'
     end if
 
