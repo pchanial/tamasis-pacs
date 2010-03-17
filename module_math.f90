@@ -8,6 +8,8 @@ module module_math
     public :: stddev
     public :: moment
     public :: sum_kahan
+    public :: linspace
+    public :: logspace
     public :: test_real_eq
 
     interface sum_kahan
@@ -169,10 +171,40 @@ contains
     !---------------------------------------------------------------------------
 
 
+    function linspace(min, max, n)
+        real(kind=p), allocatable :: linspace(:)
+        real(kind=p), intent(in)  :: min, max
+        integer, intent(in)       :: n
+        integer                   :: i
+
+        allocate(linspace(n))
+        linspace = min + (max - min) / (n-1) * [(i, i=0,n-1)]
+
+    end function linspace
+
+
+    !---------------------------------------------------------------------------
+
+
+    function logspace(min, max, n)
+        real(kind=p), allocatable :: logspace(:)
+        real(kind=p), intent(in)  :: min, max
+        integer, intent(in)       :: n
+        integer                   :: i
+
+        allocate(logspace(n))
+        logspace = exp(log(min)+(log(max)-log(min)) / (n-1) * [(i, i=0,n-1)])
+
+    end function logspace
+
+
+    !---------------------------------------------------------------------------
+
+
     elemental function test_real_eq(a, b, n)
+        logical                  :: test_real_eq
         real(kind=p), intent(in) :: a, b
         integer, intent(in)      :: n
-        logical                  :: test_real_eq
         real(kind=p)             :: epsilon
 
         ! check for NaN values
