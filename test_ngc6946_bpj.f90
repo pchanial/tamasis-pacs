@@ -8,7 +8,7 @@ program test_ngc6946_bpj
     use            :: module_projection
     use            :: module_wcs
     use            :: omp_lib
-    use            :: precision
+    use            :: module_math, only : test_real_eq
     use            :: string, only : strinteger
     implicit none
 

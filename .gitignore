@@ -11,6 +11,7 @@ tamasis.pyc
 tamasisfortran.so
 test_cfitsio
 test_fitstools
+test_math
 test_ngc6946_bpj
 test_optionparser
 test_pacs

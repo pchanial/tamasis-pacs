@@ -1,6 +1,6 @@
 program test_wcs
 
-    use precision, only : test_real_eq
+    use module_math, only : test_real_eq
     use module_fitstools, only : ft_header2str
     use module_wcs
     implicit none

@@ -1,5 +1,5 @@
 program test_pointing
- use precision, only : test_real_eq
+ use module_math, only : test_real_eq
  use module_pacspointing
  implicit none
 

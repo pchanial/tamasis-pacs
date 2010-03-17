@@ -27,7 +27,7 @@ contains
 
 
     subroutine load_filename(this, filename, status)
-        use precision, only : test_real_eq
+        use module_math, only : test_real_eq
         use module_fitstools, only : ft_readextension
 
         class(pacspointing), intent(inout) :: this
@@ -61,8 +61,8 @@ contains
     !---------------------------------------------------------------------------
 
     subroutine load_array(this, time, ra, dec, pa, chop, status)
-        use precision, only : test_real_eq
         use, intrinsic :: ISO_FORTRAN_ENV
+        use module_math, only : test_real_eq
         class(pacspointing), intent(inout) :: this
         real*8, intent(in)                 :: time(:), ra(:), dec(:), pa(:), chop(:)
         integer, intent(out)               :: status
