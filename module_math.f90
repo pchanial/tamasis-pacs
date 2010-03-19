@@ -1,6 +1,6 @@
 module module_math
 
-    use precision, only : p
+    use precision, only : p, dp
     implicit none
     private
 
@@ -10,11 +10,18 @@ module module_math
     public :: sum_kahan
     public :: linspace
     public :: logspace
+    public :: nint_down
+    public :: nint_up
     public :: test_real_eq
+    public :: NaN
 
     interface sum_kahan
         module procedure sum_kahan_1d, sum_kahan_2d, sum_kahan_3d
     end interface sum_kahan
+
+    !XXX should use ieee_arithmetic instead when gfortran implements it
+    real(kind=p), parameter :: NaN = &
+        transfer('1111111111111000000000000000000000000000000000000000000000000000'b, 0._dp)
 
 
 contains
@@ -25,12 +32,8 @@ contains
         real(kind=p), intent(out), optional :: mean, variance, skewness
         real(kind=p), intent(out), optional :: kurtosis, stddev, meandev
         integer                   :: nsamples
-        real(kind=p)              :: m, var, sdev, NaN, zero
+        real(kind=p)              :: m, var, sdev
         real(kind=p), allocatable :: residuals(:)
-
-        !XXX NaN should come from intrinsic module
-        zero = 0_p
-        NaN = 0_p / zero
 
         nsamples = size(input)
 
@@ -119,6 +122,11 @@ contains
         real(kind=p)             :: sum, c, t, y
         integer                  :: i
 
+        if (size(input) == 0) then
+            sum = NaN
+            return
+        end if
+
         sum = input(1)
         c = 0.0_p
         do i = 2, size(input)
@@ -138,6 +146,11 @@ contains
         real(kind=p)             :: sum, c, t, y
         integer                  :: i
 
+        if (size(input) == 0) then
+            sum = NaN
+            return
+        end if
+
         sum = sum_kahan_1d(input(:,1))
         c = 0.0_p
         do i = 2, size(input,2)
@@ -156,6 +169,11 @@ contains
         real(kind=p), intent(in) :: input(:,:,:)
         real(kind=p)             :: sum, c, t, y
         integer                  :: i
+
+        if (size(input) == 0) then
+            sum = NaN
+            return
+        end if
 
         sum = sum_kahan_2d(input(:,:,1))
         c = 0.0_p
@@ -201,6 +219,36 @@ contains
     !---------------------------------------------------------------------------
 
 
+    elemental function nint_down(x)
+        integer                  :: nint_down
+        real(kind=p), intent(in) :: x
+        
+        nint_down = nint(x)
+        if (x > 0 .and. abs(x-nint_down) == 0.5_p) then
+            nint_down = nint_down - 1
+        end if
+
+    end function nint_down
+
+
+    !---------------------------------------------------------------------------
+
+
+    elemental function nint_up(x)
+        integer                  :: nint_up
+        real(kind=p), intent(in) :: x
+        
+        nint_up = nint(x)
+        if (x < 0 .and. abs(x-nint_up) == 0.5_p) then
+            nint_up = nint_up + 1
+        end if
+
+    end function nint_up
+
+
+    !---------------------------------------------------------------------------
+
+
     elemental function test_real_eq(a, b, n)
         logical                  :: test_real_eq
         real(kind=p), intent(in) :: a, b
@@ -221,5 +269,6 @@ contains
         test_real_eq = abs(a-b) <= epsilon * abs(a)
 
    end function test_real_eq
+
 
 end module module_math
