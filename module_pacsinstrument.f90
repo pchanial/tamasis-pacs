@@ -1,6 +1,7 @@
 module module_pacsinstrument
 
     use module_fitstools
+    use module_math, only : nint_down, nint_up
     use module_pacspointing
     use module_pointingmatrix
     use module_projection
@@ -61,7 +62,7 @@ module module_pacsinstrument
         procedure, nopass  :: uv2yz
         procedure, nopass  :: yz2ad
         procedure, nopass  :: xy2roi
-        procedure          :: roi2pmatrix
+        procedure, nopass  :: roi2pmatrix
         procedure, nopass  :: multiplexing_direct
         procedure, nopass  :: multiplexing_transpose
 
@@ -484,8 +485,8 @@ contains
         integer            :: idetector
 
         do idetector = 1, size(xy,2) / nvertices
-            roi(:,1,idetector) = nint(minval(xy(:,nvertices * (idetector-1)+1:nvertices*idetector),2))
-            roi(:,2,idetector) = nint(maxval(xy(:,nvertices * (idetector-1)+1:nvertices*idetector),2))
+            roi(:,1,idetector) = nint_up  (minval(xy(:,nvertices * (idetector-1)+1:nvertices*idetector),2))
+            roi(:,2,idetector) = nint_down(maxval(xy(:,nvertices * (idetector-1)+1:nvertices*idetector),2))
         end do
 
     end function xy2roi
@@ -494,10 +495,9 @@ contains
     !---------------------------------------------------------------------------
 
 
-    recursive subroutine roi2pmatrix(this, roi, coords, nx, ny, isample, nroi, pmatrix)
-        class(pacsinstrument), intent(in)    :: this
-        integer, intent(in)                  :: roi(ndims,2,this%ndetectors)
-        real*8, intent(in)                   :: coords(ndims,this%ndetectors*nvertices)
+    recursive subroutine roi2pmatrix(roi, coords, nx, ny, isample, nroi, pmatrix)
+        integer, intent(in)                  :: roi(:,:,:)
+        real*8, intent(in)                   :: coords(:,:)
         type(pointingelement), intent(inout) :: pmatrix(:,:,:)
         integer, intent(in)                  :: nx, ny, isample
         integer, intent(out)                 :: nroi
@@ -509,7 +509,7 @@ contains
         ipixel = 0
         nroi = 0
         npixels_per_sample = size(pmatrix, 1)
-        do idetector = 1, this%ndetectors
+        do idetector = 1, size(pmatrix,3)
             iroi = 1
 if (roi(2,1,idetector) < 1 .or. roi(2,2,idetector) > ny) then
     write(*,*) 'roi2pmatrix: map y too small', roi(2,:,idetector), ny
@@ -673,8 +673,8 @@ end if
             end if
             coords = this%yz2ad(coords_yz, ra, dec, pa)
             coords = ad2xy_gnomonic(coords)
-            roi    = this%xy2roi(coords) ! [1=x|2=y,1=min|2=max,idetector]
-            call this%roi2pmatrix(roi, coords, nx, ny, isample, nroi, pmatrix)
+            roi    = xy2roi(coords) ! [1=x|2=y,1=min|2=max,idetector]
+            call roi2pmatrix(roi, coords, nx, ny, isample, nroi, pmatrix)
             npixels_per_sample = max(npixels_per_sample, nroi)
         end do
         !$omp end parallel do
