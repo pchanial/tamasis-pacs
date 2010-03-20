@@ -4,14 +4,17 @@ module module_math
     implicit none
     private
 
-    public :: mean
-    public :: stddev
-    public :: moment
-    public :: sum_kahan
     public :: linspace
     public :: logspace
+    public :: mad
+    public :: mean
+    public :: median
+    public :: moment
     public :: nint_down
     public :: nint_up
+    public :: stddev
+    public :: sum_kahan
+    public :: swap
     public :: test_real_eq
     public :: NaN
 
@@ -244,6 +247,107 @@ contains
         end if
 
     end function nint_up
+
+
+    !---------------------------------------------------------------------------
+
+
+    elemental subroutine swap(a,b)
+        real(kind=p), intent(inout) :: a, b
+        real(kind=p)                :: tmp
+        tmp = a
+        a   = b
+        b   = tmp
+    end subroutine swap
+
+
+    !---------------------------------------------------------------------------
+
+
+    ! This Quickselect routine is based on the algorithm described in
+    ! "Numerical recipes in C", Second Edition,
+    ! Cambridge University Press, 1992, Section 8.5, ISBN 0-521-43108-5
+    ! input array may be reordered
+    ! This code by Nicolas Devillard - 1998. Public domain.
+    function median(arr) 
+        real(kind=p)                :: median
+        real(kind=p), intent(inout) :: arr(0:)
+        integer                     :: low, high, imedian, middle, ll, hh
+
+        low = 0
+        high = size(arr)-1
+        imedian = (low + high) / 2
+        do
+            if (high <= low) then
+                median = arr(imedian)
+                return
+            end if
+
+            if (high == low + 1) then  ! Two elements only
+                if (arr(low) > arr(high)) call swap(arr(low), arr(high))
+                median = arr(imedian)
+                return
+            end if
+
+            ! Find imedian of low, middle and high items swap into position low
+            middle = (low + high) / 2
+            if (arr(middle) > arr(high)) call swap(arr(middle), arr(high))
+            if (arr(low)    > arr(high)) call swap(arr(low),    arr(high))
+            if (arr(middle) > arr(low))  call swap(arr(middle), arr(low))
+
+            ! Swap low item (now in position middle) into position (low+1)
+            call swap(arr(middle), arr(low+1)) 
+
+            ! Nibble from each end towards middle, swapping items when stuck
+            ll = low + 1
+            hh = high
+            do
+                do 
+                    ll = ll + 1
+                    if (arr(low) <= arr(ll)) exit
+                end do 
+    
+                do 
+                    hh = hh - 1
+                    if (arr(hh)  <= arr(low)) exit
+                end do
+
+                if (hh < ll) exit
+ 
+                call swap(arr(ll), arr(hh)) 
+
+            end do
+
+            ! Swap middle item (in position low) back into correct position
+            call swap(arr(low), arr(hh)) 
+    
+            ! Re-set active partition
+            if (hh <= imedian) low = ll
+            if (hh >= imedian) high = hh - 1
+
+        end do
+
+    end function median 
+
+
+    !---------------------------------------------------------------------------
+
+
+    ! returns the median absolute deviation
+    function mad(x, m)
+        real(kind=p)                        :: mad
+        real(kind=p), intent(in)            :: x(:)
+        real(kind=p), intent(out), optional :: m
+        real(kind=p)                        :: x_(size(x)), med
+ 
+        x_ = x
+        med = median(x_)
+        x_ = abs(x_ - med)
+        mad = median(x_)
+
+        if (present(m)) m = med
+
+    end function mad
 
 
     !---------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 program test_math
 
     use precision, only : p
-    use module_math, only : NaN, moment, linspace, logspace, nint_down, nint_up, test_real_eq
+    use module_math, only : NaN, linspace, logspace, median, moment, nint_down, nint_up, test_real_eq
     implicit none
 
     real(kind=p), parameter :: sample(5) = [0.204803265708662_p,           &
@@ -13,6 +13,7 @@ program test_math
     real(kind=p) :: mean, variance, skewness, kurtosis, stddev, meandev
     real(kind=p), allocatable :: x(:)
     integer                   :: i
+    real(kind=p):: xmed
 
     call moment(sample, mean, variance, skewness, kurtosis, stddev=stddev, &
                 meandev=meandev)
@@ -44,7 +45,7 @@ program test_math
         stop 'FAILED: moment 4'
     end if
 
-    allocate(x(1))
+    allocate(x(3))
     x = linspace(1._p, 2._p, 3)
     if (any(.not. test_real_eq(x, [(1._p+i/2._p, i=0,2)], 14))) then
         stop 'FAILED: linspace'
@@ -62,6 +63,11 @@ program test_math
     if (any(nint_down(-x) /=-[0,0,1,1,1,1,2,2])) stop 'FAILED: nint_down 2'
     if (any(nint_up  ( x) /= [0,0,1,1,1,1,2,2])) stop 'FAILED: nint_up 1'
     if (any(nint_up  (-x) /=-[0,0,0,1,1,1,1,2])) stop 'FAILED: nint_up 2'
+    deallocate(x)
+
+    allocate(x(size(mresults)))
+    x = mresults
+    if (median(x) /= mresults(6)) stop 'FAILED: median'
     deallocate(x)
 
     stop 'OK.'
