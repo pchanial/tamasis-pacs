@@ -14,7 +14,7 @@ LDFLAGS  = -lgomp $(shell pkg-config --libs cfitsio) $(shell pkg-config --libs w
 FCOMPILER=gnu95
 
 INCLUDES = wcslib-4.4.4-Fortran90
-FFLAGS   = $(FFLAGS_RELEASE)
+FFLAGS   = $(FFLAGS_DEBUG)
 
 MODULES = precision.f90 string.f90 $(wildcard module_*.f90)
 SOURCES = $(wildcard test_*.f90) pacs_photproject.f90
@@ -28,22 +28,22 @@ finddeps = $(1).o $(if $($(1)),$(call map,finddeps,$($(1))))
 
 # define module dependencies
 module_cfitsio = module_stdio
-module_deglitching = module_math module_pointingelement precision
+module_deglitching = module_math module_pointingmatrix precision
 module_fitstools = string module_cfitsio
 module_instrument = precision string
 module_math = precision
 module_optionparser = string
-module_pacsinstrument = string module_fitstools module_pacspointing module_pointingmatrix module_projection module_wcs 
+module_pacsinstrument = string module_fitstools module_math module_pacspointing module_pointingmatrix module_projection module_wcs 
 module_pacspointing = module_math module_fitstools
-module_pointingmatrix = module_pointingelement
+module_pointingmatrix = module_pointingelement precision
 module_preprocessor = module_math
 module_projection = precision module_sort module_stack
 module_wcs = module_fitstools module_wcslib string
 
 # define executable dependencies
-pacs_photproject = module_fitstools module_optionparser module_pacsinstrument module_pacspointing module_preprocessor
+pacs_photproject = module_fitstools module_deglitching module_optionparser module_pacsinstrument module_pacspointing module_pointingmatrix module_preprocessor
 test_cfitsio = module_cfitsio
-test_deglitching = module_deglitching
+test_deglitching = precision module_deglitching module_math module_pacsinstrument module_pointingmatrix
 test_fitstools = module_fitstools
 test_math = module_math precision
 test_ngc6946_bpj = module_fitstools module_pacsinstrument module_pacspointing module_pointingmatrix module_preprocessor module_projection module_math
@@ -61,7 +61,8 @@ test_wcslib2 = module_wcslib module_fitstools module_math
 test_wcslibc = module_wcslibc module_cfitsio
 
 .PHONY : all tests
-all : $(EXECS) tamasisfortran.so
+#all : $(EXECS) tamasisfortran.so
+all : $(EXECS)
 
 # if %.mod doesn't exist, make %.o. It will create %.mod with the same 
 # timestamp. If it does, do nothing

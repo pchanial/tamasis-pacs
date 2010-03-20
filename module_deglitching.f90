@@ -1,99 +1,64 @@
 module module_deglitching
 
     use precision, only : p, sp
-    use module_math, only : moment
-    use module_pointingelement, only : pointingelement
+    use module_math, only : moment, mad
+    use module_pointingmatrix, only : pointingelement, &
+                                      backprojection_weighted_roi
     implicit none
     private
 
-    public :: deglitch_photproject
+    public :: deglitch_l2b
 
 
 contains
 
 
-    subroutine photproject_one_frame(pmatrix, nx, timeline, mask, itime,   &
-                                     map, xmin, xmax, ymin, ymax)
-        type(pointingelement), intent(in) :: pmatrix(:,:,:)
-        integer, intent(in)               :: nx
-        real(kind=p), intent(in)          :: timeline(:,:)
-        logical, intent(in)               :: mask(:,:)
-        integer, intent(in)               :: itime
-        real(kind=p), intent(out)         :: map(0:)
-        integer, intent(out)              :: xmin, xmax, ymin, ymax
-        real(kind=sp)                     :: weight(0:size(map)-1)
-        integer :: nxmap, xmap, ymap, imap
-        integer :: ndetectors, npixels_per_sample, idetector, ipixel
-
-        npixels_per_sample = size(pmatrix,1)
-        ndetectors = size(pmatrix,3)
-
-        xmin = minval(modulo(pmatrix(:,itime,:)%pixel,nx)) + 1
-        xmax = maxval(modulo(pmatrix(:,itime,:)%pixel,nx)) + 1
-        ymin = minval(pmatrix(:,itime,:)%pixel / nx) + 1
-        ymax = maxval(pmatrix(:,itime,:)%pixel / nx) + 1
-
-        nxmap = xmax - xmin + 1
-
-        ! backprojection of the timeline and weights
-        map = 0
-        weight = 0
-        do idetector = 1, ndetectors
-
-            if (mask(itime,idetector)) cycle
-
-            do ipixel = 1, npixels_per_sample
-                xmap = modulo(pmatrix(ipixel,itime,idetector)%pixel, nx) - xmin
-                ymap = pmatrix(ipixel,itime,idetector)%pixel / nx - ymin
-                imap = xmap + ymap * nxmap
-                map(imap) = map(imap) + timeline(itime,idetector) * &
-                            pmatrix(ipixel,itime,idetector)%weight
-                weight(imap) = weight(imap) + pmatrix(ipixel,itime,idetector)%weight
-            end do
-
-        end do
-
-        map = map / weight
-        where (weight <= 0)
-            map = 0
-        end where
-
-    end subroutine photproject_one_frame
-
-
-    !---------------------------------------------------------------------------
-
-
-    subroutine deglitch_photproject(pmatrix, nx, ny, timeline, mask, &
-                                    npixels_per_frame, nsigma)
+    subroutine deglitch_l2b(pmatrix, nx, ny, timeline, mask, &
+                                    nsigma, use_mad)
         type(pointingelement), intent(in) :: pmatrix(:,:,:)
         integer, intent(in)               :: nx, ny
         real(kind=p), intent(in)          :: timeline(:,:)
-        logical, intent(inout)            :: mask(:,:)
-        integer, intent(in)               :: npixels_per_frame
+        logical(kind=1), intent(inout)    :: mask(:,:)
         real(kind=p), intent(in)          :: nsigma
+        logical, intent(in)               :: use_mad
         integer, parameter                :: min_sample_size = 5
-        integer         :: npixels_per_sample, ndetectors, ntimes
-        real(kind=p)    :: map(0:npixels_per_frame-1,size(timeline,1))
+        integer         :: npixels_per_sample, npixels_per_frame
+        integer         :: ndetectors, ntimes, nbads
         integer         :: hitmap(0:nx*ny-1)
-        integer         :: xmin(size(timeline,1)), xmax(size(timeline,1))
-        integer         :: ymin(size(timeline,1)), ymax(size(timeline,1))
+        integer         :: roi(2,2,size(timeline,1))
         integer         :: i, j, ipixel, itime, idetector, isample, imap, iv
+        integer         :: xmin, xmax, ymin, ymax
         integer         :: nv, nhits_max
-        real(kind=p)    :: mean, stddev
-        real(kind=p), allocatable  :: arrv(:)
-        integer, allocatable :: arrt(:)
-        logical, allocatable :: isglitch(:)
+        real(kind=p)    :: mv, stddev
+        real(kind=p), allocatable :: map(:,:)
+        real(kind=p), allocatable :: arrv(:)
+        integer, allocatable      :: arrt(:)
+        logical, allocatable      :: isglitch(:)
         
         npixels_per_sample = size(pmatrix,1)
         ntimes     = size(pmatrix,2)
         ndetectors = size(pmatrix,3)
+        nbads      = count(mask)
+        write (*,'(a,$)') 'Deglitching...'
+
+        ! compute the largest size of a frame mini-map
+        npixels_per_frame = 0
+        !$omp parallel do reduction(max:npixels_per_frame) private(xmin,xmax,ymin,ymax)
+        do itime=1, ntimes
+            xmin = minval(modulo(pmatrix(:,itime,:)%pixel,nx)) + 1
+            xmax = maxval(modulo(pmatrix(:,itime,:)%pixel,nx)) + 1
+            ymin = minval(pmatrix(:,itime,:)%pixel / nx) + 1
+            ymax = maxval(pmatrix(:,itime,:)%pixel / nx) + 1
+            npixels_per_frame = max(npixels_per_frame, (xmax-xmin+1)*(ymax-ymin+1))
+        end do
+        !$omp end parallel do
+
+        allocate(map(0:npixels_per_frame-1,ntimes))
 
         !$omp parallel do
         do itime=1, ntimes
-            call photproject_one_frame(pmatrix, nx, timeline, mask, itime,     &
-                                       map(:,itime), xmin(itime), xmax(itime), &
-                                       ymin(itime), ymax(itime))
+            call backprojection_weighted_roi(pmatrix, nx, timeline, mask, &
+                     itime, map(:,itime), roi(:,:,itime))
         end do
         !$omp end parallel do
 
@@ -112,20 +77,22 @@ contains
         !$omp end parallel do
 
         nhits_max = maxval(hitmap)
+
+        !$omp parallel private(i,j,itime,imap,nv,ipixel) &
+        !$omp private(arrv,arrt,isglitch,mv,stddev)
         allocate(arrv(nhits_max))
         allocate(arrt(nhits_max))
         allocate(isglitch(nhits_max))
-
-        !$omp parallel do private(i,j,itime,imap,nv,ipixel,arrv,arrt,isglitch)
+        !$omp do
         do j=1, ny
             do i=1, nx
                 imap = (i-1) + (j-1)*nx
                 nv = 0
                 do itime=1, ntimes
-                    if (i < xmin(itime) .or. i > xmax(itime) .or. &
-                        j < ymin(itime) .or. j > ymax(itime)) cycle
+                    if (i < roi(1,1,itime) .or. i > roi(1,2,itime) .or. &
+                        j < roi(2,1,itime) .or. j > roi(2,2,itime)) cycle
                     nv = nv + 1
-                    arrv(nv) = map(i-xmin(itime) + (xmax(itime)-xmin(itime)+1) * (j-ymin(itime)),itime)
+                    arrv(nv) = map(i-roi(1,1,itime) + (roi(1,2,itime)-roi(1,1,itime)+1) * (j-roi(2,1,itime)),itime)
                     arrt(nv) = itime
                 end do
 
@@ -133,8 +100,12 @@ contains
                 if (nv < min_sample_size) cycle
 
                 ! sigma clip on arrv
-                call moment(arrv(1:nv), mean, stddev=stddev)
-                isglitch(1:nv) = abs(arrv(1:nv)-mean) > nsigma * stddev
+                if (use_mad) then
+                    stddev = 1.4826_p * mad(arrv(1:nv),mv)
+                else
+                    call moment(arrv(1:nv), mv, stddev=stddev)
+                end if
+                isglitch(1:nv) = abs(arrv(1:nv)-mv) >  nsigma * stddev
 
                 ! update mask
                 do iv=1, nv
@@ -149,8 +120,16 @@ contains
                 end do
             end do
         end do
-        !$omp end parallel do
+        !$omp end do
+        deallocate(arrv)
+        deallocate(arrt)
+        deallocate(isglitch)
+        !$omp end parallel
+
+        deallocate(map)
+
+        write (*,'(a,i0,a)') ' ', count(mask)-nbads, ' samples masked.'
         
-    end subroutine deglitch_photproject
+    end subroutine deglitch_l2b
 
 end module module_deglitching
