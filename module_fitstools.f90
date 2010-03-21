@@ -44,7 +44,7 @@ module module_fitstools
 contains
 
 
-    recursive subroutine readext_logical_1d(filename, output, status, hdu)
+    subroutine readext_logical_1d(filename, output, status, hdu)
 
         character(len=*), intent(in)        :: filename
         logical*1, allocatable, intent(out) :: output(:)
@@ -72,7 +72,7 @@ contains
     !---------------------------------------------------------------------------
 
 
-    recursive subroutine readext_int64_1d(filename, output, status, hdu)
+    subroutine readext_int64_1d(filename, output, status, hdu)
 
         character(len=*), intent(in)        :: filename
         integer*8, allocatable, intent(out) :: output(:)
@@ -100,7 +100,7 @@ contains
     !---------------------------------------------------------------------------
 
 
-    recursive subroutine readext_double_1d(filename, output, status, hdu)
+    subroutine readext_double_1d(filename, output, status, hdu)
 
         character(len=*), intent(in)     :: filename
         real*8, allocatable, intent(out) :: output(:)
@@ -128,7 +128,7 @@ contains
     !---------------------------------------------------------------------------
 
 
-    recursive subroutine readext_logical_2d(filename, output, status, hdu)
+    subroutine readext_logical_2d(filename, output, status, hdu)
 
         character(len=*), intent(in)        :: filename
         integer, intent(out)                :: status
@@ -163,7 +163,7 @@ contains
     !---------------------------------------------------------------------------
 
 
-    recursive subroutine readext_double_2d(filename, output, status, hdu)
+    subroutine readext_double_2d(filename, output, status, hdu)
     
         character(len=*), intent(in)     :: filename
         real*8, allocatable, intent(out) :: output(:,:)
@@ -198,7 +198,7 @@ contains
     !---------------------------------------------------------------------------
 
 
-    recursive subroutine readext_logical_3d(filename, output, status)
+    subroutine readext_logical_3d(filename, output, status)
 
         character(len=*), intent(in)        :: filename
         logical*1, allocatable, intent(out) :: output(:,:,:)
@@ -234,7 +234,7 @@ contains
     !---------------------------------------------------------------------------
 
 
-    recursive subroutine readext_double_3d(filename, output, status)
+    subroutine readext_double_3d(filename, output, status)
 
         character(len=*), intent(in)     :: filename
         real*8, allocatable, intent(out) :: output(:,:,:)
@@ -272,7 +272,7 @@ contains
     !---------------------------------------------------------------------------
 
 
-    recursive subroutine readslice_logical_filename(filename, x1, x2, array, status)
+    subroutine readslice_logical_filename(filename, x1, x2, array, status)
 
         character(len=*), intent(in) :: filename
         integer*8, intent(in)        :: x1, x2
@@ -293,7 +293,7 @@ contains
     !---------------------------------------------------------------------------
 
 
-    recursive subroutine readslice_logical_unit(unit, x1, x2, array, status)
+    subroutine readslice_logical_unit(unit, x1, x2, array, status)
 
         integer, intent(in)      :: unit
         integer*8, intent(in)    :: x1, x2
@@ -312,7 +312,7 @@ contains
     !---------------------------------------------------------------------------
 
 
-    recursive subroutine readslice_int64_filename(filename, x1, x2, array, status)
+    subroutine readslice_int64_filename(filename, x1, x2, array, status)
 
         character(len=*), intent(in) :: filename
         integer*8, intent(in)        :: x1, x2
@@ -333,7 +333,7 @@ contains
     !---------------------------------------------------------------------------
 
 
-    recursive subroutine readslice_int64_unit(unit, x1, x2, array, status)
+    subroutine readslice_int64_unit(unit, x1, x2, array, status)
 
         integer, intent(in)      :: unit
         integer*8, intent(in)    :: x1, x2
@@ -352,7 +352,7 @@ contains
     !---------------------------------------------------------------------------
 
 
-    recursive subroutine readslice_double_filename(filename, x1, x2, array, status)
+    subroutine readslice_double_filename(filename, x1, x2, array, status)
 
         character(len=*), intent(in) :: filename
         integer*8, intent(in)        :: x1, x2
@@ -373,7 +373,7 @@ contains
     !---------------------------------------------------------------------------
 
 
-    recursive subroutine readslice_double_unit(unit, x1, x2, array, status)
+    subroutine readslice_double_unit(unit, x1, x2, array, status)
 
         integer, intent(in)    :: unit
         integer*8, intent(in)  :: x1, x2
@@ -392,7 +392,7 @@ contains
     !---------------------------------------------------------------------------
 
 
-    recursive subroutine readslice_logical_3d(unit, x1, x2, y, z, naxes, array, status)
+    subroutine readslice_logical_3d(unit, x1, x2, y, z, naxes, array, status)
 
         integer, intent(in)      :: unit
         integer*8, intent(in)    :: x1, x2
@@ -415,7 +415,7 @@ contains
     !---------------------------------------------------------------------------
 
 
-    recursive subroutine readslice_double_3d(unit, x1, x2, y, z, naxes, array, status)
+    subroutine readslice_double_3d(unit, x1, x2, y, z, naxes, array, status)
 
         integer, intent(in)   :: unit
         integer*8, intent(in) :: x1, x2
@@ -438,7 +438,7 @@ contains
     !---------------------------------------------------------------------------
 
 
-    recursive subroutine readext_open(filename, unit, status)
+    subroutine readext_open(filename, unit, status)
 
         character(len=*), intent(in) :: filename
         integer, intent(out)         :: unit
@@ -458,7 +458,7 @@ contains
     !---------------------------------------------------------------------------
 
 
-    recursive subroutine ft_openimage(filename, unit, imagerank, imageshape, status, hdu)
+    subroutine ft_openimage(filename, unit, imagerank, imageshape, status, hdu)
 
         character(len=*), intent(in)        :: filename
         integer, intent(out)                :: unit
@@ -518,7 +518,7 @@ contains
     !---------------------------------------------------------------------------
 
 
-    recursive subroutine ft_close(unit, status)
+    subroutine ft_close(unit, status)
 
         integer, intent(in)  :: unit
         integer, intent(out) :: status
@@ -537,7 +537,7 @@ contains
     !---------------------------------------------------------------------------
 
 
-    recursive function ft_checkerror_cfitsio(status, filename, hdu) result(error)
+    function ft_checkerror_cfitsio(status, filename, hdu) result(error)
 
         !  This subroutine prints out the descriptive text corresponding to the
         !  error status value and prints out the contents of the internal

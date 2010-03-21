@@ -130,7 +130,7 @@ contains
 
 
     ! time samples are not evenly spaced, slow linear interpolation
-    recursive subroutine get_position_gen(this, time, ra, dec, pa, chop, index)
+    subroutine get_position_gen(this, time, ra, dec, pa, chop, index)
         !use, intrinsic :: ieee_arithmetic (not implemented in gfortran 4.5)
         use, intrinsic :: ISO_FORTRAN_ENV, only : OUTPUT_UNIT
         class(pacspointing), intent(in) :: this
@@ -172,7 +172,7 @@ contains
 
 
     ! time samples are assumed to be equally spaced (hence a fast linear interpolation)
-    recursive subroutine get_position_ev(this, time, ra, dec, pa, chop, index)
+    subroutine get_position_ev(this, time, ra, dec, pa, chop, index)
         !use, intrinsic :: ieee_arithmetic (not implemented by gfortran 4.5)
         class(pacspointing), intent(in)  :: this
         real*8, intent(in)               :: time

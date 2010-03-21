@@ -19,7 +19,7 @@ module module_projection
 contains
 
 
-    recursive pure function intersection_polygon_unity_square(xy, nvertices) result(output)
+    pure function intersection_polygon_unity_square(xy, nvertices) result(output)
 
         use precision, only : p
 
@@ -41,7 +41,7 @@ contains
     !---------------------------------------------------------------------------
 
 
-    recursive pure function intersection_segment_unity_square(x1,  y1, &              ! first point coordinates
+    pure function intersection_segment_unity_square(x1,  y1, &              ! first point coordinates
                                                               x2,  y2) result(output) ! second point coordinates
 
         real*8, intent(in) :: x1, y1, x2, y2
@@ -189,7 +189,7 @@ contains
     !-------------------------------------------------------------------------------
 
 
-    recursive pure function surface_convex_polygon(xy) result(output)
+    pure function surface_convex_polygon(xy) result(output)
 
         real*8, intent(in) :: xy(:,:)
         real*8             :: output

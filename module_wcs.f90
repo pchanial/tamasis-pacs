@@ -297,7 +297,7 @@ contains
     !---------------------------------------------------------------------------
 
 
-    recursive function ad2xy_wcslib(ad) result(xy)
+    function ad2xy_wcslib(ad) result(xy)
         use module_wcslib
         real*8, intent(in)   :: ad(:,:)
         integer              :: status

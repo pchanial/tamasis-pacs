@@ -402,7 +402,7 @@ contains
     !---------------------------------------------------------------------------
 
 
-    recursive function uv2yz(uv, distortion_yz, chop) result(yz)
+    function uv2yz(uv, distortion_yz, chop) result(yz)
 
         real*8, intent(in) :: uv(:,:)
         real*8, intent(in) :: distortion_yz(ndims, distortion_degree, distortion_degree, distortion_degree)
@@ -451,7 +451,7 @@ contains
     !---------------------------------------------------------------------------
 
 
-    recursive function yz2ad(yz, ra0, dec0, pa0) result (ad)
+    function yz2ad(yz, ra0, dec0, pa0) result (ad)
 
         real*8, intent(in) :: yz(:,:) ! in degrees
         real*8, intent(in) :: ra0, dec0, pa0
@@ -479,7 +479,7 @@ contains
     !---------------------------------------------------------------------------
 
 
-    recursive function xy2roi(xy) result(roi)
+    function xy2roi(xy) result(roi)
         real*8, intent(in) :: xy(:,:)
         real*8             :: roi(ndims,2,size(xy,2)/nvertices)
         integer            :: idetector
@@ -495,7 +495,7 @@ contains
     !---------------------------------------------------------------------------
 
 
-    recursive subroutine roi2pmatrix(roi, coords, nx, ny, isample, nroi, pmatrix)
+    subroutine roi2pmatrix(roi, coords, nx, ny, isample, nroi, pmatrix)
         integer, intent(in)                  :: roi(:,:,:)
         real*8, intent(in)                   :: coords(:,:)
         type(pointingelement), intent(inout) :: pmatrix(:,:,:)

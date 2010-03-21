@@ -120,7 +120,7 @@ contains
     !---------------------------------------------------------------------------
 
 
-    recursive function sum_kahan_1d(input) result(sum)
+    function sum_kahan_1d(input) result(sum)
         real(kind=p), intent(in) :: input(:)
         real(kind=p)             :: sum, c, t, y
         integer                  :: i
@@ -144,7 +144,7 @@ contains
     !---------------------------------------------------------------------------
 
 
-    recursive function sum_kahan_2d(input) result(sum)
+    function sum_kahan_2d(input) result(sum)
         real(kind=p), intent(in) :: input(:,:)
         real(kind=p)             :: sum, c, t, y
         integer                  :: i
@@ -168,7 +168,7 @@ contains
     !---------------------------------------------------------------------------
 
 
-    recursive function sum_kahan_3d(input) result(sum)
+    function sum_kahan_3d(input) result(sum)
         real(kind=p), intent(in) :: input(:,:,:)
         real(kind=p)             :: sum, c, t, y
         integer                  :: i
