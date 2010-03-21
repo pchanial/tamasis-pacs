@@ -2,9 +2,11 @@ program pacs_photproject
 
     use, intrinsic :: ISO_FORTRAN_ENV
     use            :: module_fitstools
-    use            :: module_optionparser
+    use            :: module_deglitching, only : deglitch_l2b
+    use            :: module_optionparser, only : optionparser
     use            :: module_pacsinstrument
     use            :: module_pacspointing
+    use            :: module_pointingmatrix, only : backprojection_weighted
     use            :: module_preprocessor
     implicit none
 
@@ -17,6 +19,7 @@ program pacs_photproject
     real*8                             :: resolution
     integer                            :: npixels_per_sample
     logical                            :: do_flatfield, do_meansubtraction
+    logical                            :: do_deglitching_l2b, do_deglitching_l2c
     integer*8                          :: first, last
 
     real*8, allocatable                :: signal(:,:)
@@ -27,6 +30,7 @@ program pacs_photproject
     integer                            :: status, count, count1
     integer                            :: count2, count_rate, count_max
     integer                            :: nsamples
+    real*8                             :: nsigma_deglitching
     real*8, allocatable                :: map1d(:), weights(:)
     type(pointingelement), allocatable :: pmatrix(:,:,:)
     type(optionparser), allocatable    :: parser
@@ -46,6 +50,10 @@ program pacs_photproject
     call parser%add_option('no-flatfield','','Do not divide by calibration flat field')
     call parser%add_option('filtering', 'f', 'Timeline filtering (mean|none)', &
                            has_value=.true., default='mean')
+    call parser%add_option('deglitching', 'd', 'Timeline deglitching &
+                           &(l2bl2bc|none)', has_value=.true., default='none')
+    call parser%add_option('nsigma-deglitching', '', 'N-sigma for deglitching',&
+                           has_value=.true., default='5.')
     call parser%add_option('first', '', 'First sample in timeline', &
                            has_value=.true., default='12001')
     call parser%add_option('last', '', 'Last sample in timeline',   &
@@ -70,6 +78,9 @@ program pacs_photproject
     last  = parser%get_option_as_integer('last', status)
     do_flatfield = .not. parser%get_option_as_logical('no-flatfield', status)
     do_meansubtraction = parser%get_option('filtering', status) == 'mean'
+    do_deglitching_l2b = parser%get_option('deglitching', status) == 'l2b'
+    do_deglitching_l2c = parser%get_option('deglitching', status) == 'l2c'
+    nsigma_deglitching = parser%get_option_as_real('nsigma-deglitching', status)
 
     ! read pointing information
     allocate(pointing)
@@ -143,25 +154,18 @@ program pacs_photproject
         call subtract_meandim1(signal)
     end if
 
+    ! remove mean value in timeline
+    if (do_deglitching_l2b) then
+        call deglitch_l2b(pmatrix, nx, ny, signal, mask, nsigma_deglitching, .false.)
+    end if
+    if (do_deglitching_l2c) then
+        call deglitch_l2b(pmatrix, nx, ny, signal, mask, nsigma_deglitching, .true.)
+    end if
+
     ! back project the timeline
     write(*,'(a)', advance='no') 'Computing the map... '
     call system_clock(count1, count_rate, count_max)
-
-    where (mask)
-        signal = 0
-    end where
-    call pmatrix_transpose(pmatrix, signal, map1d)
-
-    where (.not. mask)
-        signal = 1.d0
-    end where
-    call pmatrix_transpose(pmatrix, signal, weights)
-    map1d = map1d / weights
-
-    where (weights < 0.1d0)
-        map1d = 0
-    end where
-
+    call backprojection_weighted(pmatrix, signal, mask, map1d)
     call system_clock(count2, count_rate, count_max)
     write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
 
