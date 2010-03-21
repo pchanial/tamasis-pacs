@@ -341,7 +341,7 @@ contains
         integer, intent(out), allocatable :: index(:)
         integer                           :: i, n, ipivot, junk
         integer                           :: isort(size(points,2))
-        type(stack_int), allocatable      :: stack
+        class(stack_int), allocatable     :: stack
 
         n = size(points,2)
         ipivot = find_pivot(points)
