@@ -13,8 +13,7 @@ module module_deglitching
 contains
 
 
-    subroutine deglitch_l2b(pmatrix, nx, ny, timeline, mask, &
-                                    nsigma, use_mad)
+    subroutine deglitch_l2b(pmatrix, nx, ny, timeline, mask, nsigma, use_mad)
         type(pointingelement), intent(in) :: pmatrix(:,:,:)
         integer, intent(in)               :: nx, ny
         real(kind=p), intent(in)          :: timeline(:,:)
