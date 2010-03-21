@@ -22,7 +22,7 @@ contains
         logical, intent(in)               :: use_mad
         integer, parameter                :: min_sample_size = 5
         integer         :: npixels_per_sample, npixels_per_frame
-        integer         :: ndetectors, ntimes, nbads
+        integer         :: ndetectors, ntimes
         integer         :: hitmap(0:nx*ny-1)
         integer         :: roi(2,2,size(timeline,1))
         integer         :: i, j, ipixel, itime, idetector, isample, imap, iv
@@ -37,8 +37,6 @@ contains
         npixels_per_sample = size(pmatrix,1)
         ntimes     = size(pmatrix,2)
         ndetectors = size(pmatrix,3)
-        nbads      = count(mask)
-        write (*,'(a,$)') 'Deglitching...'
 
         ! compute the largest size of a frame mini-map
         npixels_per_frame = 0
@@ -127,8 +125,6 @@ contains
 
         deallocate(map)
 
-        write (*,'(a,i0,a)') ' ', count(mask)-nbads, ' samples masked.'
-        
     end subroutine deglitch_l2b
 
 end module module_deglitching
