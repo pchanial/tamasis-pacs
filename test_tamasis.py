@@ -5,7 +5,7 @@ import scipy
 from scipy.sparse import dia_matrix
 from scipy.sparse.linalg import LinearOperator, cgs
 
-datadir = '/home/nbarbey/data/csh/transpScan/'
+datadir = '/home/pchanial/work/pacs/data/transparent/'
 pacs = PacsObservation(filename=datadir+'NGC6946/1342184520_blue',
                        first=20000,
                        last=86000,
