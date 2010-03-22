@@ -798,6 +798,26 @@ class Tod(FitsMaskedArray):
     def zeros(shape, dtype='float64', order='C', header=None, mask=numpy.ma.nomask):
         return Tod(FitsMaskedArray.zeros(shape, dtype, order, header=header, mask=mask))
     
+    def imshow(self, num=None, axis=True, title=None):
+        """A simple graphical display function for the Map class"""
+        from matplotlib.pyplot import gray, figure, imshow, colorbar, \
+            draw, show, xlabel, ylabel, title as pyplottitle
+
+        if self.mask.all():
+            raise ValueError('All pixels are masked.')
+
+        gray()
+        figure(num=num)
+        imshow(self, 
+               aspect='auto', 
+               interpolation='nearest', 
+               origin='lower')
+        xlabel('Detector number')
+        ylabel("Signal")
+        if title is not None:
+            pyplottitle(title)
+        colorbar()
+        draw()
 
 
 
