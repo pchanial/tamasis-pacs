@@ -468,3 +468,102 @@ subroutine compression_average_transpose(compressed, data, factor, nsamples, nde
     call transpos(compressed, data, factor)
 
 end subroutine compression_average_transpose
+
+
+!-------------------------------------------------------------------------------
+
+
+subroutine backprojection_weighted(pmatrix, data, mask, map1d, npixels_per_sample, nsamples, ndetectors, npixels)
+    use module_pointingmatrix, only : bpw => backprojection_weighted,           &
+                                      pointingelement
+    implicit none
+    !f2py integer*8,intent(in):: pmatrix(npixels_per_sample*nsamples*ndetectors)
+    !f2py intent(in)          :: data
+    !f2py intent(in)          :: mask
+    !f2py intent(inout)       :: map1d
+    !f2py intent(in)          :: npixels_per_sample
+    !f2py intent(hide)        :: nsamples = shape(data,0)
+    !f2py intent(hide)        :: ndetectors = shape(data,1)
+    !f2py intent(hide)        :: npixels = size(map1d)
+
+    type(pointingelement), intent(in) :: pmatrix(npixels_per_sample,nsamples,ndetectors)
+    real*8, intent(in)                :: data(nsamples,ndetectors)
+    logical*1, intent(in)             :: mask(nsamples,ndetectors)
+    real*8, intent(inout)             :: map1d(npixels)
+    integer, intent(in)               :: npixels_per_sample
+    integer, intent(in)               :: nsamples
+    integer, intent(in)               :: ndetectors
+    integer, intent(in)               :: npixels
+
+    call bpw(pmatrix, data, mask, map1d)
+
+end subroutine backprojection_weighted
+
+
+!-------------------------------------------------------------------------------
+
+
+subroutine deglitch_l2b_std(pmatrix, nx, ny, data, mask, nsigma, outmask, npixels_per_sample, nsamples, ndetectors)
+    use module_pointingmatrix, only : pointingelement
+    use module_deglitching, only : deglitch_l2b
+    !f2py integer*8, intent(in) :: pmatrix(npixels_per_sample*nsamples*ndetectors)
+    !f2py intent(in)    :: nx, ny
+    !f2py intent(in)    :: data
+    !f2py intent(in)    :: mask
+    !f2py intent(in)    :: nsigma
+    !f2py intent(in)    :: npixels_per_sample
+    !f2py intent(hide)  :: nsamples = shape(data,0)
+    !f2py intent(hide)  :: ndetectors = shape(data,1)
+    !f2py intent(out)   :: outmask
+    type(pointingelement), intent(in) :: pmatrix(npixels_per_sample,nsamples,ndetectors)
+    integer, intent(in)               :: nx, ny
+    real*8, intent(in)                :: data(nsamples,ndetectors)
+    logical*1, intent(in)             :: mask(nsamples,ndetectors)
+    logical*1, intent(out)            :: outmask(nsamples,ndetectors)
+    real*8, intent(in)                :: nsigma
+    integer, intent(in)               :: npixels_per_sample, nsamples, ndetectors
+    integer                           :: count1, count2, count_rate, count_max
+
+    write(*,'(a)', advance='no') 'Info: deglitching (std)... '
+    call system_clock(count1, count_rate, count_max)
+    outmask = mask
+    call deglitch_l2b(pmatrix, nx, ny, data, outmask, nsigma, .false.)
+    call system_clock(count2, count_rate, count_max)
+    write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
+
+end subroutine deglitch_l2b_std
+
+
+!-------------------------------------------------------------------------------
+
+
+subroutine deglitch_l2b_mad(pmatrix, nx, ny, data, mask, nsigma, outmask, npixels_per_sample, nsamples, ndetectors)
+    use module_pointingmatrix, only : pointingelement
+    use module_deglitching, only : deglitch_l2b
+    !f2py integer*8, intent(in) :: pmatrix(npixels_per_sample*nsamples*ndetectors)
+    !f2py intent(in)    :: nx, ny
+    !f2py intent(in)    :: data
+    !f2py intent(in)    :: mask
+    !f2py intent(in)    :: nsigma
+    !f2py intent(in)    :: npixels_per_sample
+    !f2py intent(hide)  :: nsamples = shape(data,0)
+    !f2py intent(hide)  :: ndetectors = shape(data,1)
+    !f2py intent(out)   :: outmask
+    type(pointingelement), intent(in) :: pmatrix(npixels_per_sample,nsamples,ndetectors)
+    integer, intent(in)               :: nx, ny
+    real*8, intent(in)                :: data(nsamples,ndetectors)
+    logical*1, intent(in)             :: mask(nsamples,ndetectors)
+    logical*1, intent(out)            :: outmask(nsamples,ndetectors)
+    real*8, intent(in)                :: nsigma
+    integer, intent(in)               :: npixels_per_sample, nsamples, ndetectors
+    integer                           :: count1, count2, count_rate, count_max
+
+    write(*,'(a)', advance='no') 'Info: deglitching (mad)... '
+    call system_clock(count1, count_rate, count_max)
+    outmask = mask
+    call deglitch_l2b(pmatrix, nx, ny, data, outmask, nsigma, .true.)
+    call system_clock(count2, count_rate, count_max)
+    write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
+
+end subroutine deglitch_l2b_mad
+
