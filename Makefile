@@ -9,7 +9,7 @@ FCOMPILER = intelem
 
 FC=gfortran	
 FFLAGS_DEBUG = -g -O3 -fcheck=all -fopenmp -Wall -fPIC
-FFLAGS_RELEASE = -O3 -fopenmp -fPIC
+FFLAGS_RELEASE = -O3 -fcheck=all -fopenmp -Wall -fPIC
 LDFLAGS  = -lgomp $(shell pkg-config --libs cfitsio) $(shell pkg-config --libs wcslib)
 FCOMPILER=gnu95
 
@@ -61,8 +61,8 @@ test_wcslib2 = module_wcslib module_fitstools module_math
 test_wcslibc = module_wcslibc module_cfitsio
 
 .PHONY : all tests
-#all : $(EXECS) tamasisfortran.so
-all : $(EXECS)
+all : $(EXECS) tamasisfortran.so
+#all : $(EXECS)
 
 # if %.mod doesn't exist, make %.o. It will create %.mod with the same 
 # timestamp. If it does, do nothing
