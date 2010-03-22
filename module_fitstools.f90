@@ -33,7 +33,7 @@ module module_fitstools
     end interface ft_readslice
 
     interface ft_write
-        module procedure writefits_double_1d, writefits_double_2d
+        module procedure writefits_double_1d, writefits_double_2d, writefits_double_3d
     end interface ft_write
 
     interface ft_readparam
@@ -720,6 +720,55 @@ contains
         if (ft_checkerror_cfitsio(status, filename)) return
 
     end subroutine writefits_double_2d
+
+
+    !---------------------------------------------------------------------------
+
+
+    subroutine writefits_double_3d(filename, data, header, status)
+        character(len=*), intent(in)    :: filename
+        real*8, intent(in)              :: data(:,:,:)
+        character(len=*), intent(in), optional :: header
+        integer, intent(out)            :: status
+
+        integer                         :: irec, unit, blocksize, bitpix, naxis
+        logical                         :: simple, extend
+
+        ! delete file if it exists
+        open(10, file=filename, status='unknown')
+        close(10, status='delete')
+
+        ! open and initialise the fits file
+        status = 0
+        call ftgiou(unit, status)
+        if (ft_checkerror_cfitsio(status, filename)) return
+
+        call ftinit(unit, filename, blocksize, status)
+        if (ft_checkerror_cfitsio(status, filename)) return
+        simple = .true.
+        bitpix = -64
+        naxis  = 3
+        extend = .true.
+        call FTPHPR(unit,simple,bitpix,naxis, shape(data),0,1,extend,status)
+        if (ft_checkerror_cfitsio(status, filename)) return
+
+        ! write the astrometry keywords
+        if (present(header)) then
+            do irec=1, len(header) / 80
+                call FTPREC(unit,header((irec-1)*80+1:irec*80), status)
+            end do
+            if (ft_checkerror_cfitsio(status, filename)) return
+        end if
+
+        ! write the image data
+        call FTPPRD(unit, GROUP, 1, size(data), data, status)
+        if (ft_checkerror_cfitsio(status, filename)) return
+
+        ! close the fits file
+        call ft_close(unit, status)
+        if (ft_checkerror_cfitsio(status, filename)) return
+
+    end subroutine writefits_double_3d
 
 
     !---------------------------------------------------------------------------
