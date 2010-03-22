@@ -5,8 +5,12 @@ module module_cfitsio
     use, intrinsic :: ISO_FORTRAN_ENV
     implicit none
 
-    integer(kind=C_INT), bind(C, name='READONLY')  :: CFITSIO_READONLY
-    integer(kind=C_INT), bind(C, name='READWRITE') :: CFITSIO_READWRITE
+    integer, parameter :: CFITSIO_IMAGE_HDU  =  0
+    integer, parameter :: CFITSIO_ASCII_TBL  =  1
+    integer, parameter :: CFITSIO_BINARY_TBL =  2
+    integer, parameter :: CFITSIO_ANY_HDU    = -1
+    integer, parameter :: CFITSIO_READONLY   =  0
+    integer, parameter :: CFITSIO_READWRITE  =  1
 
     interface
 
