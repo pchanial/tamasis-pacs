@@ -712,7 +712,7 @@ end if
             do idetector = 1, ndetectors
                 j = ij(2,idetector)
                 isample = j * sampling / 16 + 1
-                frac = fraction(j * sampling / 16.d0)
+                frac = (j * sampling / 16.d0) - floor(j * sampling / 16.d0)
                 sampled_signal(:,idetector) = (1-frac) * signal(isample  ::sampling,idetector) + &
                                                  frac  * signal(isample+1::sampling,idetector)
             end do
@@ -750,7 +750,7 @@ end if
             do idetector = 1, ndetectors
                 j = ij(2,idetector)
                 isample = j * sampling / 16 + 1 ! isample+1 is guaranteed to exist
-                frac = fraction(j * sampling / 16.d0)
+                frac = (j * sampling / 16.d0) - floor(j * sampling / 16.d0)
                 signal(isample  ::sampling,idetector) = (1-frac) * sampled_signal(isample::sampling,idetector)
                 signal(isample+1::sampling,idetector) =    frac  * sampled_signal(isample::sampling,idetector)
             end do
