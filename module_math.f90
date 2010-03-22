@@ -16,6 +16,7 @@ module module_math
     public :: sum_kahan
     public :: swap
     public :: test_real_eq
+    public :: test_real_neq
     public :: NaN
 
     interface sum_kahan
@@ -372,7 +373,20 @@ contains
         epsilon = 10_p**(-real(n, kind=p))
         test_real_eq = abs(a-b) <= epsilon * abs(a)
 
-   end function test_real_eq
+    end function test_real_eq
+
+
+    !---------------------------------------------------------------------------
+
+
+    elemental function test_real_neq(a, b, n)
+        logical                  :: test_real_neq
+        real(kind=p), intent(in) :: a, b
+        integer, intent(in)      :: n
+        
+        test_real_neq = .not. test_real_eq(a, b, n)
+
+    end function test_real_neq
 
 
 end module module_math
