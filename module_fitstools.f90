@@ -2,22 +2,34 @@ module module_fitstools
 
     use, intrinsic :: ISO_C_BINDING
     use, intrinsic :: ISO_FORTRAN_ENV
-    use module_cfitsio, only: CFITSIO_READONLY, CFITSIO_READWRITE
+    use            :: module_cfitsio
     implicit none
-
     private
+
+    public :: CFITSIO_IMAGE_HDU
+    public :: CFITSIO_ASCII_TBL
+    public :: CFITSIO_BINARY_TBL
+    public :: CFITSIO_ANY_HDU
+    public :: CFITSIO_READONLY
+    public :: CFITSIO_READWRITE
+    public :: ft_close
+    public :: ft_create_header
+    public :: ft_header2str
+    public :: ft_open_bintable
+    public :: ft_open_image
+    public :: ft_read_column
+    public :: ft_readextension
+    public :: ft_readparam
+    public :: ft_readslice
+    public :: ft_write
+
     integer, private, parameter :: GROUP = 1
     integer, private, parameter :: NULLVAL = 0
     integer, private, parameter :: BUFFERSIZE = 1024
 
-    public :: ft_openimage
-    public :: ft_close
-    public :: ft_readextension
-    public :: ft_readslice
-    public :: ft_create_header
-    public :: ft_write
-    public :: ft_header2str
-    public :: ft_readparam
+    interface ft_read_column
+        module procedure ft_read_column_int64, ft_read_column_double
+    end interface ft_read_column
 
     interface ft_readextension
         module procedure readext_logical_1d, readext_int64_1d, readext_double_1d, &
@@ -44,6 +56,54 @@ module module_fitstools
 contains
 
 
+    subroutine ft_read_column_double(unit, colname, nrecords, data, status)
+        use precision, only : dp
+        integer, intent(in)          :: unit
+        character(len=*), intent(in) :: colname
+        integer, intent(in)          :: nrecords
+        real(kind=dp), intent(out)   :: data(nrecords)
+        integer, intent(out)         :: status
+        integer                      :: anyf   ! set to true if undef values
+        integer                      :: colnum
+
+        ! get column number
+        call ftgcno(unit, .true., colname, colnum, status)
+        if (ft_checkerror_cfitsio(status)) return
+
+        ! extract column
+        call ftgcvd(unit, colnum, 1, 1, nrecords, nullval, data, anyf, status)
+        if (ft_checkerror_cfitsio(status)) return
+
+    end subroutine ft_read_column_double
+
+
+    !---------------------------------------------------------------------------
+
+
+    subroutine ft_read_column_int64(unit, colname, nrecords, data, status)
+        use precision, only : dp
+        integer, intent(in)          :: unit
+        character(len=*), intent(in) :: colname
+        integer, intent(in)          :: nrecords
+        integer*8, intent(out)       :: data(nrecords)
+        integer, intent(out)         :: status
+        integer                      :: anyf   ! set to true if undef values
+        integer                      :: colnum
+
+        ! get column number
+        call ftgcno(unit, .true., colname, colnum, status)
+        if (ft_checkerror_cfitsio(status)) return
+
+        ! extract column
+        call ftgcvk(unit, colnum, 1, 1, nrecords, nullval, data, anyf, status)
+        if (ft_checkerror_cfitsio(status)) return
+
+    end subroutine ft_read_column_int64
+
+
+    !---------------------------------------------------------------------------
+
+
     subroutine readext_logical_1d(filename, output, status, hdu)
 
         character(len=*), intent(in)        :: filename
@@ -54,7 +114,7 @@ contains
         integer                             :: unit, firstpix, anynull
         integer, allocatable                :: imageshape(:)
 
-        call ft_openimage(filename, unit, 1, imageshape, status, hdu=hdu)
+        call ft_open_image(filename, unit, 1, imageshape, status, hdu=hdu)
         if (status /= 0) return
 
         !  Initialize variables
@@ -82,7 +142,7 @@ contains
         integer                             :: unit, firstpix, anynull
         integer, allocatable                :: imageshape(:)
 
-        call ft_openimage(filename, unit, 1, imageshape, status, hdu=hdu)
+        call ft_open_image(filename, unit, 1, imageshape, status, hdu=hdu)
         if (status /= 0) return
 
         !  Initialize variables
@@ -110,7 +170,7 @@ contains
         integer                          :: unit, firstpix, anynull
         integer, allocatable             :: imageshape(:)
 
-        call ft_openimage(filename, unit, 1, imageshape, status, hdu=hdu)
+        call ft_open_image(filename, unit, 1, imageshape, status, hdu=hdu)
         if (status /= 0) return
 
         !  Initialize variables
@@ -138,7 +198,7 @@ contains
         integer                             :: unit, BUFFERSIZE, firstpix, anynull, j
         integer, allocatable                :: imageshape(:)
 
-        call ft_openimage(filename, unit, 2, imageshape, status, hdu=hdu)
+        call ft_open_image(filename, unit, 2, imageshape, status, hdu=hdu)
         if (status /= 0) return
 
         ! Initialize variables
@@ -173,7 +233,7 @@ contains
         integer                          :: unit, BUFFERSIZE, firstpix, anynull, j
         integer, allocatable             :: imageshape(:)
     
-        call ft_openimage(filename, unit, 2, imageshape, status, hdu=hdu)
+        call ft_open_image(filename, unit, 2, imageshape, status, hdu=hdu)
         if (status /= 0) return
 
         !  Initialize variables
@@ -207,7 +267,7 @@ contains
         integer                             :: unit, BUFFERSIZE, firstpix, anynull, j, k
         integer, allocatable                :: imageshape(:)
 
-        call ft_openimage(filename, unit, 3, imageshape, status)
+        call ft_open_image(filename, unit, 3, imageshape, status)
         if (status /= 0) return
 
         !  Initialize variables
@@ -243,7 +303,7 @@ contains
         integer                          :: unit, BUFFERSIZE, firstpix, anynull, j, k
         integer, allocatable             :: imageshape(:)
 
-        call ft_openimage(filename, unit, 3, imageshape, status)
+        call ft_open_image(filename, unit, 3, imageshape, status)
         if (status /= 0) return
 
         !  Initialize variables
@@ -458,7 +518,7 @@ contains
     !---------------------------------------------------------------------------
 
 
-    subroutine ft_openimage(filename, unit, imagerank, imageshape, status, hdu)
+    subroutine ft_open_image(filename, unit, imagerank, imageshape, status, hdu)
 
         character(len=*), intent(in)        :: filename
         integer, intent(out)                :: unit
@@ -468,10 +528,11 @@ contains
         integer, intent(in), optional       :: hdu
 
         integer                             :: nfound, hdutype, blocksize
-        character(len=80)                   :: errmsg
         integer                             :: imageshape_(8)
 
         status = 0
+
+        ! get an unused logical unit number for the FITS file
         call ftgiou(unit, status)
         if (ft_checkerror_cfitsio(status, filename)) return
 
@@ -483,10 +544,10 @@ contains
 
             ! move to the specified HDU
             call ftmahd(unit, hdu, hdutype, status)
-            if (status == 0 .and. hdutype /= 0) then
-                write (errmsg,'(a,i5,a)') "HDU type is not an image: ", hdutype, "."
-                call ftpmsg(errmsg)
+            if (status == 0 .and. hdutype /= CFITSIO_IMAGE_HDU) then
+                write (OUTPUT_UNIT,'(a,i0,a)') "HDU type is not an image: ", hdutype, "."
                 status = 1
+                return
             endif
 
         else
@@ -499,12 +560,12 @@ contains
         end if
 
         !  Determine the size of the image.
-        call ftgknj(unit, 'NAXIS', 1, imagerank, imageshape_, nfound, status)
+        call ftgknj(unit, 'NAXIS', 1, size(imageshape_), imageshape_, nfound, status)
         if (ft_checkerror_cfitsio(status, filename)) return
 
         !  Check that it found the NAXISn keywords.
         if (nfound /= imagerank) then
-            call ftpmsg('Failed to read the NAXISn keywords.')
+            write (OUTPUT_UNIT, '(a)') 'FT_OPEN_IMAGE: Incompatible NAXISn keywords.'
             status = 1
             return
         end if
@@ -512,7 +573,45 @@ contains
         allocate(imageshape(imagerank))
         imageshape = imageshape_(1:imagerank)
 
-    end subroutine ft_openimage
+    end subroutine ft_open_image
+
+
+    !---------------------------------------------------------------------------
+
+
+    subroutine ft_open_bintable(filename, unit, ncolumns, nrecords, status)
+        character(len=*), intent(in) :: filename
+        integer, intent(out)         :: unit, ncolumns, nrecords
+        integer, intent(out)         :: status
+
+        integer                      :: naxes(8)
+        integer                      :: nfound
+
+        status = 0
+
+        ! get an unused logical unit number for the FITS file
+        call ftgiou(unit, status)
+        if (ft_checkerror_cfitsio(status, filename)) return
+
+        ! open the fits file and move to the specified extension
+        call fttopn(unit, filename, CFITSIO_READONLY, status)
+        if (ft_checkerror_cfitsio(status, filename)) return
+
+        !  Determine the size of the image.
+        call ftgknj(unit, 'NAXIS', 1, size(naxes), naxes, nfound, status)
+        if (ft_checkerror_cfitsio(status, filename)) return
+
+        !  Check that it found the NAXISn keywords.
+        if (nfound /= 2) then
+            write (OUTPUT_UNIT, '(a)') 'FT_OPEN_BINTABLE: Incompatible NAXISn keywords.'
+            status = 1
+            return
+        end if
+
+        ncolumns = naxes(1)
+        nrecords = naxes(2)
+
+    end subroutine ft_open_bintable
 
 
     !---------------------------------------------------------------------------
@@ -775,9 +874,7 @@ contains
 
 
     subroutine ft_header2str(filename, header, status)
-
         use, intrinsic :: ISO_C_BINDING
-        use module_cfitsio, only : CFITSIO_READONLY, fits_open_file, fits_hdr2str, fits_close_file, cfitsio_report_error
         character(len=*), intent(in)     :: filename
         character(len=2880), intent(out) :: header
         integer, intent(out)             :: status
