@@ -7,24 +7,23 @@ program test_pacs
     use module_pacspointing
     implicit none
 
-    class(pacsinstrument), allocatable  :: pacs
-    class(pacspointing), allocatable :: pointing
+    type(pacsinstrument)  :: pacs
+    type(pacspointing)    :: pointing
     character(len=*), parameter :: filename = '/home/pchanial/work/pacs/data/transparent/NGC6946/1342184520_blue'
     character(len=*), parameter :: filename_header = 'tests/csh_header_ngc6946.fits'
 
     real*8, allocatable    :: yz(:,:), ad(:,:), xy(:,:), time(:)
     integer*8, allocatable :: timeus(:)
     integer                :: status, i, j, nx, ny, index
-    !integer                :: count, count2, count_rate, count_max
+    integer                :: count, count2, count_rate, count_max
     integer*8              :: first, last
     real*8                 :: ra, dec, pa, chop, xmin, xmax, ymin, ymax, ra0, dec0
     character(len=2880)    :: header
 
     ! read observation
 
-    allocate(pointing)
     call pointing%load_filename(filename, status)
-    if (status /= 0) stop 'pointing%load: FAILED.'
+    if (status /= 0) stop 'FAILED: pointing%load.'
     call pointing%print()
 
     first = 12001
@@ -32,21 +31,17 @@ program test_pacs
     allocate(time(last-first+1))
     allocate(timeus(last-first+1))
     call ft_readslice(filename // '_Time.fits+1', first, last, timeus, status)
-    if (status /= 0) stop 'ft_readslice: FAILED.'
+    if (status /= 0) stop 'FAILED: ft_readslice.'
 
     time = timeus * 1.0d-6
-    allocate(pacs)
-
-    call pacs%read_calibration_files(status)
-    if (status /= 0) stop 'ft_readslice: FAILED.'
-    call pacs%filter_detectors(pacs%get_array_color(filename), transparent_mode=.true., status=status)
-    if (status /= 0) stop 'filter_detectors: FAILED.'
+    call pacs%init_filename(filename, .false., status)
+    if (status /= 0) stop 'FAILED: init.'
 
     call ft_header2str(filename_header, header, status)
-    if (status /= 0) stop 'ft_header2str: FAILED.'
+    if (status /= 0) stop 'FAILED: ft_header2str.'
 
     call init_astrometry(header, status=status)
-    if (status /= 0) stop 'init_astrometry: FAILED.'
+    if (status /= 0) stop 'FAILED: init_astrometry.'
 
     write (*,*) 'Number of valid detectors:', pacs%ndetectors
     write (*,*) 'Number of samples:', size(time)
@@ -110,26 +105,39 @@ program test_pacs
     write (*,*) 'Y = ', ymin, ymax
 
     call pacs%compute_mapheader(pointing, time, 3.d0, header, status)
-    if (status /= 0) stop 'compute_mapheader: FAILED.'
+    if (status /= 0) stop 'FAILED: compute_mapheader'
 
-    !! check that all detector corners are inside the map
-    !call system_clock(count, count_rate, count_max)
-    !do i = 1, size(time)
-    !    call pointing%get_position(time(i), ra, dec, pa, chop)
-    !    yz = pacs%uv2yz(pacs%corners_uv, pacs%distortion_yz_blue, chop)
-    !    ad = pacs%yz2ad(yz, ra, dec, pa)
-    !    xy = pacs%ad2xy(ad, wcs)
-    !    if (any(xy(1,:) < -0.5d0 .or. xy(1,:) > nx-0.5d0 .or. xy(2,:) < -0.5d0 .or. xy(2,:) > ny-0.5d0)) then
-    !        write (*,*) 'XXX problem: ', i
-    !    end if
-    !end do
-    !call system_clock(count2, count_rate, count_max)
-    !write (*,'(a,f6.2,a)') 'elapsed time: ', real(count2-count)/count_rate, 's'
+    call ft_readparam(header, 'naxis1', count, nx, status=status)
+    if (status /= 0 .or. count == 0) stop 'FAILED: read_param NAXIS1'
+
+    call ft_readparam(header, 'naxis2', count, ny, status=status)
+    if (status /= 0 .or. count == 0) stop 'FAILED: read_param NAXIS2'
+
+    call init_astrometry(header, status=status)
+    if (status /= 0) stop 'FAILED: init_astrometry'
+
+    ! check that all detector corners are inside the map
+    index = 2
+    call system_clock(count, count_rate, count_max)
+    do i = 1, size(time)
+        call pointing%get_position(time(i), ra, dec, pa, chop, index)
+        yz = pacs%uv2yz(pacs%corners_uv, pacs%distortion_yz_blue, chop)
+        ad = pacs%yz2ad(yz, ra, dec, pa)
+        xy = ad2xy_gnomonic(ad)
+        if (any(xy(1,:) < 0.5d0 .or. xy(1,:) > nx+0.5d0 .or. xy(2,:) < 0.5d0 .or. xy(2,:) > ny+0.5d0)) then
+            write (*,'(3(a,i0))') 'sample:', i, ', nx: ', nx, ', ny: ', ny
+            write (*,*) 'X: ', minval(xy(1,:)), maxval(xy(1,:))
+            write (*,*) 'Y: ', minval(xy(2,:)), maxval(xy(2,:))
+            stop 'FAILED: detector outside of map'
+        end if
+    end do
+    call system_clock(count2, count_rate, count_max)
+    write (*,'(a,f6.2,a)') 'elapsed time: ', real(count2-count)/count_rate, 's'
     !! get_position: 0.00s
-    !!+uv2yz: 30.85s
-    !!+yz2ad: 40.10s,40.72s
-    !!+ad2xy: 71.54s,76.74s,69.16s
-    !!+if: 70.52s
+    !+uv2yz: 30.85s
+    !+yz2ad: 40.10s,40.72s
+    !+ad2xy: 71.54s,76.74s,69.16s
+    !+if: 70.52s
 
     stop "OK."
 

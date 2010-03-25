@@ -2,32 +2,26 @@
     ! check that we're not using the wrong calib file for blue observation
 
 
-subroutine pacs_info_ndetectors(filename, transparent_mode, ndetectors)
+subroutine pacs_info_ndetectors(filename, ndetectors)
     use, intrinsic :: ISO_FORTRAN_ENV
     use module_pacsinstrument
     implicit none
 
     !f2py intent(in) filename
-    !f2py intent(in) transparent_mode
     !f2py intent(out) ndetectors
     character(len=*), intent(in) :: filename
-    logical, intent(in)          :: transparent_mode
     integer, intent(out)         :: ndetectors
 
-    type(pacsinstrument), allocatable :: pacs
-    integer                           :: status
+    type(pacsinstrument)         :: pacs
+    integer                      :: status
 
-    allocate(pacs)
-    call pacs%read_calibration_files(status)
-    if (status /= 0) goto 999
-
-    call pacs%filter_detectors(pacs%get_array_color(filename), transparent_mode=transparent_mode, status=status)
-    if (status /= 0) goto 999
+    call pacs%init_filename(filename, .false., status)
+    if (status /= 0) then
+        write (ERROR_UNIT, '(a)') 'Aborting.'
+        return
+    end if
 
     ndetectors = pacs%ndetectors
-    return
-
-999 write (ERROR_UNIT, '(a)') 'Aborting.'
 
 end subroutine pacs_info_ndetectors
 
@@ -35,34 +29,28 @@ end subroutine pacs_info_ndetectors
 !-------------------------------------------------------------------------------
 
 
-subroutine pacs_info_ij(filename, transparent_mode, ndetectors, ij)
+subroutine pacs_info_ij(filename, ndetectors, ij)
     use, intrinsic :: ISO_FORTRAN_ENV
     use module_pacsinstrument
     implicit none
 
     !f2py intent(in) filename
-    !f2py intent(in) transparent_mode
     !f2py intent(in) ndetectors
     !f2py intent(out) ij(2,ndetectors)
     character(len=*), intent(in) :: filename
-    logical, intent(in)          :: transparent_mode
     integer, intent(in)          :: ndetectors
     integer, intent(out)         :: ij(2,ndetectors)
 
-    type(pacsinstrument), allocatable :: pacs
-    integer                           :: status
+    type(pacsinstrument)         :: pacs
+    integer                      :: status
 
-    allocate(pacs)
-    call pacs%read_calibration_files(status)
-    if (status /= 0) goto 999
-
-    call pacs%filter_detectors(pacs%get_array_color(filename), transparent_mode=transparent_mode, status=status)
-    if (status /= 0) goto 999
+    call pacs%init_filename(filename, .false., status)
+    if (status /= 0) then
+        write (ERROR_UNIT, '(a)') 'Aborting.'
+        return
+    end if
 
     ij = pacs%ij
-    return
-
-999 write (ERROR_UNIT, '(a)') 'Aborting.'
 
 end subroutine pacs_info_ij
 
@@ -72,12 +60,10 @@ end subroutine pacs_info_ij
 
 subroutine pacs_info_nsamples(filename, nsamples)
     use, intrinsic :: ISO_FORTRAN_ENV
-    use module_fitstools
-    use module_pacsinstrument
+    use module_fitstools, only : ft_open_image, ft_close
     implicit none
 
     !f2py intent(in) filename
-    !f2py intent(in) transparent_mode
     !f2py intent(out) nsamples
     character(len=*), intent(in) :: filename
     integer, intent(out)         :: nsamples
@@ -85,8 +71,9 @@ subroutine pacs_info_nsamples(filename, nsamples)
     integer, allocatable         :: imageshape(:)
     integer                      :: unit, status
 
-    call ft_openimage(filename // "_Signal.fits", unit, 3, imageshape, status)
+    call ft_open_image(filename // "_Signal.fits", unit, 3, imageshape, status)
     if (status /= 0) goto 999
+
     call ft_close(unit, status)
     if (status /= 0) goto 999
 
@@ -106,8 +93,8 @@ end subroutine pacs_info_nsamples
 !-------------------------------------------------------------------------------
 
 
-subroutine pacs_timeline(filename, array, first, last, ndetectors, transparent_mode, bad_pixel_mask, nrow, ncol, &
-                         keep_bad_detectors, signal, mask)
+subroutine pacs_timeline(filename, first, last, ndetectors, bad_detector_mask, &
+                         nrow, ncol, keep_bad_detectors, signal, mask)
     use, intrinsic :: ISO_FORTRAN_ENV
     use module_pacsinstrument
     use module_preprocessor
@@ -115,45 +102,33 @@ subroutine pacs_timeline(filename, array, first, last, ndetectors, transparent_m
 
     !f2py threadsafe
     !f2py intent(in)  :: filename
-    !f2py intent(in)  :: array
     !f2py intent(in)  :: first
     !f2py intent(in)  :: last
     !f2py intent(in)  :: ndetectors
-    !f2py intent(in)  :: transparent_mode
-    !f2py intent(in)  :: bad_pixel_mask
-    !f2py intent(hide), depend(bad_pixel_mask) :: nrow = shape(bad_pixel_mask,0), ncol = shape(bad_pixel_mask,1)
+    !f2py intent(in)  :: bad_detector_mask
+    !f2py intent(hide), depend(bad_detector_mask) :: nrow = shape(bad_detector_mask,0), ncol = shape(bad_detector_mask,1)
     !f2py intent(in)  :: keep_bad_detectors
     !f2py intent(out) :: signal
     !f2py intent(out) :: mask
     character(len=*), intent(in) :: filename
-    character(len=*), intent(in) :: array
     integer*8, intent(in)        :: first, last
     integer, intent(in)          :: ndetectors
-    logical, intent(in)          :: transparent_mode
-    logical, intent(in)          :: bad_pixel_mask(nrow,ncol)
+    logical*1, intent(in)        :: bad_detector_mask(nrow,ncol)
     integer, intent(in)          :: nrow, ncol
     logical, intent(in)          :: keep_bad_detectors
     real*8, intent(out)          :: signal(last-first+1, ndetectors)
     logical*1, intent(out)       :: mask(last-first+1, ndetectors)
 
-    type(pacsinstrument), allocatable :: pacs
-    integer                           :: status
+    type(pacsinstrument)         :: pacs
+    integer                      :: status
 
-    allocate(pacs)
-    call pacs%read_calibration_files(status)
+    call pacs%init_filename(filename, keep_bad_detectors, status,              &
+                            bad_detector_mask)
     if (status /= 0) goto 999
 
-    if (array == 'blue' .or. array == 'green') then
-        pacs%mask_blue = bad_pixel_mask
-    else
-        pacs%mask_red = bad_pixel_mask
-    end if
-    call pacs%filter_detectors(array, transparent_mode=transparent_mode, keep_bad_detectors=keep_bad_detectors, status=status)
+    call pacs%read_tod_file(filename, first, last, signal, mask, status)
     if (status /= 0) goto 999
-    call pacs%read_signal_file(filename // '_Signal.fits', first, last, signal, status)
-    if (status /= 0) goto 999
-    call pacs%read_mask_file(filename // '_Mask.fits', first, last, mask, status)
-    if (status /= 0) goto 999
+
     call divide_vectordim2(signal, pacs%flatfield)
     call subtract_meandim1(signal)
     return
@@ -166,8 +141,10 @@ end subroutine pacs_timeline
 !-------------------------------------------------------------------------------
 
 
-subroutine pacs_map_header(array, time, ra, dec, pa, chop, npointings, finetime, nfinesamples, &
-                           transparent_mode, bad_pixel_mask, nrow, ncol, keep_bad_detectors, resolution, header)
+subroutine pacs_map_header(array, time, ra, dec, pa, chop, npointings,         &
+                           finetime, nfinesamples, transparent_mode,           &
+                           keep_bad_detectors, bad_detector_mask, nrow, ncol,  &
+                           resolution, header)
 
     use, intrinsic :: ISO_FORTRAN_ENV
     use module_fitstools
@@ -182,9 +159,9 @@ subroutine pacs_map_header(array, time, ra, dec, pa, chop, npointings, finetime,
     !f2py intent(in)   :: finetime
     !f2py intent(hide) :: nfinesamples = size(finetime)
     !f2py intent(in)   :: transparent_mode
-    !f2py intent(in)   :: bad_pixel_mask
-    !f2py intent(hide), depend(bad_pixel_mask) :: nrow = shape(bad_pixel_mask,0), ncol = shape(bad_pixel_mask,1)
     !f2py intent(in)   :: keep_bad_detectors
+    !f2py intent(in)   :: bad_detector_mask
+    !f2py intent(hide), depend(bad_detector_mask) :: nrow = shape(bad_detector_mask,0), ncol = shape(bad_detector_mask,1)
     !f2py intent(in)   :: resolution
     !f2py intent(out)  :: header
 
@@ -194,36 +171,26 @@ subroutine pacs_map_header(array, time, ra, dec, pa, chop, npointings, finetime,
     real*8, intent(in)                 :: finetime(nfinesamples)
     integer, intent(in)                :: nfinesamples
     logical, intent(in)                :: transparent_mode
-    logical, intent(in)                :: bad_pixel_mask(nrow,ncol)
-    integer, intent(in)                :: nrow, ncol
     logical, intent(in)                :: keep_bad_detectors
+    logical*1, intent(in)              :: bad_detector_mask(nrow,ncol)
+    integer, intent(in)                :: nrow, ncol
     real*8, intent(in)                 :: resolution
     character(len=2880), intent(out)   :: header
 
-    type(pacsinstrument), allocatable  :: pacs
-    type(pacspointing), allocatable    :: pointing
+    type(pacsinstrument)               :: pacs
+    type(pacspointing)                 :: pointing
     integer                            :: status
 
     ! read pointing information
-    allocate(pointing)
     call pointing%load_array(time, ra, dec, pa, chop, status)
     if (status /= 0) goto 999
 
     ! get the pacs instance, read the calibration files
-    allocate(pacs)
-    call pacs%read_calibration_files(status)
+    call pacs%init(array(1:1), transparent_mode, keep_bad_detectors, status,   &
+                   bad_detector_mask)
     if (status /= 0) goto 999
 
-    if (array == 'blue' .or. array == 'green') then
-        pacs%mask_blue = bad_pixel_mask
-    else
-        pacs%mask_red = bad_pixel_mask
-    end if
-
-    call pacs%filter_detectors(array, transparent_mode=transparent_mode, keep_bad_detectors=keep_bad_detectors, status=status)
-    if (status /= 0) goto 999
-
-    if (any(pacs%mask .neqv. bad_pixel_mask)) then
+    if (any(pacs%mask .neqv. bad_detector_mask)) then
         write (*,'(a)') 'Info: using user bad pixel mask for the blue array.'
     end if
 
@@ -238,13 +205,17 @@ end subroutine pacs_map_header
 !-------------------------------------------------------------------------------
 
 
-subroutine pacs_pointing_matrix(array, time, ra, dec, pa, chop, npointings, finetime, nfinesamples, npixels_per_sample, &
-                                ndetectors, transparent_mode, bad_pixel_mask, nrow, ncol, keep_bad_detectors, header, pmatrix)
+subroutine pacs_pointing_matrix(array, time, ra, dec, pa, chop, npointings,    &
+                                finetime, nfinesamples, npixels_per_sample,    &
+                                ndetectors, transparent_mode,                  &
+                                keep_bad_detectors, bad_detector_mask,         &
+                                nrow, ncol, header, pmatrix)
 
     use, intrinsic :: ISO_FORTRAN_ENV
-    use module_fitstools
-    use module_pacsinstrument
-    use module_pacspointing
+    use module_fitstools, only : ft_readparam
+    use module_pacsinstrument, only : pacsinstrument
+    use module_pacspointing, only : pacspointing
+    use module_pointingmatrix, only : pointingelement
     implicit none
 
     !f2py threadsafe
@@ -256,9 +227,9 @@ subroutine pacs_pointing_matrix(array, time, ra, dec, pa, chop, npointings, fine
     !f2py intent(in)   :: npixels_per_sample
     !f2py intent(in)   :: ndetectors
     !f2py intent(in)   :: transparent_mode
-    !f2py intent(in)   :: bad_pixel_mask
-    !f2py intent(hide), depend(bad_pixel_mask) :: nrow = shape(bad_pixel_mask,0), ncol = shape(bad_pixel_mask,1)
     !f2py intent(in)   :: keep_bad_detectors
+    !f2py intent(in)   :: bad_detector_mask
+    !f2py intent(hide), depend(bad_detector_mask) :: nrow = shape(bad_detector_mask,0), ncol = shape(bad_detector_mask,1)
     !f2py intent(in)   :: header
     !f2py integer*8, dimension(npixels_per_sample*nfinesamples*ndetectors), intent(inout) :: pmatrix
 
@@ -270,35 +241,26 @@ subroutine pacs_pointing_matrix(array, time, ra, dec, pa, chop, npointings, fine
     integer, intent(in)                  :: npixels_per_sample
     integer, intent(in)                  :: ndetectors
     logical, intent(in)                  :: transparent_mode
-    logical, intent(in)                  :: bad_pixel_mask(nrow,ncol)
-    integer, intent(in)                  :: nrow, ncol
     logical, intent(in)                  :: keep_bad_detectors
+    logical*1, intent(in)                :: bad_detector_mask(nrow,ncol)
+    integer, intent(in)                  :: nrow, ncol
     character(len=*), intent(in)         :: header
     type(pointingelement), intent(inout) :: pmatrix(npixels_per_sample, nfinesamples, ndetectors)
 
-    type(pacsinstrument), allocatable    :: pacs
-    type(pacspointing), allocatable      :: pointing
+    type(pacsinstrument)                 :: pacs
+    type(pacspointing)                   :: pointing
     integer                              :: status, count,  count1, count2, count_rate, count_max, nx, ny
 
     ! read pointing information
-    allocate(pointing)
     call pointing%load_array(time, ra, dec, pa, chop, status)
     if (status /= 0) goto 999
 
     ! get the pacs instance, read the calibration files
-    allocate(pacs)
-    call pacs%read_calibration_files(status)
+    call pacs%init(array(1:1), transparent_mode, keep_bad_detectors, status,   &
+                   bad_detector_mask)
     if (status /= 0) goto 999
 
-    if (array == 'blue' .or. array == 'green') then
-        pacs%mask_blue = bad_pixel_mask
-    else
-        pacs%mask_red = bad_pixel_mask
-    end if
-    call pacs%filter_detectors(array, transparent_mode=transparent_mode, keep_bad_detectors=keep_bad_detectors, status=status)
-    if (status /= 0) goto 999
-
-    if (any(pacs%mask .neqv. bad_pixel_mask)) then
+    if (any(pacs%mask .neqv. bad_detector_mask)) then
         write (*,'(a)') "Info: using user's bad pixel mask."
     end if
 

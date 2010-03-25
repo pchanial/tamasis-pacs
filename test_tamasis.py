@@ -11,7 +11,6 @@ pacs = PacsObservation(filename=datadir+'NGC6946/1342184520_blue',
                        last=86000,
                        resolution=3.,
                        fine_sampling_factor=1,
-                       keep_bad_detectors=False,
                        npixels_per_sample=6)
 
 tod = pacs.get_tod()
@@ -60,5 +59,5 @@ mymap[mymap.mask == False] = solution
 #                            observingMode      = 'transparent' \
 #                            fineSamplingFactor = 1             \
 #                            compressionFactor  = 1             \
-#                            keepBadPixels      = True)
+#                            keepBadDetectors   = True)
 

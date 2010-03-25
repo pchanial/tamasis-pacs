@@ -2,23 +2,27 @@ module module_pacspointing
     implicit none
     private
 
-    type, public :: pacspointing
+    public :: pacspointing
+
+    type pacspointing
 
         private
         integer                           :: nsamples
         real*8                            :: delta
-        real*8, allocatable, dimension(:) :: time, ra, dec, pa, chop
+        real*8, allocatable, dimension(:), public :: time, ra, dec, pa, chop
         procedure(get_position_ev), pointer, public :: get_position => null()
 
     contains
 
+        private
 !        generic          :: load => load_filename, load_array
         procedure, public :: load_filename
+        procedure         :: load_filename_oldstyle
         procedure, public :: load_array
         procedure, public :: compute_center
         procedure, public :: print
         procedure, public :: get_position_gen
-        procedure         :: destructor ! XXX should be final, but not handled by gfortran 4.5
+        procedure, public :: destructor ! XXX should be final, but not handled by gfortran 4.5
 
     end type pacspointing
 
@@ -27,7 +31,63 @@ contains
 
 
     subroutine load_filename(this, filename, status)
-        use module_math, only : test_real_eq
+        use, intrinsic :: ISO_FORTRAN_ENV
+        use            :: precision, only : p, dp
+        use            :: module_fitstools, only : ft_read_column,   &
+                                                   ft_open_bintable, ft_close
+
+        class(pacspointing), intent(inout) :: this
+        character(len=*), intent(in)       :: filename
+        integer, intent(out)               :: status
+        integer                            :: pos
+
+        real(kind=dp), allocatable  :: time(:), ra(:), dec(:), pa(:), chop(:)
+        integer*8, allocatable      :: timeus(:)
+        integer unit
+        integer ncolumns, nrecords
+
+        pos = len_trim(filename)
+        if (filename(pos-4:pos) /= '.fits') then
+            write (OUTPUT_UNIT,'(a)') 'LOAD_FILENAME: obsolete file format.'
+            call this%load_filename_oldstyle(filename, status)
+            return
+        endif
+
+        call ft_open_bintable(filename // '[Status]', unit, ncolumns, nrecords,&
+                              status)
+        if (status /= 0) return
+
+        allocate(time  (nrecords))
+        allocate(timeus(nrecords))
+        allocate(ra    (nrecords))
+        allocate(dec   (nrecords))
+        allocate(pa    (nrecords))
+        allocate(chop  (nrecords))
+
+        call ft_read_column(unit, 'FINETIME', timeus, status)
+        if (status /= 0) return
+        time = timeus * 1.d-6
+        call ft_read_column(unit, 'RaArray', ra, status)
+        if (status /= 0) return
+        call ft_read_column(unit, 'DecArray', dec, status)
+        if (status /= 0) return
+        call ft_read_column(unit, 'PaArray', pa, status)
+        if (status /= 0) return
+        call ft_read_column(unit, 'CHOPFPUANGLE', chop, status)
+        if (status /= 0) return
+
+        call ft_close(unit, status)
+        if (status /= 0) return
+
+        call this%load_array(time, ra, dec, pa, chop, status)
+
+    end subroutine load_filename
+
+
+    !---------------------------------------------------------------------------
+
+
+    subroutine load_filename_oldstyle(this, filename, status)
         use module_fitstools, only : ft_readextension
 
         class(pacspointing), intent(inout) :: this
@@ -55,14 +115,14 @@ contains
 
         call this%load_array(time, ra, dec, pa, chop, status)
 
-    end subroutine load_filename
+    end subroutine load_filename_oldstyle
 
 
     !---------------------------------------------------------------------------
 
+
     subroutine load_array(this, time, ra, dec, pa, chop, status)
         use, intrinsic :: ISO_FORTRAN_ENV
-        use module_math, only : test_real_eq
         class(pacspointing), intent(inout) :: this
         real*8, intent(in)                 :: time(:), ra(:), dec(:), pa(:), chop(:)
         integer, intent(out)               :: status

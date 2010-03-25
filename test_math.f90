@@ -13,7 +13,6 @@ program test_math
     real(kind=p) :: mean, variance, skewness, kurtosis, stddev, meandev
     real(kind=p), allocatable :: x(:)
     integer                   :: i
-    real(kind=p):: xmed
 
     call moment(sample, mean, variance, skewness, kurtosis, stddev=stddev, &
                 meandev=meandev)
@@ -65,9 +64,9 @@ program test_math
     if (any(nint_up  (-x) /=-[0,0,0,1,1,1,1,2])) stop 'FAILED: nint_up 2'
     deallocate(x)
 
-    allocate(x(size(mresults)))
-    x = mresults
-    if (median(x) /= mresults(6)) stop 'FAILED: median'
+    allocate(x(size(mresults)+1))
+    x = [mresults, -999._p]
+    if (median(x) /= mresults(2)) stop 'FAILED: median'
     deallocate(x)
 
     stop 'OK.'

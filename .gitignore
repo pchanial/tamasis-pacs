@@ -1,6 +1,7 @@
 *.o
 *.mod
 *~
+*pyc
 *__genmod.f90
 
 .cproject
@@ -16,7 +17,8 @@ test_math
 test_ngc6946_bpj
 test_optionparser
 test_pacs
-test_pointing
+test_pacsinstrument
+test_pacspointing
 test_projection
 test_read_config
 test_sort

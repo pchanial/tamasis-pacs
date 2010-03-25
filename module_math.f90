@@ -371,7 +371,7 @@ contains
         end if
 
         epsilon = 10_p**(-real(n, kind=p))
-        test_real_eq = abs(a-b) <= epsilon * abs(a)
+        test_real_eq = abs(a-b) <= epsilon * abs(max(a,b))
 
     end function test_real_eq
 

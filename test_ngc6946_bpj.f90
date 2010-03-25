@@ -4,6 +4,7 @@ program test_ngc6946_bpj
     use            :: module_fitstools
     use            :: module_pacsinstrument
     use            :: module_pacspointing
+    use            :: module_pointingmatrix
     use            :: module_preprocessor
     use            :: module_projection
     use            :: module_wcs
@@ -12,14 +13,10 @@ program test_ngc6946_bpj
     use            :: string, only : strinteger
     implicit none
 
-    type(pacsinstrument), allocatable :: pacs
-    type(pacspointing), allocatable   :: pointing
+    type(pacsinstrument)        :: pacs
+    type(pacspointing)          :: pointing
     character(len=*), parameter :: inputdir        = '/home/pchanial/work/pacs/data/transparent/NGC6946/'
     character(len=*), parameter :: filename        = inputdir // '1342184520_blue'
-    character(len=*), parameter :: filename_signal = inputdir // '1342184520_blue_Signal.fits'
-    character(len=*), parameter :: filename_mask   = inputdir // '1342184520_blue_Mask.fits'
-    character(len=*), parameter :: filename_time   = inputdir // '1342184520_blue_Time.fits'
-
     real*8, allocatable                :: signal(:,:), coords(:,:), coords_yz(:,:)
     real*8                             :: ra, dec, pa, chop, chop_old
     real*8, allocatable                :: surface1(:,:), surface2(:,:)
@@ -39,7 +36,6 @@ program test_ngc6946_bpj
     call system_clock(count0, count_rate, count_max)
 
     ! read pointing information
-    allocate(pointing)
     call pointing%load_filename(filename, status)
     if (status /= 0) stop 'pointing%load_filename: FAILED.'
 
@@ -50,18 +46,14 @@ program test_ngc6946_bpj
     nsamples = last - first + 1
     allocate(time(last-first+1))
     allocate(timeus(last-first+1))
-    call ft_readslice(filename_time // '+1', first, last, timeus, status)
+    call ft_readslice(filename // '_Time.fits+1', first, last, timeus, status)
     if (status /= 0) stop 'FAILED: ft_readslice'
     time = timeus * 1.0d-6
     npixels_per_sample = 6
 
     ! get the pacs instance, read the calibration files
-    allocate(pacs)
-    call pacs%read_calibration_files(status)
-    if (status /= 0) stop 'FAILED: read_calibration_files.'
-
-    call pacs%filter_detectors('blue', transparent_mode=.true., status=status)
-    if (status /= 0) stop 'FAILED: filter_detectors.'
+    call pacs%init_filename(filename, .false., status)
+    if (status /= 0) stop 'FAILED: pacs%init'
 
     call pacs%compute_mapheader(pointing, time, 3.d0, header, status)
     if (status /= 0) stop 'FAILED: compute_mapheader.'
@@ -75,11 +67,12 @@ program test_ngc6946_bpj
     allocate(map1d(0:nx*ny-1))
 
     ! read the signal file
-    write(*,'(a)', advance='no') 'Reading signal file... '
+    write(*,'(a)', advance='no') 'Reading tod file... '
     call system_clock(count1, count_rate, count_max)
     allocate(signal(last-first+1, pacs%ndetectors))
-    call pacs%read_signal_file(filename_signal, first, last, signal, status)
-    if (status /= 0) stop 'FAILED: read_signal_file.'
+    allocate(mask  (last-first+1, pacs%ndetectors))
+    call pacs%read_tod_file(filename, first, last, signal, mask, status)
+    if (status /= 0) stop 'FAILED: read_tod_file_oldstyle.'
     call system_clock(count2, count_rate, count_max)
     write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
 

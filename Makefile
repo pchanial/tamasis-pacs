@@ -9,7 +9,7 @@ FCOMPILER = intelem
 
 FC=gfortran	
 FFLAGS_DEBUG = -g -O3 -fcheck=all -fopenmp -Wall -fPIC
-FFLAGS_RELEASE = -O3 -fcheck=all -fopenmp -Wall -fPIC
+FFLAGS_RELEASE = -O3 -fopenmp -Wall -fPIC
 LDFLAGS  = -lgomp $(shell pkg-config --libs cfitsio) $(shell pkg-config --libs wcslib)
 FCOMPILER=gnu95
 
@@ -49,7 +49,8 @@ test_math = module_math precision
 test_ngc6946_bpj = module_fitstools module_pacsinstrument module_pacspointing module_pointingmatrix module_preprocessor module_projection module_math
 test_optionparser = module_optionparser
 test_pacs = module_pacsinstrument module_pacspointing module_fitstools
-test_pointing = module_pacspointing
+test_pacsinstrument = module_pacsinstrument module_pacspointing
+test_pacspointing = module_math module_pacspointing
 test_projection = module_projection module_sort
 test_read_config = module_instrument
 test_sort = module_sort

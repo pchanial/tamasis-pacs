@@ -1,17 +1,27 @@
 module module_pacsinstrument
 
+    use, intrinsic :: ISO_FORTRAN_ENV, only : ERROR_UNIT, OUTPUT_UNIT
     use module_fitstools
     use module_math, only : nint_down, nint_up
     use module_pacspointing
     use module_pointingmatrix
     use module_projection
-    use string, only : strlowcase
+    use string, only : strinteger, strlowcase
     implicit none
+    private
 
-    integer, parameter :: shape_blue(2) = [32, 64]
-    integer, parameter :: shape_red (2) = [16, 32]
+    public :: ndims
+    public :: nvertices
+    public :: pacsinstrument
+    public :: xy2roi
+    public :: roi2pmatrix
+    public :: multiplexing_direct
+    public :: multiplexing_transpose
+
     integer, parameter :: ndims = 2
     integer, parameter :: nvertices = 4
+    integer, parameter :: shape_blue(2) = [32, 64]
+    integer, parameter :: shape_red (2) = [16, 32]
     integer, parameter :: distortion_degree = 3
     real*8, parameter  :: sampling = 0.025d0
 
@@ -30,6 +40,8 @@ module module_pacsinstrument
         integer              :: nrows
         integer              :: ncolumns
         integer              :: fine_sampling_factor
+        character            :: channel
+        logical              :: transparent_mode
 
         logical*1, pointer   :: mask(:,:)
         integer, allocatable :: ij(:,:)
@@ -51,27 +63,100 @@ module module_pacsinstrument
 
     contains
 
+        procedure          :: init
+        procedure          :: init_filename
         procedure          :: read_calibration_files
         procedure          :: filter_detectors
-        procedure          :: read_signal_file
-        procedure          :: read_mask_file
+        procedure          :: read_tod_file
         procedure          :: compute_mapheader
         procedure          :: find_minmax
         procedure          :: compute_projection_sharp_edges
-        procedure, nopass  :: get_array_color
         procedure, nopass  :: uv2yz
         procedure, nopass  :: yz2ad
         procedure, nopass  :: xy2roi
         procedure, nopass  :: roi2pmatrix
-        procedure, nopass  :: multiplexing_direct
-        procedure, nopass  :: multiplexing_transpose
 
         procedure, private :: filter_detectors_array
+        procedure, private :: read_signal_file_oldstyle
+        procedure, private :: read_mask_file_oldstyle
 
     end type pacsinstrument
 
 
 contains
+
+    
+    subroutine init(this, channel, transparent_mode, keep_bad_detectors,       &
+                    status, bad_detector_mask)
+        class(pacsinstrument), intent(inout) :: this
+        character, intent(in)                :: channel
+        logical, intent(in)                  :: transparent_mode
+        logical, intent(in)                  :: keep_bad_detectors
+        integer, intent(out)                 :: status
+        logical*1, intent(in), optional      :: bad_detector_mask(:,:)
+
+        this%channel = channel
+        this%transparent_mode = transparent_mode
+
+        call this%read_calibration_files(status)
+        if (status /= 0) return
+
+        if (present(bad_detector_mask)) then
+            if (channel == 'r') then
+                !XXX gfortran bug test_bug_shape
+                ! should be any(shape(bad_detector_mask) /= shape(this%mask_red))
+                if (size(bad_detector_mask,1) /= size(this%mask_red,1) .or.    &
+                    size(bad_detector_mask,2) /= size(this%mask_red,2)) then
+                   status = 1
+                   write (ERROR_UNIT,'(a)') 'INIT: input red mask has invalid size.'
+                   return
+                end if
+                this%mask_red = bad_detector_mask
+            else
+                if (channel == 'g') write (*,*) 'pacs%init: check me.'
+                if (size(bad_detector_mask,1) /= size(this%mask_blue,1) .or.   &
+                    size(bad_detector_mask,2) /= size(this%mask_blue,2)) then
+                   status = 1
+                   write (ERROR_UNIT,'(a)') 'INIT: input blue mask has invalid size.'
+                   return
+                end if
+                this%mask_blue = bad_detector_mask
+            end if
+
+        end if
+        
+        call this%filter_detectors(channel, transparent_mode,                  &
+                                   keep_bad_detectors, status)
+
+    end subroutine init
+
+
+    !---------------------------------------------------------------------------
+
+
+    subroutine init_filename(this, filename, keep_bad_detectors, status,       &
+                            bad_detector_mask)
+        class(pacsinstrument), intent(inout) :: this
+        character(len=*), intent(in)         :: filename
+        logical, intent(in)                  :: keep_bad_detectors
+        integer, intent(out)                 :: status
+        logical*1, intent(in), optional      :: bad_detector_mask(:,:)
+        character :: channel
+        logical   :: transparent_mode
+
+        channel = get_channel(filename, status)
+        if (status /= 0) return
+
+        transparent_mode = get_transparent_mode(filename, status)
+        if (status /= 0) return
+
+        call this%init(channel, transparent_mode, keep_bad_detectors, status,  &
+                       bad_detector_mask)
+
+    end subroutine init_filename
+
+
+    !---------------------------------------------------------------------------
 
 
     subroutine read_calibration_files(this, status)
@@ -179,12 +264,11 @@ contains
     !---------------------------------------------------------------------------
 
 
-    subroutine read_signal_file(this, filename, first, last, signal, status)
-
+    subroutine read_signal_file_oldstyle(this, filename, first, last, signal, status)
         class(pacsinstrument), intent(in) :: this
         character(len=*), intent(in)      :: filename
         integer*8, intent(in)             :: first, last
-        real*8, intent(out)               :: signal(last-first+1, this%ndetectors)
+        real*8, intent(out)               :: signal(:,:)
         integer, intent(out)              :: status
         integer*8                         :: p, q
         integer                           :: idetector, unit
@@ -192,14 +276,10 @@ contains
         logical                           :: keep_bad_detectors
 
         keep_bad_detectors = size(this%mask) > this%ndetectors
-
-        !should be tested with cfitsio compiled with ./configure --enable-reentrant
-        !!$omp parallel default(shared) private(idetector, p, q, unit, imageshape) firstprivate(status)
         status = 0
-        call ft_openimage(filename, unit, 3, imageshape, status)
+        call ft_open_image(filename // '_Signal.fits', unit, 3, imageshape, status)
         if (status /= 0) return
 
-        !!$omp do
         do idetector = 1, this%ndetectors
 
             p = this%pq(1,idetector)
@@ -208,34 +288,29 @@ contains
             if (status /= 0) return
 
         end do
-        !!$omp end do
 
         call ft_close(unit, status)
-        !!$omp end parallel
 
-    end subroutine read_signal_file
+    end subroutine read_signal_file_oldstyle
 
 
     !---------------------------------------------------------------------------
 
 
-    subroutine read_mask_file(this, filename, first, last, mask, status)
+    subroutine read_mask_file_oldstyle(this, filename, first, last, mask, status)
 
         class(pacsinstrument), intent(in) :: this
         character(len=*), intent(in)      :: filename
         integer*8, intent(in)             :: first, last
-        logical*1, intent(out)            :: mask(last-first+1, this%ndetectors)
+        logical*1, intent(out)            :: mask(:,:)
         integer, intent(out)              :: status
         integer*8                         :: p, q
         integer                           :: idetector, unit
         integer, allocatable              :: imageshape(:)
 
-        !should be tested with cfitsio compiled with ./configure --enable-reentrant
-        !!$omp parallel default(shared) private(idetector, p, q, unit, imageshape) firstprivate(status)
-        call ft_openimage(filename, unit, 3, imageshape, status)
+        call ft_open_image(filename // '_Mask.fits', unit, 3, imageshape, status)
         if (status /= 0) return
 
-        !!$omp do
         do idetector = 1, this%ndetectors
 
             p = this%pq(1,idetector)
@@ -244,48 +319,168 @@ contains
             if (status /= 0) return
 
         end do
-        !!$omp end do
 
         call ft_close(unit, status)
-        !!$omp end parallel
 
-    end subroutine read_mask_file
+    end subroutine read_mask_file_oldstyle
 
 
     !---------------------------------------------------------------------------
 
 
-    subroutine filter_detectors(this, side, transparent_mode, keep_bad_detectors, status)
-        use, intrinsic :: ISO_FORTRAN_ENV
+    subroutine read_tod_file(this, filename, first, last, signal, mask, status)
+        class(pacsinstrument), intent(in) :: this
+        character(len=*), intent(in)      :: filename
+        integer*8, intent(in)             :: first, last
+        real*8, intent(out)               :: signal(:,:)
+        logical*1, intent(out)            :: mask  (:,:)
+        integer, intent(out)              :: status
+        integer*8                         :: p, q
+        integer                           :: idetector, unit, pos
+        integer, allocatable              :: imageshape(:)
+        logical                           :: keep_bad_detectors, mask_found
+        integer*4, allocatable            :: maskcompressed(:)
+        integer*4                         :: maskval
+        integer                           :: ntimes, ncompressed
+        integer                           :: itime, icompressed, ibit
+        integer*8                         :: firstcompressed, lastcompressed
+
+        if (last < first) then
+            status = 1
+            write (ERROR_UNIT,'(a,2(i0,a))')"READ_TOD_FILE: The last sample '",&
+                  last, "' is less than the first sample '", first, "'."
+            return
+        end if
+
+        if (first < 1) then
+            status = 1
+            write (ERROR_UNIT,'(a,i0,a)') "READ_TOD_FILE: The first sample '", &
+                  first, "' is less than 1."
+            return
+        end if
+ 
+        pos = len_trim(filename)
+        if (filename(pos-4:pos) /= '.fits') then
+            write (ERROR_UNIT,'(a)') 'READ_TOD_FILE: obsolete file format.'
+            call this%read_signal_file_oldstyle(filename, first, last, signal, status)
+            if (status /= 0) return
+            call this%read_mask_file_oldstyle(filename, first, last, mask, status)
+            return
+        endif
+
+        keep_bad_detectors = size(this%mask) > this%ndetectors
+
+        ! read signal HDU
+        call ft_open_image(filename // '[Signal]', unit, 3, imageshape, status)
+        if (status /= 0) return
+
+        if (last > imageshape(1)) then
+            status = 1
+            write (ERROR_UNIT,'(a,2(i0,a))')"READ_TOD_FILE: The last sample '",&
+                  last, "' exceeds the size of the observation '",             &
+                  imageshape(1), "'."
+            return
+        end if
+        ntimes = last - first + 1
+
+        do idetector = 1, this%ndetectors
+
+            p = this%pq(1,idetector)
+            q = this%pq(2,idetector)
+            call ft_readslice(unit, first, last, q+1, p+1, imageshape, signal(:,idetector), status)
+            if (status /= 0) return
+
+        end do
+
+        call ft_close(unit, status)
+        if (status /= 0) return
+
+        ! read MMT_Glitchmask HDU
+        mask = .false.
+        mask_found = ft_test_extension(filename // '[MMT_Glitchmask]', status)
+        if (status /= 0) return
+
+        if (.not. mask_found) then
+            write (*,'(a)') 'Info: mask MMT_Glitchmask is not found.'
+            return
+        end if
+
+        call ft_open_image(filename // '[MMT_Glitchmask]', unit, 3, imageshape, status)
+        if (status /= 0) return
+
+        firstcompressed = (first - 1) / 32 + 1
+        lastcompressed  = (last  - 1) / 32 + 1
+        ncompressed = lastcompressed - firstcompressed + 1
+        allocate(maskcompressed(ncompressed))
+
+        do idetector = 1, this%ndetectors
+
+            p = this%pq(1,idetector)
+            q = this%pq(2,idetector)
+            call ft_readslice(unit, firstcompressed, lastcompressed, q+1, p+1, &
+                              imageshape, maskcompressed, status)
+            if (status /= 0) go to 999
+
+            ! loop over the bytes of the compressed mask
+            do icompressed = firstcompressed, lastcompressed
+
+               maskval = maskcompressed(icompressed-firstcompressed+1)
+               if (maskval == 0) cycle
+
+               itime = (icompressed-1)*32 - first + 2
+
+               ! loop over the bits of a compressed mask byte
+               do ibit= max(0, first - (icompressed-1)*32-1),                  &
+                        min(31, last - (icompressed-1)*32-1)
+                    mask(itime+ibit,idetector) = mask(itime+ibit,idetector)    &
+                                                 .or. btest(maskval, ibit)
+               end do
+
+            end do
+
+        end do
+
+    999 call ft_close(unit, status)
+
+    end subroutine read_tod_file
+
+
+    !---------------------------------------------------------------------------
+
+
+    subroutine filter_detectors(this, channel, transparent_mode, keep_bad_detectors, status)
         class(pacsinstrument), intent(inout)   :: this
-        character(len=*), intent(in), optional :: side
+        character, intent(in)                  :: channel
         logical, intent(in), optional          :: transparent_mode
         logical, intent(in), optional          :: keep_bad_detectors
         integer, intent(out)                   :: status
 
-        status = 0
-        if (present(side)) then
-            if (strlowcase(side) == 'red') then
-                call this%filter_detectors_array(this%mask_red, this%corners_uv_red, this%distortion_yz_red, &
-                                            this%flatfield_red, transparent_mode=transparent_mode,            &
-                                            keep_bad_detectors=keep_bad_detectors)
-                return
-            else if (strlowcase(side) == 'green') then
-                write(*,*) 'Check calibration files for the green band...'
-                call this%filter_detectors_array(this%mask_blue, this%corners_uv_blue, this%distortion_yz_blue, &
-                                            this%flatfield_green, transparent_mode=transparent_mode,             &
-                                            keep_bad_detectors=keep_bad_detectors)
-                return
-            else if (strlowcase(side) /= 'blue') then
-                status = 1
-                write (ERROR_UNIT,'(a)') "FILTER_DETECTORS: invalid array side ('blue', 'green' or 'red'): " // strlowcase(side)
-                return
-            endif
-        endif
+        select case (channel)
+           case ('r')
+              call this%filter_detectors_array(this%mask_red,                  &
+                   this%corners_uv_red, this%distortion_yz_red,                &
+                   this%flatfield_red, transparent_mode=transparent_mode,      &
+                   keep_bad_detectors=keep_bad_detectors)
+           case ('g')
+              write(*,*) 'FILTER_DETECTORS: Check calibration files for the green band...'
+              call this%filter_detectors_array(this%mask_blue,                 &
+                   this%corners_uv_blue, this%distortion_yz_blue,              &
+                   this%flatfield_green, transparent_mode=transparent_mode,    &
+                   keep_bad_detectors=keep_bad_detectors)
+           case ('b')
+              call filter_detectors_array(this, this%mask_blue,                &
+                   this%corners_uv_blue, this%distortion_yz_blue,              &
+                   this%flatfield_blue, transparent_mode=transparent_mode,     &
+                   keep_bad_detectors=keep_bad_detectors)
 
-        call filter_detectors_array(this, this%mask_blue, this%corners_uv_blue, this%distortion_yz_blue, &
-                                    this%flatfield_blue, transparent_mode=transparent_mode,              &
-                                    keep_bad_detectors=keep_bad_detectors)
+           case default
+                status = 1
+                write (ERROR_UNIT,'(a)') "FILTER_DETECTORS: invalid array &
+                    &channel ('blue', 'green' or 'red'): " // channel
+                return
+        end select
+
+        status = 0
 
     end subroutine filter_detectors
 
@@ -362,41 +557,122 @@ contains
     !---------------------------------------------------------------------------
 
 
-    function get_array_color(filename) result(color)
-        character(len=*), intent(in)                 :: filename
-        character(len=get_array_color_len(filename)) :: color
+    ! returns 'b', 'g' or 'r' for a blue, green or red channel observation
+    function get_channel(filename, status) result(channel)
+        character                     :: channel
+        character(len=*), intent(in)  :: filename
+        integer, intent(out)          :: status
+        integer                       :: length, unit, ncolumns, nrecords
+        integer                       :: status_close
+        character(len=2), allocatable :: channels(:)
 
-        if (len(color) == 4) then
-            color = 'blue'
-        else if (len(color) == 5) then
-            color = 'green'
-        else if (len(color) == 3) then
-            color = 'red'
+        channel = ' '
+        length = len_trim(filename)
+        if (filename(length-4:length) /= '.fits') then
+            status = 0
+            write (ERROR_UNIT,'(a)') 'GET_CHANNEL: obsolete file format.'
+            if (strlowcase(filename(length-3:length)) == 'blue') then
+               channel = 'b'
+            else if (strlowcase(filename(length-4:length)) == 'green') then
+               channel = 'g'
+            else if (strlowcase(filename(length-2:length)) == 'red') then
+               channel = 'r'
+            else
+               status = 1
+               write (ERROR_UNIT,'(a)') 'File name does not contain the array channel identifier (blue, green, red).'
+            end if
+            go to 999
+        endif
+
+        call ft_open_bintable(filename // '[Status]', unit, ncolumns, nrecords, status)
+        if (status /= 0) return
+
+        allocate(channels(nrecords))
+        call ft_read_column(unit, 'BAND', channels, status)
+        if (status /= 0) return
+
+        if (any(channels /= channels(1))) then
+            status = 1
+            write (ERROR_UNIT,'(a)') 'Observation is BANDSWITCH.'
         else
-            stop "File name must contain the array identifier (blue, green, red)."
+           select case (channels(1))
+               case ('BS')
+                   channel = 'b'
+               case ('BL')
+                   channel = 'g'
+               case ('R ')
+                   channel = 'r'
+               case default
+                   status = 1
+                   write (ERROR_UNIT,'(a)') 'Invalid array BAND value: ' // channels(1)
+           end select
         end if
 
-    end function get_array_color
+        call ft_close(unit, status_close)
+        if (status == 0) status = status_close
+
+    999 if (status == 0) then
+            write (OUTPUT_UNIT,'(a,$)') "Info: Channel: '"
+            select case (channel)
+                case ('b')
+                    write (OUTPUT_UNIT,'(a,$)') 'Blue'
+                case ('g')
+                    write (OUTPUT_UNIT,'(a,$)') 'Green'
+                case ('r')
+                    write (OUTPUT_UNIT,'(a,$)') 'Red'
+            end select
+            write (OUTPUT_UNIT,'(a)') "'"
+        end if
+
+    end function get_channel
 
 
     !---------------------------------------------------------------------------
 
 
-    pure function get_array_color_len(filename) result(length)
+    function get_transparent_mode(filename, status) result(tmode)
+        logical                      :: tmode
         character(len=*), intent(in) :: filename
-        integer                      :: length
+        integer, intent(out)         :: status
+        integer           :: unit, ikey, length
+        character(len=72) :: compression, keyword, comment
 
-        if (strlowcase(filename(len(filename)-2:len(filename))) == 'lue') then
-            length = 4
-        else if (strlowcase(filename(len(filename)-2:len(filename))) == 'een') then
-            length = 5
-        else if (strlowcase(filename(len(filename)-2:len(filename))) == 'red') then
-            length = 3
-        else
-            length = 0
+        tmode = .true.
+
+        length = len_trim(filename)
+        if (filename(length-4:length) /= '.fits') then
+            write(*,'(a)') 'GET_TRANSPARENT_MODE: Obsolete file format.'
+            status = 0
+            return
         end if
 
-    end function get_array_color_len
+        call ft_open(filename, unit, status)
+        if (status /= 0) return
+
+        ikey = 1
+        do
+            call ftgkys(unit, 'key.META_'//strinteger(ikey), keyword, comment, status)
+            if (status /= 0) go to 999
+            if (keyword == 'compMode') exit
+            ikey = ikey + 1
+        end do
+
+        call ftgkys(unit, 'META_'//strinteger(ikey), compression, comment, status)
+        if (compression == 'Photometry Default Mode') then
+            tmode = .false.
+        else if (compression == 'Photometry Lossless Compression Mode') then
+            tmode = .true.
+        else
+            status = 1
+            write (ERROR_UNIT,'(a)') "ERROR: Unknown compression mode: '" // trim(compression) // "'."
+            return
+        end if
+
+        write (OUTPUT_UNIT,'(a)') "Info: Compression mode: '" // trim(compression) // "'"
+
+    999 call ft_close(unit, status)
+
+    end function get_transparent_mode
 
 
     !---------------------------------------------------------------------------

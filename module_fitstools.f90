@@ -1,7 +1,7 @@
 module module_fitstools
 
     use, intrinsic :: ISO_C_BINDING
-    use, intrinsic :: ISO_FORTRAN_ENV
+    use, intrinsic :: ISO_FORTRAN_ENV, only : ERROR_UNIT, OUTPUT_UNIT
     use            :: module_cfitsio
     implicit none
     private
@@ -15,12 +15,14 @@ module module_fitstools
     public :: ft_close
     public :: ft_create_header
     public :: ft_header2str
+    public :: ft_open
     public :: ft_open_bintable
     public :: ft_open_image
     public :: ft_read_column
     public :: ft_readextension
     public :: ft_readparam
     public :: ft_readslice
+    public :: ft_test_extension
     public :: ft_write
 
     integer, private, parameter :: GROUP = 1
@@ -28,7 +30,8 @@ module module_fitstools
     integer, private, parameter :: BUFFERSIZE = 1024
 
     interface ft_read_column
-        module procedure ft_read_column_int8, ft_read_column_double
+        module procedure ft_read_column_character, ft_read_column_int4,        &
+                         ft_read_column_int8, ft_read_column_double
     end interface ft_read_column
 
     interface ft_readextension
@@ -58,49 +61,101 @@ module module_fitstools
 contains
 
 
-    subroutine ft_read_column_double(unit, colname, nrecords, data, status)
+    subroutine ft_read_column_character(unit, colname, data, status)
         use precision, only : dp
-        integer, intent(in)          :: unit
-        character(len=*), intent(in) :: colname
-        integer, intent(in)          :: nrecords
-        real(kind=dp), intent(out)   :: data(nrecords)
-        integer, intent(out)         :: status
-        integer                      :: anyf   ! set to true if undef values
-        integer                      :: colnum
+        integer, intent(in)           :: unit
+        character(len=*), intent(in)  :: colname
+        character(len=*), intent(out) :: data(:)
+        integer, intent(out)          :: status
+        logical                       :: anyf   ! set to true if undef values
+        integer                       :: colnum
+
+        status = 0
 
         ! get column number
         call ftgcno(unit, .true., colname, colnum, status)
         if (ft_checkerror_cfitsio(status)) return
 
         ! extract column
-        call ftgcvd(unit, colnum, 1, 1, nrecords, nullval, data, anyf, status)
+        call ftgcvs(unit, colnum, 1, 1, size(data), '', data, anyf, status)
         if (ft_checkerror_cfitsio(status)) return
 
-    end subroutine ft_read_column_double
+    end subroutine ft_read_column_character
 
 
     !---------------------------------------------------------------------------
 
 
-    subroutine ft_read_column_int8(unit, colname, nrecords, data, status)
+    subroutine ft_read_column_int4(unit, colname, data, status)
         use precision, only : dp
         integer, intent(in)          :: unit
         character(len=*), intent(in) :: colname
-        integer, intent(in)          :: nrecords
-        integer*8, intent(out)       :: data(nrecords)
+        integer*4, intent(out)       :: data(:)
         integer, intent(out)         :: status
-        integer                      :: anyf   ! set to true if undef values
+        logical                      :: anyf   ! set to true if undef values
         integer                      :: colnum
+
+        status = 0
 
         ! get column number
         call ftgcno(unit, .true., colname, colnum, status)
         if (ft_checkerror_cfitsio(status)) return
 
         ! extract column
-        call ftgcvk(unit, colnum, 1, 1, nrecords, nullval, data, anyf, status)
+        call ftgcvj(unit, colnum, 1, 1, size(data), nullval, data, anyf, status)
+        if (ft_checkerror_cfitsio(status)) return
+
+    end subroutine ft_read_column_int4
+
+
+    !---------------------------------------------------------------------------
+
+
+    subroutine ft_read_column_int8(unit, colname, data, status)
+        use precision, only : dp
+        integer, intent(in)          :: unit
+        character(len=*), intent(in) :: colname
+        integer*8, intent(out)       :: data(:)
+        integer, intent(out)         :: status
+        logical                      :: anyf   ! set to true if undef values
+        integer                      :: colnum
+
+        status = 0
+
+        ! get column number
+        call ftgcno(unit, .true., colname, colnum, status)
+        if (ft_checkerror_cfitsio(status)) return
+
+        ! extract column
+        call ftgcvk(unit, colnum, 1, 1, size(data), nullval, data, anyf, status)
         if (ft_checkerror_cfitsio(status)) return
 
     end subroutine ft_read_column_int8
+
+
+    !---------------------------------------------------------------------------
+
+
+    subroutine ft_read_column_double(unit, colname, data, status)
+        use precision, only : dp
+        integer, intent(in)          :: unit
+        character(len=*), intent(in) :: colname
+        real(kind=dp), intent(out)   :: data(:)
+        integer, intent(out)         :: status
+        logical                      :: anyf   ! set to true if undef values
+        integer                      :: colnum
+
+        status = 0
+
+        ! get column number
+        call ftgcno(unit, .true., colname, colnum, status)
+        if (ft_checkerror_cfitsio(status)) return
+
+        ! extract column
+        call ftgcvd(unit, colnum, 1, 1, size(data), nullval, data, anyf, status)
+        if (ft_checkerror_cfitsio(status)) return
+
+    end subroutine ft_read_column_double
 
 
     !---------------------------------------------------------------------------
@@ -343,7 +398,7 @@ contains
 
         integer                      :: unit
 
-        call readext_open(filename, unit, status)
+        call ft_open(filename, unit, status)
         if (status /= 0) return
         call readslice_logical_unit(unit, x1, x2, array, status)
         if (status /= 0) return
@@ -383,7 +438,7 @@ contains
 
         integer                      :: unit
 
-        call readext_open(filename, unit, status)
+        call ft_open(filename, unit, status)
         if (status /= 0) return
         call readslice_int4_unit(unit, x1, x2, array, status)
         if (status /= 0) return
@@ -423,7 +478,7 @@ contains
 
         integer                      :: unit
 
-        call readext_open(filename, unit, status)
+        call ft_open(filename, unit, status)
         if (status /= 0) return
         call readslice_int8_unit(unit, x1, x2, array, status)
         if (status /= 0) return
@@ -463,7 +518,7 @@ contains
 
         integer                      :: unit
 
-        call readext_open(filename, unit, status)
+        call ft_open(filename, unit, status)
         if (status /= 0) return
         call readslice_double_unit(unit, x1, x2, array, status)
         if (status /= 0) return
@@ -586,37 +641,71 @@ contains
     !---------------------------------------------------------------------------
 
 
-    subroutine readext_open(filename, unit, status)
-
+    ! return true if extension is false. status may be set to a non-zero value
+    ! if a problem unrelated to the existence of the extension occurs.
+    function ft_test_extension(filename, status)
+        logical                      :: ft_test_extension
         character(len=*), intent(in) :: filename
-        integer, intent(out)         :: unit
-        integer, intent(out)         :: status
+        integer                      :: unit
+        logical                      :: junk
+        integer                      :: status, status_close
 
+        ! get an unused logical unit number for the FITS file
         status = 0
         call ftgiou(unit, status)
         if (ft_checkerror_cfitsio(status, filename)) return
 
-        ! open the fits file and move to the HDU specified in the filename
+        ! open the fits file and move to the specified extension
+        call ftnopn(unit, filename, CFITSIO_READONLY, status)
+        ft_test_extension = status == 0
+        if (status == 301) then
+            status = 0
+        else
+            junk = ft_checkerror_cfitsio(status, filename)
+        end if
+
+        ! close logical unit
+        call ft_close(unit, status_close)
+        if (status == 0) status = status_close
+
+    end function ft_test_extension
+
+
+    !---------------------------------------------------------------------------
+
+
+    subroutine ft_open(filename, unit, status)
+        character(len=*), intent(in)      :: filename
+        integer, intent(out)              :: unit
+        integer, intent(out)              :: status
+
+        status = 0
+
+        ! get an unused logical unit number for the FITS file
+        call ftgiou(unit, status)
+        if (ft_checkerror_cfitsio(status, filename)) return
+
+
+        ! open the fits file and move to the specified extension
         call ftnopn(unit, filename, CFITSIO_READONLY, status)
         if (ft_checkerror_cfitsio(status, filename)) return
 
-    end subroutine readext_open
+    end subroutine ft_open
 
 
     !---------------------------------------------------------------------------
 
 
     subroutine ft_open_image(filename, unit, imagerank, imageshape, status, hdu)
+        character(len=*), intent(in)      :: filename
+        integer, intent(out)              :: unit
+        integer, intent(in)               :: imagerank
+        integer, allocatable, intent(out) :: imageshape(:)
+        integer, intent(out)              :: status
+        integer, intent(in), optional     :: hdu
 
-        character(len=*), intent(in)        :: filename
-        integer, intent(out)                :: unit
-        integer, intent(in)                 :: imagerank
-        integer, allocatable, intent(inout) :: imageshape(:)
-        integer, intent(out)                :: status
-        integer, intent(in), optional       :: hdu
-
-        integer                             :: nfound, hdutype, blocksize
-        integer                             :: imageshape_(8)
+        integer                           :: nfound, hdutype, blocksize
+        integer                           :: imageshape_(8)
 
         status = 0
 
@@ -633,7 +722,7 @@ contains
             ! move to the specified HDU
             call ftmahd(unit, hdu, hdutype, status)
             if (status == 0 .and. hdutype /= CFITSIO_IMAGE_HDU) then
-                write (OUTPUT_UNIT,'(a,i0,a)') "HDU type is not an image: ", hdutype, "."
+                write (ERROR_UNIT,'(a,i0,a)') "HDU type is not an image: ", hdutype, "."
                 status = 1
                 return
             endif
@@ -653,11 +742,12 @@ contains
 
         !  Check that it found the NAXISn keywords.
         if (nfound /= imagerank) then
-            write (OUTPUT_UNIT, '(a)') 'FT_OPEN_IMAGE: Incompatible NAXISn keywords.'
+            write (ERROR_UNIT, '(a)') 'FT_OPEN_IMAGE: Incompatible NAXISn keywords.'
             status = 1
             return
         end if
 
+        if (allocated(imageshape)) deallocate(imageshape)
         allocate(imageshape(imagerank))
         imageshape = imageshape_(1:imagerank)
 
@@ -691,7 +781,7 @@ contains
 
         !  Check that it found the NAXISn keywords.
         if (nfound /= 2) then
-            write (OUTPUT_UNIT, '(a)') 'FT_OPEN_BINTABLE: Incompatible NAXISn keywords.'
+            write (ERROR_UNIT, '(a)') 'FT_OPEN_BINTABLE: Incompatible NAXISn keywords.'
             status = 1
             return
         end if
@@ -719,60 +809,6 @@ contains
         if (ft_checkerror_cfitsio(status)) return
 
     end subroutine ft_close
-
-
-    !---------------------------------------------------------------------------
-
-
-    function ft_checkerror_cfitsio(status, filename, hdu) result(error)
-
-        !  This subroutine prints out the descriptive text corresponding to the
-        !  error status value and prints out the contents of the internal
-        !  error message stack generated by FITSIO whenever an error occurs.
-
-        integer, intent(in)                    :: status
-        character(len=*), intent(in), optional :: filename
-        integer, intent(in), optional          :: hdu
-        logical                                :: error
-        character                              :: errtext*30, errmessage*80
-
-        error = status /= 0
-
-        !  Check if status is OK (no error); if so, simply return
-        if (.not. error) return
-
-        ! flush the output unit
-        flush(OUTPUT_UNIT)
-
-        !  Print the filename
-        if (present(filename)) write (ERROR_UNIT,*) 'In file ' // filename // ': '
-
-        !  Print the HDU number
-        if (present(hdu)) write (ERROR_UNIT,*) 'HDU: ', hdu
-
-        !  The FTGERR subroutine returns a descriptive 30-character text string that
-        !  corresponds to the integer error status number.  A complete list of all
-        !  the error numbers can be found in the back of the FITSIO User's Guide.
-        call ftgerr(status, errtext)
-        write(ERROR_UNIT,*) 'FITSIO Error Status =',status,': ',errtext
-
-        !  FITSIO usually generates an internal stack of error messages whenever
-        !  an error occurs.  These messages provide much more information on the
-        !  cause of the problem than can be provided by the single integer error
-        !  status value.  The FTGMSG subroutine retrieves the oldest message from
-        !  the stack and shifts any remaining messages on the stack down one
-        !  position.  FTGMSG is called repeatedly until a blank message is
-        !  returned, which indicates that the stack is empty.  Each error message
-        !  may be up to 80 characters in length.  Another subroutine, called
-        !  FTCMSG, is available to simply clear the whole error message stack in
-        !  cases where one is not interested in the contents.
-        call ftgmsg(errmessage)
-        do while (errmessage /= ' ')
-            write(ERROR_UNIT,*) errmessage
-            call ftgmsg(errmessage)
-        end do
-
-    end function ft_checkerror_cfitsio
 
 
     !---------------------------------------------------------------------------
@@ -1235,6 +1271,61 @@ contains
         end do
 
     end subroutine ft_readparam_character
+
+
+    !---------------------------------------------------------------------------
+
+
+    function ft_checkerror_cfitsio(status, filename, hdu)
+
+        !  This subroutine prints out the descriptive text corresponding to the
+        !  error status value and prints out the contents of the internal
+        !  error message stack generated by FITSIO whenever an error occurs.
+        logical                                :: ft_checkerror_cfitsio
+        integer, intent(in)                    :: status
+        character(len=*), intent(in), optional :: filename
+        integer, intent(in), optional          :: hdu
+        character                              :: errtext*30, errmessage*80
+
+        ft_checkerror_cfitsio = status /= 0
+
+        !  Check if status is OK (no error); if so, simply return
+        if (status == 0) return
+
+        ! flush the output unit
+        flush(OUTPUT_UNIT)
+
+        !  Print the filename
+        if (present(filename)) then
+            write (ERROR_UNIT,*) 'In file ' // trim(filename) // ':'
+        end if
+
+        !  Print the HDU number
+        if (present(hdu)) write (ERROR_UNIT,*) 'HDU: ', hdu
+
+        !  The FTGERR subroutine returns a descriptive 30-character text string that
+        !  corresponds to the integer error status number.  A complete list of all
+        !  the error numbers can be found in the back of the FITSIO User's Guide.
+        call ftgerr(status, errtext)
+        write(ERROR_UNIT,*) 'FITSIO Error Status =', status, ': ', errtext
+
+        !  FITSIO usually generates an internal stack of error messages whenever
+        !  an error occurs.  These messages provide much more information on the
+        !  cause of the problem than can be provided by the single integer error
+        !  status value.  The FTGMSG subroutine retrieves the oldest message from
+        !  the stack and shifts any remaining messages on the stack down one
+        !  position.  FTGMSG is called repeatedly until a blank message is
+        !  returned, which indicates that the stack is empty.  Each error message
+        !  may be up to 80 characters in length.  Another subroutine, called
+        !  FTCMSG, is available to simply clear the whole error message stack in
+        !  cases where one is not interested in the contents.
+        call ftgmsg(errmessage)
+        do while (errmessage /= ' ')
+            write(ERROR_UNIT,*) errmessage
+            call ftgmsg(errmessage)
+        end do
+
+    end function ft_checkerror_cfitsio
 
 
 end module module_fitstools
