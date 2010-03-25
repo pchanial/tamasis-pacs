@@ -29,7 +29,7 @@ program pacs_photproject
     integer                            :: status, count, count1
     integer                            :: count2, count_rate, count_max
     real*8                             :: deglitching_nsigma
-    real*8, allocatable                :: map1d(:), weights(:)
+    real*8, allocatable                :: map1d(:)
     type(pointingelement), allocatable :: pmatrix(:,:,:)
     type(optionparser)                 :: parser
 
@@ -86,19 +86,23 @@ program pacs_photproject
     call pacs%init_filename(trim(infile), .false., status)
     if (status /= 0) go to 999
 
-    call pacs%compute_mapheader(pointing, pointing%time(first:last),           &
-                                resolution, header, status)
+    ! get FITS header
+    if (headerfile /= '') then
+       call ft_header2str(headerfile, header, status)
+    else
+       call pacs%compute_mapheader(pointing, pointing%time(first:last),        &
+                                   resolution, header, status)
+    end if
     if (status /= 0) go to 999
 
+    ! allocate memory for the maps
     call ft_readparam(header, 'naxis1', count, nx, status=status)
     if (status /= 0 .or. count == 0) go to 999
 
     call ft_readparam(header, 'naxis2', count, ny, status=status)
     if (status /= 0 .or. count == 0) go to 999
 
-    ! allocate memory for the maps
     allocate(map1d(0:nx*ny-1))
-    allocate(weights(0:nx*ny-1))
 
     ! compute the projector
     write(*,'(a)', advance='no') 'Computing the projector... '
@@ -163,13 +167,12 @@ program pacs_photproject
     call system_clock(count2, count_rate, count_max)
     write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
 
-
     ! write the map as fits file
     write(*,'(a)') 'Writing FITS file... '
     call ft_write(outfile, reshape(map1d, [nx,ny]), header, status)
     if (status /= 0) go to 999
 
-    return
+    call exit(0)
 
 999 stop 'Aborting.'
 
