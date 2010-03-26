@@ -9,6 +9,7 @@ module string
  public :: strsplit
  public :: strinteger
  public :: strjoin
+ public :: strsection
 
  interface strjoin
      module procedure strjoin_trim, strjoin_opt
@@ -181,5 +182,47 @@ contains
          strjoin_opt_len = sum([(len_trim(input(i)), i=1, size(input))])
      end if
  end function strjoin_opt_len
+
+
+    !---------------------------------------------------------------------------
+
+
+    function strsection(first, last) result(str)
+        integer, intent(in)                       :: first, last
+        character(len=strsection_len(first,last)) :: str
+        
+        if (first == 0 .and. last == 0) then
+            str = ':'
+            return
+        end if
+
+        if (first == 0) then
+            write (str,'(":",i0)') last
+            return
+        end if
+
+        if (last == 0) then
+            write (str,'(i0,":")') first
+            return
+        end if
+
+        write (str,'(i0,":",i0)') first, last
+
+    end function strsection
+
+
+    !---------------------------------------------------------------------------
+
+
+    pure function strsection_len(first, last) result(length)
+        integer             :: length
+        integer, intent(in) :: first, last
+
+        length = len(strinteger(first)) + len(strinteger(last)) + 1
+        if (first == 0) length = length - 1
+        if (last  == 0) length = length - 1
+
+    end function strsection_len
+
 
 end module string
