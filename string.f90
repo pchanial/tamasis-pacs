@@ -15,6 +15,15 @@ module string
      module procedure strjoin_trim, strjoin_opt
  end interface strjoin
 
+ interface strinteger
+     module procedure strinteger_int4, strinteger_int8
+ end interface strinteger
+
+ interface strsection
+     module procedure strsection_int4, strsection_int8
+ end interface strsection
+
+
 contains
 
  ! convert a word to lower case
@@ -102,33 +111,61 @@ contains
 
  end subroutine strsplit
 
- pure function strinteger(input)
+ pure function strinteger_int4(input) result(strinteger)
 
-  integer, intent(in)                  :: input
-  character(len=strinteger_len(input)) :: strinteger
-  character(len=80)                    :: string
+  integer*4, intent(in)                     :: input
+  character(len=strinteger_int4_len(input)) :: strinteger
+  character(len=80)                         :: string
 
   string = ' '
   write(string, '(i80)') input
   strinteger = adjustl(string)
       
- end function strinteger
+ end function strinteger_int4
 
- pure function strinteger_len(input)
+ pure function strinteger_int4_len(input) result(length)
  
-  integer, intent(in) :: input
-  integer             :: strinteger_len
+  integer*4, intent(in) :: input
+  integer               :: length
 
   if (input == 0)  then
-     strinteger_len = 1
+     length = 1
      return
   end if
 
-  strinteger_len = floor(log10(dble(abs(input))))+1
+  length = floor(log10(dble(abs(input))))+1
 
-  if (input < 0) strinteger_len = strinteger_len + 1
+  if (input < 0) length = length + 1
 
- end function strinteger_len
+ end function strinteger_int4_len
+
+ pure function strinteger_int8(input) result(strinteger)
+
+  integer*8, intent(in)                     :: input
+  character(len=strinteger_int8_len(input)) :: strinteger
+  character(len=80)                         :: string
+
+  string = ' '
+  write(string, '(i80)') input
+  strinteger = adjustl(string)
+      
+ end function strinteger_int8
+
+ pure function strinteger_int8_len(input) result(length)
+ 
+  integer*8, intent(in) :: input
+  integer               :: length
+
+  if (input == 0)  then
+     length = 1
+     return
+  end if
+
+  length = floor(log10(dble(abs(input))))+1
+
+  if (input < 0) length = length + 1
+
+ end function strinteger_int8_len
 
  pure function strjoin_trim(input)
      character(len=*), intent(in)           :: input(:)
@@ -187,9 +224,9 @@ contains
     !---------------------------------------------------------------------------
 
 
-    function strsection(first, last) result(str)
-        integer, intent(in)                       :: first, last
-        character(len=strsection_len(first,last)) :: str
+    function strsection_int4(first, last) result(str)
+        integer, intent(in)                            :: first, last
+        character(len=strsection_int4_len(first,last)) :: str
         
         if (first == 0 .and. last == 0) then
             str = ':'
@@ -208,13 +245,14 @@ contains
 
         write (str,'(i0,":",i0)') first, last
 
-    end function strsection
+    end function strsection_int4
 
 
     !---------------------------------------------------------------------------
 
 
-    pure function strsection_len(first, last) result(length)
+    ! 0 means unbound
+    pure function strsection_int4_len(first, last) result(length)
         integer             :: length
         integer, intent(in) :: first, last
 
@@ -222,7 +260,49 @@ contains
         if (first == 0) length = length - 1
         if (last  == 0) length = length - 1
 
-    end function strsection_len
+    end function strsection_int4_len
+
+
+    !---------------------------------------------------------------------------
+
+
+    function strsection_int8(first, last) result(str)
+        integer*8, intent(in)                          :: first, last
+        character(len=strsection_int8_len(first,last)) :: str
+        
+        if (first == 0 .and. last == 0) then
+            str = ':'
+            return
+        end if
+
+        if (first == 0) then
+            write (str,'(":",i0)') last
+            return
+        end if
+
+        if (last == 0) then
+            write (str,'(i0,":")') first
+            return
+        end if
+
+        write (str,'(i0,":",i0)') first, last
+
+    end function strsection_int8
+
+
+    !---------------------------------------------------------------------------
+
+
+    ! 0 means unbound
+    pure function strsection_int8_len(first, last) result(length)
+        integer               :: length
+        integer*8, intent(in) :: first, last
+
+        length = len(strinteger(first)) + len(strinteger(last)) + 1
+        if (first == 0) length = length - 1
+        if (last  == 0) length = length - 1
+
+    end function strsection_int8_len
 
 
 end module string
