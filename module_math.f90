@@ -4,6 +4,10 @@ module module_math
     implicit none
     private
 
+    public :: mInf
+    public :: pInf
+    public :: NaN
+
     public :: linspace
     public :: logspace
     public :: mad
@@ -17,7 +21,6 @@ module module_math
     public :: swap
     public :: test_real_eq
     public :: test_real_neq
-    public :: NaN
 
     interface sum_kahan
         module procedure sum_kahan_1d, sum_kahan_2d, sum_kahan_3d
@@ -25,8 +28,9 @@ module module_math
 
     !XXX should use ieee_arithmetic instead when gfortran implements it
     real(kind=p), parameter ::                                                                       &
-        NaN = transfer('1111111111111000000000000000000000000000000000000000000000000000'b, 0._dp),  &
-        Infinity = transfer('0111111111110000000000000000000000000000000000000000000000000000'b,0._dp)
+        NaN  = transfer('1111111111111000000000000000000000000000000000000000000000000000'b, 0._dp), &
+        mInf = transfer('1111111111110000000000000000000000000000000000000000000000000000'b,0._dp),  &
+        pInf = transfer('0111111111110000000000000000000000000000000000000000000000000000'b,0._dp)
 
 
 contains
