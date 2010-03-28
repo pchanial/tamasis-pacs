@@ -10,6 +10,7 @@ module string
  public :: strinteger
  public :: strjoin
  public :: strsection
+ public :: strternary
 
  interface strjoin
      module procedure strjoin_trim, strjoin_opt
@@ -303,6 +304,40 @@ contains
         if (last  == 0) length = length - 1
 
     end function strsection_int8_len
+
+
+    !---------------------------------------------------------------------------
+
+
+    function strternary(condition, str_true, str_false)
+        logical, intent(in)          :: condition
+        character(len=*), intent(in) :: str_true, str_false
+        character(len=strternary_len(condition,str_true,str_false)):: strternary
+
+        if (condition) then
+            strternary = str_true
+        else
+            strternary = str_false
+        end if
+
+    end function strternary
+
+
+    !---------------------------------------------------------------------------
+
+
+    pure function strternary_len(condition, str_true, str_false)
+        integer                      :: strternary_len
+        character(len=*), intent(in) :: str_true, str_false
+        logical, intent(in)          :: condition
+
+        if (condition) then
+            strternary_len = len(str_true)
+        else
+            strternary_len = len(str_false)
+        end if
+
+    end function strternary_len
 
 
 end module string
