@@ -24,8 +24,9 @@ module module_math
     end interface sum_kahan
 
     !XXX should use ieee_arithmetic instead when gfortran implements it
-    real(kind=p), parameter :: NaN = &
-        transfer('1111111111111000000000000000000000000000000000000000000000000000'b, 0._dp)
+    real(kind=p), parameter ::                                                                       &
+        NaN = transfer('1111111111111000000000000000000000000000000000000000000000000000'b, 0._dp),  &
+        Infinity = transfer('0111111111110000000000000000000000000000000000000000000000000000'b,0._dp)
 
 
 contains
