@@ -4,7 +4,7 @@ module module_fitstools
     use ISO_FORTRAN_ENV, only : ERROR_UNIT, OUTPUT_UNIT
     use module_cfitsio
     use precision,       only : dp
-    use string,          only : strlowcase, strsection, strupcase
+    use string,          only : strinteger, strlowcase, strsection, strupcase
     implicit none
     private
 
@@ -1145,14 +1145,12 @@ contains
 
 
     subroutine ft_header2str(filename, header, status)
-        character(len=*), intent(in)      :: filename
-        character(len=28800), intent(out) :: header
-        integer, intent(out)              :: status
-
-        integer(kind=C_INT)               :: fits_status
-        character(len=28800), pointer     :: f_header
-        type(C_PTR)                       :: fptr, c_header
-        integer                           :: nkeyrec
+        character(len=*), intent(in)        :: filename
+        character(len=*), intent(out)       :: header
+        integer, intent(out)                :: status
+        character(len=len(header)), pointer :: f_header
+        type(C_PTR)                         :: fptr, c_header
+        integer                             :: nkeyrec
 
         status = 0
         call fits_open_file(fptr, filename // C_NULL_CHAR, CFITSIO_READONLY, status)
@@ -1167,8 +1165,9 @@ contains
         ! check we can hold the header in memory
         if (nkeyrec*80 > len(f_header)) then
             status = 1
-            write (ERROR_UNIT,'(a)') "FT_HEADER2STR: The FITS file header in '"&
-                // trim(filename) // "' is too large."
+            write (ERROR_UNIT,'(a)') "FT_HEADER2STR: The argument cannot store &
+                &the FITS header of file '" // trim(filename) // "'. The length&
+                & should be at least equal to '"//strinteger(nkeyrec*80)//"'."
             return
         end if
 

@@ -1,12 +1,12 @@
 program test_fitstools
-
     use module_fitstools
     implicit none
 
     character(len=*), parameter :: filename_header = 'tests/csh_header_ngc6946.fits'
 
     integer                     :: count, status
-    character(len=28800)        :: header
+    character(len=2880)         :: header
+    character(len=160)          :: header_too_small
     real*8                      :: image(10,15)
     logical                     :: bvalue
     integer*4                   :: ivalue
@@ -15,6 +15,9 @@ program test_fitstools
     character(len=70)           :: cvalue
 
     ! test extraction of header in FITS file
+    call ft_header2str(filename_header, header_too_small, status=status)
+    if (status == 0) stop 'FAILED: ft_header2str'
+
     call ft_header2str(filename_header, header, status=status)
     if (status /= 0) stop 'FAILED: ft_header2str'
 
