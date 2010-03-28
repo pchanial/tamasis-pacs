@@ -5,8 +5,8 @@ program test_fitstools
 
     character(len=*), parameter :: filename_header = 'tests/csh_header_ngc6946.fits'
 
-    integer                     :: count, status, nx, ny
-    character(len=2880)         :: header
+    integer                     :: count, status
+    character(len=28800)        :: header
     real*8                      :: image(10,15)
     logical                     :: bvalue
     integer*4                   :: ivalue

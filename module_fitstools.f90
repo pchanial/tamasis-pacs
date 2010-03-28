@@ -1,8 +1,10 @@
 module module_fitstools
 
-    use, intrinsic :: ISO_C_BINDING
-    use, intrinsic :: ISO_FORTRAN_ENV, only : ERROR_UNIT, OUTPUT_UNIT
-    use            :: module_cfitsio
+    use ISO_C_BINDING
+    use ISO_FORTRAN_ENV, only : ERROR_UNIT, OUTPUT_UNIT
+    use module_cfitsio
+    use precision,       only : dp
+    use string,          only : strlowcase, strsection, strupcase
     implicit none
     private
 
@@ -30,13 +32,20 @@ module module_fitstools
     integer, private, parameter :: BUFFERSIZE = 1024
 
     interface ft_read_column
-        module procedure ft_read_column_character, ft_read_column_int4,        &
-                         ft_read_column_int8, ft_read_column_double
+        module procedure ft_read_column_character_filename,                    &
+                         ft_read_column_character_unit,                        &
+                         ft_read_column_int4_filename,                         &
+                         ft_read_column_int4_unit,                             &
+                         ft_read_column_int8_filename,                         &
+                         ft_read_column_int8_unit,                             &
+                         ft_read_column_double_filename,                       &
+                         ft_read_column_double_unit
     end interface ft_read_column
 
     interface ft_readextension
-        module procedure readext_logical_1d, readext_int8_1d, readext_double_1d, &
-                         readext_logical_2d, readext_double_2d,                   &
+        module procedure readext_logical_1d, readext_int8_1d,                  &
+                         readext_double_1d,                                    &
+                         readext_logical_2d, readext_double_2d,                &
                          readext_logical_3d, readext_double_3d
     end interface ft_readextension
 
@@ -61,15 +70,48 @@ module module_fitstools
 contains
 
 
-    subroutine ft_read_column_character(unit, colname, data, status)
-        use precision, only : dp
+    subroutine ft_read_column_character_filename(filename, colname, data,status)
+        character(len=*), intent(in)               :: filename
+        character(len=*), intent(in)               :: colname
+        character(len=*), allocatable, intent(out) :: data(:)
+        integer, intent(out)                       :: status
+        integer :: status_close, nrecords, unit
+        
+        call ft_open_bintable(filename, unit, nrecords, status)
+        if (status /= 0) return
+        
+        allocate(data(nrecords))
+        call ft_read_column_character_unit(unit, colname, 1, nrecords, data,   &
+                                           status)
+        
+        call ft_close(unit, status_close)
+        if (status == 0) status = status_close
+
+    end subroutine ft_read_column_character_filename
+
+
+    !---------------------------------------------------------------------------
+
+
+    subroutine ft_read_column_character_unit(unit, colname, first, last, data, &
+                                             status)
         integer, intent(in)           :: unit
         character(len=*), intent(in)  :: colname
+        integer, intent(in)           :: first, last
         character(len=*), intent(out) :: data(:)
         integer, intent(out)          :: status
         logical                       :: anyf   ! set to true if undef values
         integer                       :: colnum
 
+        ! parameter check
+        if (size(data) /= last-first+1) then
+            status = 1
+            write (ERROR_UNIT,'(a,i0,a)') "FT_READ_COLUMN: Output array has a s&
+                &ize '", size(data), "' incompatible with the specified range '&
+                &[" // strsection(first, last) // "]'."
+            return
+        end if
+
         status = 0
 
         ! get column number
@@ -77,24 +119,55 @@ contains
         if (ft_checkerror_cfitsio(status)) return
 
         ! extract column
-        call ftgcvs(unit, colnum, 1, 1, size(data), '', data, anyf, status)
+        call ftgcvs(unit, colnum, 1, first, last, '', data, anyf, status)
         if (ft_checkerror_cfitsio(status)) return
 
-    end subroutine ft_read_column_character
+    end subroutine ft_read_column_character_unit
 
 
     !---------------------------------------------------------------------------
 
 
-    subroutine ft_read_column_int4(unit, colname, data, status)
-        use precision, only : dp
+    subroutine ft_read_column_int4_filename(filename, colname, data, status)
+        character(len=*), intent(in)        :: filename
+        character(len=*), intent(in)        :: colname
+        integer*4, allocatable, intent(out) :: data(:)
+        integer, intent(out)                :: status
+        integer                             :: status_close, nrecords, unit
+        
+        call ft_open_bintable(filename, unit, nrecords, status)
+        if (status /= 0) return
+        
+        allocate(data(nrecords))
+        call ft_read_column_int4_unit(unit, colname, 1, nrecords, data, status)
+        
+        call ft_close(unit, status_close)
+        if (status == 0) status = status_close
+
+    end subroutine ft_read_column_int4_filename
+
+
+    !---------------------------------------------------------------------------
+
+
+    subroutine ft_read_column_int4_unit(unit, colname, first, last, data,status)
         integer, intent(in)          :: unit
         character(len=*), intent(in) :: colname
+        integer, intent(in)          :: first, last
         integer*4, intent(out)       :: data(:)
         integer, intent(out)         :: status
         logical                      :: anyf   ! set to true if undef values
         integer                      :: colnum
 
+        ! parameter check
+        if (size(data) /= last-first+1) then
+            status = 1
+            write (ERROR_UNIT,'(a,i0,a)') "FT_READ_COLUMN: Output array has a s&
+                &ize '", size(data), "' incompatible with the specified range '&
+                &[" // strsection(first, last) // "]'."
+            return
+        end if
+
         status = 0
 
         ! get column number
@@ -102,24 +175,55 @@ contains
         if (ft_checkerror_cfitsio(status)) return
 
         ! extract column
-        call ftgcvj(unit, colnum, 1, 1, size(data), nullval, data, anyf, status)
+        call ftgcvj(unit, colnum, 1, first, last, nullval, data, anyf, status)
         if (ft_checkerror_cfitsio(status)) return
 
-    end subroutine ft_read_column_int4
+    end subroutine ft_read_column_int4_unit
 
 
     !---------------------------------------------------------------------------
 
 
-    subroutine ft_read_column_int8(unit, colname, data, status)
-        use precision, only : dp
+    subroutine ft_read_column_int8_filename(filename, colname, data, status)
+        character(len=*), intent(in)        :: filename
+        character(len=*), intent(in)        :: colname
+        integer*8, allocatable, intent(out) :: data(:)
+        integer, intent(out)                :: status
+        integer                             :: status_close, nrecords, unit
+        
+        call ft_open_bintable(filename, unit, nrecords, status)
+        if (status /= 0) return
+        
+        allocate(data(nrecords))
+        call ft_read_column_int8_unit(unit, colname, 1, nrecords, data, status)
+        
+        call ft_close(unit, status_close)
+        if (status == 0) status = status_close
+
+    end subroutine ft_read_column_int8_filename
+
+
+    !---------------------------------------------------------------------------
+
+
+    subroutine ft_read_column_int8_unit(unit, colname, first, last, data,status)
         integer, intent(in)          :: unit
         character(len=*), intent(in) :: colname
+        integer, intent(in)          :: first, last
         integer*8, intent(out)       :: data(:)
         integer, intent(out)         :: status
         logical                      :: anyf   ! set to true if undef values
         integer                      :: colnum
 
+        ! parameter check
+        if (size(data) /= last-first+1) then
+            status = 1
+            write (ERROR_UNIT,'(a,i0,a)') "FT_READ_COLUMN: Output array has a s&
+                &ize '", size(data), "' incompatible with the specified range '&
+                &[" // strsection(first, last) // "]'."
+            return
+        end if
+
         status = 0
 
         ! get column number
@@ -127,23 +231,55 @@ contains
         if (ft_checkerror_cfitsio(status)) return
 
         ! extract column
-        call ftgcvk(unit, colnum, 1, 1, size(data), nullval, data, anyf, status)
+        call ftgcvk(unit, colnum, 1, first, last, nullval, data, anyf, status)
         if (ft_checkerror_cfitsio(status)) return
 
-    end subroutine ft_read_column_int8
+    end subroutine ft_read_column_int8_unit
 
 
     !---------------------------------------------------------------------------
 
 
-    subroutine ft_read_column_double(unit, colname, data, status)
-        use precision, only : dp
+    subroutine ft_read_column_double_filename(filename, colname, data, status)
+        character(len=*), intent(in)     :: filename
+        character(len=*), intent(in)     :: colname
+        real*8, allocatable, intent(out) :: data(:)
+        integer, intent(out)             :: status
+        integer                          :: status_close, nrecords, unit
+        
+        call ft_open_bintable(filename, unit, nrecords, status)
+        if (status /= 0) return
+        
+        allocate(data(nrecords))
+        call ft_read_column_double_unit(unit, colname, 1, nrecords, data,status)
+        
+        call ft_close(unit, status_close)
+        if (status == 0) status = status_close
+
+    end subroutine ft_read_column_double_filename
+
+
+    !---------------------------------------------------------------------------
+
+
+    subroutine ft_read_column_double_unit(unit, colname, first, last, data,    &
+                                          status)
         integer, intent(in)          :: unit
         character(len=*), intent(in) :: colname
+        integer, intent(in)          :: first, last
         real(kind=dp), intent(out)   :: data(:)
         integer, intent(out)         :: status
         logical                      :: anyf   ! set to true if undef values
         integer                      :: colnum
+
+        ! parameter check
+        if (size(data) /= last-first+1) then
+            status = 1
+            write (ERROR_UNIT,'(a,i0,a)') "FT_READ_COLUMN: Output array has a s&
+                &ize '", size(data), "' incompatible with the specified range '&
+                &[" // strsection(first, last) // "]'."
+            return
+        end if
 
         status = 0
 
@@ -152,10 +288,10 @@ contains
         if (ft_checkerror_cfitsio(status)) return
 
         ! extract column
-        call ftgcvd(unit, colnum, 1, 1, size(data), nullval, data, anyf, status)
+        call ftgcvd(unit, colnum, 1, first, last, nullval, data, anyf, status)
         if (ft_checkerror_cfitsio(status)) return
 
-    end subroutine ft_read_column_double
+    end subroutine ft_read_column_double_unit
 
 
     !---------------------------------------------------------------------------
@@ -168,20 +304,21 @@ contains
         integer, intent(out)                :: status
         integer, optional, intent(in)       :: hdu
 
-        integer                             :: unit, firstpix, anynull
+        integer                             :: unit, anynull, status_close
         integer, allocatable                :: imageshape(:)
 
         call ft_open_image(filename, unit, 1, imageshape, status, hdu=hdu)
         if (status /= 0) return
 
         !  Initialize variables
-        firstpix=1
         allocate(output(imageshape(1)))
 
-        call ftgpvb(unit, GROUP, firstpix, imageshape(1), NULLVAL, output, anynull, status)
-        if (ft_checkerror_cfitsio(status, filename)) return
+        call ftgpvb(unit, GROUP, 1, imageshape(1), NULLVAL, output, anynull,   &
+                    status)
+        if (ft_checkerror_cfitsio(status, filename)) continue
 
-        call ft_close(unit, status)
+        call ft_close(unit, status_close)
+        if (status == 0) status = status_close
 
     end subroutine readext_logical_1d
 
@@ -196,20 +333,21 @@ contains
         integer, intent(out)                :: status
         integer, optional, intent(in)       :: hdu
 
-        integer                             :: unit, firstpix, anynull
+        integer                             :: unit, anynull, status_close
         integer, allocatable                :: imageshape(:)
 
         call ft_open_image(filename, unit, 1, imageshape, status, hdu=hdu)
         if (status /= 0) return
 
         !  Initialize variables
-        firstpix=1
         allocate(output(imageshape(1)))
 
-        call ftgpvk(unit, GROUP, firstpix, imageshape(1), NULLVAL, output, anynull, status)
-        if (ft_checkerror_cfitsio(status, filename)) return
+        call ftgpvk(unit, GROUP, 1, imageshape(1), NULLVAL, output, anynull,   &
+                    status)
+        if (ft_checkerror_cfitsio(status, filename)) continue
 
-        call ft_close(unit, status)
+        call ft_close(unit, status_close)
+        if (status == 0) status = status_close
 
     end subroutine readext_int8_1d
 
@@ -224,20 +362,21 @@ contains
         integer, intent(out)             :: status
         integer, optional, intent(in)    :: hdu
 
-        integer                          :: unit, firstpix, anynull
+        integer                          :: unit, anynull, status_close
         integer, allocatable             :: imageshape(:)
 
         call ft_open_image(filename, unit, 1, imageshape, status, hdu=hdu)
         if (status /= 0) return
 
         !  Initialize variables
-        firstpix=1
         allocate(output(imageshape(1)))
 
-        call ftgpvd(unit, GROUP, firstpix, imageshape(1), NULLVAL, output, anynull, status)
-        if (ft_checkerror_cfitsio(status, filename)) return
+        call ftgpvd(unit, GROUP, 1, imageshape(1), NULLVAL, output, anynull,   &
+                    status)
+        if (ft_checkerror_cfitsio(status, filename)) continue
 
-        call ft_close(unit, status)
+        call ft_close(unit, status_close)
+        if (status == 0) status = status_close
 
     end subroutine readext_double_1d
 
@@ -252,7 +391,8 @@ contains
         logical*1, allocatable, intent(out) :: output(:,:)
         integer, optional, intent(in)       :: hdu
 
-        integer                             :: unit, BUFFERSIZE, firstpix, anynull, j
+        integer                             :: unit, firstpix, anynull, j,     &
+                                               status_close
         integer, allocatable                :: imageshape(:)
 
         call ft_open_image(filename, unit, 2, imageshape, status, hdu=hdu)
@@ -260,19 +400,20 @@ contains
 
         ! Initialize variables
         firstpix=1
-        BUFFERSIZE = imageshape(1)
         allocate(output(imageshape(1), imageshape(2)))
 
         do j = 1, imageshape(2)
 
-           call ftgpvb(unit, GROUP, firstpix, BUFFERSIZE, NULLVAL, output(:, j), anynull, status)
-           if (ft_checkerror_cfitsio(status, filename)) return
+           call ftgpvb(unit, GROUP, firstpix, imageshape(1), NULLVAL,          &
+                       output(:, j), anynull, status)
+           if (ft_checkerror_cfitsio(status, filename)) go to 999
 
-           firstpix = firstpix + BUFFERSIZE
+           firstpix = firstpix + imageshape(1)
 
         end do
 
-        call ft_close(unit, status)
+    999 call ft_close(unit, status_close)
+        if (status == 0) status = status_close
 
     end subroutine readext_logical_2d
 
@@ -287,7 +428,8 @@ contains
         integer, intent(out)             :: status
         integer, optional, intent(in)    :: hdu
 
-        integer                          :: unit, BUFFERSIZE, firstpix, anynull, j
+        integer                          :: unit, firstpix, anynull, j,        &
+                                            status_close
         integer, allocatable             :: imageshape(:)
     
         call ft_open_image(filename, unit, 2, imageshape, status, hdu=hdu)
@@ -295,19 +437,20 @@ contains
 
         !  Initialize variables
         firstpix=1
-        BUFFERSIZE = imageshape(1)
         allocate(output(imageshape(1),imageshape(2)))
 
         do j = 1, imageshape(2)
     
-            call ftgpvd(unit, GROUP, firstpix, BUFFERSIZE, NULLVAL, output(:,j), anynull, status)
-            if (ft_checkerror_cfitsio(status, filename)) return
+            call ftgpvd(unit, GROUP, firstpix, imageshape(1), NULLVAL,         &
+                        output(:,j), anynull, status)
+            if (ft_checkerror_cfitsio(status, filename)) go to 999
 
-            firstpix = firstpix + BUFFERSIZE
+            firstpix = firstpix + imageshape(1)
 
         end do
 
-        call ft_close(unit, status)
+    999 call ft_close(unit, status_close)
+        if (status == 0) status = status_close
 
     end subroutine readext_double_2d
 
@@ -321,7 +464,8 @@ contains
         logical*1, allocatable, intent(out) :: output(:,:,:)
         integer, intent(out)                :: status
 
-        integer                             :: unit, BUFFERSIZE, firstpix, anynull, j, k
+        integer                             :: unit, firstpix, anynull, j, k,  &
+                                               status_close
         integer, allocatable                :: imageshape(:)
 
         call ft_open_image(filename, unit, 3, imageshape, status)
@@ -329,13 +473,13 @@ contains
 
         !  Initialize variables
         firstpix = 1
-        BUFFERSIZE = imageshape(1)
         allocate(output(imageshape(1), imageshape(2), imageshape(3)))
 
         outer: do k = 1, imageshape(3)
             do j = 1, imageshape(2)
 
-                call ftgpvb(unit, GROUP, firstpix, BUFFERSIZE, NULLVAL, output(:,j,k), anynull, status)
+                call ftgpvb(unit, GROUP, firstpix, imageshape(1), NULLVAL,     &
+                            output(:,j,k), anynull, status)
                 if (ft_checkerror_cfitsio(status, filename)) exit outer
 
                 firstpix = firstpix + BUFFERSIZE
@@ -343,7 +487,8 @@ contains
             end do
         end do outer
 
-        call ft_close(unit, status)
+        call ft_close(unit, status_close)
+        if (status == 0) status = status_close
 
     end subroutine readext_logical_3d
 
@@ -357,7 +502,8 @@ contains
         real*8, allocatable, intent(out) :: output(:,:,:)
         integer, intent(out)             :: status
 
-        integer                          :: unit, BUFFERSIZE, firstpix, anynull, j, k
+        integer                          :: unit, firstpix, anynull, j, k,     &
+                                            status_close
         integer, allocatable             :: imageshape(:)
 
         call ft_open_image(filename, unit, 3, imageshape, status)
@@ -365,23 +511,24 @@ contains
 
         !  Initialize variables
         firstpix = 1
-        BUFFERSIZE = imageshape(1)
         allocate(output(imageshape(1), imageshape(2), imageshape(3)))
 
         outer: do k = 1, imageshape(3)
 
             do j = 1, imageshape(2)
 
-                call ftgpvd(unit, GROUP, firstpix, BUFFERSIZE, NULLVAL, output(:,j,k), anynull, status)
+                call ftgpvd(unit, GROUP, firstpix, imageshape(1), NULLVAL,     &
+                            output(:,j,k), anynull, status)
                 if (ft_checkerror_cfitsio(status, filename)) exit outer
 
-                firstpix = firstpix + BUFFERSIZE
+                firstpix = firstpix + imageshape(1)
 
             end do
 
         end do outer
 
-        call ft_close(unit, status)
+        call ft_close(unit, status_close)
+        if (status == 0) status = status_close
 
     end subroutine readext_double_3d
 
@@ -395,14 +542,13 @@ contains
         integer*8, intent(in)        :: x1, x2
         logical*1, intent(inout)     :: array(x2 - x1 + 1)
         integer, intent(out)         :: status
-
-        integer                      :: unit
+        integer                      :: unit, status_close
 
         call ft_open(filename, unit, status)
         if (status /= 0) return
         call readslice_logical_unit(unit, x1, x2, array, status)
-        if (status /= 0) return
-        call ft_close(unit, status)
+        call ft_close(unit, status_close)
+        if (status == 0) status = status_close
 
     end subroutine readslice_logical_filename
 
@@ -416,7 +562,6 @@ contains
         integer*8, intent(in)    :: x1, x2
         logical*1, intent(inout) :: array(x2 - x1 + 1)
         integer, intent(out)     :: status
-
         integer                  :: anynull
 
         status = 0
@@ -435,14 +580,13 @@ contains
         integer*8, intent(in)        :: x1, x2
         integer*4, intent(inout)     :: array(x2 - x1 + 1)
         integer, intent(out)         :: status
-
-        integer                      :: unit
+        integer                      :: unit, status_close
 
         call ft_open(filename, unit, status)
         if (status /= 0) return
         call readslice_int4_unit(unit, x1, x2, array, status)
-        if (status /= 0) return
-        call ft_close(unit, status)
+        call ft_close(unit, status_close)
+        if (status == 0) status = status_close
 
     end subroutine readslice_int4_filename
 
@@ -456,7 +600,6 @@ contains
         integer*8, intent(in)    :: x1, x2
         integer*4, intent(inout) :: array(x2 - x1 + 1)
         integer, intent(out)     :: status
-
         integer                  :: anynull
 
         status = 0
@@ -475,14 +618,13 @@ contains
         integer*8, intent(in)        :: x1, x2
         integer*8, intent(inout)     :: array(x2 - x1 + 1)
         integer, intent(out)         :: status
-
-        integer                      :: unit
+        integer                      :: unit, status_close
 
         call ft_open(filename, unit, status)
         if (status /= 0) return
         call readslice_int8_unit(unit, x1, x2, array, status)
-        if (status /= 0) return
-        call ft_close(unit, status)
+        call ft_close(unit, status_close)
+        if (status == 0) status = status_close
 
     end subroutine readslice_int8_filename
 
@@ -496,7 +638,6 @@ contains
         integer*8, intent(in)    :: x1, x2
         integer*8, intent(inout) :: array(x2 - x1 + 1)
         integer, intent(out)     :: status
-
         integer                  :: anynull
 
         status = 0
@@ -515,14 +656,13 @@ contains
         integer*8, intent(in)        :: x1, x2
         real*8, intent(inout)        :: array(x2 - x1 + 1)
         integer, intent(out)         :: status
-
-        integer                      :: unit
+        integer                      :: unit, status_close
 
         call ft_open(filename, unit, status)
         if (status /= 0) return
         call readslice_double_unit(unit, x1, x2, array, status)
-        if (status /= 0) return
-        call ft_close(unit, status)
+        call ft_close(unit, status_close)
+        if (status == 0) status = status_close
 
     end subroutine readslice_double_filename
 
@@ -536,7 +676,6 @@ contains
         integer*8, intent(in)  :: x1, x2
         real*8, intent(inout)  :: array(x2 - x1 + 1)
         integer, intent(out)   :: status
-
         integer                :: anynull
 
         status = 0
@@ -557,7 +696,6 @@ contains
         integer, intent(in)      :: naxes(3)
         logical*1, intent(inout) :: array(x2 - x1 + 1)
         integer, intent(out)     :: status
-
         integer                  :: anynull
         integer*8                :: firstpix
 
@@ -580,7 +718,6 @@ contains
         integer, intent(in)      :: naxes(3)
         integer*4, intent(inout) :: array(x2 - x1 + 1)
         integer, intent(out)     :: status
-
         integer                  :: anynull
         integer*8                :: firstpix
 
@@ -603,7 +740,6 @@ contains
         integer, intent(in)      :: naxes(3)
         integer*8, intent(inout) :: array(x2 - x1 + 1)
         integer, intent(out)     :: status
-
         integer                  :: anynull
         integer*8                :: firstpix
 
@@ -626,7 +762,6 @@ contains
         integer, intent(in)   :: naxes(3)
         real*8, intent(inout) :: array(x2 - x1 + 1)
         integer, intent(out)  :: status
-
         integer               :: anynull
         integer*8             :: firstpix
 
@@ -647,8 +782,9 @@ contains
         logical                      :: ft_test_extension
         character(len=*), intent(in) :: filename
         integer                      :: unit
-        logical                      :: junk
         integer                      :: status, status_close
+
+        ft_test_extension = .false.
 
         ! get an unused logical unit number for the FITS file
         status = 0
@@ -661,7 +797,7 @@ contains
         if (status == 301) then
             status = 0
         else
-            junk = ft_checkerror_cfitsio(status, filename)
+            if (ft_checkerror_cfitsio(status, filename)) continue
         end if
 
         ! close logical unit
@@ -675,9 +811,10 @@ contains
 
 
     subroutine ft_open(filename, unit, status)
-        character(len=*), intent(in)      :: filename
-        integer, intent(out)              :: unit
-        integer, intent(out)              :: status
+        character(len=*), intent(in) :: filename
+        integer, intent(out)         :: unit
+        integer, intent(out)         :: status
+        integer                      :: status_close
 
         status = 0
 
@@ -685,10 +822,11 @@ contains
         call ftgiou(unit, status)
         if (ft_checkerror_cfitsio(status, filename)) return
 
-
         ! open the fits file and move to the specified extension
         call ftnopn(unit, filename, CFITSIO_READONLY, status)
-        if (ft_checkerror_cfitsio(status, filename)) return
+        if (ft_checkerror_cfitsio(status, filename)) then
+            call ft_close(unit, status_close)
+        end if
 
     end subroutine ft_open
 
@@ -705,7 +843,7 @@ contains
         integer, intent(in), optional     :: hdu
 
         integer                           :: nfound, hdutype, blocksize
-        integer                           :: imageshape_(8)
+        integer                           :: imageshape_(8), status_close
 
         status = 0
 
@@ -717,14 +855,14 @@ contains
 
             ! open the fits file and point to the primary header
             call ftopen(unit, filename, CFITSIO_READONLY, blocksize, status)
-            if (ft_checkerror_cfitsio(status, filename)) return
+            if (ft_checkerror_cfitsio(status, filename)) go to 999
 
             ! move to the specified HDU
             call ftmahd(unit, hdu, hdutype, status)
             if (status == 0 .and. hdutype /= CFITSIO_IMAGE_HDU) then
                 write (ERROR_UNIT,'(a,i0,a)') "HDU type is not an image: ", hdutype, "."
                 status = 1
-                return
+                go to 999
             endif
 
         else
@@ -732,24 +870,27 @@ contains
             ! open the fits file and move to the HDU specified in the filename
             ! otherwise, move to the first image in FITS file
             call ftiopn(unit, filename, CFITSIO_READONLY, status)
-            if (ft_checkerror_cfitsio(status, filename)) return
+            if (ft_checkerror_cfitsio(status, filename)) go to 999
 
         end if
 
         !  Determine the size of the image.
         call ftgknj(unit, 'NAXIS', 1, size(imageshape_), imageshape_, nfound, status)
-        if (ft_checkerror_cfitsio(status, filename)) return
+        if (ft_checkerror_cfitsio(status, filename)) go to 999
 
         !  Check that it found the NAXISn keywords.
         if (nfound /= imagerank) then
             write (ERROR_UNIT, '(a)') 'FT_OPEN_IMAGE: Incompatible NAXISn keywords.'
             status = 1
-            return
+            go to 999
         end if
 
         if (allocated(imageshape)) deallocate(imageshape)
         allocate(imageshape(imagerank))
         imageshape = imageshape_(1:imagerank)
+        return
+
+    999 call ft_close(unit, status_close)
 
     end subroutine ft_open_image
 
@@ -757,13 +898,13 @@ contains
     !---------------------------------------------------------------------------
 
 
-    subroutine ft_open_bintable(filename, unit, ncolumns, nrecords, status)
+    subroutine ft_open_bintable(filename, unit, nrecords, status)
         character(len=*), intent(in) :: filename
-        integer, intent(out)         :: unit, ncolumns, nrecords
+        integer, intent(out)         :: unit, nrecords
         integer, intent(out)         :: status
 
         integer                      :: naxes(8)
-        integer                      :: nfound
+        integer                      :: nfound, ncolumns, status_close
 
         status = 0
 
@@ -773,21 +914,24 @@ contains
 
         ! open the fits file and move to the specified extension
         call fttopn(unit, filename, CFITSIO_READONLY, status)
-        if (ft_checkerror_cfitsio(status, filename)) return
+        if (ft_checkerror_cfitsio(status, filename)) go to 999
 
         !  Determine the size of the image.
         call ftgknj(unit, 'NAXIS', 1, size(naxes), naxes, nfound, status)
-        if (ft_checkerror_cfitsio(status, filename)) return
+        if (ft_checkerror_cfitsio(status, filename)) go to 999
 
         !  Check that it found the NAXISn keywords.
         if (nfound /= 2) then
             write (ERROR_UNIT, '(a)') 'FT_OPEN_BINTABLE: Incompatible NAXISn keywords.'
             status = 1
-            return
+            go to 999
         end if
 
         ncolumns = naxes(1)
         nrecords = naxes(2)
+        return
+
+    999 call ft_close(unit, status_close)
 
     end subroutine ft_open_bintable
 
@@ -799,14 +943,17 @@ contains
 
         integer, intent(in)  :: unit
         integer, intent(out) :: status
+        integer              :: status_release
 
         !  The FITS file must always be closed before exiting the program.
         !  Any unit numbers allocated with FTGIOU must be freed with FTFIOU.
         status = 0
         call ftclos(unit, status)
-        if (ft_checkerror_cfitsio(status)) return
-        call ftfiou(unit, status)
-        if (ft_checkerror_cfitsio(status)) return
+        if (ft_checkerror_cfitsio(status)) continue
+        status_release = 0
+        call ftfiou(unit, status_release)
+        if (ft_checkerror_cfitsio(status_release) .and. status == 0)           &
+            status = status_release
 
     end subroutine ft_close
 
@@ -853,8 +1000,8 @@ contains
         real*8, intent(in)              :: data(:)
         character(len=*), intent(in), optional :: header
         integer, intent(out)            :: status
-
-        integer                         :: irec, unit, blocksize, bitpix, naxis, naxes(1)
+        integer                         :: irec, unit, blocksize, bitpix,      &
+                                           naxis, naxes(1), status_close
         logical                         :: simple, extend
 
         ! delete file if it exists
@@ -867,30 +1014,30 @@ contains
         if (ft_checkerror_cfitsio(status, filename)) return
 
         call ftinit(unit, filename, blocksize, status)
-        if (ft_checkerror_cfitsio(status, filename)) return
+        if (ft_checkerror_cfitsio(status, filename)) go to 999
         simple = .true.
         bitpix = -64
         naxis  = 1
         naxes  = [ size(data) ]
         extend = .true.
         call FTPHPR(unit,simple,bitpix,naxis,naxes,0,1,extend,status)
-        if (ft_checkerror_cfitsio(status, filename)) return
+        if (ft_checkerror_cfitsio(status, filename)) go to 999
 
         ! write the astrometry keywords
         if (present(header)) then
             do irec=1, len(header) / 80
                 call FTPREC(unit,header((irec-1)*80+1:irec*80), status)
             end do
-            if (ft_checkerror_cfitsio(status, filename)) return
+            if (ft_checkerror_cfitsio(status, filename)) go to 999
         end if
 
         ! write the image data
         call FTPPRD(unit, GROUP, 1, size(data), data, status)
-        if (ft_checkerror_cfitsio(status, filename)) return
+        if (ft_checkerror_cfitsio(status, filename)) go to 999
 
         ! close the fits file
-        call ft_close(unit, status)
-        if (ft_checkerror_cfitsio(status, filename)) return
+    999 call ft_close(unit, status_close)
+        if (status == 0) status = status_close
 
     end subroutine writefits_double_1d
 
@@ -903,8 +1050,8 @@ contains
         real*8, intent(in)              :: data(:,:)
         character(len=*), intent(in), optional :: header
         integer, intent(out)            :: status
-
-        integer                         :: irec, unit, blocksize, bitpix, naxis, naxes(2)
+        integer                         :: irec, unit, blocksize, bitpix,      &
+                                           naxis, naxes(2), status_close
         logical                         :: simple, extend
 
         ! delete file if it exists
@@ -917,30 +1064,30 @@ contains
         if (ft_checkerror_cfitsio(status, filename)) return
 
         call ftinit(unit, filename, blocksize, status)
-        if (ft_checkerror_cfitsio(status, filename)) return
+        if (ft_checkerror_cfitsio(status, filename)) go to 999
         simple = .true.
         bitpix = -64
         naxis  = 2
         naxes  = [size(data,1), size(data,2)]
         extend = .true.
         call FTPHPR(unit,simple,bitpix,naxis,naxes,0,1,extend,status)
-        if (ft_checkerror_cfitsio(status, filename)) return
+        if (ft_checkerror_cfitsio(status, filename)) go to 999
 
         ! write the astrometry keywords
         if (present(header)) then
             do irec=1, len(header) / 80
                 call FTPREC(unit,header((irec-1)*80+1:irec*80), status)
             end do
-            if (ft_checkerror_cfitsio(status, filename)) return
+            if (ft_checkerror_cfitsio(status, filename)) go to 999
         end if
 
         ! write the image data
         call FTPPRD(unit, GROUP, 1, size(data), data, status)
-        if (ft_checkerror_cfitsio(status, filename)) return
+        if (ft_checkerror_cfitsio(status, filename)) go to 999
 
         ! close the fits file
-        call ft_close(unit, status)
-        if (ft_checkerror_cfitsio(status, filename)) return
+    999 call ft_close(unit, status_close)
+        if (status == 0) status = status_close
 
     end subroutine writefits_double_2d
 
@@ -953,8 +1100,8 @@ contains
         real*8, intent(in)              :: data(:,:,:)
         character(len=*), intent(in), optional :: header
         integer, intent(out)            :: status
-
-        integer                         :: irec, unit, blocksize, bitpix, naxis
+        integer                         :: irec, unit, blocksize, bitpix,      &
+                                           naxis, status_close
         logical                         :: simple, extend
 
         ! delete file if it exists
@@ -967,29 +1114,29 @@ contains
         if (ft_checkerror_cfitsio(status, filename)) return
 
         call ftinit(unit, filename, blocksize, status)
-        if (ft_checkerror_cfitsio(status, filename)) return
+        if (ft_checkerror_cfitsio(status, filename)) go to 999
         simple = .true.
         bitpix = -64
         naxis  = 3
         extend = .true.
         call FTPHPR(unit,simple,bitpix,naxis, shape(data),0,1,extend,status)
-        if (ft_checkerror_cfitsio(status, filename)) return
+        if (ft_checkerror_cfitsio(status, filename)) go to 999
 
         ! write the astrometry keywords
         if (present(header)) then
             do irec=1, len(header) / 80
                 call FTPREC(unit,header((irec-1)*80+1:irec*80), status)
             end do
-            if (ft_checkerror_cfitsio(status, filename)) return
+            if (ft_checkerror_cfitsio(status, filename)) go to 999
         end if
 
         ! write the image data
         call FTPPRD(unit, GROUP, 1, size(data), data, status)
-        if (ft_checkerror_cfitsio(status, filename)) return
+        if (ft_checkerror_cfitsio(status, filename)) go to 999
 
         ! close the fits file
-        call ft_close(unit, status)
-        if (ft_checkerror_cfitsio(status, filename)) return
+    999 call ft_close(unit, status_close)
+        if (status == 0) status = status_close
 
     end subroutine writefits_double_3d
 
@@ -998,35 +1145,37 @@ contains
 
 
     subroutine ft_header2str(filename, header, status)
-        use, intrinsic :: ISO_C_BINDING
-        character(len=*), intent(in)     :: filename
-        character(len=2880), intent(out) :: header
-        integer, intent(out)             :: status
+        character(len=*), intent(in)      :: filename
+        character(len=28800), intent(out) :: header
+        integer, intent(out)              :: status
 
-        integer(kind=C_INT)              :: fits_status
-        character(len=2880), pointer     :: f_header
-        type(C_PTR)                      :: fptr, c_header
-        integer                          :: nkeyrec
+        integer(kind=C_INT)               :: fits_status
+        character(len=28800), pointer     :: f_header
+        type(C_PTR)                       :: fptr, c_header
+        integer                           :: nkeyrec
 
-        fits_status = 0
+        status = 0
+        call fits_open_file(fptr, filename // C_NULL_CHAR, CFITSIO_READONLY, status)
+        if (ft_checkerror_cfitsio(status, filename)) return
 
-        call fits_open_file(fptr, filename // C_NULL_CHAR, CFITSIO_READONLY, fits_status)
-        if (fits_status /= 0) goto 999
+        call fits_hdr2str(fptr, 1, C_NULL_PTR, 0, c_header, nkeyrec, status)
+        if (ft_checkerror_cfitsio(status, filename)) return
 
-        call fits_hdr2str(fptr, 1, C_NULL_PTR, 0, c_header, nkeyrec, fits_status)
-        if (fits_status /= 0) goto 999
+        call fits_close_file(fptr, status)
+        if (ft_checkerror_cfitsio(status, filename)) return
 
-        call fits_close_file(fptr, fits_status)
-        if (fits_status /= 0) goto 999
+        ! check we can hold the header in memory
+        if (nkeyrec*80 > len(f_header)) then
+            status = 1
+            write (ERROR_UNIT,'(a)') "FT_HEADER2STR: The FITS file header in '"&
+                // trim(filename) // "' is too large."
+            return
+        end if
 
         call c_f_pointer(c_header, f_header)
         header = f_header(1:nkeyrec*80)
-        header(nkeyrec*80+1:) = ' '
         status = 0
         return
-
-    999 call cfitsio_report_error(fits_status)
-        status = fits_status
 
     end subroutine ft_header2str
 
@@ -1035,7 +1184,6 @@ contains
 
 
     subroutine ft_getparam(header, param, count, value, comment, must_exist, status)
-        use string, only : strlowcase, strupcase
         character(len=*), intent(in)   :: header
         character(len=*), intent(in)   :: param
         integer, intent(out)           :: count
