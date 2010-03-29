@@ -18,7 +18,7 @@ module module_optionparser
     implicit none
 
     integer, private, parameter :: ARGUMENT_MAX = 128
-    integer, private, parameter :: ARGUMENT_VALUE_LEN = 256
+    integer, private, parameter :: ARGUMENT_VALUE_LEN = 2048
     integer, private, parameter :: OPTION_MAX = 64
     integer, private, parameter :: OPTION_NAME_LEN = 32
     integer, private, parameter :: OPTION_DESCRIPTION_LEN = 80
@@ -58,6 +58,7 @@ module module_optionparser
         procedure, public  :: get_option_as_real
         procedure, public  :: get_option_count
         procedure, public  :: get_argument
+        procedure, public  :: get_arguments
         procedure, public  :: get_argument_count
         procedure, public  :: print_options
 
@@ -510,11 +511,11 @@ contains
 
 
     function get_argument(this, number, status) result(value)
-        class(optionparser), intent(in) :: this
-        integer, intent(in)             :: number
-        integer, intent(out), optional  :: status
-        character(len=2048)             :: value
-        integer                         :: status2, length
+        class(optionparser), intent(in)   :: this
+        integer, intent(in)               :: number
+        integer, intent(out), optional    :: status
+        character(len=ARGUMENT_VALUE_LEN) :: value
+        integer                           :: status2, length
 
         if (present(status)) status = 1
         if (number <= 0) then
@@ -540,6 +541,25 @@ contains
         if (present(status)) status = 0
 
     end function get_argument
+
+
+    !---------------------------------------------------------------------------
+
+
+    subroutine get_arguments(this, arguments, status)
+        class(optionparser), intent(in)                :: this
+        character(len=ARGUMENT_VALUE_LEN), allocatable :: arguments(:)
+        integer, intent(out), optional                 :: status
+        integer :: narguments, iargument
+
+        narguments = this%get_argument_count()
+        allocate(arguments(narguments))
+        do iargument = 1, narguments
+            arguments(iargument) = this%get_argument(iargument, status)
+            if (status /= 0) return
+        end do
+
+    end subroutine get_arguments
 
 
     !---------------------------------------------------------------------------
