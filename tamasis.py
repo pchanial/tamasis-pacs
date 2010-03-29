@@ -1,4 +1,4 @@
-import tamasisfortran as tmmf
+import tamasisfortran as tmf
 import numpy
 import scipy.sparse.linalg
     
@@ -198,19 +198,19 @@ class PacsProjectionSharpEdges(AcquisitionModel):
         self.header = pacs.header
         self.shapein = (pacs.header["naxis1"], pacs.header["naxis2"])
         self.shapeout = (pacs.nfinesamples, pacs.ndetectors) 
-        tmmf.pacs_pointing_matrix(pacs.array, pacs.pointing_time, pacs.ra, pacs.dec, pacs.pa, pacs.chop, pacs.fine_time, pacs.npixels_per_sample, pacs.ndetectors, pacs.transparent_mode, pacs.keep_bad_detectors, pacs.bad_detector_mask.astype('int8'), str(pacs.header).replace('\n', ''), self.pmatrix)
+        tmf.pacs_pointing_matrix(pacs.array, pacs.pointing_time, pacs.ra, pacs.dec, pacs.pa, pacs.chop, pacs.fine_time, pacs.npixels_per_sample, pacs.ndetectors, pacs.transparent_mode, pacs.keep_bad_detectors, pacs.bad_detector_mask.astype('int8'), str(pacs.header).replace('\n', ''), self.pmatrix)
 
     def direct(self, map2d):
         self._validate_output_direct(Tod, self._validate_input_direct(Map, map2d))
         map2d.header = self.header
         self._output_transpose = map2d
-        tmmf.pacs_projection_sharp_edges_direct(self.pmatrix, map2d, self._output_direct, self.npixels_per_sample)
+        tmf.pacs_projection_sharp_edges_direct(self.pmatrix, map2d, self._output_direct, self.npixels_per_sample)
         return self._output_direct
 
     def transpose(self, signal):
         self._validate_output_transpose(Map, self._validate_input_transpose(Tod, signal), header=self.header)
         self._output_direct = signal
-        tmmf.pacs_projection_sharp_edges_transpose(self.pmatrix, signal, self._output_transpose,  self.npixels_per_sample)
+        tmf.pacs_projection_sharp_edges_transpose(self.pmatrix, signal, self._output_transpose,  self.npixels_per_sample)
         return self._output_transpose
 
     def __str__(self):
@@ -234,13 +234,13 @@ class PacsMultiplexing(AcquisitionModel):
     def direct(self, signal):
         self._validate_output_direct(Tod, self._validate_input_direct(Tod, signal))
         self._output_transpose = signal
-        tmmf.pacs_multiplexing_direct(signal, self._output_direct, self.fine_sampling_factor, self.ij)
+        tmf.pacs_multiplexing_direct(signal, self._output_direct, self.fine_sampling_factor, self.ij)
         return self._output_direct
 
     def transpose(self, signal):
         self._validate_output_transpose(Tod, self._validate_input_transpose(Tod, signal))
         self._output_direct = signal
-        tmmf.pacs_multiplexing_transpose(signal, self._output_transpose, self.fine_sampling_factor, self.ij)
+        tmf.pacs_multiplexing_transpose(signal, self._output_transpose, self.fine_sampling_factor, self.ij)
         return self._output_transpose
 
     def _validate_shape_direct(self, shapein):
@@ -323,7 +323,7 @@ class CompressionAverage(Compression):
     Author: P. Chanial
     """
     def __init__(self, compression_factor, description=None):
-        Compression.__init__(self, tmmf.compression_average_direct, tmmf.compression_average_transpose, compression_factor, description)
+        Compression.__init__(self, tmf.compression_average_direct, tmf.compression_average_transpose, compression_factor, description)
         
 
 #-------------------------------------------------------------------------------
@@ -503,12 +503,12 @@ class PacsObservation(_Pacs):
     - ij(2,ndetectors)   : the row and column number (starting from 0) of the detectors
     Author: P. Chanial
     """
-    def __init__(self, filename, first=0, last=None, header=None, resolution=None, npixels_per_sample=9, fine_sampling_factor=1, bad_detector_mask=None, keep_bad_detectors=False):
+    def __init__(self, filename, first=0, last=0, header=None, resolution=None, npixels_per_sample=9, fine_sampling_factor=1, bad_detector_mask=None, keep_bad_detectors=False):
 
         import pyfits
 
         if last is None:
-            ntotsamples = tmmf.pacs_info_nsamples(filename)
+            ntotsamples, nobsids = tmf.pacs_info_nsamples(filename, first, last)
             print "This observation contains "+str(ntotsamples)+" samples."
             return
 
@@ -554,7 +554,7 @@ class PacsObservation(_Pacs):
         if resolution is None:
             resolution = 3.
         if header is None:
-            header = self._str2fitsheader(tmmf.pacs_map_header(array, time, ra, dec, pa, chop, fine_time, self.transparent_mode, keep_bad_detectors, self.bad_detector_mask.astype('int8'), resolution))
+            header = self._str2fitsheader(tmf.pacs_map_header(array, time, ra, dec, pa, chop, fine_time, self.transparent_mode, keep_bad_detectors, self.bad_detector_mask.astype('int8'), resolution))
 
         self.header = header
 
@@ -563,13 +563,13 @@ class PacsObservation(_Pacs):
         self.last = last
         
         #XXX REMOVE ME
-        self.ij2 = tmmf.pacs_info_ij(filename, self.ndetectors)
+        self.ij2 = tmf.pacs_info_ij(filename, self.ndetectors)
  
     def get_tod(self):
         """
         Returns the signal and mask timelines as fortran arrays.
         """
-        signal, mask = tmmf.pacs_timeline(self.filename, self.first+1, self.last, self.ndetectors, self.bad_detector_mask, self.keep_bad_detectors)
+        signal, mask = tmf.pacs_timeline(self.filename, self.first+1, self.last, self.ndetectors, self.bad_detector_mask, self.keep_bad_detectors)
 
         mask = numpy.array(mask, dtype=bool)
         if self.keep_bad_detectors:

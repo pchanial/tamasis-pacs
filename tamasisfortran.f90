@@ -58,34 +58,24 @@ end subroutine pacs_info_ij
 !-------------------------------------------------------------------------------
 
 
-subroutine pacs_info_nsamples(filename, nsamples)
-    use, intrinsic :: ISO_FORTRAN_ENV
-    use module_fitstools, only : ft_open_image, ft_close
+subroutine pacs_info_nsamples(filename, first, last, nsamples, nobsids)
+    use, intrinsic :: ISO_FORTRAN_ENV, only : ERROR_UNIT
+    use            :: module_fitstools, only : ft_open_image, ft_close
+    use            :: module_pacsinstrument, only : get_nsamples
     implicit none
 
     !f2py intent(in) filename
     !f2py intent(out) nsamples
     character(len=*), intent(in) :: filename
-    integer, intent(out)         :: nsamples
+    integer*8, intent(in)        :: first, last
+    integer*8, intent(out)       :: nsamples
+    integer, intent(out)         :: nobsids
+    integer                      :: status
 
-    integer, allocatable         :: imageshape(:)
-    integer                      :: unit, status
-
-    call ft_open_image(filename // "_Signal.fits", unit, 3, imageshape, status)
-    if (status /= 0) goto 999
-
-    call ft_close(unit, status)
-    if (status /= 0) goto 999
-
-    if (size(imageshape) == 3) then
-        nsamples = imageshape(1)
-        return
-    endif
-
-    status = 1
-    write (ERROR_UNIT, '(a)') 'Number of dimensions is not 3 in ' // filename // "_Signal.fits"
-
-999 write (ERROR_UNIT, '(a)') 'Aborting.'
+    call get_nsamples(filename, first, last, nsamples, nobsids, status)
+    if (status /= 0) then
+       write (ERROR_UNIT, '(a)') 'Aborting.'
+    end if
 
 end subroutine pacs_info_nsamples
 
@@ -95,21 +85,22 @@ end subroutine pacs_info_nsamples
 
 subroutine pacs_timeline(filename, first, last, ndetectors, bad_detector_mask, &
                          nrow, ncol, keep_bad_detectors, signal, mask)
-    use, intrinsic :: ISO_FORTRAN_ENV
-    use module_pacsinstrument
-    use module_preprocessor
+    use, intrinsic :: ISO_FORTRAN_ENV, only : ERROR_UNIT
+    use module_pacsinstrument, only : pacsinstrument
+    use module_preprocessor, only : divide_vectordim2, subtract_meandim1
     implicit none
 
     !f2py threadsafe
-    !f2py intent(in)  :: filename
-    !f2py intent(in)  :: first
-    !f2py intent(in)  :: last
-    !f2py intent(in)  :: ndetectors
-    !f2py intent(in)  :: bad_detector_mask
-    !f2py intent(hide), depend(bad_detector_mask) :: nrow = shape(bad_detector_mask,0), ncol = shape(bad_detector_mask,1)
-    !f2py intent(in)  :: keep_bad_detectors
-    !f2py intent(out) :: signal
-    !f2py intent(out) :: mask
+    !f2py intent(in)   :: filename
+    !f2py intent(in)   :: first
+    !f2py intent(in)   :: last
+    !f2py intent(in)   :: ndetectors
+    !f2py intent(in)   :: bad_detector_mask
+    !f2py intent(hide) :: nrow = shape(bad_detector_mask,0)
+    !f2py intent(hide) :: ncol = shape(bad_detector_mask,1)
+    !f2py intent(in)   :: keep_bad_detectors
+    !f2py intent(out)  :: signal
+    !f2py intent(out)  :: mask
     character(len=*), intent(in) :: filename
     integer*8, intent(in)        :: first, last
     integer, intent(in)          :: ndetectors
@@ -146,10 +137,9 @@ subroutine pacs_map_header(array, time, ra, dec, pa, chop, npointings,         &
                            keep_bad_detectors, bad_detector_mask, nrow, ncol,  &
                            resolution, header)
 
-    use, intrinsic :: ISO_FORTRAN_ENV
-    use module_fitstools
-    use module_pacsinstrument
-    use module_pacspointing
+    use, intrinsic :: ISO_FORTRAN_ENV, only : ERROR_UNIT
+    use module_pacsinstrument, only : pacsinstrument
+    use module_pacspointing, only : pacspointing
     implicit none
 
     !f2py threadsafe
@@ -165,21 +155,21 @@ subroutine pacs_map_header(array, time, ra, dec, pa, chop, npointings,         &
     !f2py intent(in)   :: resolution
     !f2py intent(out)  :: header
 
-    character(len=*), intent(in)       :: array
-    real*8, intent(in)                 :: time(npointings), ra(npointings), dec(npointings), pa(npointings), chop(npointings)
-    integer, intent(in)                :: npointings
-    real*8, intent(in)                 :: finetime(nfinesamples)
-    integer, intent(in)                :: nfinesamples
-    logical, intent(in)                :: transparent_mode
-    logical, intent(in)                :: keep_bad_detectors
-    logical*1, intent(in)              :: bad_detector_mask(nrow,ncol)
-    integer, intent(in)                :: nrow, ncol
-    real*8, intent(in)                 :: resolution
-    character(len=2880), intent(out)   :: header
+    character(len=*), intent(in)     :: array
+    real*8, intent(in)               :: time(npointings), ra(npointings), dec(npointings), pa(npointings), chop(npointings)
+    integer, intent(in)              :: npointings
+    real*8, intent(in)               :: finetime(nfinesamples)
+    integer, intent(in)              :: nfinesamples
+    logical, intent(in)              :: transparent_mode
+    logical, intent(in)              :: keep_bad_detectors
+    logical*1, intent(in)            :: bad_detector_mask(nrow,ncol)
+    integer, intent(in)              :: nrow, ncol
+    real*8, intent(in)               :: resolution
+    character(len=2880), intent(out) :: header
 
-    type(pacsinstrument)               :: pacs
-    type(pacspointing)                 :: pointing
-    integer                            :: status
+    type(pacsinstrument)             :: pacs
+    type(pacspointing)               :: pointing
+    integer                          :: status
 
     ! read pointing information
     call pointing%load_array(time, ra, dec, pa, chop, status)

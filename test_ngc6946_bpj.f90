@@ -1,61 +1,56 @@
 program test_ngc6946_bpj
 
-    use, intrinsic :: ISO_FORTRAN_ENV
-    use            :: module_fitstools
-    use            :: module_pacsinstrument
-    use            :: module_pacspointing
-    use            :: module_pointingmatrix
-    use            :: module_preprocessor
-    use            :: module_projection
-    use            :: module_wcs
-    use            :: omp_lib
-    use            :: module_math, only : test_real_eq
-    use            :: string, only : strinteger
+    use ISO_FORTRAN_ENV
+    use module_fitstools
+    use module_pacsinstrument
+    use module_pacsobservation
+    use module_pacspointing
+    use module_pointingmatrix
+    use module_preprocessor
+    use module_projection
+    use module_wcs
+    use omp_lib
+    use module_math, only : pInf, test_real_eq, sum_kahan
+    use string, only : strinteger
     implicit none
 
     type(pacsinstrument)        :: pacs
+    type(pacsobservation)       :: obs(1)
     type(pacspointing)          :: pointing
-    character(len=*), parameter :: inputdir        = '/home/pchanial/work/pacs/data/transparent/NGC6946/'
-    character(len=*), parameter :: filename        = inputdir // '1342184520_blue'
+    character(len=*), parameter :: inputdir    = '/home/pchanial/work/pacs/data/transparent/NGC6946/'
+    character(len=*), parameter :: filename(1) = inputdir // '1342184520_blue[12001:86000]'
+    integer, parameter          :: npixels_per_sample = 6
     real*8, allocatable                :: signal(:,:), coords(:,:), coords_yz(:,:)
     real*8                             :: ra, dec, pa, chop, chop_old
     real*8, allocatable                :: surface1(:,:), surface2(:,:)
     logical*1, allocatable             :: mask(:,:)
-    real*8, allocatable                :: time(:)
-    integer*8, allocatable             :: timeus(:)
     character(len=80)                  :: outfile
     character(len=2880)                :: header
     integer                            :: nx, ny, index
     integer                            :: status, count, count0, count1
     integer                            :: count2, count_rate, count_max
-    integer                            :: idetector, isample, npixels_per_sample
-    integer*8                          :: first, last, nsamples
+    integer                            :: idetector, isample
+    integer*8                          :: nsamples
     real*8, allocatable                :: map1d(:)
     type(pointingelement), allocatable :: pmatrix(:,:,:)
 
     call system_clock(count0, count_rate, count_max)
 
-    ! read pointing information
-    call pointing%load_filename(filename, status)
-    if (status /= 0) stop 'pointing%load_filename: FAILED.'
+    ! initialise observation
+    call init_pacsobservation(obs, filename, status)
+    if (status /= 0) stop 'FAILED: pacsobservation%init'
+    nsamples = obs(1)%last - obs(1)%first + 1
 
-    ! read the time file
-    status = 0
-    first = 12001
-    last  = 86000
-    nsamples = last - first + 1
-    allocate(time(last-first+1))
-    allocate(timeus(last-first+1))
-    call ft_readslice(filename // '_Time.fits+1', first, last, timeus, status)
-    if (status /= 0) stop 'FAILED: ft_readslice'
-    time = timeus * 1.0d-6
-    npixels_per_sample = 6
+    ! initialise pacs instrument
+    call pacs%init(obs, 1, .false., status)
+    if (status /= 0) stop 'FAILED: pacsinstrument%init'
 
-    ! get the pacs instance, read the calibration files
-    call pacs%init_filename(filename, .false., status)
-    if (status /= 0) stop 'FAILED: pacs%init'
+    ! initialise pointing information
+    call pointing%init(obs, status)
+    if (status /= 0) stop 'FAILED: pacspointing%init'
 
-    call pacs%compute_mapheader(pointing, time, 3.d0, header, status)
+    ! get header map
+    call pacs%compute_mapheader(pointing, .false., 3.d0, header, status)
     if (status /= 0) stop 'FAILED: compute_mapheader.'
 
     call ft_readparam(header, 'naxis1', count, nx, status=status)
@@ -69,10 +64,10 @@ program test_ngc6946_bpj
     ! read the signal file
     write(*,'(a)', advance='no') 'Reading tod file... '
     call system_clock(count1, count_rate, count_max)
-    allocate(signal(last-first+1, pacs%ndetectors))
-    allocate(mask  (last-first+1, pacs%ndetectors))
-    call pacs%read_tod_file(filename, first, last, signal, mask, status)
-    if (status /= 0) stop 'FAILED: read_tod_file_oldstyle.'
+    allocate(signal(nsamples, pacs%ndetectors))
+    allocate(mask  (nsamples, pacs%ndetectors))
+    call read_pacsobservation(obs, pacs%pq, signal, mask, status)
+    if (status /= 0) stop 'FAILED: read_tod'
     call system_clock(count2, count_rate, count_max)
     write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
 
@@ -86,9 +81,9 @@ program test_ngc6946_bpj
 
     ! compute the projector
     write(*,'(a)', advance='no') 'Computing the projector... '
-    allocate(pmatrix(npixels_per_sample,last-first+1,pacs%ndetectors))
+    allocate(pmatrix(npixels_per_sample,nsamples,pacs%ndetectors))
     call system_clock(count1, count_rate, count_max)
-    call pacs%compute_projection_sharp_edges(pointing, time, header, nx, ny, pmatrix, status)
+    call pacs%compute_projection_sharp_edges(pointing, .false., header, nx, ny, pmatrix, status)
     if (status /= 0) stop 'FAILED: compute_projection_sharp_edges.'
     call system_clock(count2, count_rate, count_max)
     write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
@@ -104,13 +99,14 @@ program test_ngc6946_bpj
     call init_astrometry(header, status=status)
     if (status /= 0) stop 'FAILED: init_astrometry'
 
-        chop_old = -9999999999.0d0 ! XXX should be NaN
-    index = 2
+    chop_old = pInf
+
+    index = 0
     write(*,*) 'surfaces:'
     !$omp parallel do default(shared) firstprivate(index, chop_old)   &
     !$omp private(isample, ra, dec, pa, chop, coords, coords_yz)
     do isample = 1, nsamples
-        call pointing%get_position(time(isample), ra, dec, pa, chop, index)
+        call pointing%get_position(1, pointing%time(isample), ra, dec, pa, chop, index)
         if (abs(chop-chop_old) > 1.d-2) then
             coords_yz = pacs%uv2yz(pacs%corners_uv, pacs%distortion_yz, chop)
             chop_old = chop
@@ -148,7 +144,8 @@ program test_ngc6946_bpj
     if (status /= 0) stop 'FAILED: ft_write.'
 
     ! test the back projected map
-    write (ERROR_UNIT,*) 'Sum in map is ', sum_kahan(map1d), ' ...instead of ', strinteger(int(pacs%ndetectors*nsamples, kind=4))
+    write (ERROR_UNIT,*) 'Sum in map is ', sum_kahan(map1d), ' ...instead of ',&
+                         strinteger(int(pacs%ndetectors*nsamples, kind=4))
     if (.not. test_real_eq(sum_kahan(map1d), real(pacs%ndetectors*nsamples,kind=8), 6)) then
         stop 'FAILED.'
     end if

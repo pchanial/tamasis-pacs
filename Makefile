@@ -29,32 +29,34 @@ finddeps = $(1).o $(if $($(1)),$(call map,finddeps,$($(1))))
 # define module dependencies
 module_cfitsio = module_stdio
 module_deglitching = module_math module_pointingmatrix precision
-module_fitstools = string module_cfitsio
+module_fitstools = precision string module_cfitsio
 module_instrument = precision string
 module_math = precision
 module_optionparser = string
-module_pacsinstrument = string module_fitstools module_math module_pacspointing module_pointingmatrix module_projection module_wcs 
-module_pacspointing = module_math module_fitstools
+module_pacsinstrument = module_fitstools module_math module_pacsobservation module_pacspointing module_pointingmatrix module_projection module_wcs 
+module_pacsobservation = module_fitstools precision string
+module_pacspointing = module_fitstools module_pacsobservation precision string
 module_pointingmatrix = module_pointingelement precision
 module_preprocessor = module_math
 module_projection = precision module_sort module_stack
 module_wcs = module_fitstools module_wcslib string
 
 # define executable dependencies
-pacs_photproject = module_fitstools module_deglitching module_optionparser module_pacsinstrument module_pacspointing module_pointingmatrix module_preprocessor
+pacs_photproject = module_fitstools module_deglitching module_optionparser module_pacsinstrument module_pacsobservation module_pacspointing module_pointingmatrix module_preprocessor
 test_cfitsio = module_cfitsio
 test_deglitching = precision module_deglitching module_math module_pacsinstrument module_pointingmatrix
 test_fitstools = module_fitstools
 test_math = module_math precision
-test_ngc6946_bpj = module_fitstools module_pacsinstrument module_pacspointing module_pointingmatrix module_preprocessor module_projection module_math
+test_ngc6946_bpj = module_fitstools module_pacsinstrument module_pacsobservation module_pacspointing module_pointingmatrix module_preprocessor module_projection module_math
 test_optionparser = module_optionparser
-test_pacs = module_pacsinstrument module_pacspointing module_fitstools
 test_pacsinstrument = module_pacsinstrument module_pacspointing
-test_pacspointing = module_math module_pacspointing
+test_pacsobservation = module_pacsinstrument module_pacsobservation string
+test_pacspointing = module_math module_pacsobservation module_pacspointing
 test_projection = module_projection module_sort
 test_read_config = module_instrument
 test_sort = module_sort
 test_stack = module_stack
+test_string = string
 test_stdio = module_stdio module_cfitsio
 test_wcs = module_wcs module_fitstools module_math
 test_wcslib1 = module_wcslib module_cfitsio 
@@ -62,8 +64,8 @@ test_wcslib2 = module_wcslib module_fitstools module_math
 test_wcslibc = module_wcslibc module_cfitsio
 
 .PHONY : all tests
-all : $(EXECS) tamasisfortran.so
-#all : $(EXECS)
+#all : $(EXECS) tamasisfortran.so
+all : $(EXECS)
 
 # if %.mod doesn't exist, make %.o. It will create %.mod with the same 
 # timestamp. If it does, do nothing

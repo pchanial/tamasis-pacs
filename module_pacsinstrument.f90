@@ -1,12 +1,15 @@
 module module_pacsinstrument
 
-    use, intrinsic :: ISO_FORTRAN_ENV, only : ERROR_UNIT, OUTPUT_UNIT
-    use module_fitstools
-    use module_math, only : nint_down, nint_up
-    use module_pacspointing
-    use module_pointingmatrix
-    use module_projection
-    use string, only : strinteger, strlowcase
+    use ISO_FORTRAN_ENV,        only : ERROR_UNIT, OUTPUT_UNIT
+    use module_fitstools,       only : ft_create_header, ft_readextension
+    use module_math,            only : pInf, mInf, NaN, nint_down, nint_up
+    use module_pacsobservation, only : pacsobservation
+    use module_pacspointing,    only : pacspointing
+    use module_pointingmatrix,  only : pointingelement
+    use module_projection,      only : convex_hull,                            &
+                                       intersection_polygon_unity_square
+    use string,                 only : strinteger
+    use module_wcs,             only : init_astrometry, ad2xy_gnomonic
     implicit none
     private
 
@@ -23,7 +26,7 @@ module module_pacsinstrument
     integer, parameter :: shape_blue(2) = [32, 64]
     integer, parameter :: shape_red (2) = [16, 32]
     integer, parameter :: distortion_degree = 3
-    real*8, parameter  :: sampling = 0.025d0
+    real*8,  parameter :: sampling = 0.025d0
 
     integer :: tamasis_dir_len ! length of the path to the tamasis installation directory
 
@@ -42,6 +45,7 @@ module module_pacsinstrument
         integer              :: fine_sampling_factor
         character            :: channel
         logical              :: transparent_mode
+        logical              :: keep_bad_detectors
 
         logical*1, pointer   :: mask(:,:)
         integer, allocatable :: ij(:,:)
@@ -63,22 +67,19 @@ module module_pacsinstrument
 
     contains
 
-        procedure          :: init
-        procedure          :: init_filename
-        procedure          :: read_calibration_files
-        procedure          :: filter_detectors
-        procedure          :: read_tod_file
-        procedure          :: compute_mapheader
-        procedure          :: find_minmax
-        procedure          :: compute_projection_sharp_edges
-        procedure, nopass  :: uv2yz
-        procedure, nopass  :: yz2ad
-        procedure, nopass  :: xy2roi
-        procedure, nopass  :: roi2pmatrix
+        private
+        procedure, public :: init
+        procedure, public :: init_scalar
+        procedure         :: read_calibration_files
+        procedure         :: filter_detectors
+        procedure, public :: compute_mapheader
+        procedure, public :: find_minmax
+        procedure, public :: compute_projection_sharp_edges
+        procedure, public, nopass  :: uv2yz
+        procedure, public, nopass  :: yz2ad
+        procedure, public, nopass  :: xy2roi
 
-        procedure, private :: filter_detectors_array
-        procedure, private :: read_signal_file_oldstyle
-        procedure, private :: read_mask_file_oldstyle
+        procedure :: filter_detectors_array
 
     end type pacsinstrument
 
@@ -86,23 +87,33 @@ module module_pacsinstrument
 contains
 
     
-    subroutine init(this, channel, transparent_mode, keep_bad_detectors,       &
-                    status, bad_detector_mask)
+    subroutine init_scalar(this, obs, fine_sampling_factor, keep_bad_detectors,&
+                           status, bad_detector_mask)
         class(pacsinstrument), intent(inout) :: this
-        character, intent(in)                :: channel
-        logical, intent(in)                  :: transparent_mode
+        type(pacsobservation), intent(in)    :: obs
+        integer, intent(in)                  :: fine_sampling_factor
         logical, intent(in)                  :: keep_bad_detectors
         integer, intent(out)                 :: status
         logical*1, intent(in), optional      :: bad_detector_mask(:,:)
 
-        this%channel = channel
-        this%transparent_mode = transparent_mode
+        if (all(fine_sampling_factor /= [1,2,4,8,16,32])) then
+            status = 1
+            write (ERROR_UNIT,'(a)') "ERROR: invalid sampling factor '" //     &
+                strinteger(fine_sampling_factor) // "'. Valid values are 1,2,4,&
+                &8,16,32."
+            return
+        end if
+
+        this%channel = obs%channel
+        this%fine_sampling_factor = fine_sampling_factor
+        this%transparent_mode = obs%transparent_mode
+        this%keep_bad_detectors = keep_bad_detectors
 
         call this%read_calibration_files(status)
         if (status /= 0) return
 
         if (present(bad_detector_mask)) then
-            if (channel == 'r') then
+            if (this%channel == 'r') then
                 !XXX gfortran bug test_bug_shape
                 ! should be any(shape(bad_detector_mask) /= shape(this%mask_red))
                 if (size(bad_detector_mask,1) /= size(this%mask_red,1) .or.    &
@@ -113,7 +124,7 @@ contains
                 end if
                 this%mask_red = bad_detector_mask
             else
-                if (channel == 'g') write (*,*) 'pacs%init: check me.'
+                if (this%channel == 'g') write (*,*) 'pacs%init: check me.'
                 if (size(bad_detector_mask,1) /= size(this%mask_blue,1) .or.   &
                     size(bad_detector_mask,2) /= size(this%mask_blue,2)) then
                    status = 1
@@ -125,35 +136,43 @@ contains
 
         end if
         
-        call this%filter_detectors(channel, transparent_mode,                  &
-                                   keep_bad_detectors, status)
+        call this%filter_detectors()
 
-    end subroutine init
+    end subroutine init_scalar
 
 
     !---------------------------------------------------------------------------
 
 
-    subroutine init_filename(this, filename, keep_bad_detectors, status,       &
-                            bad_detector_mask)
+    subroutine init(this, obs, fine_sampling_factor, keep_bad_detectors,       &
+                    status, bad_detector_mask)
         class(pacsinstrument), intent(inout) :: this
-        character(len=*), intent(in)         :: filename
+        type(pacsobservation), intent(in)    :: obs(:)
+        integer, intent(in)                  :: fine_sampling_factor
         logical, intent(in)                  :: keep_bad_detectors
         integer, intent(out)                 :: status
         logical*1, intent(in), optional      :: bad_detector_mask(:,:)
-        character :: channel
-        logical   :: transparent_mode
 
-        channel = get_channel(filename, status)
-        if (status /= 0) return
+        ! check that all observations have the same filter
+        if (any(obs%channel /= obs(1)%channel)) then
+            status = 1
+            write (ERROR_UNIT,'(a)') 'ERROR: Observations have different channe&
+                                     &s.'
+            return
+        end if
 
-        transparent_mode = get_transparent_mode(filename, status)
-        if (status /= 0) return
+        ! check that all observations have the same transparent mode
+        if (any(obs%transparent_mode .neqv. obs(1)%transparent_mode)) then
+            status = 1
+            write (ERROR_UNIT,'(a)') 'ERROR: Observations have different transp&
+                                     &rent modes.'
+            return
+        end if
 
-        call this%init(channel, transparent_mode, keep_bad_detectors, status,  &
-                       bad_detector_mask)
+        call this%init_scalar(obs(1), fine_sampling_factor, keep_bad_detectors,&
+                              status, bad_detector_mask)
 
-    end subroutine init_filename
+    end subroutine init
 
 
     !---------------------------------------------------------------------------
@@ -264,223 +283,25 @@ contains
     !---------------------------------------------------------------------------
 
 
-    subroutine read_signal_file_oldstyle(this, filename, first, last, signal, status)
-        class(pacsinstrument), intent(in) :: this
-        character(len=*), intent(in)      :: filename
-        integer*8, intent(in)             :: first, last
-        real*8, intent(out)               :: signal(:,:)
-        integer, intent(out)              :: status
-        integer*8                         :: p, q
-        integer                           :: idetector, unit
-        integer, allocatable              :: imageshape(:)
-        logical                           :: keep_bad_detectors
-
-        keep_bad_detectors = size(this%mask) > this%ndetectors
-        status = 0
-        call ft_open_image(filename // '_Signal.fits', unit, 3, imageshape, status)
-        if (status /= 0) return
-
-        do idetector = 1, this%ndetectors
-
-            p = this%pq(1,idetector)
-            q = this%pq(2,idetector)
-            call ft_readslice(unit, first, last, q+1, p+1, imageshape, signal(:,idetector), status)
-            if (status /= 0) return
-
-        end do
-
-        call ft_close(unit, status)
-
-    end subroutine read_signal_file_oldstyle
-
-
-    !---------------------------------------------------------------------------
-
-
-    subroutine read_mask_file_oldstyle(this, filename, first, last, mask, status)
-
-        class(pacsinstrument), intent(in) :: this
-        character(len=*), intent(in)      :: filename
-        integer*8, intent(in)             :: first, last
-        logical*1, intent(out)            :: mask(:,:)
-        integer, intent(out)              :: status
-        integer*8                         :: p, q
-        integer                           :: idetector, unit
-        integer, allocatable              :: imageshape(:)
-
-        call ft_open_image(filename // '_Mask.fits', unit, 3, imageshape, status)
-        if (status /= 0) return
-
-        do idetector = 1, this%ndetectors
-
-            p = this%pq(1,idetector)
-            q = this%pq(2,idetector)
-            call ft_readslice(unit, first, last, q+1, p+1, imageshape, mask(:,idetector), status)
-            if (status /= 0) return
-
-        end do
-
-        call ft_close(unit, status)
-
-    end subroutine read_mask_file_oldstyle
-
-
-    !---------------------------------------------------------------------------
-
-
-    subroutine read_tod_file(this, filename, first, last, signal, mask, status)
-        class(pacsinstrument), intent(in) :: this
-        character(len=*), intent(in)      :: filename
-        integer*8, intent(in)             :: first, last
-        real*8, intent(out)               :: signal(:,:)
-        logical*1, intent(out)            :: mask  (:,:)
-        integer, intent(out)              :: status
-        integer*8                         :: p, q
-        integer                           :: idetector, unit, pos
-        integer, allocatable              :: imageshape(:)
-        logical                           :: keep_bad_detectors, mask_found
-        integer*4, allocatable            :: maskcompressed(:)
-        integer*4                         :: maskval
-        integer                           :: ntimes, ncompressed
-        integer                           :: itime, icompressed, ibit
-        integer*8                         :: firstcompressed, lastcompressed
-
-        if (last < first) then
-            status = 1
-            write (ERROR_UNIT,'(a,2(i0,a))')"READ_TOD_FILE: The last sample '",&
-                  last, "' is less than the first sample '", first, "'."
-            return
-        end if
-
-        if (first < 1) then
-            status = 1
-            write (ERROR_UNIT,'(a,i0,a)') "READ_TOD_FILE: The first sample '", &
-                  first, "' is less than 1."
-            return
-        end if
- 
-        pos = len_trim(filename)
-        if (filename(pos-4:pos) /= '.fits') then
-            write (ERROR_UNIT,'(a)') 'READ_TOD_FILE: obsolete file format.'
-            call this%read_signal_file_oldstyle(filename, first, last, signal, status)
-            if (status /= 0) return
-            call this%read_mask_file_oldstyle(filename, first, last, mask, status)
-            return
-        endif
-
-        keep_bad_detectors = size(this%mask) > this%ndetectors
-
-        ! read signal HDU
-        call ft_open_image(filename // '[Signal]', unit, 3, imageshape, status)
-        if (status /= 0) return
-
-        if (last > imageshape(1)) then
-            status = 1
-            write (ERROR_UNIT,'(a,2(i0,a))')"READ_TOD_FILE: The last sample '",&
-                  last, "' exceeds the size of the observation '",             &
-                  imageshape(1), "'."
-            return
-        end if
-        ntimes = last - first + 1
-
-        do idetector = 1, this%ndetectors
-
-            p = this%pq(1,idetector)
-            q = this%pq(2,idetector)
-            call ft_readslice(unit, first, last, q+1, p+1, imageshape, signal(:,idetector), status)
-            if (status /= 0) return
-
-        end do
-
-        call ft_close(unit, status)
-        if (status /= 0) return
-
-        ! read MMT_Glitchmask HDU
-        mask = .false.
-        mask_found = ft_test_extension(filename // '[MMT_Glitchmask]', status)
-        if (status /= 0) return
-
-        if (.not. mask_found) then
-            write (*,'(a)') 'Info: mask MMT_Glitchmask is not found.'
-            return
-        end if
-
-        call ft_open_image(filename // '[MMT_Glitchmask]', unit, 3, imageshape, status)
-        if (status /= 0) return
-
-        firstcompressed = (first - 1) / 32 + 1
-        lastcompressed  = (last  - 1) / 32 + 1
-        ncompressed = lastcompressed - firstcompressed + 1
-        allocate(maskcompressed(ncompressed))
-
-        do idetector = 1, this%ndetectors
-
-            p = this%pq(1,idetector)
-            q = this%pq(2,idetector)
-            call ft_readslice(unit, firstcompressed, lastcompressed, q+1, p+1, &
-                              imageshape, maskcompressed, status)
-            if (status /= 0) go to 999
-
-            ! loop over the bytes of the compressed mask
-            do icompressed = firstcompressed, lastcompressed
-
-               maskval = maskcompressed(icompressed-firstcompressed+1)
-               if (maskval == 0) cycle
-
-               itime = (icompressed-1)*32 - first + 2
-
-               ! loop over the bits of a compressed mask byte
-               do ibit= max(0, first - (icompressed-1)*32-1),                  &
-                        min(31, last - (icompressed-1)*32-1)
-                    mask(itime+ibit,idetector) = mask(itime+ibit,idetector)    &
-                                                 .or. btest(maskval, ibit)
-               end do
-
-            end do
-
-        end do
-
-    999 call ft_close(unit, status)
-
-    end subroutine read_tod_file
-
-
-    !---------------------------------------------------------------------------
-
-
-    subroutine filter_detectors(this, channel, transparent_mode, keep_bad_detectors, status)
+    subroutine filter_detectors(this)
         class(pacsinstrument), intent(inout)   :: this
-        character, intent(in)                  :: channel
-        logical, intent(in), optional          :: transparent_mode
-        logical, intent(in), optional          :: keep_bad_detectors
-        integer, intent(out)                   :: status
 
-        select case (channel)
+        select case (this%channel)
            case ('r')
               call this%filter_detectors_array(this%mask_red,                  &
                    this%corners_uv_red, this%distortion_yz_red,                &
-                   this%flatfield_red, transparent_mode=transparent_mode,      &
-                   keep_bad_detectors=keep_bad_detectors)
+                   this%flatfield_red)
            case ('g')
               write(*,*) 'FILTER_DETECTORS: Check calibration files for the green band...'
               call this%filter_detectors_array(this%mask_blue,                 &
                    this%corners_uv_blue, this%distortion_yz_blue,              &
-                   this%flatfield_green, transparent_mode=transparent_mode,    &
-                   keep_bad_detectors=keep_bad_detectors)
+                   this%flatfield_green)
            case ('b')
-              call filter_detectors_array(this, this%mask_blue,                &
+              call this%filter_detectors_array(this%mask_blue,                &
                    this%corners_uv_blue, this%distortion_yz_blue,              &
-                   this%flatfield_blue, transparent_mode=transparent_mode,     &
-                   keep_bad_detectors=keep_bad_detectors)
+                   this%flatfield_blue)
 
-           case default
-                status = 1
-                write (ERROR_UNIT,'(a)') "FILTER_DETECTORS: invalid array &
-                    &channel ('blue', 'green' or 'red'): " // channel
-                return
         end select
-
-        status = 0
 
     end subroutine filter_detectors
 
@@ -488,30 +309,15 @@ contains
     !---------------------------------------------------------------------------
 
 
-    subroutine filter_detectors_array(this, mask, uv, distortion, flatfield, transparent_mode, keep_bad_detectors)
+    subroutine filter_detectors_array(this, mask, uv, distortion, flatfield)
 
         class(pacsinstrument), intent(inout)    :: this
         logical*1, intent(in), target :: mask(:,:)
         real*8, intent(in)            :: uv(:,:,:,:)
         real*8, intent(in)            :: distortion(:,:,:,:)
         real*8, intent(in)            :: flatfield(:,:)
-        logical, intent(in), optional :: transparent_mode
-        logical, intent(in), optional :: keep_bad_detectors
 
         integer                       :: idetector, p, q
-        logical                       :: transmode, keepbaddetectors
-
-        if (present(transparent_mode)) then
-            transmode = transparent_mode
-        else
-            transmode = .false.
-        end if
-
-        if (present(keep_bad_detectors)) then
-            keepbaddetectors = keep_bad_detectors
-        else
-            keepbaddetectors = .false.
-        end if
 
         this%nrows    = size(mask, 1)
         this%ncolumns = size(mask, 2)
@@ -519,13 +325,13 @@ contains
         allocate(this%mask(this%nrows, this%ncolumns))
         this%mask => mask
 
-        if (transmode) then
+        if (this%transparent_mode) then
             this%mask(1:16,1:16) = .true.
             this%mask(1:16,33:)  = .true.
             this%mask(17:,:)     = .true.
         end if
         this%ndetectors = size(this%mask)
-        if (.not. keepbaddetectors) then
+        if (.not. this%keep_bad_detectors) then
             this%ndetectors = this%ndetectors - count(this%mask)
         end if
 
@@ -540,7 +346,7 @@ contains
 
         do p = 0, this%nrows - 1
             do q = 0, this%ncolumns - 1
-                if (this%mask(p+1,q+1) .and. .not. keepbaddetectors) cycle
+                if (this%mask(p+1,q+1) .and. .not.this%keep_bad_detectors) cycle
                 this%pq(1, idetector) = p
                 this%pq(2, idetector) = q
                 this%ij(1, idetector) = mod(p, 16)
@@ -557,129 +363,7 @@ contains
     !---------------------------------------------------------------------------
 
 
-    ! returns 'b', 'g' or 'r' for a blue, green or red channel observation
-    function get_channel(filename, status) result(channel)
-        character                     :: channel
-        character(len=*), intent(in)  :: filename
-        integer, intent(out)          :: status
-        integer                       :: length, unit, ncolumns, nrecords
-        integer                       :: status_close
-        character(len=2), allocatable :: channels(:)
-
-        channel = ' '
-        length = len_trim(filename)
-        if (filename(length-4:length) /= '.fits') then
-            status = 0
-            write (ERROR_UNIT,'(a)') 'GET_CHANNEL: obsolete file format.'
-            if (strlowcase(filename(length-3:length)) == 'blue') then
-               channel = 'b'
-            else if (strlowcase(filename(length-4:length)) == 'green') then
-               channel = 'g'
-            else if (strlowcase(filename(length-2:length)) == 'red') then
-               channel = 'r'
-            else
-               status = 1
-               write (ERROR_UNIT,'(a)') 'File name does not contain the array channel identifier (blue, green, red).'
-            end if
-            go to 999
-        endif
-
-        call ft_open_bintable(filename // '[Status]', unit, ncolumns, nrecords, status)
-        if (status /= 0) return
-
-        allocate(channels(nrecords))
-        call ft_read_column(unit, 'BAND', channels, status)
-        if (status /= 0) return
-
-        if (any(channels /= channels(1))) then
-            status = 1
-            write (ERROR_UNIT,'(a)') 'Observation is BANDSWITCH.'
-        else
-           select case (channels(1))
-               case ('BS')
-                   channel = 'b'
-               case ('BL')
-                   channel = 'g'
-               case ('R ')
-                   channel = 'r'
-               case default
-                   status = 1
-                   write (ERROR_UNIT,'(a)') 'Invalid array BAND value: ' // channels(1)
-           end select
-        end if
-
-        call ft_close(unit, status_close)
-        if (status == 0) status = status_close
-
-    999 if (status == 0) then
-            write (OUTPUT_UNIT,'(a,$)') "Info: Channel: '"
-            select case (channel)
-                case ('b')
-                    write (OUTPUT_UNIT,'(a,$)') 'Blue'
-                case ('g')
-                    write (OUTPUT_UNIT,'(a,$)') 'Green'
-                case ('r')
-                    write (OUTPUT_UNIT,'(a,$)') 'Red'
-            end select
-            write (OUTPUT_UNIT,'(a)') "'"
-        end if
-
-    end function get_channel
-
-
-    !---------------------------------------------------------------------------
-
-
-    function get_transparent_mode(filename, status) result(tmode)
-        logical                      :: tmode
-        character(len=*), intent(in) :: filename
-        integer, intent(out)         :: status
-        integer           :: unit, ikey, length
-        character(len=72) :: compression, keyword, comment
-
-        tmode = .true.
-
-        length = len_trim(filename)
-        if (filename(length-4:length) /= '.fits') then
-            write(*,'(a)') 'GET_TRANSPARENT_MODE: Obsolete file format.'
-            status = 0
-            return
-        end if
-
-        call ft_open(filename, unit, status)
-        if (status /= 0) return
-
-        ikey = 1
-        do
-            call ftgkys(unit, 'key.META_'//strinteger(ikey), keyword, comment, status)
-            if (status /= 0) go to 999
-            if (keyword == 'compMode') exit
-            ikey = ikey + 1
-        end do
-
-        call ftgkys(unit, 'META_'//strinteger(ikey), compression, comment, status)
-        if (compression == 'Photometry Default Mode') then
-            tmode = .false.
-        else if (compression == 'Photometry Lossless Compression Mode') then
-            tmode = .true.
-        else
-            status = 1
-            write (ERROR_UNIT,'(a)') "ERROR: Unknown compression mode: '" // trim(compression) // "'."
-            return
-        end if
-
-        write (OUTPUT_UNIT,'(a)') "Info: Compression mode: '" // trim(compression) // "'"
-
-    999 call ft_close(unit, status)
-
-    end function get_transparent_mode
-
-
-    !---------------------------------------------------------------------------
-
-
     function uv2yz(uv, distortion_yz, chop) result(yz)
-
         real*8, intent(in) :: uv(:,:)
         real*8, intent(in) :: distortion_yz(ndims, distortion_degree, distortion_degree, distortion_degree)
         real*8, intent(in) :: chop ! chop angle in degree
@@ -771,11 +455,11 @@ contains
     !---------------------------------------------------------------------------
 
 
-    subroutine roi2pmatrix(roi, coords, nx, ny, isample, nroi, pmatrix)
+    subroutine roi2pmatrix(roi, coords, nx, ny, itime, nroi, pmatrix)
         integer, intent(in)                  :: roi(:,:,:)
         real*8, intent(in)                   :: coords(:,:)
         type(pointingelement), intent(inout) :: pmatrix(:,:,:)
-        integer, intent(in)                  :: nx, ny, isample
+        integer, intent(in)                  :: nx, ny, itime
         integer, intent(out)                 :: nroi
         real*8                               :: polygon(2,nvertices)
 
@@ -801,15 +485,15 @@ end if
                     weight = abs(intersection_polygon_unity_square(polygon, nvertices))
                     if (weight <= 0) cycle
                     if (iroi <= npixels_per_sample) then
-                        pmatrix(iroi,isample,idetector)%pixel  = ipixel
-                        pmatrix(iroi,isample,idetector)%weight = weight
+                        pmatrix(iroi,itime,idetector)%pixel  = ipixel
+                        pmatrix(iroi,itime,idetector)%weight = weight
                     end if
                     iroi = iroi + 1
                 end do
             end do
             ! fill the rest of the pointing matrix
-            pmatrix(iroi:,isample,idetector)%pixel  = ipixel
-            pmatrix(iroi:,isample,idetector)%weight = 0
+            pmatrix(iroi:,itime,idetector)%pixel  = ipixel
+            pmatrix(iroi:,itime,idetector)%weight = 0
             nroi = max(nroi, iroi-1)
         end do
 
@@ -819,30 +503,31 @@ end if
     !---------------------------------------------------------------------------
 
 
-    subroutine compute_mapheader(this, pointing, times, resolution, header, status)
-
-        use module_fitstools, only : ft_create_header
-        use module_wcs, only : init_astrometry
-
+    subroutine compute_mapheader(this, pointing, finer_sampling, resolution,   &
+                                 header, status)
         class(pacsinstrument), intent(in) :: this
         class(pacspointing), intent(in)   :: pointing
-        real*8, intent(in)                :: times(:)  ! times at which the PACS array should be considered as inside the map
+        logical, intent(in)               :: finer_sampling
         real*8, intent(in)                :: resolution
         character(len=2880), intent(out)  :: header
         integer, intent(out)              :: status
-
         integer                           :: nx, ny
         integer                           :: ixmin, ixmax, iymin, iymax
         real*8                            :: ra0, dec0, xmin, xmax, ymin, ymax
 
-        call pointing%compute_center(times, ra0, dec0)
+        !XXX
+        if (finer_sampling) then
+            stop 'COMPUTE_MAPHEADER: Finer sampling is not implemented yet.'
+        end if
+
+        call pointing%compute_center(ra0, dec0)
 
         call ft_create_header(0, 0, -resolution/3600.d0, resolution/3600.d0, 0.d0, ra0, dec0, 1.d0, 1.d0, header)
 
         call init_astrometry(header, status=status)
         if (status /= 0) return
 
-        call this%find_minmax(pointing, times, xmin, xmax, ymin, ymax)
+        call this%find_minmax(pointing, finer_sampling, xmin, xmax, ymin, ymax)
 
         ixmin = nint(xmin)
         ixmax = nint(xmax)
@@ -852,9 +537,9 @@ end if
         nx = ixmax-ixmin+1
         ny = iymax-iymin+1
 
-        ! move the reference pixels (not the reference values!)
-        call ft_create_header(nx, ny, -resolution/3600.d0, resolution/3600.d0, 0.d0, &
-                              ra0, dec0, -ixmin+2.d0, -iymin+2.d0, header)
+        ! move the reference pixel (not the reference value!)
+        call ft_create_header(nx, ny, -resolution/3600.d0, resolution/3600.d0, &
+                              0.d0, ra0, dec0, -ixmin+2.d0, -iymin+2.d0, header)
 
     end subroutine compute_mapheader
 
@@ -863,51 +548,48 @@ end if
 
 
     ! find minimum and maximum pixel coordinates in maps
-    subroutine find_minmax(this, pointing, times, xmin, xmax, ymin, ymax)
-
-        use module_projection, only: convex_hull
-        use module_wcs, only : ad2xy_gnomonic
+    subroutine find_minmax(this, pointing, finer_sampling, xmin, xmax,         &
+                           ymin, ymax)
         class(pacsinstrument), intent(in) :: this
         class(pacspointing), intent(in)   :: pointing
-        real*8, intent(in)                :: times(:)  ! times at which the PACS array should be considered as inside the map
+        logical, intent(in)               :: finer_sampling
         real*8, intent(out)               :: xmin, xmax, ymin, ymax
-
         real*8                            :: ra, dec, pa, chop
-        real*8                            :: infinity, zero
         real*8, allocatable               :: hull_uv(:,:), hull(:,:)
         integer, allocatable              :: ihull(:)
-        integer                           :: nsamples, isample, index
+        integer                           :: islice, itime, index
 
-        zero = 0.d0
-        infinity = 1.d0 / zero
+        xmin = pInf
+        xmax = mInf
+        ymin = pInf
+        ymax = mInf
 
-        xmin =  infinity
-        xmax = -infinity
-        ymin =  infinity
-        ymax = -infinity
-
-        nsamples = size(times)
         call convex_hull(this%corners_uv, ihull)
 
         allocate(hull_uv(ndims,size(ihull)))
         allocate(hull(ndims, size(ihull)))
         hull_uv = this%corners_uv(:,ihull)
-        index = 2
 
-        ! with gfortran 4.5, the following openmp construct corrupts the memory...
-        !!$omp parallel do default(shared) reduction(min:xmin,ymin) reduction(max:xmax,ymax) &
-        !!$omp private(isample,ra,dec,pa,chop,hull) firstprivate(index)
-        do isample = 1, nsamples
-           call pointing%get_position(times(isample), ra, dec, pa, chop, index)
-           hull = uv2yz(hull_uv, this%distortion_yz_blue, chop)
-           hull = yz2ad(hull, ra, dec, pa)
-           hull = ad2xy_gnomonic(hull)
-           xmin = min(xmin, minval(hull(1,:)))
-           xmax = max(xmax, maxval(hull(1,:)))
-           ymin = min(ymin, minval(hull(2,:)))
-           ymax = max(ymax, maxval(hull(2,:)))
+        do islice = 1, pointing%nslices
+
+            index = 0
+
+            !$omp parallel do default(shared) reduction(min:xmin,ymin) reduction(max:xmax,ymax) &
+            !$omp private(itime,ra,dec,pa,chop,hull) firstprivate(index)
+            do itime = pointing%first(islice), pointing%last(islice)
+                call pointing%get_position(islice, pointing%time(itime), ra, dec, pa, chop, index)
+                hull = uv2yz(hull_uv, this%distortion_yz_blue, chop)
+                hull = yz2ad(hull, ra, dec, pa)
+                hull = ad2xy_gnomonic(hull)
+                xmin = min(xmin, minval(hull(1,:)))
+                xmax = max(xmax, maxval(hull(1,:)))
+                ymin = min(ymin, minval(hull(2,:)))
+                ymax = max(ymax, maxval(hull(2,:)))
+
+             end do
+             !$omp end parallel do
+
         end do
-        !!$omp end parallel do
 
     end subroutine find_minmax
 
@@ -915,45 +597,51 @@ end if
     !---------------------------------------------------------------------------
 
 
-    subroutine compute_projection_sharp_edges(this, pointing, time, header, nx, ny, pmatrix, status)
-
-        use module_wcs, only : init_astrometry, ad2xy_gnomonic
-        class(pacsinstrument), intent(in)    :: this
-        class(pacspointing), intent(in)      :: pointing
-        character(len=*), intent(in)         :: header
-        real*8, intent(in)                   :: time(:)
-        integer, intent(in)                  :: nx, ny
-        type(pointingelement), intent(out)   :: pmatrix(:,:,:)
-        integer, intent(out)                 :: status
+    subroutine compute_projection_sharp_edges(this, pointing, finer_sampling,  &
+                                              header, nx, ny, pmatrix, status)
+        class(pacsinstrument), intent(in)  :: this
+        type(pacspointing), intent(in)     :: pointing
+        logical, intent(in)                :: finer_sampling
+        character(len=*), intent(in)       :: header
+        integer, intent(in)                :: nx, ny
+        type(pointingelement), intent(out) :: pmatrix(:,:,:)
+        integer, intent(out)               :: status
 
         real*8  :: coords(ndims,this%ndetectors*nvertices), coords_yz(ndims,this%ndetectors*nvertices)
         real*8  :: ra, dec, pa, chop, chop_old
-        integer :: roi(ndims,2,this%ndetectors), isample, nsamples, npixels_per_sample, nroi, index
+        integer :: roi(ndims,2,this%ndetectors), islice, itime, npixels_per_sample, nroi, index
+
+        !XXX
+        if (finer_sampling) then
+            stop 'COMPUTE_MAPHEADER: Finer sampling is not implemented yet.'
+        end if
 
         call init_astrometry(header, status=status)
         if (status /= 0) return
 
-        nsamples = size(time)
         npixels_per_sample = -1
 
-        chop_old = -9999999999.0d0 ! XXX should be NaN
-        index = 2
-        !$omp parallel do default(shared) firstprivate(index, chop_old)   &
-        !$omp private(isample, ra, dec, pa, chop, coords, coords_yz, roi) &
-        !$omp reduction(max : npixels_per_sample)
-        do isample = 1, nsamples
-            call pointing%get_position(time(isample), ra, dec, pa, chop, index)
-            if (abs(chop-chop_old) > 1.d-2) then
-                coords_yz = this%uv2yz(this%corners_uv, this%distortion_yz, chop)
-                chop_old = chop
-            end if
-            coords = this%yz2ad(coords_yz, ra, dec, pa)
-            coords = ad2xy_gnomonic(coords)
-            roi    = xy2roi(coords) ! [1=x|2=y,1=min|2=max,idetector]
-            call roi2pmatrix(roi, coords, nx, ny, isample, nroi, pmatrix)
-            npixels_per_sample = max(npixels_per_sample, nroi)
+        do islice = 1, pointing%nslices
+            chop_old = pInf
+            index = 0
+            !$omp parallel do default(shared) firstprivate(index, chop_old)   &
+            !$omp private(itime, ra, dec, pa, chop, coords, coords_yz, roi) &
+            !$omp reduction(max : npixels_per_sample)
+            do itime = pointing%first(islice), pointing%last(islice)
+                call pointing%get_position(islice, pointing%time(itime), ra, dec, pa, chop, index)
+                if (abs(chop-chop_old) > 1.d-2) then
+                    coords_yz = this%uv2yz(this%corners_uv, this%distortion_yz, chop)
+                    chop_old = chop
+                 end if
+                 coords = this%yz2ad(coords_yz, ra, dec, pa)
+                 coords = ad2xy_gnomonic(coords)
+                 roi    = xy2roi(coords) ! [1=x|2=y,1=min|2=max,idetector]
+                 call roi2pmatrix(roi, coords, nx, ny, itime, nroi, pmatrix)
+                 npixels_per_sample = max(npixels_per_sample, nroi)
+             end do
+             !$omp end parallel do
         end do
-        !$omp end parallel do
+
         if (npixels_per_sample /= size(pmatrix,1)) then
             write(*,'(a,i0,a)') 'Warning: to compute the Pointing Matrix, npixels_per_sample may be updated to ', npixels_per_sample, '.'
         end if

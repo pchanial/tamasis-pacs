@@ -1,60 +1,58 @@
 program pacs_photproject
 
-    use, intrinsic :: ISO_FORTRAN_ENV
-    use            :: module_fitstools
-    use            :: module_deglitching, only : deglitch_l2b
-    use            :: module_optionparser, only : optionparser
-    use            :: module_pacsinstrument
-    use            :: module_pacspointing
-    use            :: module_pointingmatrix, only : pointingelement,           &
-                          backprojection_weighted
-    use            :: module_preprocessor
+    use ISO_FORTRAN_ENV,        only : ERROR_UNIT, OUTPUT_UNIT
+    use module_fitstools,       only : ft_header2str, ft_readparam, ft_write
+    use module_deglitching,     only : deglitch_l2b
+    use module_optionparser,    only : optionparser
+    use module_pacsinstrument,  only : pacsinstrument
+    use module_pacsobservation, only : pacsobservation, init_pacsobservation,  &
+                                       read_pacsobservation
+    use module_pacspointing,    only : pacspointing
+    use module_pointingmatrix,  only : backprojection_weighted, pointingelement
+    use module_preprocessor,    only : divide_vectordim2, subtract_meandim1
     implicit none
 
-    character(len=*), parameter :: defaultfile = '/home/pchanial/work/pacs/data/transparent/NGC6946/1342184520_blue'
     type(pacsinstrument)               :: pacs
     type(pacspointing)                 :: pointing
 
-    character(len=2048)                :: infile, outfile, headerfile
+    character(len=2048), allocatable   :: infile(:)
+    character(len=2048)                :: outfile, headerfile
     character(len=2880)                :: header
     real*8                             :: resolution
     integer                            :: npixels_per_sample
     logical                            :: do_flatfield, do_meansubtraction
     character(len=256)                 :: deglitching_method
-    integer*8                          :: first, last
+    integer*8                          :: nsamples
 
     real*8, allocatable                :: signal(:,:)
     logical*1, allocatable             :: mask(:,:)
-    integer                            :: nx, ny
+    integer                            :: nobs, nx, ny
     integer                            :: status, count, count1
     integer                            :: count2, count_rate, count_max
     real*8                             :: deglitching_nsigma
     real*8, allocatable                :: map1d(:)
     type(pointingelement), allocatable :: pmatrix(:,:,:)
     type(optionparser)                 :: parser
+    type(pacsobservation), allocatable :: obs(:)
 
     ! command parsing
-    call parser%init('pacs_photproject [options] fitsfile', 0, 1)
+    call parser%init('pacs_photproject [options] fitsfile', 0, -1)
     call parser%add_option('', 'o', 'Filename of the output map (FITS format)',&
                            has_value=.true., default='photproject.fits')
-    call parser%add_option('header', 'h', 'Input FITS header of the map',   &
+    call parser%add_option('header', 'h', 'Input FITS header of the map',      &
                            has_value=.true.)
-    call parser%add_option('resolution', '', 'Input pixel size of the map', &
+    call parser%add_option('resolution', '', 'Input pixel size of the map',    &
                            has_value=.true., default='3.')
     call parser%add_option('npixels-per-sample', 'n', 'Maximum number of sky &
-                           &pixels intercepted by a PACS detector',          &
+                           &pixels intercepted by a PACS detector',            &
                            has_value=.true., default='6')
     call parser%add_option('no-flatfield','','Do not divide by calibration flat field')
     call parser%add_option('filtering', 'f', 'Timeline filtering (mean|none)', &
                            has_value=.true., default='mean')
     call parser%add_option('deglitching', 'd', 'Timeline deglitching (l2std|&
                            &l2mad|none)', has_value=.true., default='none')
-    call parser%add_option('nsigma', '', 'N-sigma for deglitching',&
+    call parser%add_option('nsigma', '', 'N-sigma for deglitching',            &
                            has_value=.true., default='5.')
-    call parser%add_option('first', '', 'First sample in timeline', &
-                           has_value=.true., default='12001')
-    call parser%add_option('last', '', 'Last sample in timeline',   &
-                           has_value=.true., default='86000')
 
     call parser%parse(status)
     if (status == -1) stop
@@ -62,36 +60,41 @@ program pacs_photproject
 
     call parser%print_options()
 
-    if (parser%get_argument_count() == 1) then
-       infile = parser%get_argument(1,status)
-    else
-       infile = defaultfile
-    end if
     outfile = parser%get_option('o', status) !XXX status gfortran bug
     headerfile = parser%get_option('header', status)
     resolution = parser%get_option_as_real('resolution', status)
     npixels_per_sample = parser%get_option_as_integer('npixels-per-sample', status)
-    first = parser%get_option_as_integer('first', status)
-    last  = parser%get_option_as_integer('last', status)
     do_flatfield = .not. parser%get_option_as_logical('no-flatfield', status)
     do_meansubtraction = parser%get_option('filtering', status) == 'mean'
     deglitching_method = parser%get_option('deglitching', status)
     deglitching_nsigma = parser%get_option_as_real('nsigma', status)
+    
+    ! initialise observations
+    nobs = parser%get_argument_count()
+    allocate(obs(nobs))
+    call parser%get_arguments(infile, status)
+    if (status /= 0) go to 999
+    !allocate(obs(1))
+    !allocate(infile(1))
+    !infile(1) = '~/work/pacs/data/transparent/NGC6946/1342184520_blue'
+    call init_pacsobservation(obs, infile, status)
+    if (status /= 0) go to 999
+    nsamples = sum(obs%nsamples)
 
-    ! read pointing information
-    call pointing%load_filename(trim(infile), status)
+    ! initialise pointing information
+    call pointing%init(obs, status)
     if (status /= 0) go to 999
 
-    ! get the pacs instance, read the calibration files
-    call pacs%init_filename(trim(infile), .false., status)
+    ! initialise pacs instrument
+    call pacs%init(obs, 1, .false., status)
     if (status /= 0) go to 999
 
     ! get FITS header
     if (headerfile /= '') then
        call ft_header2str(headerfile, header, status)
     else
-       call pacs%compute_mapheader(pointing, pointing%time(first:last),        &
-                                   resolution, header, status)
+       call pacs%compute_mapheader(pointing, .false., resolution, header,&
+                                   status)
     end if
     if (status /= 0) go to 999
 
@@ -106,24 +109,23 @@ program pacs_photproject
 
     ! compute the projector
     write(*,'(a)', advance='no') 'Computing the projector... '
-    allocate(pmatrix(npixels_per_sample,last-first+1,pacs%ndetectors))
+    allocate(pmatrix(npixels_per_sample,nsamples,pacs%ndetectors))
 
     call system_clock(count1, count_rate, count_max)
-    call pacs%compute_projection_sharp_edges(pointing,                         &
-                                             pointing%time(first:last), header,&
-                                             nx, ny, pmatrix, status)
+    call pacs%compute_projection_sharp_edges(pointing, .false., header,  nx,   &
+                                             ny, pmatrix, status)
     if (status /= 0) go to 999
 
     call system_clock(count2, count_rate, count_max)
     write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
 
     ! read the signal file
-    allocate(signal(last-first+1, pacs%ndetectors))
-    allocate(mask  (last-first+1, pacs%ndetectors))
+    allocate(signal(nsamples, pacs%ndetectors))
+    allocate(mask  (nsamples, pacs%ndetectors))
 
     write(*,'(a)', advance='no') 'Reading timeline... '
     call system_clock(count1, count_rate, count_max)
-    call pacs%read_tod_file(trim(infile), first, last, signal, mask, status)
+    call read_pacsobservation(obs, pacs%pq, signal, mask, status)
     if (status /= 0) go to 999
     call system_clock(count2, count_rate, count_max)
     write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
@@ -134,17 +136,12 @@ program pacs_photproject
         call divide_vectordim2(signal, pacs%flatfield)
     end if
 
-    ! remove mean value in timeline
-    if (do_meansubtraction) then
-        write(*,'(a)') 'Removing mean value... '
-        call subtract_meandim1(signal)
-    end if
-
-    ! remove mean value in timeline
-    if (len_trim(deglitching_method) /= 0) then
+    ! deglitching
+    if (deglitching_method /= 'none') then
         write (*,'(a,$)') 'Deglitching (' // trim(deglitching_method) // ')...'
         call system_clock(count1, count_rate, count_max)
         select case (deglitching_method)
+
             case ('l2std')
                call deglitch_l2b(pmatrix, nx, ny, signal, mask,                &
                                  deglitching_nsigma, .false.)
@@ -155,9 +152,19 @@ program pacs_photproject
                write (ERROR_UNIT,'(/,a)') "ERROR: Invalid deglitching method '"&
                                           // trim(deglitching_method) // "'."
                go to 999
+
          end select
          call system_clock(count2, count_rate, count_max)
          write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
+    end if
+
+    ! remove mean value in timeline
+    if (do_meansubtraction) then
+        if (size(obs) > 1) then
+            write (OUTPUT_UNIT,'(a)') 'Warning: the mean is calculated over several obsids. FIXME'
+        end if
+        write(*,'(a)') 'Removing mean value... '
+        call subtract_meandim1(signal)
     end if
 
     ! back project the timeline
