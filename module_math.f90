@@ -4,6 +4,9 @@ module module_math
     implicit none
     private
 
+    public :: pi
+    public :: deg2rad
+    public :: rad2deg
     public :: mInf
     public :: pInf
     public :: NaN
@@ -26,8 +29,11 @@ module module_math
         module procedure sum_kahan_1d, sum_kahan_2d, sum_kahan_3d
     end interface sum_kahan
 
+    real(p), parameter :: pi = 4.0_p * atan(1.0_p)
+    real(p), parameter :: deg2rad = pi / 180._p
+    real(p), parameter :: rad2deg = 180._p / pi
     !XXX should use ieee_arithmetic instead when gfortran implements it
-    real(kind=p), parameter ::                                                                       &
+    real(p), parameter ::                                                                       &
         NaN  = transfer('1111111111111000000000000000000000000000000000000000000000000000'b, 0._dp), &
         mInf = transfer('1111111111110000000000000000000000000000000000000000000000000000'b,0._dp),  &
         pInf = transfer('0111111111110000000000000000000000000000000000000000000000000000'b,0._dp)
@@ -199,13 +205,12 @@ contains
 
 
     function linspace(min, max, n)
-        real(kind=p), allocatable :: linspace(:)
+        real(kind=p)              :: linspace(n)
         real(kind=p), intent(in)  :: min, max
         integer, intent(in)       :: n
         integer                   :: i
 
-        allocate(linspace(n))
-        linspace = min + (max - min) / (n-1) * [(i, i=0,n-1)]
+        linspace = min + (max - min) / (n-1) * [(i, i=0, n-1)]
 
     end function linspace
 
@@ -214,12 +219,11 @@ contains
 
 
     function logspace(min, max, n)
-        real(kind=p), allocatable :: logspace(:)
+        real(kind=p)              :: logspace(n)
         real(kind=p), intent(in)  :: min, max
         integer, intent(in)       :: n
         integer                   :: i
 
-        allocate(logspace(n))
         logspace = exp(log(min)+(log(max)-log(min)) / (n-1) * [(i, i=0,n-1)])
 
     end function logspace
