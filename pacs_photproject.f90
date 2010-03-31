@@ -5,15 +5,15 @@ program pacs_photproject
     use module_deglitching,     only : deglitch_l2b
     use module_optionparser,    only : optionparser
     use module_pacsinstrument,  only : pacsinstrument
-    use module_pacsobservation, only : pacsobservation, init_pacsobservation,  &
-                                       read_pacsobservation
+    use module_pacsobservation, only : pacsobservation
     use module_pacspointing,    only : pacspointing
     use module_pointingmatrix,  only : backprojection_weighted, pointingelement
     use module_preprocessor,    only : divide_vectordim2, subtract_meandim1
     implicit none
 
-    type(pacsinstrument)               :: pacs
-    type(pacspointing)                 :: pointing
+    class(pacsinstrument), allocatable :: pacs
+    class(pacsobservation), allocatable:: obs
+    class(pacspointing), allocatable   :: pointing
 
     character(len=2048), allocatable   :: infile(:)
     character(len=2048)                :: outfile, headerfile
@@ -26,17 +26,17 @@ program pacs_photproject
 
     real*8, allocatable                :: signal(:,:)
     logical*1, allocatable             :: mask(:,:)
-    integer                            :: nobs, nx, ny
+    integer                            :: nobs, iobs, nx, ny, dest
     integer                            :: status, count, count1
     integer                            :: count2, count_rate, count_max
     real*8                             :: deglitching_nsigma
     real*8, allocatable                :: map1d(:)
     type(pointingelement), allocatable :: pmatrix(:,:,:)
-    type(optionparser)                 :: parser
-    type(pacsobservation), allocatable :: obs(:)
+    class(optionparser), allocatable   :: parser
 
     ! command parsing
-    call parser%init('pacs_photproject [options] fitsfile', 0, -1)
+    allocate(parser)
+    call parser%init('pacs_photproject [options] fitsfile...', 1, -1)
     call parser%add_option('', 'o', 'Filename of the output map (FITS format)',&
                            has_value=.true., default='photproject.fits')
     call parser%add_option('header', 'h', 'Input FITS header of the map',      &
@@ -71,21 +71,22 @@ program pacs_photproject
     
     ! initialise observations
     nobs = parser%get_argument_count()
-    allocate(obs(nobs))
+    allocate(obs)
     call parser%get_arguments(infile, status)
     if (status /= 0) go to 999
-    !allocate(obs(1))
     !allocate(infile(1))
-    !infile(1) = '~/work/pacs/data/transparent/NGC6946/1342184520_blue'
-    call init_pacsobservation(obs, infile, status)
+    !infile(1) = '/mnt/herschel1/mapmaking/data/pacs/transpScan/1342185454_blue_PreparedFrames.fits'
+    call obs%init(infile, status)
     if (status /= 0) go to 999
-    nsamples = sum(obs%nsamples)
+    nsamples = sum(obs%info%nsamples)
 
     ! initialise pointing information
+    allocate(pointing)
     call pointing%init(obs, status)
     if (status /= 0) go to 999
 
     ! initialise pacs instrument
+    allocate(pacs)
     call pacs%init(obs, 1, .false., status)
     if (status /= 0) go to 999
 
@@ -125,7 +126,7 @@ program pacs_photproject
 
     write(*,'(a)', advance='no') 'Reading timeline... '
     call system_clock(count1, count_rate, count_max)
-    call read_pacsobservation(obs, pacs%pq, signal, mask, status)
+    call obs%read(pacs%pq, signal, mask, status)
     if (status /= 0) go to 999
     call system_clock(count2, count_rate, count_max)
     write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
@@ -160,17 +161,18 @@ program pacs_photproject
 
     ! remove mean value in timeline
     if (do_meansubtraction) then
-        if (size(obs) > 1) then
-            write (OUTPUT_UNIT,'(a)') 'Warning: the mean is calculated over several obsids. FIXME'
-        end if
         write(*,'(a)') 'Removing mean value... '
-        call subtract_meandim1(signal)
+        dest = 1
+        do iobs = 1, nobs
+            call subtract_meandim1(signal(dest:dest+obs%info(iobs)%nsamples-1,:))
+            dest = dest + obs%info(iobs)%nsamples
+        end do
     end if
 
     ! back project the timeline
     write(*,'(a)', advance='no') 'Computing the map... '
     call system_clock(count1, count_rate, count_max)
-    call backprojection_weighted(pmatrix, signal, mask, map1d)
+    call backprojection_weighted(pmatrix, signal, mask, map1d, 0.d0)
     call system_clock(count2, count_rate, count_max)
     write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
 

@@ -1,22 +1,22 @@
 program test_ngc6946_bpj
 
     use ISO_FORTRAN_ENV
-    use module_fitstools
-    use module_pacsinstrument
-    use module_pacsobservation
-    use module_pacspointing
-    use module_pointingmatrix
+    use module_fitstools, only : ft_readparam, ft_write
+    use module_pacsinstrument, only : ndims, nvertices, pacsinstrument
+    use module_pacsobservation, only : pacsobservation
+    use module_pacspointing, only : pacspointing
+    use module_pointingmatrix, only : pointingelement, pmatrix_direct, pmatrix_transpose
     use module_preprocessor
     use module_projection
-    use module_wcs
+    use module_wcs, only : init_astrometry, ad2xy_gnomonic
     use omp_lib
     use module_math, only : pInf, test_real_eq, sum_kahan
     use string, only : strinteger
     implicit none
 
-    type(pacsinstrument)        :: pacs
-    type(pacsobservation)       :: obs(1)
-    type(pacspointing)          :: pointing
+    class(pacsinstrument), allocatable  :: pacs
+    class(pacsobservation), allocatable :: obs
+    class(pacspointing), allocatable    :: pointing
     character(len=*), parameter :: inputdir    = '/home/pchanial/work/pacs/data/transparent/NGC6946/'
     character(len=*), parameter :: filename(1) = inputdir // '1342184520_blue[12001:86000]'
     integer, parameter          :: npixels_per_sample = 6
@@ -37,15 +37,18 @@ program test_ngc6946_bpj
     call system_clock(count0, count_rate, count_max)
 
     ! initialise observation
-    call init_pacsobservation(obs, filename, status)
+    allocate(obs)
+    call obs%init(filename, status)
     if (status /= 0) stop 'FAILED: pacsobservation%init'
-    nsamples = obs(1)%last - obs(1)%first + 1
+    nsamples = obs%info(1)%nsamples
 
     ! initialise pacs instrument
+    allocate(pacs)
     call pacs%init(obs, 1, .false., status)
     if (status /= 0) stop 'FAILED: pacsinstrument%init'
 
     ! initialise pointing information
+    allocate(pointing)
     call pointing%init(obs, status)
     if (status /= 0) stop 'FAILED: pacspointing%init'
 
@@ -66,7 +69,7 @@ program test_ngc6946_bpj
     call system_clock(count1, count_rate, count_max)
     allocate(signal(nsamples, pacs%ndetectors))
     allocate(mask  (nsamples, pacs%ndetectors))
-    call read_pacsobservation(obs, pacs%pq, signal, mask, status)
+    call obs%read(pacs%pq, signal, mask, status)
     if (status /= 0) stop 'FAILED: read_tod'
     call system_clock(count2, count_rate, count_max)
     write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
@@ -103,8 +106,9 @@ program test_ngc6946_bpj
 
     index = 0
     write(*,*) 'surfaces:'
-    !$omp parallel do default(shared) firstprivate(index, chop_old)   &
-    !$omp private(isample, ra, dec, pa, chop, coords, coords_yz)
+    !XXX IFORT bug
+    !!$omp parallel do default(shared) firstprivate(index, chop_old)   &
+    !!$omp private(isample, ra, dec, pa, chop, coords, coords_yz)
     do isample = 1, nsamples
         call pointing%get_position(1, pointing%time(isample), ra, dec, pa, chop, index)
         if (abs(chop-chop_old) > 1.d-2) then
@@ -112,13 +116,13 @@ program test_ngc6946_bpj
             chop_old = chop
         end if
         coords = pacs%yz2ad(coords_yz, ra, dec, pa)
-        call ad2xy_gnomonic_vect(coords(1,:), coords(2,:), coords(1,:), coords(2,:))
+        coords = ad2xy_gnomonic(coords)
         do idetector = 1, pacs%ndetectors
             surface1(isample,idetector) = abs(surface_convex_polygon(coords(:,(idetector-1)*nvertices+1:idetector*nvertices)))
             surface2(isample,idetector) = sum_kahan(real(pmatrix(:,isample,idetector)%weight, kind=8))
         end do
     end do
-    !$omp end parallel do
+    !!$omp end parallel do
 
     call system_clock(count2, count_rate, count_max)
     write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'

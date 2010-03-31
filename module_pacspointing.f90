@@ -1,8 +1,8 @@
 module module_pacspointing
     use ISO_FORTRAN_ENV,        only : OUTPUT_UNIT, ERROR_UNIT
     use module_fitstools,       only : ft_read_column, ft_readextension, ft_open_bintable, ft_close
-    use module_math,            only : median, NaN
-    use module_pacsobservation, only : pacsobservation
+    use module_math,            only : mean, NaN
+    use module_pacsobservation, only : pacsobservation, pacsobsinfo
     use precision,              only : p, dp
     use string,                 only : strinteger, strternary
     implicit none
@@ -38,7 +38,7 @@ contains
     subroutine init(this, obs, status)
 
         class(pacspointing), intent(inout) :: this
-        type(pacsobservation), intent(in)  :: obs(:)
+        class(pacsobservation), intent(in) :: obs
         integer, intent(out)               :: status
 
         real(kind=dp), allocatable         :: buffer(:)
@@ -47,8 +47,8 @@ contains
         integer :: first, last
         integer :: length, unit, status_close, iobs
 
-        this%nslices      = size(obs)
-        this%nsamples_tot = sum(obs%nsamples)
+        this%nslices      = size(obs%info)
+        this%nsamples_tot = sum(obs%info%nsamples)
         allocate(this%nsamples(this%nslices))
         allocate(this%first   (this%nslices))
         allocate(this%last    (this%nslices))
@@ -58,17 +58,17 @@ contains
         allocate(this%dec     (this%nsamples_tot))
         allocate(this%pa      (this%nsamples_tot))
         allocate(this%chop    (this%nsamples_tot))
-        this%nsamples = obs%nsamples
+        this%nsamples = obs%info%nsamples
 
         do iobs = 1, this%nslices
 
             ! compute range of slices. They are contiguous in pacspointing
-            this%first(iobs) = sum(obs(1:iobs-1)%nsamples) + 1
+            this%first(iobs) = sum(obs%info(1:iobs-1)%nsamples) + 1
             this%last (iobs) = this%first(iobs) + this%nsamples(iobs) - 1
 
-            length = len_trim(obs(iobs)%filename)
-            if (obs(iobs)%filename(length-4:length) /= '.fits') then
-                 call this%init_oldstyle(obs(iobs), iobs, status)
+            length = len_trim(obs%info(iobs)%filename)
+            if (obs%info(iobs)%filename(length-4:length) /= '.fits') then
+                 call this%init_oldstyle(obs%info(iobs), iobs, status)
                  if (status /= 0) return
                  cycle
             end if
@@ -76,7 +76,7 @@ contains
             allocate(timeus(this%nsamples(iobs)))
             allocate(buffer(this%nsamples(iobs)))
 
-            call ft_open_bintable(trim(obs(iobs)%filename) // '[Status]', unit,&
+            call ft_open_bintable(trim(obs%info(iobs)%filename) // '[Status]', unit,&
                                   nsamples, status)
             if (status /= 0) return
             if (nsamples < this%nsamples(iobs)) then
@@ -86,8 +86,8 @@ contains
                 go to 999
             end if
 
-            first = obs(iobs)%first
-            last  = obs(iobs)%last
+            first = obs%info(iobs)%first
+            last  = obs%info(iobs)%last
 
             call ft_read_column(unit, 'FINETIME', first, last, timeus, status)
             if (status /= 0) go to 999
@@ -122,6 +122,8 @@ contains
         return
 
     999 call ft_close(unit, status_close)
+        if (allocated(buffer)) deallocate(buffer)
+        if (allocated(timeus)) deallocate(timeus)
 
     end subroutine init
 
@@ -131,7 +133,7 @@ contains
 
     subroutine init_oldstyle(this, obs, iobs, status)
         class(pacspointing), intent(inout) :: this
-        class(pacsobservation), intent(in) :: obs
+        type(pacsobsinfo), intent(in)      :: obs
         integer, intent(in)                :: iobs
         integer, intent(out)               :: status
         real*8, allocatable                :: buffer(:)
@@ -228,34 +230,35 @@ contains
         integer   :: islice
         integer*8 :: isample, nsamples, first, last
         real(dp), allocatable :: delta(:)
-        real(dp), parameter :: tol = 0.001d0 ! fractional threshold of sampling above which sampling is considered uneven
+        real(dp), parameter :: tol = 0.01d0 ! fractional threshold of sampling above which sampling is considered uneven
 
         status = 0
 
         do islice = 1, this%nslices
 
-           nsamples = this%nsamples(islice)
-           first    = this%first(islice)
-           last     = this%last(islice)
+            nsamples = this%nsamples(islice)
+            first    = this%first(islice)
+            last     = this%last(islice)
            
-           if (nsamples <= 1) then
-              status = 1
-              write (ERROR_UNIT,'(a)')'Input time has less than 2 time samples.'
-              return
-           end if
-
-           ! check that the input time is monotonous (and increasing)
-           allocate(delta(this%nsamples(islice)-1))
-           delta = this%time(first+1:last) - this%time(first:last-1)
-           if (any(delta <= 0)) then
+            if (nsamples <= 1) then
                 status = 1
+                write (ERROR_UNIT,'(a)') 'Input time has less than 2 samples.'
+                return
+            end if
+
+            ! check that the input time is monotonous (and increasing)
+            allocate(delta(this%nsamples(islice)-1))
+            delta = this%time(first+1:last) - this%time(first:last-1)
+            if (any(delta <= 0)) then
+                status = 1
+                deallocate(delta)
                 write (ERROR_UNIT,'(a)') "ERROR: The pointing time is not stric&
                     &tly increasing"
                 return
             end if
 
             ! check there is no time drifts
-            this%delta(islice) = median(delta)
+            this%delta(islice) = mean(delta)
             if (any(abs([(this%delta(islice)*(isample-1),isample=1,nsamples)] -&
                 (this%time(first:last)-this%time(first))) > tol *              &
                 this%delta(islice))) then
@@ -263,6 +266,8 @@ contains
                     &d or is drifting' // strternary(this%nslices>1, ' in obser&
                     &vation '//strinteger(islice),'') // '.'
             end if
+
+            deallocate(delta)
           
         end do
 
@@ -283,8 +288,11 @@ contains
         integer                         :: i, first, last
         real*8                          :: frac
 
-        if (islice < 1 .or. islice > this%nslices)                             &
-            stop 'GET_POSITION: invalid slice number.'
+        if (islice < 1 .or. islice > this%nslices) then
+            write (ERROR_UNIT,'(a,i0,a)') "GET_POSITION: Invalid slice number '&
+                &", islice, "'."
+            stop
+        end if
 
         first = this%first(islice)
         last  = this%last (islice)
@@ -298,7 +306,7 @@ contains
             return
         end if
 
-        if (index == 0) then
+        if (index == 0 .or. index-1 > size(this%time)) then
             index = first + 1
         else if (time <= this%time(index-1)) then
             index = first + 1

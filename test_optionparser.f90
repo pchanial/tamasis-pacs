@@ -3,10 +3,10 @@ program test_optionparser
     use module_optionparser
     implicit none
 
-    type(optionparser), allocatable :: parser
-    integer                         :: status
+    class(optionparser), allocatable :: parser
+    integer                          :: status
 
-   allocate(parser)
+    allocate(parser)
     call parser%init('test_optionparser [options] arg1 [arg2]', 1, 2)
 
     call parser%add_option('recursive','r','Recursive loop',status=status)

@@ -24,140 +24,119 @@ module module_pacsobservation
     private
 
     public :: pacsobservation
-    public :: init_pacsobservation
-    public :: read_pacsobservation
+    public :: pacsobsinfo
+
+    type pacsobsinfo
+        character(len=256) :: filename
+        character          :: channel
+        logical            :: transparent_mode
+        integer            :: compression_factor
+        integer*8          :: nsamples
+        integer*8          :: first
+        integer*8          :: last
+    end type pacsobsinfo
 
     type pacsobservation
 
         private
-        character(len=256), public :: filename
-        character,          public :: channel
-        logical,            public :: transparent_mode
-        integer,            public :: compression_factor
-        integer*8,          public :: nsamples
-        integer*8,          public :: first
-        integer*8,          public :: last
+        type(pacsobsinfo), allocatable, public :: info(:)
 
     contains
 
         private
-        procedure :: init
-        procedure :: read
-        procedure :: read_oldstyle
-        procedure :: set_channel
-        procedure :: set_compression_mode
-        procedure :: set_filename
-        procedure :: set_transparent_mode
-        procedure :: set_valid_slice
+        procedure, public :: init
+        procedure, public :: read
 
     end type pacsobservation
-
-    interface init_pacsobservation
-        module procedure init_scalar, init_array
-    end interface init_pacsobservation
-
-    interface read_pacsobservation
-        module procedure read_scalar, read_array
-    end interface read_pacsobservation
-
 
 contains
 
 
     subroutine init(this, filename, status)
+
         class(pacsobservation), intent(inout) :: this
-        character(len=*), intent(in)          :: filename
+        character(len=*), intent(in)          :: filename(:)
         integer, intent(out)                  :: status
         integer*8                             :: first, last
+        integer                               :: iobs
 
-        call this%set_filename(filename, first, last, status)
-        if (status /= 0) return
-
-        call this%set_valid_slice(first, last, status)
-        if (status /= 0) return
-
-        this%nsamples = this%last - this%first + 1
-
-        call this%set_channel(status)
-        if (status /= 0) return
-
-        call this%set_compression_mode(status)
-        if (status /= 0) return
+        ! parameter checking
+        if (size(filename) == 0) then 
+            status = 1
+            write (ERROR_UNIT,'(a)')'INIT_PACSOBSERVATION: Array has zero size.'
+            return
+        end if
         
-        call this%set_transparent_mode(status)
-        if (status /= 0) return
+        if (allocated(this%info)) deallocate(this%info)
+        allocate(this%info(size(filename)))
+
+        do iobs = 1, size(filename)
+            call set_filename(this%info(iobs), filename(iobs), first, last,    &
+                              status)
+            if (status /= 0) return
+
+            call set_valid_slice(this%info(iobs), first, last, status)
+            if (status /= 0) return
+
+            this%info(iobs)%nsamples = this%info(iobs)%last -                  &
+                                       this%info(iobs)%first + 1
+
+            call set_channel(this%info(iobs), status)
+            if (status /= 0) return
+
+            call set_compression_mode(this%info(iobs), status)
+            if (status /= 0) return
         
+            call set_transparent_mode(this%info(iobs), status)
+            if (status /= 0) return
+
+        end do
+        
+        ! print some info
+        do iobs = 1, size(filename)
+
+            ! observation number & file name
+            write (OUTPUT_UNIT,'(a)') 'Info: Observation' // strternary(       &
+                size(filename)>1, ' ' // strinteger(iobs), '') // ': ' //      &
+                trim(this%info(iobs)%filename)
+            write (OUTPUT_UNIT,'(a)') '      Section: [' //     &
+                strsection(this%info(iobs)%first,this%info(iobs)%last) // ']'
+            
+            ! channel
+            write (OUTPUT_UNIT,'(a,$)') "      Channel: "
+            select case (this%info(iobs)%channel)
+                case ('b')
+                    write (OUTPUT_UNIT,'(a)') "'Blue'"
+                case ('g')
+                    write (OUTPUT_UNIT,'(a)') "'Green'"
+                case ('r')
+                    write (OUTPUT_UNIT,'(a)') "'Red'"
+                case default
+                    write (OUTPUT_UNIT,'(a)') 'Unknown'
+            end select
+
+            ! compression mode
+!            write (OUTPUT_UNIT,'(a)') "Info: Compression mode: '" // trim(compression) // "'"
+
+            ! compression factor
+            write (OUTPUT_UNIT,'(a,i0)') "      Compression factor: ",         &
+                 this%info(iobs)%compression_factor
+
+        end do
+
     end subroutine init
 
 
     !---------------------------------------------------------------------------
 
 
-    subroutine init_scalar(obs, filename, status)
-        class(pacsobservation), intent(inout) :: obs
-        character(len=*), intent(in)          :: filename
-        integer, intent(out)                  :: status
-
-        ! initialise observation
-        call obs%init(filename, status)
-        if (status /= 0) return
-
-        ! print some info
-        write (OUTPUT_UNIT,'(a)') 'Info: Section: ' //           &
-             strsection(obs%first, obs%last)
-
-    end subroutine init_scalar
-
-
-    !---------------------------------------------------------------------------
-
-
-    subroutine init_array(obs, filename, status)
-        type(pacsobservation), intent(inout) :: obs(:)
-        character(len=*), intent(in)         :: filename(:)
-        integer, intent(out)                 :: status
-        integer   :: iobs
-
-        ! parameter checking
-        if (size(obs) == 0) then 
-            status = 1
-            write (ERROR_UNIT,'(a)')'INIT_PACSOBSERVATION: Array has zero size.'
-            return
-        end if
-        if (size(obs) /= size(filename)) then
-            status = 1
-            write (ERROR_UNIT,'(a,2(i0,a))') "INIT_PACSOBSERVATION: Invalid num&
-                &ber of input files '", size(filename), "' instead of '",      &
-                size(obs), "'."
-            return
-        end if
-
-        ! loop over the observations
-        do iobs = 1, size(obs)
-            call obs(iobs)%init(filename(iobs), status)
-            if (status /= 0) return
-        end do
-
-        ! print some info
-        do iobs = 1, size(obs)
-            write (OUTPUT_UNIT,'(a)') 'Info: Section' // strternary(iobs>1, ' '&
-                // strinteger(iobs), ''), strsection(obs(iobs)%first,          &
-                obs(iobs)%last)
-        end do
-
-    end subroutine init_array
-
-
-    !---------------------------------------------------------------------------
-
-
-    ! returns 'b', 'g' or 'r' for a blue, green or red channel observation
+    ! sets 'b', 'g' or 'r' for a blue, green or red channel observation
     subroutine set_channel(this, status)
-        class(pacsobservation), intent(inout) :: this
-        integer, intent(out)                  :: status
-        integer                               :: length, unit, nsamples
-        integer                               :: status_close
-        character(len=2), allocatable         :: channels(:)
+        type(pacsobsinfo), intent(inout) :: this
+        integer, intent(out)             :: status
+        integer                          :: length, unit, nsamples
+        integer                          :: status_close
+        character(len=2), allocatable    :: channels(:)
 
         this%channel = ' '
 
@@ -165,7 +144,6 @@ contains
         length = len_trim(this%filename)
         if (this%filename(length-4:length) /= '.fits') then
             status = 0
-            write (ERROR_UNIT,'(a)') 'SET_CHANNEL: obsolete file format.'
             if (strlowcase(this%filename(length-3:length)) == 'blue') then
                this%channel = 'b'
             else if (strlowcase(this%filename(length-4:length)) == 'green') then
@@ -176,7 +154,7 @@ contains
                status = 1
                write (ERROR_UNIT,'(a)') 'File name does not contain the array channel identifier (blue, green, red).'
             end if
-            go to 999
+            return
         endif
 
         call ft_open_bintable(trim(this%filename) // '[Status]', unit,         &
@@ -207,18 +185,6 @@ contains
         call ft_close(unit, status_close)
         if (status == 0) status = status_close
 
-    999 if (status == 0) then
-            write (OUTPUT_UNIT,'(a,$)') "Info: Channel: "
-            select case (this%channel)
-                case ('b')
-                    write (OUTPUT_UNIT,'(a)') "'Blue'"
-                case ('g')
-                    write (OUTPUT_UNIT,'(a)') "'Green'"
-                case ('r')
-                    write (OUTPUT_UNIT,'(a)') "'Red'"
-            end select
-        end if
-
     end subroutine set_channel
 
 
@@ -226,8 +192,8 @@ contains
 
 
     subroutine set_compression_mode(this, status)
-        class(pacsobservation), intent(inout) :: this
-        integer, intent(out)                  :: status
+        type(pacsobsinfo), intent(inout) :: this
+        integer, intent(out)             :: status
         integer           :: unit, ikey, length, status_close
         character(len=72) :: algorithm, keyword, comment
 
@@ -238,8 +204,8 @@ contains
         if (this%filename(length-4:length) /= '.fits') then
             status = 0
             this%compression_factor = 1
-            write (*,'(a)') 'Info: Compression factor is one for obsolete file &
-                &format.'
+            write (*,'(a)') 'Warning: Assuming compression factor of one for ob&
+                &solete file format.'
             return
         end if
 
@@ -271,9 +237,6 @@ contains
             this%compression_factor = 1
         end if
         
-        write (OUTPUT_UNIT,'(a,i0)') "Info: Compression factor: ",             &
-            this%compression_factor
-
     999 call ft_close(unit, status_close)
         if (status == 0) status = status_close
 
@@ -284,10 +247,10 @@ contains
 
 
     subroutine set_transparent_mode(this, status)
-        class(pacsobservation), intent(inout) :: this
-        integer, intent(out)                  :: status
-        integer                               :: unit, ikey, length, status_close
-        character(len=72)                     :: compression, keyword, comment
+        type(pacsobsinfo), intent(inout) :: this
+        integer, intent(out)             :: status
+        integer                          :: unit, ikey, length, status_close
+        character(len=72)                :: compression, keyword, comment
 
         this%transparent_mode = .false.
 
@@ -296,7 +259,7 @@ contains
         if (this%filename(length-4:length) /= '.fits') then
             status = 0
             this%transparent_mode = .true.
-            write (*,'(a)') 'Info: Transparent mode assumed for obsolete file f&
+            write (*,'(a)') 'Warning: Transparent mode assumed for obsolete file f&
                 &ormat.'
             return
         end if
@@ -328,8 +291,6 @@ contains
             go to 999
         end if
 
-        write (OUTPUT_UNIT,'(a)') "Info: Compression mode: '" // trim(compression) // "'"
-
     999 call ft_close(unit, status_close)
         if (status == 0) status = status_close
 
@@ -340,9 +301,9 @@ contains
 
 
     subroutine set_valid_slice(this, first, last, status)
-        class(pacsobservation), intent(inout) :: this
-        integer*8, intent(in)                 :: first, last
-        integer, intent(out)                  :: status
+        type(pacsobsinfo), intent(inout) :: this
+        integer*8, intent(in)            :: first, last
+        integer, intent(out)             :: status
         integer*8              :: nsamples
         integer                :: length
         integer*8              :: isample
@@ -383,8 +344,8 @@ contains
             ! set first valid sample
             if (first == 0) then
                 if (abs(chop(this%last)) > 1.d0) then
-                    write (OUTPUT_UNIT,'(a)') 'Info: last sample is invalid. Au&
-                        &tomatic search for valid slice is disabled.'
+                    write (OUTPUT_UNIT,'(a)') 'Warning: last sample is invalid.&
+                        & Automatic search for valid slice is disabled.'
                     this%first = 1
                 else
                     do isample = this%last-1, 1, -1
@@ -454,11 +415,11 @@ contains
 
 
     subroutine set_filename(this, filename, first, last, status)
-        class(pacsobservation), intent(inout) :: this
-        character(len=*), intent(in)          :: filename
-        integer*8, intent(out)                :: first, last
-        integer, intent(out)                  :: status
-        integer                               :: pos, length, delim
+        type(pacsobsinfo), intent(inout) :: this
+        character(len=*), intent(in)     :: filename
+        integer*8, intent(out)           :: first, last
+        integer, intent(out)             :: status
+        integer                          :: pos, length, delim
  
         status = 0
         first = 0
@@ -483,7 +444,7 @@ contains
         if (pos == 1) then
             status = 1
             write (ERROR_UNIT,'(a)') "ERROR: Missing opening bracket in '" //  &
-                                     trim(filename) // "'."
+                 trim(filename) // "'."
             return
         end if
       
@@ -503,7 +464,7 @@ contains
             read (filename(delim+1:length), '(i20)', iostat=status) last
             if (status /= 0) then
                 write (ERROR_UNIT,'(a)') 'ERROR: Invalid last sample: ' //    &
-                    filename(pos-1:length+1)
+                      filename(pos-1:length+1)
                 return
             end if
         end if
@@ -513,7 +474,7 @@ contains
             read (filename(pos:delim-1), '(i20)', iostat=status) first
             if (status /= 0) then
                 write (ERROR_UNIT,'(a)') 'ERROR: Invalid first sample: ' //    &
-                    filename(pos-1:length+1)
+                      filename(pos-1:length+1)
                 return
             end if
         end if
@@ -541,42 +502,18 @@ contains
     !---------------------------------------------------------------------------
 
 
-    subroutine read_scalar(obs, pq, signal, mask, status)
-        type(pacsobservation), intent(inout) :: obs
-        integer, intent(in)                  :: pq(:,:)
-        real(p), intent(out)                 :: signal(:,:)
-        logical(1), intent(out)              :: mask(:,:)
-        integer, intent(out)                 :: status
+    subroutine read(obs, pq, signal, mask, status)
 
-
-        ! check that the number of samples in the observation is equal
-        ! to the number of samples in the signal and mask arrays
-        if (obs%nsamples /= size(signal,1) .or.                                &
-            obs%nsamples /= size(mask,1)) then
-            status = 1
-            write (ERROR_UNIT,'(a)') 'READ_TOD: invalid dimensions.'
-            return
-        end if
-
-        call obs%read(pq, 1_8, signal, mask, status)
-
-    end subroutine read_scalar
-
-
-    !---------------------------------------------------------------------------
-
-
-    subroutine read_array(obs, pq, signal, mask, status)
-        type(pacsobservation), intent(in) :: obs(:)
-        integer, intent(in)               :: pq(:,:)
-        real(p), intent(out)              :: signal(:,:)
-        logical(1), intent(out)           :: mask(:,:)
-        integer, intent(out)              :: status
+        class(pacsobservation), intent(in) :: obs
+        integer, intent(in)                :: pq(:,:)
+        real(p), intent(out)               :: signal(:,:)
+        logical(1), intent(out)            :: mask(:,:)
+        integer, intent(out)               :: status
         integer*8 :: nsamples, destination
         integer   :: nobs, iobs
 
-        nobs     = size(obs)
-        nsamples = sum(obs%nsamples)
+        nobs     = size(obs%info)
+        nsamples = sum(obs%info%nsamples)
 
         ! check that the total number of samples in the observations is equal
         ! to the number of samples in the signal and mask arrays
@@ -589,34 +526,34 @@ contains
         ! loop over the PACS observations
         destination = 1
         do iobs = 1, nobs
-            call obs(iobs)%read(pq, destination, signal, mask, status)
+            call read_one(obs%info(iobs), pq, destination, signal, mask, status)
             if (status /= 0) return
-            destination = destination + obs(iobs)%nsamples
+            destination = destination + obs%info(iobs)%nsamples
         end do
    
-    end subroutine read_array
+    end subroutine read
 
 
     !---------------------------------------------------------------------------
 
 
-    subroutine read(this, pq, destination, signal, mask, status)
-        class(pacsobservation), intent(in) :: this
-        integer, intent(in)                :: pq(:,:)
-        integer*8, intent(in)              :: destination
-        real*8, intent(inout)              :: signal(:,:)
-        logical*1, intent(inout)           :: mask  (:,:)
-        integer, intent(out)               :: status
-        integer*8                          :: p, q
-        integer                            :: idetector, unit, length
-        integer                            :: status_close
-        integer, allocatable               :: imageshape(:)
-        logical                            :: mask_found
-        integer*4, allocatable             :: maskcompressed(:)
-        integer*4                          :: maskval
-        integer*8                          :: ncompressed
-        integer*8                          :: isample, icompressed, ibit
-        integer*8                          :: firstcompressed, lastcompressed
+    subroutine read_one(this, pq, destination, signal, mask, status)
+        type(pacsobsinfo), intent(in) :: this
+        integer, intent(in)           :: pq(:,:)
+        integer*8, intent(in)         :: destination
+        real*8, intent(inout)         :: signal(:,:)
+        logical*1, intent(inout)      :: mask  (:,:)
+        integer, intent(out)          :: status
+        integer*8                     :: p, q
+        integer                       :: idetector, unit, length
+        integer                       :: status_close
+        integer, allocatable          :: imageshape(:)
+        logical                       :: mask_found
+        integer*4, allocatable        :: maskcompressed(:)
+        integer*4                     :: maskval
+        integer*8                     :: ncompressed
+        integer*8                     :: isample, icompressed, ibit
+        integer*8                     :: firstcompressed, lastcompressed
 
         ! old style file format
         length = len_trim(this%filename)
@@ -699,22 +636,22 @@ contains
     999 call ft_close(unit, status_close)
         if (status == 0) status = status_close
 
-    end subroutine read
+    end subroutine read_one
 
 
     !---------------------------------------------------------------------------
 
 
     subroutine read_oldstyle(this, pq, dest, signal, mask, status)
-        class(pacsobservation), intent(in) :: this
-        integer, intent(in)                :: pq(:,:)
-        integer*8, intent(in)              :: dest
-        real*8, intent(inout)              :: signal(:,:)
-        logical*1, intent(inout)           :: mask(:,:)
-        integer, intent(out)               :: status
-        integer*8                          :: p, q
-        integer                            :: idetector, unit, status_close
-        integer, allocatable               :: imageshape(:)
+        type(pacsobsinfo), intent(in) :: this
+        integer, intent(in)           :: pq(:,:)
+        integer*8, intent(in)         :: dest
+        real*8, intent(inout)         :: signal(:,:)
+        logical*1, intent(inout)      :: mask(:,:)
+        integer, intent(out)          :: status
+        integer*8                     :: p, q
+        integer                       :: idetector, unit, status_close
+        integer, allocatable          :: imageshape(:)
 
         ! handle signal
         call ft_open_image(trim(this%filename) // '_Signal.fits', unit, 3,     &

@@ -3,8 +3,7 @@ program test_deglitching
     use :: precision, only : p
     use :: module_deglitching, only : deglitch_l2b
     use :: module_math, only : linspace
-    use :: module_pacsinstrument, only : xy2roi, roi2pmatrix
-    use :: module_pointingmatrix, only : pointingelement, pmatrix_direct
+    use :: module_pointingmatrix, only : pointingelement, pmatrix_direct, xy2roi, roi2pmatrix
     implicit none
 
     type(pointingelement),allocatable :: pmatrix(:,:,:)
@@ -31,10 +30,13 @@ program test_deglitching
     allocate(mask(ntimes,ndetectors))
 
     map = linspace(1._p, 2.25_p, nx*ny)
-    xc = [(linspace(1._p, real(nx-3, kind=p), nx-3), i=1,nrepeats)]
+!print *, 'g'!, shape(xc)!, shape(yc)
+    do i=1,nrepeats
+        xc((i-1)*(nx-3)+1:i*(nx-3)) = linspace(1._p, real(nx-3, kind=p), nx-3)
+    end do
+    !xc = [(linspace(1._p, real(nx-3, kind=p), nx-3), i=1, nrepeats)]
     yc = 1._p
     mask = .false.
-
 
     !----------------------------------------------------------------------
     ! test 1: detectors do not overlap map pixels (npixels_per_sample = 1)
@@ -207,8 +209,14 @@ contains
         do itime=1, ntimes
             xy(1,:) = [xc(itime)-h, xc(itime)+h, xc(itime)+h, xc(itime)-h]
             xy(2,:) = [yc(itime)-h, yc(itime)-h, yc(itime)+h, yc(itime)+h]
-            roi = xy2roi(xy)
-            call roi2pmatrix(roi, xy, nx, ny, itime, nroi, pmatrix)
+!IFORT BUG: print *, shape([yc(itime)-h, yc(itime)-h, yc(itime)+h, yc(itime)+h])
+            xy(2,1) = yc(itime)-h
+            xy(2,2) = yc(itime)-h
+            xy(2,3) = yc(itime)+h
+            xy(2,4) = yc(itime)+h
+
+            roi = xy2roi(xy,4)
+            call roi2pmatrix(roi, 4, xy, nx, ny, itime, nroi, pmatrix)
             npixels_per_sample = max(npixels_per_sample, nroi)
         end do
 

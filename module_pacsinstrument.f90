@@ -2,22 +2,20 @@ module module_pacsinstrument
 
     use ISO_FORTRAN_ENV,        only : ERROR_UNIT, OUTPUT_UNIT
     use module_fitstools,       only : ft_create_header, ft_readextension
-    use module_math,            only : pInf, mInf, NaN, nint_down, nint_up
-    use module_pacsobservation, only : pacsobservation
+    use module_math,            only : pInf, mInf, NaN, nint_down, nint_up,    &
+                                       deg2rad
+    use module_pacsobservation, only : pacsobservation, pacsobsinfo
     use module_pacspointing,    only : pacspointing
-    use module_pointingmatrix,  only : pointingelement
-    use module_projection,      only : convex_hull,                            &
-                                       intersection_polygon_unity_square
+    use module_pointingmatrix,  only : pointingelement, xy2roi, roi2pmatrix
+    use module_projection,      only : convex_hull
     use string,                 only : strinteger
-    use module_wcs,             only : init_astrometry, ad2xy_gnomonic
+    use module_wcs,             only : init_astrometry, ad2xy_gnomonic, ad2xy_gnomonic_vect
     implicit none
     private
 
     public :: ndims
     public :: nvertices
     public :: pacsinstrument
-    public :: xy2roi
-    public :: roi2pmatrix
     public :: multiplexing_direct
     public :: multiplexing_transpose
 
@@ -70,15 +68,15 @@ module module_pacsinstrument
         private
         procedure, public :: init
         procedure, public :: init_scalar
-        procedure         :: read_calibration_files
-        procedure         :: filter_detectors
         procedure, public :: compute_mapheader
         procedure, public :: find_minmax
         procedure, public :: compute_projection_sharp_edges
-        procedure, public, nopass  :: uv2yz
-        procedure, public, nopass  :: yz2ad
-        procedure, public, nopass  :: xy2roi
 
+        procedure, nopass, public :: uv2yz
+        procedure, nopass, public :: yz2ad
+
+        procedure :: read_calibration_files
+        procedure :: filter_detectors
         procedure :: filter_detectors_array
 
     end type pacsinstrument
@@ -90,7 +88,7 @@ contains
     subroutine init_scalar(this, obs, fine_sampling_factor, keep_bad_detectors,&
                            status, bad_detector_mask)
         class(pacsinstrument), intent(inout) :: this
-        type(pacsobservation), intent(in)    :: obs
+        type(pacsobsinfo), intent(in)        :: obs
         integer, intent(in)                  :: fine_sampling_factor
         logical, intent(in)                  :: keep_bad_detectors
         integer, intent(out)                 :: status
@@ -147,14 +145,14 @@ contains
     subroutine init(this, obs, fine_sampling_factor, keep_bad_detectors,       &
                     status, bad_detector_mask)
         class(pacsinstrument), intent(inout) :: this
-        type(pacsobservation), intent(in)    :: obs(:)
+        class(pacsobservation), intent(in)   :: obs
         integer, intent(in)                  :: fine_sampling_factor
         logical, intent(in)                  :: keep_bad_detectors
         integer, intent(out)                 :: status
         logical*1, intent(in), optional      :: bad_detector_mask(:,:)
 
         ! check that all observations have the same filter
-        if (any(obs%channel /= obs(1)%channel)) then
+        if (any(obs%info%channel /= obs%info(1)%channel)) then
             status = 1
             write (ERROR_UNIT,'(a)') 'ERROR: Observations have different channe&
                                      &s.'
@@ -162,15 +160,15 @@ contains
         end if
 
         ! check that all observations have the same transparent mode
-        if (any(obs%transparent_mode .neqv. obs(1)%transparent_mode)) then
+        if (any(obs%info%transparent_mode .neqv. obs%info(1)%transparent_mode)) then
             status = 1
             write (ERROR_UNIT,'(a)') 'ERROR: Observations have different transp&
                                      &rent modes.'
             return
         end if
 
-        call this%init_scalar(obs(1), fine_sampling_factor, keep_bad_detectors,&
-                              status, bad_detector_mask)
+        call this%init_scalar(obs%info(1), fine_sampling_factor,               &
+                              keep_bad_detectors, status, bad_detector_mask)
 
     end subroutine init
 
@@ -297,7 +295,7 @@ contains
                    this%corners_uv_blue, this%distortion_yz_blue,              &
                    this%flatfield_green)
            case ('b')
-              call this%filter_detectors_array(this%mask_blue,                &
+              call this%filter_detectors_array(this%mask_blue,                 &
                    this%corners_uv_blue, this%distortion_yz_blue,              &
                    this%flatfield_blue)
 
@@ -419,85 +417,19 @@ contains
 
         integer            :: i
         real*8             :: cospa, sinpa
-        real*8, parameter  :: pi = 4.0d0 * atan(1.0d0)
-        real*8, parameter  :: radeg = pi / 180d0
 
 
-        cospa =  cos(pa0*radeg)
-        sinpa = -sin(pa0*radeg)
+        cospa =  cos(pa0*deg2rad)
+        sinpa = -sin(pa0*deg2rad)
 
         do i=1, size(yz, 2)
 
             ad(2,i) = dec0 + (yz(1,i) * sinpa + yz(2,i) * cospa)
-            ad(1,i) = ra0  + (yz(1,i) * cospa - yz(2,i) * sinpa) / cos(ad(2,i) * radeg)
+            ad(1,i) = ra0  + (yz(1,i) * cospa - yz(2,i) * sinpa) / cos(ad(2,i) * deg2rad)
 
         end do
 
     end function yz2ad
-
-
-    !---------------------------------------------------------------------------
-
-
-    function xy2roi(xy) result(roi)
-        real*8, intent(in) :: xy(:,:)
-        real*8             :: roi(ndims,2,size(xy,2)/nvertices)
-        integer            :: idetector
-
-        do idetector = 1, size(xy,2) / nvertices
-            roi(:,1,idetector) = nint_up  (minval(xy(:,nvertices * (idetector-1)+1:nvertices*idetector),2))
-            roi(:,2,idetector) = nint_down(maxval(xy(:,nvertices * (idetector-1)+1:nvertices*idetector),2))
-        end do
-
-    end function xy2roi
-
-
-    !---------------------------------------------------------------------------
-
-
-    subroutine roi2pmatrix(roi, coords, nx, ny, itime, nroi, pmatrix)
-        integer, intent(in)                  :: roi(:,:,:)
-        real*8, intent(in)                   :: coords(:,:)
-        type(pointingelement), intent(inout) :: pmatrix(:,:,:)
-        integer, intent(in)                  :: nx, ny, itime
-        integer, intent(out)                 :: nroi
-        real*8                               :: polygon(2,nvertices)
-
-        integer                              :: npixels_per_sample, idetector, ix, iy, iroi, ipixel
-        real*4                               :: weight
-
-        ipixel = 0
-        nroi = 0
-        npixels_per_sample = size(pmatrix, 1)
-        do idetector = 1, size(pmatrix,3)
-            iroi = 1
-if (roi(2,1,idetector) < 1 .or. roi(2,2,idetector) > ny) then
-    write(*,*) 'roi2pmatrix: map y too small', roi(2,:,idetector), ny
-end if
-            do iy = max(roi(2,1,idetector),1), min(roi(2,2,idetector),ny)
-if (roi(1,1,idetector) < 1 .or. roi(1,2,idetector) > nx) then
-    write(*,*) 'roi2pmatrix: map x too small', roi(1,:,idetector), nx
-end if
-                do ix = max(roi(1,1,idetector),1), min(roi(1,2,idetector),nx)
-                    ipixel = ix - 1 + (iy - 1) * nx
-                    polygon(1,:) = coords(1,(idetector-1)*nvertices+1:idetector*nvertices) - (ix-0.5d0)
-                    polygon(2,:) = coords(2,(idetector-1)*nvertices+1:idetector*nvertices) - (iy-0.5d0)
-                    weight = abs(intersection_polygon_unity_square(polygon, nvertices))
-                    if (weight <= 0) cycle
-                    if (iroi <= npixels_per_sample) then
-                        pmatrix(iroi,itime,idetector)%pixel  = ipixel
-                        pmatrix(iroi,itime,idetector)%weight = weight
-                    end if
-                    iroi = iroi + 1
-                end do
-            end do
-            ! fill the rest of the pointing matrix
-            pmatrix(iroi:,itime,idetector)%pixel  = ipixel
-            pmatrix(iroi:,itime,idetector)%weight = 0
-            nroi = max(nroi, iroi-1)
-        end do
-
-    end subroutine roi2pmatrix
 
 
     !---------------------------------------------------------------------------
@@ -574,12 +506,14 @@ end if
 
             index = 0
 
-            !$omp parallel do default(shared) reduction(min:xmin,ymin) reduction(max:xmax,ymax) &
-            !$omp private(itime,ra,dec,pa,chop,hull) firstprivate(index)
+            !XXX bug IFORT
+            !!$omp parallel do default(shared) reduction(min:xmin,ymin) &
+            !!$omp reduction(max:xmax,ymax) &
+            !!$omp private(itime,ra,dec,pa,chop,hull) firstprivate(index)
             do itime = pointing%first(islice), pointing%last(islice)
                 call pointing%get_position(islice, pointing%time(itime), ra, dec, pa, chop, index)
-                hull = uv2yz(hull_uv, this%distortion_yz_blue, chop)
-                hull = yz2ad(hull, ra, dec, pa)
+                hull = this%uv2yz(hull_uv, this%distortion_yz_blue, chop)
+                hull = this%yz2ad(hull, ra, dec, pa)
                 hull = ad2xy_gnomonic(hull)
                 xmin = min(xmin, minval(hull(1,:)))
                 xmax = max(xmax, maxval(hull(1,:)))
@@ -587,7 +521,7 @@ end if
                 ymax = max(ymax, maxval(hull(2,:)))
 
              end do
-             !$omp end parallel do
+             !!$omp end parallel do
 
         end do
 
@@ -600,7 +534,7 @@ end if
     subroutine compute_projection_sharp_edges(this, pointing, finer_sampling,  &
                                               header, nx, ny, pmatrix, status)
         class(pacsinstrument), intent(in)  :: this
-        type(pacspointing), intent(in)     :: pointing
+        class(pacspointing), intent(in)    :: pointing
         logical, intent(in)                :: finer_sampling
         character(len=*), intent(in)       :: header
         integer, intent(in)                :: nx, ny
@@ -609,7 +543,8 @@ end if
 
         real*8  :: coords(ndims,this%ndetectors*nvertices), coords_yz(ndims,this%ndetectors*nvertices)
         real*8  :: ra, dec, pa, chop, chop_old
-        integer :: roi(ndims,2,this%ndetectors), islice, itime, npixels_per_sample, nroi, index
+        integer :: roi(ndims,2,this%ndetectors)
+        integer :: nsamples,  islice, itime, npixels_per_sample, nroi, index, dest
 
         !XXX
         if (finer_sampling) then
@@ -620,26 +555,32 @@ end if
         if (status /= 0) return
 
         npixels_per_sample = -1
+        dest = 0
 
+        ! loop over the observations
         do islice = 1, pointing%nslices
+
+            nsamples = int(pointing%nsamples(islice), kind=kind(0))
             chop_old = pInf
             index = 0
+
             !$omp parallel do default(shared) firstprivate(index, chop_old)   &
             !$omp private(itime, ra, dec, pa, chop, coords, coords_yz, roi) &
             !$omp reduction(max : npixels_per_sample)
-            do itime = pointing%first(islice), pointing%last(islice)
-                call pointing%get_position(islice, pointing%time(itime), ra, dec, pa, chop, index)
+            do itime = 1, nsamples
+                call pointing%get_position(islice, pointing%time(itime+pointing%first(islice)-1), ra, dec, pa, chop, index)
                 if (abs(chop-chop_old) > 1.d-2) then
                     coords_yz = this%uv2yz(this%corners_uv, this%distortion_yz, chop)
                     chop_old = chop
                  end if
                  coords = this%yz2ad(coords_yz, ra, dec, pa)
                  coords = ad2xy_gnomonic(coords)
-                 roi    = xy2roi(coords) ! [1=x|2=y,1=min|2=max,idetector]
-                 call roi2pmatrix(roi, coords, nx, ny, itime, nroi, pmatrix)
+                 roi    = xy2roi(coords, nvertices)
+                 call roi2pmatrix(roi, nvertices, coords, nx, ny, itime + dest, nroi, pmatrix)
                  npixels_per_sample = max(npixels_per_sample, nroi)
              end do
              !$omp end parallel do
+             dest = dest + nsamples
         end do
 
         if (npixels_per_sample /= size(pmatrix,1)) then

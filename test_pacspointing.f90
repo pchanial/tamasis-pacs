@@ -1,11 +1,11 @@
 program test_pacspointing
     use module_math, only : NaN, test_real_eq, test_real_neq
-    use module_pacsobservation, only : pacsobservation, init_pacsobservation
+    use module_pacsobservation, only : pacsobservation
     use module_pacspointing
     implicit none
 
-    type(pacspointing)          :: ptg
-    type(pacsobservation)       :: obs(1)
+    class(pacspointing), allocatable    :: ptg
+    class(pacsobservation), allocatable :: obs
     character(len=*), parameter :: filename(1) = 'tests/frames_blue.fits'
     integer                     :: i, index
     real*8                      :: time(12), ra(12), dec(12), pa(12), chop(12)
@@ -29,9 +29,11 @@ program test_pacspointing
                                     -0.000325298332441215088d0]
     integer                     :: status
 
-    call init_pacsobservation(obs, filename, status)
+    allocate(obs)
+    call obs%init(filename, status)
     if (status /= 0) stop 'FAILED: init_pacsobservation'
 
+    allocate(ptg)
     call ptg%init(obs, status)
     if (status /= 0) stop 'FAILED: ptg%init'
 

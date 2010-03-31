@@ -1,13 +1,17 @@
 module module_pointingmatrix
 
-    use precision, only : p, sp
+    use module_math, only : nint_down, nint_up
     use module_pointingelement, only : pointingelement
+    use module_projection, only : intersection_polygon_unity_square, intersection_polygon_unity_square_vect
+    use precision, only : p, sp
     implicit none
     private
 
     public :: pointingelement
     public :: pmatrix_direct
     public :: pmatrix_transpose
+    public :: xy2roi
+    public :: roi2pmatrix
     public :: backprojection_weighted
     public :: backprojection_weighted_roi
 
@@ -82,22 +86,25 @@ contains
         real(kind=p), intent(out)             :: map(0:)
         logical(kind=1), intent(in), optional :: mask(:,:)
         real(kind=p), intent(in), optional    :: threshold
-        real(kind=p)                          :: weight(0:ubound(map,1))
+        real(kind=p)                          :: weight(0:size(map)-1)
         integer                               :: npixels, nsamples, ndetectors
         integer                               :: ipixel, isample, idetector,imap
         real(kind=p)                          :: threshold_
+          
+        logical :: domask
 
         npixels    = size(pmatrix, 1)
         nsamples   = size(pmatrix, 2)
         ndetectors = size(pmatrix, 3)
+        domask     = present(mask)
 
-        map = 0
-        weight = 0
-        !$omp parallel do reduction(+:map,weight) & 
+        map = 0.d0
+        weight = 0.d0
+        !$omp parallel do default(shared) reduction(+:map,weight) &
         !$omp private(idetector,isample,ipixel,imap)
         do idetector = 1, ndetectors
             do isample = 1, nsamples
-                if (present(mask)) then
+                if (domask) then
                    if (mask(isample,idetector)) cycle
                 end if
                 do ipixel = 1, npixels
@@ -180,6 +187,84 @@ contains
         end where
 
     end subroutine backprojection_weighted_roi
+
+
+    !---------------------------------------------------------------------------
+
+
+    ! roi is a 3-dimensional array: [1=x|2=y,1=min|2=max,idetector]
+    function xy2roi(xy, nvertices) result(roi)
+        real*8, intent(in)  :: xy(:,:)
+        integer, intent(in) :: nvertices
+        real*8              :: roi(size(xy,1),2,size(xy,2)/nvertices)
+        integer             :: idetector
+
+        do idetector = 1, size(xy,2) / nvertices
+            roi(1,1,idetector) = nint_up  (minval(xy(1,nvertices * (idetector-1)+1:nvertices*idetector)))
+            roi(1,2,idetector) = nint_down(maxval(xy(1,nvertices * (idetector-1)+1:nvertices*idetector)))
+            roi(2,1,idetector) = nint_up  (minval(xy(2,nvertices * (idetector-1)+1:nvertices*idetector)))
+            roi(2,2,idetector) = nint_down(maxval(xy(2,nvertices * (idetector-1)+1:nvertices*idetector)))
+        end do
+
+    end function xy2roi
+
+
+    !---------------------------------------------------------------------------
+
+
+    subroutine roi2pmatrix(roi, nvertices, coords, nx, ny, itime, nroi, pmatrix)
+        integer, intent(in)                  :: roi(:,:,:)
+        integer, intent(in)                  :: nvertices
+        real*8, intent(in)                   :: coords(:,:)
+        type(pointingelement), intent(inout) :: pmatrix(:,:,:)
+        integer, intent(in)                  :: nx, ny, itime
+        integer, intent(out)                 :: nroi
+        real*8                               :: polygon(size(roi,1),nvertices)
+
+        integer                              :: npixels_per_sample, idetector, ix, iy, iroi, ipixel
+        real*4                               :: weight
+
+        ipixel = 0
+        nroi = 0
+        npixels_per_sample = size(pmatrix, 1)
+        do idetector = 1, size(pmatrix,3)
+
+           if (roi(2,1,idetector) < 1 .or. roi(2,2,idetector) > ny) then
+              write(*,*) 'roi2pmatrix: map y too small', roi(2,:,idetector), ny
+           end if
+
+           if (roi(1,1,idetector) < 1 .or. roi(1,2,idetector) > nx) then
+              write(*,*) 'roi2pmatrix: map x too small', roi(1,:,idetector), nx
+           end if
+
+            iroi = 1
+            do iy = max(roi(2,1,idetector),1), min(roi(2,2,idetector),ny)
+
+                do ix = max(roi(1,1,idetector),1), min(roi(1,2,idetector),nx)
+
+                    ipixel = ix - 1 + (iy - 1) * nx
+                    polygon(1,:) = coords(1,(idetector-1)*nvertices+1:idetector*nvertices) - (ix-0.5d0)
+                    polygon(2,:) = coords(2,(idetector-1)*nvertices+1:idetector*nvertices) - (iy-0.5d0)
+                    weight = abs(intersection_polygon_unity_square(polygon, nvertices))
+                    if (weight <= 0) cycle
+                    if (iroi <= npixels_per_sample) then
+                        pmatrix(iroi,itime,idetector)%pixel  = ipixel
+                        pmatrix(iroi,itime,idetector)%weight = weight
+                    end if
+                    iroi = iroi + 1
+
+                end do
+
+            end do
+
+            ! fill the rest of the pointing matrix
+            pmatrix(iroi:,itime,idetector)%pixel  = ipixel
+            pmatrix(iroi:,itime,idetector)%weight = 0
+            nroi = max(nroi, iroi-1)
+
+        end do
+
+    end subroutine roi2pmatrix
 
 
 end module module_pointingmatrix

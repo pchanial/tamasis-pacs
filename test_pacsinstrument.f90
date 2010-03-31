@@ -3,14 +3,14 @@ program test_pacsinstrument
     use module_fitstools,       only : ft_readparam, ft_header2str
     use module_math,            only : mean, test_real_neq
     use module_pacsinstrument
-    use module_pacsobservation, only : init_pacsobservation, pacsobservation
+    use module_pacsobservation, only : pacsobservation
     use module_pacspointing,    only : pacspointing
     use module_wcs,             only : init_astrometry, ad2xy_gnomonic
     implicit none
 
-    type(pacsinstrument)  :: pacs
-    type(pacsobservation) :: obs(1)
-    type(pacspointing)    :: pointing
+    class(pacsinstrument), allocatable  :: pacs
+    class(pacsobservation), allocatable :: obs
+    class(pacspointing), allocatable    :: pointing
     character(len=*), parameter :: filename(1) = 'tests/frames_blue.fits'
     character(len=*), parameter :: filename_header = 'tests/csh_header_ngc6946.fits'
 
@@ -20,15 +20,21 @@ program test_pacsinstrument
     real*8                 :: ra, dec, pa, chop, xmin, xmax, ymin, ymax, ra0, dec0
     character(len=2880)    :: header
 
+    real*8, allocatable    :: a_vect(:), d_vect(:), ad_vect(:,:)
+    integer                :: n
+
     ! initialise observation
-    call init_pacsobservation(obs, filename, status)
+    allocate(obs)
+    call obs%init(filename, status)
     if (status /= 0) stop 'FAILED: init_pacsobservation'
 
     ! initialise pacs instrument
+    allocate(pacs)
     call pacs%init(obs, 1, .false., status)
     if (status /= 0) stop 'FAILED: pacsinstrument%init'
 
     ! initialise pointing information
+    allocate(pointing)
     call pointing%init(obs, status)
     if (status /= 0) stop 'FAILED: pacspointing%init'
 
@@ -136,6 +142,25 @@ program test_pacsinstrument
     !+yz2ad: 40.10s,40.72s
     !+ad2xy: 71.54s,76.74s,69.16s
     !+if: 70.52s
+
+    n = 10000000
+    allocate(a_vect(n))
+    allocate(d_vect(n))
+    allocate(ad_vect(2,n))
+
+    a_vect = [(2.3+(10.d0*i)/n, i=1,n)]
+    d_vect = [(3.8+(10.d0*i)/n, i=1,n)]
+    ad_vect(1,:) = a_vect
+    ad_vect(2,:) = d_vect
+    ra  = 12.3d0
+    dec = 60.3d0
+    pa  = 2.7d0
+
+    call system_clock(count1, count_rate, count_max)
+    ad_vect = pacs%yz2ad(ad_vect, ra, dec, pa)
+    call system_clock(count2, count_rate, count_max)
+    write(*,'(a,f6.4,a)') 'yz2ad: ',real(count2-count1)/count_rate, 's'
+
 
     stop "OK."
     

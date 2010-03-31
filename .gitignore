@@ -20,6 +20,7 @@ test_pacs
 test_pacsinstrument
 test_pacsobservation
 test_pacspointing
+test_pointingmatrix
 test_projection
 test_read_config
 test_sort
