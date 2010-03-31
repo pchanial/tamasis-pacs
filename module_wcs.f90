@@ -1,11 +1,9 @@
 module module_wcs
 
-    use, intrinsic :: ISO_FORTRAN_ENV
+    use ISO_FORTRAN_ENV
+    use module_math, only : deg2rad, rad2deg
     implicit none
-
     private
-    real*8, parameter :: pi = 4.0d0 * atan(1.0d0)
-    real*8, parameter :: radeg = 180.d0 / pi
 
     type, public :: astrometry
         integer :: naxis(2)
@@ -121,7 +119,7 @@ contains
                 return
             end if
             
-            crota2 = crota2 / radeg
+            crota2 = crota2 * deg2rad
             myastr%cd(1,1) =  cos(crota2)
             myastr%cd(2,1) = -sin(crota2)
             myastr%cd(1,2) =  sin(crota2)
@@ -186,8 +184,8 @@ contains
         real*8 :: phi1, cosphi1, sinphi1 ! cos and sin of crval(2)
         common /gnomonic/ lambda0, cosphi1, sinphi1
 
-        lambda0 = astr%crval(1) / radeg
-        phi1 = astr%crval(2) / radeg
+        lambda0 = astr%crval(1) * deg2rad
+        phi1 = astr%crval(2) * deg2rad
         cosphi1 = cos(phi1)
         sinphi1 = sin(phi1)
 
@@ -207,9 +205,9 @@ contains
         common /gnomonic/ lambda0, cosphi1, sinphi1
 
         do i = 1, size(ad,2)
-            lambda = ad(1,i) / radeg
-            phi = ad(2,i) / radeg
-            invcosc = radeg/(sinphi1*sin(phi)+cosphi1*cos(phi)*cos(lambda-lambda0))
+            lambda = ad(1,i) * deg2rad
+            phi = ad(2,i) * deg2rad
+            invcosc = rad2deg / (sinphi1*sin(phi)+cosphi1*cos(phi)*cos(lambda-lambda0))
             xsi = invcosc * cos(phi)*sin(lambda-lambda0)
             eta = invcosc * (cosphi1*sin(phi)-sinphi1*cos(phi)*cos(lambda-lambda0))
 
@@ -230,9 +228,9 @@ contains
         real*8              :: cosphi1, sinphi1 ! cos and sin of crval[1]
         common /gnomonic/ lambda0, cosphi1, sinphi1
 
-        lambda = a / radeg
-        phi = d / radeg
-        invcosc = radeg /(sinphi1*sin(phi)+cosphi1*cos(phi)*cos(lambda-lambda0))
+        lambda  = a * deg2rad
+        phi     = d * deg2rad
+        invcosc = rad2deg / (sinphi1*sin(phi)+cosphi1*cos(phi)*cos(lambda-lambda0))
         xsi = invcosc * cos(phi)*sin(lambda-lambda0)
         eta = invcosc * (cosphi1*sin(phi)-sinphi1*cos(phi)*cos(lambda-lambda0))
 
@@ -270,7 +268,6 @@ contains
         real*8, intent(out) :: x, y
         real*8              :: cdinv(2,2), crpix(2)
         common /rotation/ cdinv, crpix
-!check in place
 
         x = cdinv(1,1)*xsi + cdinv(1,2)*eta + crpix(1)
         y = cdinv(2,1)*xsi + cdinv(2,2)*eta + crpix(2)
