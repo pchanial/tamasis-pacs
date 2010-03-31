@@ -119,7 +119,8 @@ contains
         if (ft_checkerror_cfitsio(status)) return
 
         ! extract column
-        call ftgcvs(unit, colnum, 1, first, last, '', data, anyf, status)
+        call ftgcvs(unit, colnum, first, 1, last-first+1, '', data, anyf,      &
+            status)
         if (ft_checkerror_cfitsio(status)) return
 
     end subroutine ft_read_column_character_unit
@@ -175,7 +176,8 @@ contains
         if (ft_checkerror_cfitsio(status)) return
 
         ! extract column
-        call ftgcvj(unit, colnum, 1, first, last, nullval, data, anyf, status)
+        call ftgcvj(unit, colnum, first, 1, last-first+1, nullval, data, anyf, &
+            status)
         if (ft_checkerror_cfitsio(status)) return
 
     end subroutine ft_read_column_int4_unit
@@ -231,7 +233,8 @@ contains
         if (ft_checkerror_cfitsio(status)) return
 
         ! extract column
-        call ftgcvk(unit, colnum, 1, first, last, nullval, data, anyf, status)
+        call ftgcvk(unit, colnum, first, 1, last-first+1, nullval, data, anyf, &
+            status)
         if (ft_checkerror_cfitsio(status)) return
 
     end subroutine ft_read_column_int8_unit
@@ -288,7 +291,8 @@ contains
         if (ft_checkerror_cfitsio(status)) return
 
         ! extract column
-        call ftgcvd(unit, colnum, 1, first, last, nullval, data, anyf, status)
+        call ftgcvd(unit, colnum, first, 1, last-first+1, nullval, data, anyf, &
+            status)
         if (ft_checkerror_cfitsio(status)) return
 
     end subroutine ft_read_column_double_unit
