@@ -447,11 +447,6 @@ contains
         integer                           :: ixmin, ixmax, iymin, iymax
         real*8                            :: ra0, dec0, xmin, xmax, ymin, ymax
 
-        !XXX
-        if (finer_sampling) then
-            stop 'COMPUTE_MAPHEADER: Finer sampling is not implemented yet.'
-        end if
-
         call pointing%compute_center(ra0, dec0)
 
         call ft_create_header(0, 0, -resolution/3600.d0, resolution/3600.d0, 0.d0, ra0, dec0, 1.d0, 1.d0, header)
@@ -480,8 +475,7 @@ contains
 
 
     ! find minimum and maximum pixel coordinates in maps
-    subroutine find_minmax(this, pointing, finer_sampling, xmin, xmax,         &
-                           ymin, ymax)
+    subroutine find_minmax(this, pointing, finer_sampling, xmin, xmax, ymin, ymax)
         class(pacsinstrument), intent(in) :: this
         class(pacspointing), intent(in)   :: pointing
         logical, intent(in)               :: finer_sampling
@@ -489,7 +483,7 @@ contains
         real*8                            :: ra, dec, pa, chop
         real*8, allocatable               :: hull_uv(:,:), hull(:,:)
         integer, allocatable              :: ihull(:)
-        integer                           :: islice, itime, index
+        integer                           :: sampling_factor, islice, itime
 
         xmin = pInf
         xmax = mInf
@@ -504,14 +498,20 @@ contains
 
         do islice = 1, pointing%nslices
 
-            index = 0
+            ! check if it is required to interpolate pointing positions
+            if (finer_sampling) then
+               sampling_factor = this%fine_sampling_factor * pointing%compression_factor(islice)
+            else
+               sampling_factor = 1
+            end if
 
             !XXX bug IFORT
             !!$omp parallel do default(shared) reduction(min:xmin,ymin) &
             !!$omp reduction(max:xmax,ymax) &
             !!$omp private(itime,ra,dec,pa,chop,hull) firstprivate(index)
-            do itime = pointing%first(islice), pointing%last(islice)
-                call pointing%get_position(islice, pointing%time(itime), ra, dec, pa, chop, index)
+            do itime = 1, pointing%nsamples(islice) * this%fine_sampling_factor
+
+                call pointing%get_position_index(islice, itime, sampling_factor, ra, dec, pa, chop)
                 hull = this%uv2yz(hull_uv, this%distortion_yz_blue, chop)
                 hull = this%yz2ad(hull, ra, dec, pa)
                 hull = ad2xy_gnomonic(hull)
@@ -531,8 +531,7 @@ contains
     !---------------------------------------------------------------------------
 
 
-    subroutine compute_projection_sharp_edges(this, pointing, finer_sampling,  &
-                                              header, nx, ny, pmatrix, status)
+    subroutine compute_projection_sharp_edges(this, pointing, finer_sampling, header, nx, ny, pmatrix, status)
         class(pacsinstrument), intent(in)  :: this
         class(pacspointing), intent(in)    :: pointing
         logical, intent(in)                :: finer_sampling
@@ -544,12 +543,7 @@ contains
         real*8  :: coords(ndims,this%ndetectors*nvertices), coords_yz(ndims,this%ndetectors*nvertices)
         real*8  :: ra, dec, pa, chop, chop_old
         integer :: roi(ndims,2,this%ndetectors)
-        integer :: nsamples,  islice, itime, npixels_per_sample, nroi, index, dest
-
-        !XXX
-        if (finer_sampling) then
-            stop 'COMPUTE_MAPHEADER: Finer sampling is not implemented yet.'
-        end if
+        integer :: nsamples,  npixels_per_sample, islice, itime, sampling_factor, nroi, dest
 
         call init_astrometry(header, status=status)
         if (status /= 0) return
@@ -562,13 +556,19 @@ contains
 
             nsamples = int(pointing%nsamples(islice), kind=kind(0))
             chop_old = pInf
-            index = 0
 
-            !$omp parallel do default(shared) firstprivate(index, chop_old)   &
+            ! check if it is required to interpolate pointing positions
+            if (finer_sampling) then
+               sampling_factor = this%fine_sampling_factor * pointing%compression_factor(islice)
+            else
+               sampling_factor = 1
+            end if
+
+            !$omp parallel do default(shared) firstprivate(chop_old)   &
             !$omp private(itime, ra, dec, pa, chop, coords, coords_yz, roi) &
             !$omp reduction(max : npixels_per_sample)
-            do itime = 1, nsamples
-                call pointing%get_position(islice, pointing%time(itime+pointing%first(islice)-1), ra, dec, pa, chop, index)
+            do itime = 1, nsamples * sampling_factor
+                call pointing%get_position_index(islice, itime, sampling_factor, ra, dec, pa, chop)
                 if (abs(chop-chop_old) > 1.d-2) then
                     coords_yz = this%uv2yz(this%corners_uv, this%distortion_yz, chop)
                     chop_old = chop
@@ -580,11 +580,14 @@ contains
                  npixels_per_sample = max(npixels_per_sample, nroi)
              end do
              !$omp end parallel do
-             dest = dest + nsamples
+             dest = dest + nsamples * sampling_factor
         end do
 
-        if (npixels_per_sample /= size(pmatrix,1)) then
-            write(*,'(a,i0,a)') 'Warning: to compute the Pointing Matrix, npixels_per_sample may be updated to ', npixels_per_sample, '.'
+        if (npixels_per_sample > size(pmatrix,1)) then
+            status = 1
+            write(*,'(a,i0,a)') 'Error: Please update npixels_per_sample to ', npixels_per_sample, '.'
+        else if (npixels_per_sample < size(pmatrix,1)) then
+            write(*,'(a,i0,a)') 'Warning: You may update npixels_per_sample to ', npixels_per_sample, '.'
         end if
 
     end subroutine compute_projection_sharp_edges

@@ -66,7 +66,7 @@ program test_pacsinstrument
     if (status /= 0) stop 'FAILED: init_astrometry.'
 
     index = 0
-    call pointing%get_position(1, pointing%time(1), ra, dec, pa, chop, index)
+    call pointing%get_position_time(1, pointing%time(1), ra, dec, pa, chop, index)
 
     yz = pacs%uv2yz(pacs%corners_uv, pacs%distortion_yz_blue, chop)
 
@@ -124,7 +124,7 @@ program test_pacsinstrument
     index = 0
     call system_clock(count1, count_rate, count_max)
     do i = 1, size(time)
-        call pointing%get_position(1, time(i), ra, dec, pa, chop, index)
+        call pointing%get_position_time(1, time(i), ra, dec, pa, chop, index)
         yz = pacs%uv2yz(pacs%corners_uv, pacs%distortion_yz_blue, chop)
         ad = pacs%yz2ad(yz, ra, dec, pa)
         xy = ad2xy_gnomonic(ad)

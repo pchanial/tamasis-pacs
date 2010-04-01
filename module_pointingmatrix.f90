@@ -2,7 +2,7 @@ module module_pointingmatrix
 
     use module_math, only : nint_down, nint_up
     use module_pointingelement, only : pointingelement
-    use module_projection, only : intersection_polygon_unity_square, intersection_polygon_unity_square_vect
+    use module_projection, only : intersection_polygon_unity_square
     use precision, only : p, sp
     implicit none
     private
@@ -98,7 +98,7 @@ contains
         ndetectors = size(pmatrix, 3)
         domask     = present(mask)
 
-        map = 0.d0
+        map    = 0.d0
         weight = 0.d0
         !$omp parallel do default(shared) reduction(+:map,weight) &
         !$omp private(idetector,isample,ipixel,imap)
@@ -109,10 +109,8 @@ contains
                 end if
                 do ipixel = 1, npixels
                     imap = pmatrix(ipixel,isample,idetector)%pixel
-                    map(imap) = map(imap) + timeline(isample,idetector) * &
-                        pmatrix(ipixel,isample,idetector)%weight
-                    weight(imap) = weight(imap) + &
-                        pmatrix(ipixel,isample,idetector)%weight
+                    map   (imap) = map   (imap) + pmatrix(ipixel,isample,idetector)%weight * timeline(isample,idetector)
+                    weight(imap) = weight(imap) + pmatrix(ipixel,isample,idetector)%weight
                 end do
             end do
         end do

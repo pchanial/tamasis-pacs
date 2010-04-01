@@ -26,7 +26,7 @@ program test_ngc6946_bpj
     logical*1, allocatable             :: mask(:,:)
     character(len=80)                  :: outfile
     character(len=2880)                :: header
-    integer                            :: nx, ny, index
+    integer                            :: nx, ny
     integer                            :: status, count, count0, count1
     integer                            :: count2, count_rate, count_max
     integer                            :: idetector, isample
@@ -104,13 +104,11 @@ program test_ngc6946_bpj
 
     chop_old = pInf
 
-    index = 0
     write(*,*) 'surfaces:'
     !XXX IFORT bug
-    !!$omp parallel do default(shared) firstprivate(index, chop_old)   &
-    !!$omp private(isample, ra, dec, pa, chop, coords, coords_yz)
+    !!$omp parallel do default(shared) firstprivate(chop_old) private(isample, ra, dec, pa, chop, coords, coords_yz)
     do isample = 1, nsamples
-        call pointing%get_position(1, pointing%time(isample), ra, dec, pa, chop, index)
+        call pointing%get_position_index(1, isample, 1, ra, dec, pa, chop)
         if (abs(chop-chop_old) > 1.d-2) then
             coords_yz = pacs%uv2yz(pacs%corners_uv, pacs%distortion_yz, chop)
             chop_old = chop

@@ -1,10 +1,10 @@
 module module_pacspointing
     use ISO_FORTRAN_ENV,        only : OUTPUT_UNIT, ERROR_UNIT
     use module_fitstools,       only : ft_read_column, ft_readextension, ft_open_bintable, ft_close
-    use module_math,            only : mean, NaN
+    use module_math,            only : NaN, median, test_real_neq
     use module_pacsobservation, only : pacsobservation, pacsobsinfo
     use precision,              only : p, dp
-    use string,                 only : strinteger, strternary
+    use string,                 only : strinteger, strreal, strternary
     implicit none
     private
 
@@ -14,6 +14,7 @@ module module_pacspointing
 
         integer                :: nslices, nsamples_tot
         integer*8, allocatable :: nsamples(:), first(:), last(:)
+        integer, allocatable   :: compression_factor(:)
         real*8, allocatable    :: time(:), ra(:), dec(:), pa(:), chop(:)
         real(dp), allocatable  :: delta(:)
 
@@ -24,7 +25,8 @@ module module_pacspointing
         procedure         :: init_oldstyle
         procedure, public :: init_sim
         procedure         :: init2
-        procedure, public :: get_position
+        procedure, public :: get_position_time
+        procedure, public :: get_position_index
         procedure, public :: compute_center
         procedure, public :: print
         procedure, public :: destructor ! XXX should be final, but not handled by gfortran 4.5
@@ -53,6 +55,7 @@ contains
         allocate(this%first   (this%nslices))
         allocate(this%last    (this%nslices))
         allocate(this%delta   (this%nslices))
+        allocate(this%compression_factor(this%nslices))
         allocate(this%time    (this%nsamples_tot))
         allocate(this%ra      (this%nsamples_tot))
         allocate(this%dec     (this%nsamples_tot))
@@ -76,13 +79,11 @@ contains
             allocate(timeus(this%nsamples(iobs)))
             allocate(buffer(this%nsamples(iobs)))
 
-            call ft_open_bintable(trim(obs%info(iobs)%filename) // '[Status]', unit,&
-                                  nsamples, status)
+            call ft_open_bintable(trim(obs%info(iobs)%filename) // '[Status]', unit, nsamples, status)
             if (status /= 0) return
             if (nsamples < this%nsamples(iobs)) then
                 status = 1
-                write (ERROR_UNIT,'(a)') 'ERROR: There is not pointing informat&
-                                         &ion for every frame.'
+                write (ERROR_UNIT,'(a)') 'ERROR: There is not pointing information for every frame.'
                 go to 999
             end if
 
@@ -119,6 +120,17 @@ contains
         end do
 
         call this%init2(status)
+        if (status /= 0) return
+
+        ! check that the compression factor taken from the observation headers and from the pointing is the same
+        do iobs = 1, this%nslices
+            if (this%compression_factor(iobs) /= obs%info(iobs)%compression_factor) then
+                status = 1
+                write (ERROR_UNIT, '(a)') 'Error: ' // strternary(this%nslices>1,'In observation '//strinteger(iobs)//', i','I') //&
+                      "ncompatible compression factor from header '" // strinteger(obs%info(iobs)%compression_factor) // "' and poi&
+                      &nting '" // strinteger(this%compression_factor(iobs)) // "'."
+            end if
+        end do
         return
 
     999 call ft_close(unit, status_close)
@@ -199,6 +211,7 @@ contains
         allocate(this%first   (1))
         allocate(this%last    (1))
         allocate(this%delta   (1))
+        allocate(this%compression_factor(1))
         allocate(this%time(nsamples))
         allocate(this%ra  (nsamples))
         allocate(this%dec (nsamples))
@@ -210,6 +223,7 @@ contains
         this%nsamples(1)  = nsamples
         this%first(1)     = 1
         this%last (1)     = nsamples
+        this%compression_factor = 1
         this%time         = time
         this%ra           = ra
         this%dec          = dec
@@ -228,9 +242,9 @@ contains
         class(pacspointing), intent(inout) :: this
         integer, intent(out) :: status
         integer   :: islice
-        integer*8 :: isample, nsamples, first, last
+        integer*8 :: nsamples, first, last
         real(dp), allocatable :: delta(:)
-        real(dp), parameter :: tol = 0.01d0 ! fractional threshold of sampling above which sampling is considered uneven
+        real(dp)              :: delta_max
 
         status = 0
 
@@ -252,19 +266,27 @@ contains
             if (any(delta <= 0)) then
                 status = 1
                 deallocate(delta)
-                write (ERROR_UNIT,'(a)') "ERROR: The pointing time is not stric&
-                    &tly increasing"
+                write (ERROR_UNIT,'(a)') "ERROR: The pointing time is not strictly increasing"
                 return
             end if
 
-            ! check there is no time drifts
-            this%delta(islice) = mean(delta)
-            if (any(abs([(this%delta(islice)*(isample-1),isample=1,nsamples)] -&
-                (this%time(first:last)-this%time(first))) > tol *              &
-                this%delta(islice))) then
-                write (*,'(a)') 'Warning: the pointing time is not evenly space&
-                    &d or is drifting' // strternary(this%nslices>1, ' in obser&
-                    &vation '//strinteger(islice),'') // '.'
+            ! check if there are gaps
+            this%delta(islice) = median(delta)
+            delta_max = maxval(abs(delta))
+            if (any(test_real_neq(delta, this%delta(islice), 3))) then
+                write (*,'(a)') 'Warning: ' // strternary(this%nslices>1, ' In observation '//strinteger(islice)//', t','T') //    &
+                      'he pointing time is not evenly spaced.'
+                if (delta_max > 1.5_p * this%delta(islice)) then
+                    write (*,'(a)') '         Largest gap is ' // strreal(delta_max*1000._p,1) // 'ms.'
+                end if
+            end if
+
+            ! check the compression factor from the data themselves
+            this%compression_factor(islice) = nint(this%delta(islice) / 0.024996_dp)
+            if (test_real_neq(this%compression_factor(islice) * 0.024996_dp, this%delta(islice), 2)) then
+                status = 1
+                write (*,'(a)') 'Error: The sampling time is not an integer number of PACS sampling time (40Hz).'
+                return
             end if
 
             deallocate(delta)
@@ -277,9 +299,9 @@ contains
     !---------------------------------------------------------------------------
 
 
-    ! time samples are not evenly spaced, slow linear interpolation
+    ! linear interpolation if time samples are not evenly spaced.
     ! for the first call, index should be set to zero
-    subroutine get_position(this, islice, time, ra, dec, pa, chop, index)
+    subroutine get_position_time(this, islice, time, ra, dec, pa, chop, index)
         class(pacspointing), intent(in) :: this
         integer, intent(in)             :: islice
         real*8, intent(in)              :: time
@@ -297,8 +319,7 @@ contains
         first = this%first(islice)
         last  = this%last (islice)
 
-        if (time > this%time(last)  + this%delta(islice) .or.                  &
-            time < this%time(first) - this%delta(islice)) then
+        if (time > 2.d0 * this%time(last) - this%time(last-1) .or. time < 2.d0 * this%time(first) - this%time(first+1)) then
             ra   = NaN
             dec  = NaN
             pa   = NaN
@@ -326,7 +347,45 @@ contains
 
         index = i
 
-    end subroutine get_position
+    end subroutine get_position_time
+
+
+    !---------------------------------------------------------------------------
+
+
+    ! The sampling factor is the compression factor times the fine sampling
+    ! factor. itime is a fine sampling index
+    ! if there is a gap in the timeline (which should not happen, and should be
+    ! corrected beforehand), it will not be taken into account so that finer
+    ! sampling will be interpolated using the start and end of the gap.
+    subroutine get_position_index(this, islice, itime, sampling_factor, ra, dec, pa, chop)
+        class(pacspointing), intent(in) :: this
+        integer, intent(in)             :: islice, itime, sampling_factor
+        real*8, intent(out)             :: ra, dec, pa, chop
+        integer                         :: i, itime_max
+        real*8                          :: frac
+
+        if (islice < 1 .or. islice > this%nslices) then
+            write (ERROR_UNIT,'(a,i0,a)') "GET_POSITION: Invalid slice number '", islice, "'."
+            stop
+        end if
+
+        itime_max = this%nsamples(islice) * sampling_factor
+        if (itime < 1 .or. itime > itime_max) then
+            write (ERROR_UNIT,'(a,i0,a,i0,a)') "GET_POSITION: Invalid time index '", itime, "'. Valid range is [1:", itime_max,"]."
+            stop
+        end if
+
+        i    = min((itime - 1) / sampling_factor, this%nsamples(islice)-2)
+        frac = real(itime - 1 - sampling_factor * i, p) / sampling_factor
+        i    = i + this%first(islice)
+
+        ra   = this%ra  (i) * (1 - frac) + this%ra  (i+1) * frac
+        dec  = this%dec (i) * (1 - frac) + this%dec (i+1) * frac
+        pa   = this%pa  (i) * (1 - frac) + this%pa  (i+1) * frac
+        chop = this%chop(i) * (1 - frac) + this%chop(i+1) * frac
+
+    end subroutine get_position_index
 
 
     !---------------------------------------------------------------------------
@@ -387,15 +446,16 @@ contains
     subroutine destructor(this)
         class(pacspointing), intent(inout) :: this
 
-        if (allocated(this%time)) deallocate(this%time)
-        if (allocated(this%ra))   deallocate(this%ra)
-        if (allocated(this%dec))  deallocate(this%dec)
-        if (allocated(this%pa))   deallocate(this%pa)
-        if (allocated(this%chop)) deallocate(this%chop)
+        if (allocated(this%time))     deallocate(this%time)
+        if (allocated(this%ra))       deallocate(this%ra)
+        if (allocated(this%dec))      deallocate(this%dec)
+        if (allocated(this%pa))       deallocate(this%pa)
+        if (allocated(this%chop))     deallocate(this%chop)
         if (allocated(this%nsamples)) deallocate(this%nsamples)
-        if (allocated(this%first)) deallocate(this%first)
-        if (allocated(this%last )) deallocate(this%last)
-        if (allocated(this%delta)) deallocate(this%delta)
+        if (allocated(this%first))    deallocate(this%first)
+        if (allocated(this%last ))    deallocate(this%last)
+        if (allocated(this%delta))    deallocate(this%delta)
+        if (allocated(this%compression_factor)) deallocate(this%compression_factor)
 
     end subroutine
 

@@ -2,6 +2,7 @@ program test_pacspointing
     use module_math, only : NaN, test_real_eq, test_real_neq
     use module_pacsobservation, only : pacsobservation
     use module_pacspointing
+    use precision, only : p
     implicit none
 
     class(pacspointing), allocatable    :: ptg
@@ -9,24 +10,24 @@ program test_pacspointing
     character(len=*), parameter :: filename(1) = 'tests/frames_blue.fits'
     integer                     :: i, index
     real*8                      :: time(12), ra(12), dec(12), pa(12), chop(12)
-    real*8, parameter           :: timetest(6) = [1634799159.471412d0,         &
-                                    1634799159.5713959d0, 1634799159.6713789d0,&
-                                    1634799159.771354d0, 1634799159.871338d0,  &
-                                    1634799159.9713209d0]
-    real*8, parameter           :: ratest(6)  = [246.00222169646082d0,         &
-                                    246.00162449475283d0, 246.00103010675886d0,&
-                                    246.00043574779528d0, 245.99983813619218d0,&
-                                    245.99923984440272d0]
-    real*8, parameter           :: dectest(6) = [61.500650548286465d0,         &
-                                    61.501139611012334d0, 61.501628617896479d0,&
-                                    61.502117583112039d0, 61.502603243153743d0,&
-                                    61.503088192854655d0]
-    real*8, parameter           :: patest(6)  = [219.90452446277453d0,         &
-                                    219.90399442217031d0,219.90348064274335d0, &
-                                    219.90296688571451d0, 219.90247630714885d0,&
-                                    219.90199059816473d0] 
-    real*8, parameter           :: choptest(6) = [0.d0, 0.d0, 0.d0, 0.d0, 0.d0,&
-                                    -0.000325298332441215088d0]
+    real*8, parameter           :: timetest(6) = [1634799159.471412_p,         &
+                                    1634799159.5713959_p, 1634799159.6713789_p,&
+                                    1634799159.771354_p, 1634799159.871338_p,  &
+                                    1634799159.9713209_p]
+    real*8, parameter           :: ratest(6)  = [246.00222169646082_p,         &
+                                    246.00162449475283_p, 246.00103010675886_p,&
+                                    246.00043574779528_p, 245.99983813619218_p,&
+                                    245.99923984440272_p]
+    real*8, parameter           :: dectest(6) = [61.500650548286465_p,         &
+                                    61.501139611012334_p, 61.501628617896479_p,&
+                                    61.502117583112039_p, 61.502603243153743_p,&
+                                    61.503088192854655_p]
+    real*8, parameter           :: patest(6)  = [219.90452446277453_p,         &
+                                    219.90399442217031_p,219.90348064274335_p, &
+                                    219.90296688571451_p, 219.90247630714885_p,&
+                                    219.90199059816473_p] 
+    real*8, parameter           :: choptest(6) = [0._p, 0._p, 0._p, 0._p, 0._p,&
+                                    -0.000325298332441215088_p]
     integer                     :: status
 
     allocate(obs)
@@ -39,7 +40,7 @@ program test_pacspointing
 
     index = 0
     do i = 1, 6
-        call ptg%get_position(1, timetest(i), ra(i), dec(i), pa(i), chop(i), index)
+        call ptg%get_position_time(1, timetest(i), ra(i), dec(i), pa(i), chop(i), index)
     end do
     if (any(test_real_neq(ra  (1:6), ratest,   15))) stop 'FAILED: ra'
     if (any(test_real_neq(dec (1:6), dectest,  15))) stop 'FAILED: dec'
@@ -48,46 +49,55 @@ program test_pacspointing
 
     call ptg%destructor()
 
-    time = [(i * 0.5d0, i = -2, 9)]
+    time = [(i * 0.5_p, i = -2, 9)]
 
     ! test interpolation (evenly spaced sampling)
-    call ptg%init_sim([1.d0, 2.d0], [0.d0, 1.d0], [3.d0, 3.d0], [2.d0, 1.d0], [0.d0, 0.d0], status)
+    call ptg%init_sim([1._p, 2._p], [0._p, 1._p], [3._p, 3._p], [2._p, 1._p], [0._p, 0._p], status)
     if (status /= 0) stop 'FAILED: init_sim 1'
 
     index = 0
     do i = 1, size(time)
-       call ptg%get_position(1, time(i), ra(i), dec(i), pa(i), chop(i), index)
+       call ptg%get_position_time(1, time(i), ra(i), dec(i), pa(i), chop(i), index)
     end do
-    if (any(test_real_neq(ra,  [nan, nan,-1.0d0,-0.5d0, 0.0d0, 0.5d0, 1.0d0,   &
-                                1.5d0, 2.0d0, nan, nan, nan], 10) .or.         &
-            test_real_neq(dec, [nan, nan, 3.0d0, 3.0d0, 3.0d0, 3.0d0, 3.0d0,   &
-                                3.0d0, 3.0d0, nan, nan, nan], 10) .or.         &
-            test_real_neq(pa,  [nan, nan, 3.0d0, 2.5d0, 2.0d0, 1.5d0, 1.0d0,   &
-                                0.5d0, 0.0d0, nan, nan, nan], 10)))            &
-        stop 'FAILED: get_position 1'
+    if (any(test_real_neq(ra,  [nan, nan,-1.0_p,-0.5_p, 0.0_p, 0.5_p, 1.0_p,   &
+                                1.5_p, 2.0_p, nan, nan, nan], 10) .or.         &
+            test_real_neq(dec, [nan, nan, 3.0_p, 3.0_p, 3.0_p, 3.0_p, 3.0_p,   &
+                                3.0_p, 3.0_p, nan, nan, nan], 10) .or.         &
+            test_real_neq(pa,  [nan, nan, 3.0_p, 2.5_p, 2.0_p, 1.5_p, 1.0_p,   &
+                                0.5_p, 0.0_p, nan, nan, nan], 10)))            &
+        stop 'FAILED: get_position_time 1'
     call ptg%destructor()
 
     ! test slow interpolation (unevenly spaced sampling)
-    call ptg%init_sim([0.5d0, 1.5d0, 2.5d0, 3.d0], [0.d0, 1.d0, 2.d0, 2.5d0],  &
-                      [3.d0, 3.d0, 3.d0, 3.d0], [3.d0, 2.d0, 1.d0, 0.5d0],     &
-                      [0.d0, 0.d0, 0.d0, 1.d0], status)
+    call ptg%init_sim([0.5_p, 1.5_p, 2.5_p, 3._p], [0._p, 1._p, 2._p, 2.5_p],  &
+                      [3._p, 3._p, 3._p, 3._p], [3._p, 2._p, 1._p, 0.5_p],     &
+                      [0._p, 0._p, 0._p, 1._p], status)
     if (status /= 0) stop 'FAILED: init_sim 2'
 
     index = 0
     do i = 1, size(time)
-        call ptg%get_position(1, time(i), ra(i), dec(i), pa(i), chop(i), index)
+        call ptg%get_position_time(1, time(i), ra(i), dec(i), pa(i), chop(i), index)
     end do
 
     ! time starts from -1 to 4.5
-    if (any(test_real_neq(ra,  [nan, -1.d0, -0.5d0, 0.0d0, 0.5d0, 1.0d0, 1.5d0,&
-                                2.0d0, 2.5d0, 3.0d0, 3.5d0, nan], 10) .or.     &
-            test_real_neq(dec, [nan,  3.0d0, 3.0d0, 3.0d0, 3.0d0, 3.0d0, 3.0d0,&
-                                3.0d0, 3.0d0, 3.0d0, 3.0d0, nan], 10) .or.     &
-            test_real_neq(pa,  [nan, 4.0d0, 3.5d0, 3.0d0, 2.5d0, 2.0d0, 1.5d0, &
-                                1.0d0, 0.5d0, 0.0d0, -0.5d0, nan], 10) .or.    &
-            test_real_neq(chop,[nan, 0.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0, 0.0d0, &
-                                0.0d0, 1.0d0, 2.0d0, 3.0d0, nan], 10)))        &
-       stop 'FAILED: get_position 2'
+    if (any(test_real_neq(ra,  [nan, -1._p, -0.5_p, 0.0_p, 0.5_p, 1.0_p, 1.5_p,&
+                                2.0_p, 2.5_p, 3.0_p, nan, nan], 10) .or.     &
+            test_real_neq(dec, [nan,  3.0_p, 3.0_p, 3.0_p, 3.0_p, 3.0_p, 3.0_p,&
+                                3.0_p, 3.0_p, 3.0_p, nan, nan], 10) .or.     &
+            test_real_neq(pa,  [nan, 4.0_p, 3.5_p, 3.0_p, 2.5_p, 2.0_p, 1.5_p, &
+                                1.0_p, 0.5_p, 0.0_p, nan, nan], 10) .or.    &
+            test_real_neq(chop,[nan, 0.0_p, 0.0_p, 0.0_p, 0.0_p, 0.0_p, 0.0_p, &
+                                0.0_p, 1.0_p, 2.0_p, nan, nan], 10)))        &
+       stop 'FAILED: get_position_time 2'
+
+    do i = 1, size(time)
+        call ptg%get_position_index(1, i, 3, ra(i), dec(i), pa(i), chop(i))
+    end do
+
+    if (any(test_real_neq(ra, [(0._p+i/3._p,i=0,2), (1._p+i/3._p,i=0,2), (2._p+0.5_p*i/3._p,i=0,2),(2.5_p+0.5_p*i/3._p,i=0,2)], 15)&
+        .or.test_real_neq(dec, [(3.0_p,i=1,12)], 15)                                                                               &
+        .or.test_real_neq(pa, [(3._p-i/3._p,i=0,2), (2._p-i/3._p,i=0,2), (1.-0.5_p*i/3._p,i=0,2), (0.5_p-0.5_p*i/3._p, i=0,2)],15) &
+        .or.test_real_neq(chop, [(0.0_p, i=1,6), (0.0_p+i/3.0_p, i=0,5)], 15))) stop 'FAILED: get_position_index'
 
     call ptg%destructor()
 
