@@ -9,6 +9,7 @@ module string
  public :: strsplit
  public :: strinteger
  public :: strjoin
+ public :: strreal
  public :: strsection
  public :: strternary
 
@@ -167,6 +168,45 @@ contains
   if (input < 0) length = length + 1
 
  end function strinteger_int8_len
+
+ 
+ pure function strreal(input, prec)
+
+     real*8, intent(in)  :: input
+     integer, intent(in) :: prec
+     character(len=strreal_len(input,prec)) :: strreal
+
+     character(len=20)   :: charvalue
+     integer             :: status
+
+     write (charvalue,'(bn,f20.'//strinteger(prec)//')',iostat=status) input
+     if (status /= 0) then
+         strreal = '*****'
+         return
+     end if
+
+     strreal = adjustl(charvalue)
+
+ end function strreal
+
+ pure function strreal_len(input, prec) result(length)
+
+     integer             :: length
+     real*8, intent(in)  :: input
+     integer, intent(in) :: prec
+     character(len=20)   :: charvalue
+     integer             :: status
+
+     write (charvalue,'(bn,f20.'//strinteger(prec)//')',iostat=status) input
+     if (status /= 0) then
+         length = 5
+         return
+     end if
+
+     length = len_trim(adjustl(charvalue))
+
+ end function strreal_len
+
 
  pure function strjoin_trim(input)
      character(len=*), intent(in)           :: input(:)
