@@ -1,9 +1,9 @@
 module module_pointingmatrix
 
-    use module_math, only : nint_down, nint_up
+    use module_math,            only : nint_down, nint_up
     use module_pointingelement, only : pointingelement
-    use module_projection, only : intersection_polygon_unity_square
-    use precision, only : p, sp
+    use module_projection,      only : intersection_polygon_unity_square
+    use precision,              only : p, sp
     implicit none
     private
 
@@ -24,23 +24,16 @@ contains
         type(pointingelement), intent(in) :: pmatrix(:,:,:)
         real(kind=p), intent(in)          :: map(0:)
         real(kind=p), intent(inout)       :: timeline(:,:)
-        integer                           :: idetector, isample, ipixel, npixels, nsamples, ndetectors
+        integer                           :: isample, idetector, nsamples, ndetectors
 
-        npixels    = size(pmatrix, 1)
         nsamples   = size(pmatrix, 2)
         ndetectors = size(pmatrix, 3)
 
-        !$omp parallel do private(idetector, isample, ipixel)
+        !$omp parallel do private(idetector, isample)
         do idetector = 1, ndetectors
             do isample = 1, nsamples
                 timeline(isample,idetector) = 0
-                do ipixel = 1, npixels
-                    timeline(isample,idetector) = timeline(isample,idetector) + map(pmatrix(ipixel,isample,idetector)%pixel) * &
-                        pmatrix(ipixel,isample,idetector)%weight
-                end do
-                !faster with ifort:
-                !timeline(isample,idetector) = sum(map(pmatrix(:,isample,idetector)%pixel)* &
-                !                              pmatrix(:,isample,idetector)%weight)
+                timeline(isample,idetector) = sum(map(pmatrix(:,isample,idetector)%pixel) * pmatrix(:,isample,idetector)%weight)
             end do
         end do
         !$omp end parallel do
@@ -66,8 +59,7 @@ contains
         do idetector = 1, ndetectors
             do isample = 1, nsamples
                 do ipixel = 1, npixels
-                    map(pmatrix(ipixel,isample,idetector)%pixel) =     &
-                        map(pmatrix(ipixel,isample,idetector)%pixel) + &
+                    map(pmatrix(ipixel,isample,idetector)%pixel) = map(pmatrix(ipixel,isample,idetector)%pixel) +                  &
                         pmatrix(ipixel,isample,idetector)%weight * timeline(isample,idetector)
                 end do
             end do
@@ -135,8 +127,7 @@ contains
 
 
     ! backproject a frame into a minimap
-    subroutine backprojection_weighted_roi(pmatrix, nx, timeline, mask, itime, &
-                                           map, roi)
+    subroutine backprojection_weighted_roi(pmatrix, nx, timeline, mask, itime, map, roi)
         type(pointingelement), intent(in) :: pmatrix(:,:,:)
         integer, intent(in)               :: nx
         real(kind=p), intent(in)          :: timeline(:,:)
@@ -172,9 +163,9 @@ contains
                 xmap = mod(pmatrix(ipixel,itime,idetector)%pixel, nx)-roi(1,1)+1
                 ymap = pmatrix(ipixel,itime,idetector)%pixel / nx - roi(2,1) + 1
                 imap = xmap + ymap * nxmap
-                map(imap) = map(imap) + timeline(itime,idetector) * &
-                            pmatrix(ipixel,itime,idetector)%weight
+                map(imap) = map(imap) + timeline(itime,idetector) * pmatrix(ipixel,itime,idetector)%weight
                 weight(imap) = weight(imap) + pmatrix(ipixel,itime,idetector)%weight
+
             end do
 
         end do
