@@ -107,7 +107,7 @@ tamasisfortran.so: tamasisfortran.f90 $(MODULES:.f90=.o)
 	f2py --fcompiler=${FCOMPILER} --f90exec=$(FC) --f90flags="$(FFLAGS)" -DF2PY_REPORT_ON_ARRAY_COPY=1 -c $^ -m tamasisfortran $(LDFLAGS)
 
 clean:
-	rm -f *.o *.mod *.so $(EXECS)
+	rm -f *.o *.mod *.so *~ $(EXECS)
 
 tests: $$(filter-out test_wcslib%,$$(filter test_%,$$(EXECS)))
 	@for test in $^; do \
