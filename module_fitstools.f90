@@ -1446,6 +1446,12 @@ contains
         ! flush the output unit
         flush(OUTPUT_UNIT)
 
+        ! file not found
+        if (status == 104 .and. present(filename)) then
+            write (ERROR_UNIT,'(a)') "ERROR: Failure to open or find file '" // trim(filename) // "'."
+            return
+        end if
+
         !  Print the filename
         if (present(filename)) then
             write (ERROR_UNIT,*) 'In file ' // trim(filename) // ':'
