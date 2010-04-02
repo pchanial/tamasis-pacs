@@ -9,7 +9,7 @@ program test_pointingmatrix
     real(p), allocatable, dimension(:)  :: x_vect, y_vect
     real(p), allocatable, dimension(:,:):: xy
     integer, allocatable :: roi(:,:,:)
-    integer n, i
+    integer i
     integer :: npixels_per_sample, ntimes, ndetectors, nroi, nx, ny, itime
     type(pointingelement), allocatable :: pmatrix(:,:,:)
 

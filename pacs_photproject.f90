@@ -1,6 +1,6 @@
 program pacs_photproject
 
-    use ISO_FORTRAN_ENV,        only : ERROR_UNIT, OUTPUT_UNIT
+    use iso_fortran_env,        only : ERROR_UNIT, OUTPUT_UNIT
     use module_fitstools,       only : ft_header2str, ft_readparam, ft_write
     use module_deglitching,     only : deglitch_l2b
     use module_optionparser,    only : optionparser
@@ -14,7 +14,11 @@ program pacs_photproject
     class(pacsinstrument), allocatable :: pacs
     class(pacsobservation), allocatable:: obs
     class(pacspointing), allocatable   :: pointing
-
+    type(pointingelement), allocatable :: pmatrix(:,:,:)
+    class(optionparser), allocatable   :: parser
+    real*8, allocatable                :: signal(:,:)
+    logical*1, allocatable             :: mask(:,:)
+    real*8, allocatable                :: map1d(:)
     character(len=2048), allocatable   :: infile(:)
     character(len=2048)                :: outfile, headerfile
     character(len=2880)                :: header
@@ -23,36 +27,23 @@ program pacs_photproject
     logical                            :: do_flatfield, do_meansubtraction
     character(len=256)                 :: deglitching_method
     integer*8                          :: nsamples
-
-    real*8, allocatable                :: signal(:,:)
-    logical*1, allocatable             :: mask(:,:)
     integer                            :: nobs, iobs, nx, ny, dest
     integer                            :: status, count, count1
     integer                            :: count2, count_rate, count_max
     real*8                             :: deglitching_nsigma
-    real*8, allocatable                :: map1d(:)
-    type(pointingelement), allocatable :: pmatrix(:,:,:)
-    class(optionparser), allocatable   :: parser
 
     ! command parsing
     allocate(parser)
     call parser%init('pacs_photproject [options] fitsfile...', 1, -1)
-    call parser%add_option('', 'o', 'Filename of the output map (FITS format)',&
-                           has_value=.true., default='photproject.fits')
-    call parser%add_option('header', 'h', 'Input FITS header of the map',      &
-                           has_value=.true.)
-    call parser%add_option('resolution', '', 'Input pixel size of the map',    &
-                           has_value=.true., default='3.')
-    call parser%add_option('npixels-per-sample', 'n', 'Maximum number of sky &
-                           &pixels intercepted by a PACS detector',            &
+    call parser%add_option('', 'o', 'Filename of the output map (FITS format)', has_value=.true., default='photproject.fits')
+    call parser%add_option('header', '', 'Input FITS header of the map',        has_value=.true.)
+    call parser%add_option('resolution', '', 'Input pixel size of the map',     has_value=.true., default='3.2')
+    call parser%add_option('npixels-per-sample', 'n', 'Maximum number of sky pixels intercepted by a PACS detector',               &
                            has_value=.true., default='6')
     call parser%add_option('no-flatfield','','Do not divide by calibration flat field')
-    call parser%add_option('filtering', 'f', 'Timeline filtering (mean|none)', &
-                           has_value=.true., default='mean')
-    call parser%add_option('deglitching', 'd', 'Timeline deglitching (l2std|&
-                           &l2mad|none)', has_value=.true., default='none')
-    call parser%add_option('nsigma', '', 'N-sigma for deglitching',            &
-                           has_value=.true., default='5.')
+    call parser%add_option('filtering', 'f', 'Timeline filtering (mean|none)',  has_value=.true., default='mean')
+    call parser%add_option('deglitching', 'd', 'Timeline deglitching (l2std|l2mad|none)', has_value=.true., default='none')
+    call parser%add_option('nsigma', '', 'N-sigma for deglitching',             has_value=.true., default='5.')
 
     call parser%parse(status)
     if (status == -1) stop
@@ -74,9 +65,7 @@ program pacs_photproject
     allocate(obs)
     call parser%get_arguments(infile, status)
     if (status /= 0) go to 999
-    !allocate(infile(1))
-    !infile(1) = '/mnt/herschel1/mapmaking/data/pacs/transpScan/1342185454_blue_PreparedFrames.fits'
-    call obs%init(infile, status)
+    call obs%init(infile, status, verbose=.true.)
     if (status /= 0) go to 999
     nsamples = sum(obs%info%nsamples)
 
@@ -87,15 +76,14 @@ program pacs_photproject
 
     ! initialise pacs instrument
     allocate(pacs)
-    call pacs%init(obs, 1, .false., status)
+    call pacs%init(obs%channel, obs%transparent_mode, 1, .false., status)
     if (status /= 0) go to 999
 
     ! get FITS header
     if (headerfile /= '') then
        call ft_header2str(headerfile, header, status)
     else
-       call pacs%compute_mapheader(pointing, .false., resolution, header,&
-                                   status)
+       call pacs%compute_mapheader(pointing, .false., resolution, header, status)
     end if
     if (status /= 0) go to 999
 
@@ -113,8 +101,7 @@ program pacs_photproject
     allocate(pmatrix(npixels_per_sample,nsamples,pacs%ndetectors))
 
     call system_clock(count1, count_rate, count_max)
-    call pacs%compute_projection_sharp_edges(pointing, .false., header,  nx,   &
-                                             ny, pmatrix, status)
+    call pacs%compute_projection_sharp_edges(pointing, .false., header,  nx, ny, pmatrix, status)
     if (status /= 0) go to 999
 
     call system_clock(count2, count_rate, count_max)
@@ -126,7 +113,7 @@ program pacs_photproject
 
     write(*,'(a)', advance='no') 'Reading timeline... '
     call system_clock(count1, count_rate, count_max)
-    call obs%read(pacs%pq, signal, mask, status)
+    call pacs%read(obs, signal, mask, status)
     if (status /= 0) go to 999
     call system_clock(count2, count_rate, count_max)
     write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
@@ -144,14 +131,11 @@ program pacs_photproject
         select case (deglitching_method)
 
             case ('l2std')
-               call deglitch_l2b(pmatrix, nx, ny, signal, mask,                &
-                                 deglitching_nsigma, .false.)
+               call deglitch_l2b(pmatrix, nx, ny, signal, mask, deglitching_nsigma, .false.)
             case ('l2mad')
-               call deglitch_l2b(pmatrix, nx, ny, signal, mask,                &
-                                 deglitching_nsigma, .true.)
+               call deglitch_l2b(pmatrix, nx, ny, signal, mask, deglitching_nsigma, .true.)
             case default
-               write (ERROR_UNIT,'(/,a)') "ERROR: Invalid deglitching method '"&
-                                          // trim(deglitching_method) // "'."
+               write (ERROR_UNIT,'(/,a)') "ERROR: Invalid deglitching method '" // trim(deglitching_method) // "'."
                go to 999
 
          end select

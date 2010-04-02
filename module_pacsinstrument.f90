@@ -1,13 +1,13 @@
 module module_pacsinstrument
 
     use ISO_FORTRAN_ENV,        only : ERROR_UNIT, OUTPUT_UNIT
-    use module_fitstools,       only : ft_create_header, ft_readextension
-    use module_math,            only : pInf, mInf, NaN, nint_down, nint_up,    &
-                                       deg2rad
+    use module_fitstools,       only : ft_close, ft_create_header, ft_open_image, ft_readextension, ft_readslice, ft_test_extension
+    use module_math,            only : DEG2RAD, pInf, mInf, NaN, nint_down, nint_up
     use module_pacsobservation, only : pacsobservation, pacsobsinfo
     use module_pacspointing,    only : pacspointing
     use module_pointingmatrix,  only : pointingelement, xy2roi, roi2pmatrix
     use module_projection,      only : convex_hull
+    use precision,              only : p
     use string,                 only : strinteger
     use module_wcs,             only : init_astrometry, ad2xy_gnomonic, ad2xy_gnomonic_vect
     implicit none
@@ -67,14 +67,17 @@ module module_pacsinstrument
 
         private
         procedure, public :: init
-        procedure, public :: init_scalar
         procedure, public :: compute_mapheader
         procedure, public :: find_minmax
         procedure, public :: compute_projection_sharp_edges
+        procedure, public :: destroy
+        procedure, public :: read
 
         procedure, nopass, public :: uv2yz
         procedure, nopass, public :: yz2ad
 
+        procedure :: read_one
+        procedure :: read_oldstyle
         procedure :: read_calibration_files
         procedure :: filter_detectors
         procedure :: filter_detectors_array
@@ -84,28 +87,35 @@ module module_pacsinstrument
 
 contains
 
-    
-    subroutine init_scalar(this, obs, fine_sampling_factor, keep_bad_detectors,&
-                           status, bad_detector_mask)
+
+    subroutine init(this, channel, transparent_mode, fine_sampling_factor, keep_bad_detectors, status, bad_detector_mask)
         class(pacsinstrument), intent(inout) :: this
-        type(pacsobsinfo), intent(in)        :: obs
+        character, intent(in)                :: channel
+        logical, intent(in)                  :: transparent_mode
         integer, intent(in)                  :: fine_sampling_factor
         logical, intent(in)                  :: keep_bad_detectors
         integer, intent(out)                 :: status
         logical*1, intent(in), optional      :: bad_detector_mask(:,:)
 
-        if (all(fine_sampling_factor /= [1,2,4,8,16,32])) then
+        ! check channel
+        if (index('rgb', channel) == 0) then
             status = 1
-            write (ERROR_UNIT,'(a)') "ERROR: invalid sampling factor '" //     &
-                strinteger(fine_sampling_factor) // "'. Valid values are 1,2,4,&
-                &8,16,32."
+            write (ERROR_UNIT,'(a)') "ERROR: Invalid channel '" // channel // "'. Valid values are 'r', 'g' and 'b'."
             return
         end if
 
-        this%channel = obs%channel
+        ! check fine sampling factor
+        if (all(fine_sampling_factor /= [1,2,4,8,16,32])) then
+            status = 1
+            write (ERROR_UNIT,'(a)') "ERROR: Invalid sampling factor '" //     &
+                strinteger(fine_sampling_factor) // "'. Valid values are '1', '2', '4', '8', '16' or '32'."
+            return
+        end if
+
+        this%channel              = channel
         this%fine_sampling_factor = fine_sampling_factor
-        this%transparent_mode = obs%transparent_mode
-        this%keep_bad_detectors = keep_bad_detectors
+        this%transparent_mode     = transparent_mode
+        this%keep_bad_detectors   = keep_bad_detectors
 
         call this%read_calibration_files(status)
         if (status /= 0) return
@@ -135,40 +145,6 @@ contains
         end if
         
         call this%filter_detectors()
-
-    end subroutine init_scalar
-
-
-    !---------------------------------------------------------------------------
-
-
-    subroutine init(this, obs, fine_sampling_factor, keep_bad_detectors,       &
-                    status, bad_detector_mask)
-        class(pacsinstrument), intent(inout) :: this
-        class(pacsobservation), intent(in)   :: obs
-        integer, intent(in)                  :: fine_sampling_factor
-        logical, intent(in)                  :: keep_bad_detectors
-        integer, intent(out)                 :: status
-        logical*1, intent(in), optional      :: bad_detector_mask(:,:)
-
-        ! check that all observations have the same filter
-        if (any(obs%info%channel /= obs%info(1)%channel)) then
-            status = 1
-            write (ERROR_UNIT,'(a)') 'ERROR: Observations have different channe&
-                                     &s.'
-            return
-        end if
-
-        ! check that all observations have the same transparent mode
-        if (any(obs%info%transparent_mode .neqv. obs%info(1)%transparent_mode)) then
-            status = 1
-            write (ERROR_UNIT,'(a)') 'ERROR: Observations have different transp&
-                                     &rent modes.'
-            return
-        end if
-
-        call this%init_scalar(obs%info(1), fine_sampling_factor,               &
-                              keep_bad_detectors, status, bad_detector_mask)
 
     end subroutine init
 
@@ -290,7 +266,7 @@ contains
                    this%corners_uv_red, this%distortion_yz_red,                &
                    this%flatfield_red)
            case ('g')
-              write(*,*) 'FILTER_DETECTORS: Check calibration files for the green band...'
+              write(*,*) 'XXX FILTER_DETECTORS: Check calibration files for the green band...'
               call this%filter_detectors_array(this%mask_blue,                 &
                    this%corners_uv_blue, this%distortion_yz_blue,              &
                    this%flatfield_green)
@@ -419,13 +395,13 @@ contains
         real*8             :: cospa, sinpa
 
 
-        cospa =  cos(pa0*deg2rad)
-        sinpa = -sin(pa0*deg2rad)
+        cospa =  cos(pa0*DEG2RAD)
+        sinpa = -sin(pa0*DEG2RAD)
 
         do i=1, size(yz, 2)
 
             ad(2,i) = dec0 + (yz(1,i) * sinpa + yz(2,i) * cospa)
-            ad(1,i) = ra0  + (yz(1,i) * cospa - yz(2,i) * sinpa) / cos(ad(2,i) * deg2rad)
+            ad(1,i) = ra0  + (yz(1,i) * cospa - yz(2,i) * sinpa) / cos(ad(2,i) * DEG2RAD)
 
         end do
 
@@ -509,7 +485,7 @@ contains
             !!$omp parallel do default(shared) reduction(min:xmin,ymin) &
             !!$omp reduction(max:xmax,ymax) &
             !!$omp private(itime,ra,dec,pa,chop,hull) firstprivate(index)
-            do itime = 1, pointing%nsamples(islice) * this%fine_sampling_factor
+            do itime = 1, pointing%nsamples(islice) * sampling_factor
 
                 call pointing%get_position_index(islice, itime, sampling_factor, ra, dec, pa, chop)
                 hull = this%uv2yz(hull_uv, this%distortion_yz_blue, chop)
@@ -596,6 +572,208 @@ contains
     !---------------------------------------------------------------------------
 
 
+    subroutine read(this, obs, signal, mask, status)
+
+        class(pacsinstrument), intent(in)  :: this
+        class(pacsobservation), intent(in) :: obs
+        real(p), intent(out)               :: signal(:,:)
+        logical(1), intent(out)            :: mask(:,:)
+        integer, intent(out)               :: status
+        integer*8 :: nsamples, destination
+        integer   :: nobs, iobs
+
+        nobs     = size(obs%info)
+        nsamples = sum(obs%info%nsamples)
+
+        ! check that the total number of samples in the observations is equal
+        ! to the number of samples in the signal and mask arrays
+        if (nsamples /= size(signal,1) .or. nsamples /= size(mask,1)) then
+            status = 1
+            write (ERROR_UNIT,'(a)') 'READ_TOD: invalid dimensions.'
+            return
+        end if
+
+        ! loop over the PACS observations
+        destination = 1
+        do iobs = 1, nobs
+            call this%read_one(obs%info(iobs), destination, signal, mask, status)
+            if (status /= 0) return
+            destination = destination + obs%info(iobs)%nsamples
+        end do
+   
+    end subroutine read
+
+
+    !---------------------------------------------------------------------------
+
+
+    subroutine read_one(this, obs, destination, signal, mask, status)
+        class(pacsinstrument), intent(in) :: this
+        class(pacsobsinfo), intent(in)    :: obs
+        integer*8, intent(in)         :: destination
+        real*8, intent(inout)         :: signal(:,:)
+        logical*1, intent(inout)      :: mask  (:,:)
+        integer, intent(out)          :: status
+        integer*8                     :: p, q
+        integer                       :: idetector, unit, length
+        integer                       :: status_close
+        integer, allocatable          :: imageshape(:)
+        logical                       :: mask_found
+        integer*4, allocatable        :: maskcompressed(:)
+        integer*4                     :: maskval
+        integer*8                     :: ncompressed
+        integer*8                     :: isample, icompressed, ibit
+        integer*8                     :: firstcompressed, lastcompressed
+
+        ! old style file format
+        length = len_trim(obs%filename)
+        if (obs%filename(length-4:length) /= '.fits') then
+            call this%read_oldstyle(obs, destination, signal, mask, status)
+            return
+        end if
+
+        ! read signal HDU
+        call ft_open_image(trim(obs%filename) // '[Signal]', unit, 3,         &
+                           imageshape, status)
+        if (status /= 0) return
+
+        do idetector = 1, size(signal,2)
+
+            p = this%pq(1,idetector)
+            q = this%pq(2,idetector)
+
+            call ft_readslice(unit, obs%first, obs%last, q+1, p+1,           &
+                 imageshape, signal(destination:destination+obs%nsamples-1,   &
+                 idetector),status)
+            if (status /= 0) go to 999
+
+        end do
+
+        call ft_close(unit, status)
+        if (status /= 0) return
+
+
+        ! read Mask HDU
+        mask(destination:destination+obs%nsamples-1,:) = .false.
+        mask_found = ft_test_extension(trim(obs%filename)//'[Master]', status)
+        if (status /= 0) return
+
+        if (.not. mask_found) then
+            write (*,'(a)') 'Info: mask Master is not found.'
+            return
+        end if
+
+        call ft_open_image(trim(obs%filename) // '[Master]', unit, 3,         &
+                           imageshape, status)
+        if (status /= 0) return
+
+        allocate(maskcompressed(imageshape(1)))
+
+        do idetector = 1, size(mask,2)
+
+            p = this%pq(1,idetector)
+            q = this%pq(2,idetector)
+
+            if (this%mask(p+1,q+1)) then
+                mask(destination:destination+obs%nsamples-1,idetector) = .true.
+                cycle
+            end if
+
+            firstcompressed = (obs%first - 1) / 32 + 1
+            lastcompressed  = (obs%last  - 1) / 32 + 1
+            ncompressed = lastcompressed - firstcompressed + 1
+
+            call ft_readslice(unit, firstcompressed, lastcompressed,       &
+                 q+1, p+1, imageshape, maskcompressed(1:ncompressed),status)
+            if (status /= 0) go to 999
+
+            ! loop over the bytes of the compressed mask
+            do icompressed = firstcompressed, lastcompressed
+
+                maskval = maskcompressed(icompressed-firstcompressed+1)
+                if (maskval == 0) cycle
+
+                isample = (icompressed-1)*32 - obs%first + destination + 1
+
+                ! loop over the bits of a compressed mask byte
+                do ibit = max(0, obs%first - (icompressed-1)*32-1),           &
+                          min(31, obs%last - (icompressed-1)*32-1)
+                    mask(isample+ibit,idetector) =                             &
+                         mask(isample+ibit,idetector) .or. btest(maskval,ibit)
+                end do
+
+            end do
+
+        end do
+
+    999 call ft_close(unit, status_close)
+        if (status == 0) status = status_close
+
+    end subroutine read_one
+
+
+    !---------------------------------------------------------------------------
+
+
+    subroutine read_oldstyle(this, obs, dest, signal, mask, status)
+        class(pacsinstrument), intent(in) :: this
+        class(pacsobsinfo), intent(in)    :: obs
+        integer*8, intent(in)          :: dest
+        real*8, intent(inout)          :: signal(:,:)
+        logical*1, intent(inout)       :: mask(:,:)
+        integer, intent(out)           :: status
+        integer*8                      :: p, q
+        integer                        :: idetector, unit, status_close
+        integer, allocatable           :: imageshape(:)
+
+        ! handle signal
+        call ft_open_image(trim(obs%filename) // '_Signal.fits', unit, 3,     &
+                           imageshape, status)
+        if (status /= 0) return
+
+        do idetector = 1, size(signal,2)
+
+            p = this%pq(1,idetector)
+            q = this%pq(2,idetector)
+            call ft_readslice(unit, obs%first, obs%last, q+1, p+1,           &
+                 imageshape, signal(dest:dest+obs%nsamples-1,idetector),status)
+            if (status /= 0) go to 999
+
+        end do
+
+        call ft_close(unit, status)
+        if (status /= 0) return
+
+        ! handle mask
+        call ft_open_image(trim(obs%filename) // '_Mask.fits', unit, 3,       &
+                           imageshape, status)
+        if (status /= 0) return
+
+        do idetector = 1, size(mask,2)
+
+            p = this%pq(1,idetector)
+            q = this%pq(2,idetector)
+
+            if (this%mask(p+1,q+1)) then
+                mask(dest:dest+obs%nsamples-1,idetector) = .true.
+                cycle
+            end if
+
+            call ft_readslice(unit, obs%first, obs%last, q+1, p+1,           &
+                 imageshape, mask(dest:dest+obs%nsamples-1,idetector), status)
+            if (status /= 0) go to 999
+
+        end do
+
+    999 call ft_close(unit, status_close)
+        if (status == 0) status = status_close
+
+    end subroutine read_oldstyle
+
+
+    !---------------------------------------------------------------------------
+
+
     subroutine multiplexing_direct(signal, sampled_signal, sampling, ij)
         real*8, intent(in)  :: signal(:,:)
         integer, intent(in) :: sampling
@@ -667,6 +845,22 @@ contains
         end if
 
     end subroutine multiplexing_transpose
+
+
+    !---------------------------------------------------------------------------
+
+
+    subroutine destroy(this)
+
+        class(pacsinstrument), intent(inout) :: this
+
+        deallocate(this%ij)
+        deallocate(this%pq)
+        deallocate(this%flatfield)
+        deallocate(this%corners_uv)
+        deallocate(this%corners_yz)
+
+    end subroutine destroy
 
 
 end module module_pacsinstrument

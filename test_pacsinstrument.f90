@@ -5,6 +5,7 @@ program test_pacsinstrument
     use module_pacsinstrument
     use module_pacsobservation, only : pacsobservation
     use module_pacspointing,    only : pacspointing
+    use string,                 only : strreal
     use module_wcs,             only : init_astrometry, ad2xy_gnomonic
     implicit none
 
@@ -30,7 +31,7 @@ program test_pacsinstrument
 
     ! initialise pacs instrument
     allocate(pacs)
-    call pacs%init(obs, 1, .false., status)
+    call pacs%init(obs%channel, obs%transparent_mode, 1, .false., status)
     if (status /= 0) stop 'FAILED: pacsinstrument%init'
 
     ! initialise pointing information
@@ -159,8 +160,25 @@ program test_pacsinstrument
     call system_clock(count1, count_rate, count_max)
     ad_vect = pacs%yz2ad(ad_vect, ra, dec, pa)
     call system_clock(count2, count_rate, count_max)
-    write(*,'(a,f6.4,a)') 'yz2ad: ',real(count2-count1)/count_rate, 's'
+    write(*,'(a)') 'yz2ad: ' // strreal(real(count2-count1,kind=8)/count_rate,4) // 's'
+    call pacs%destroy()
 
+    call pacs%init('r', .true., 1, .false., status)
+    if (status /= 0) stop 'FAILED: pacs%init 1'
+    call pacs%destroy()
+
+    call pacs%init('g', .true., 1, .false., status)
+    if (status /= 0) stop 'FAILED: pacs%init 2'
+    call pacs%destroy()
+
+    call pacs%init('b', .true., 1, .false., status)
+    if (status /= 0) stop 'FAILED: pacs%init 3'
+    call pacs%destroy()
+
+    call pacs%init('x', .true., 1, .false., status)
+    if (status == 0) stop 'FAILED: pacs%init 4'
+    call pacs%init('b', .true., 3, .false., status)
+    if (status == 0) stop 'FAILED: pacs%init 5'
 
     stop "OK."
     

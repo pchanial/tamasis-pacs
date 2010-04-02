@@ -44,7 +44,7 @@ program test_ngc6946_bpj
 
     ! initialise pacs instrument
     allocate(pacs)
-    call pacs%init(obs, 1, .false., status)
+    call pacs%init(obs%channel, obs%transparent_mode, 1, .false., status)
     if (status /= 0) stop 'FAILED: pacsinstrument%init'
 
     ! initialise pointing information
@@ -69,7 +69,7 @@ program test_ngc6946_bpj
     call system_clock(count1, count_rate, count_max)
     allocate(signal(nsamples, pacs%ndetectors))
     allocate(mask  (nsamples, pacs%ndetectors))
-    call obs%read(pacs%pq, signal, mask, status)
+    call pacs%read(obs, signal, mask, status)
     if (status /= 0) stop 'FAILED: read_tod'
     call system_clock(count2, count_rate, count_max)
     write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
@@ -146,7 +146,7 @@ program test_ngc6946_bpj
     if (status /= 0) stop 'FAILED: ft_write.'
 
     ! test the back projected map
-    write (ERROR_UNIT,*) 'Sum in map is ', sum_kahan(map1d), ' ...instead of ',&
+    write (OUTPUT_UNIT,*) 'Sum in map is ', sum_kahan(map1d), ' ...instead of ',&
                          strinteger(int(pacs%ndetectors*nsamples, kind=4))
     if (.not. test_real_eq(sum_kahan(map1d), real(pacs%ndetectors*nsamples,kind=8), 6)) then
         stop 'FAILED.'

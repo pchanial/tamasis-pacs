@@ -1,12 +1,12 @@
 program test_pacsobservation
 
-    !use module_pacsinstrument, only : pacsinstrument
-    use module_pacsobservation
+    use module_pacsinstrument,  only : pacsinstrument
+    use module_pacsobservation, only : pacsobservation
     use string, only : strsection
     implicit none
 
     class(pacsobservation), allocatable :: obs
-!    class(pacsinstrument), allocatable  :: pacs
+    class(pacsinstrument), allocatable  :: pacs
     character(len=*), parameter :: filename = 'tests/frames_blue.fits'
     character(len=50), allocatable :: afilename(:)
     integer                     :: status, idetector
@@ -70,41 +70,40 @@ program test_pacsobservation
     deallocate(afilename)
 
     
-!!$    ! test reading observation
-!!$    allocate(obs)
-!!$    call obs%init(filename, status)
-!!$    if (status /= 0) stop 'FAILED: init_pacsobservation loop'
-!!$
-!!$    allocate(pacs)
-!!$    !call pacs%init(obs, 1, .false., status)
-!!$    if (status /= 0 .or. pacs%channel /= 'b' .or. pacs%transparent_mode)       &
-!!$        stop 'FAILED: pacs%init'
-!!$
-!!$    ! get a detector that has been hit by a glitch
-!!$    do idetector = 1, pacs%ndetectors
-!!$        if (pacs%pq(1,idetector)+1 == 27.and.pacs%pq(2,idetector)+1 == 64) exit
-!!$    end do
-!!$
-!!$    mask_ref = .false.
-!!$    mask_ref([5,6,7,151]) = .true. ! 27 64
-!!$    
-!!$    do first = 1, 360,7
-!!$        do last = first, 360, 11
-!!$           obs%info(1)%first = first
-!!$           obs%info(1)%last = last
-!!$           obs%info(1)%nsamples = last - first + 1
-!!$           allocate(signal(obs%info(1)%nsamples,pacs%ndetectors))
-!!$           allocate(mask  (obs%info(1)%nsamples,pacs%ndetectors))
-!!$           call read_pacsobservation(obs, pacs%pq, signal, mask, status)
-!!$           if (status /= 0) stop 'FAILED: read_pacsobservation loop'
-!!$           if (any(mask(1:last-first+1,idetector) .neqv. mask_ref(first:last))) then
-!!$               stop 'FAILED: read mask'
-!!$           end if
-!!$           deallocate(signal)
-!!$           deallocate(mask  )
-!!$        end do
-!!$    end do
-!!$
+    ! test reading observation
+    call obs%init([filename], status)
+    if (status /= 0) stop 'FAILED: init_pacsobservation loop'
+
+    allocate(pacs)
+    call pacs%init(obs%channel, obs%transparent_mode, 1, .false., status)
+    if (status /= 0 .or. pacs%channel /= 'b' .or. pacs%transparent_mode)       &
+        stop 'FAILED: pacs%init'
+
+    ! get a detector that has been hit by a glitch
+    do idetector = 1, pacs%ndetectors
+        if (pacs%pq(1,idetector)+1 == 27.and.pacs%pq(2,idetector)+1 == 64) exit
+    end do
+
+    mask_ref = .false.
+    mask_ref([5,6,7,151]) = .true. ! 27 64
+    
+    do first = 1, 360,7
+        do last = first, 360, 11
+           obs%info(1)%first = first
+           obs%info(1)%last = last
+           obs%info(1)%nsamples = last - first + 1
+           allocate(signal(obs%info(1)%nsamples,pacs%ndetectors))
+           allocate(mask  (obs%info(1)%nsamples,pacs%ndetectors))
+           call pacs%read(obs, signal, mask, status)
+           if (status /= 0) stop 'FAILED: read_pacsobservation loop'
+           if (any(mask(1:last-first+1,idetector) .neqv. mask_ref(first:last))) then
+               stop 'FAILED: read mask'
+           end if
+           deallocate(signal)
+           deallocate(mask  )
+        end do
+    end do
+
     stop 'OK.'
    
 end program test_pacsobservation

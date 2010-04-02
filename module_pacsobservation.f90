@@ -14,12 +14,10 @@
 
 module module_pacsobservation
 
-    use ISO_FORTRAN_ENV,  only : ERROR_UNIT, OUTPUT_UNIT
-    use module_fitstools, only : ft_open, ft_open_image, ft_open_bintable,  &
-                                 ft_read_column, ft_readextension,          &
-                                 ft_readslice, ft_test_extension,ft_close
-    use precision,        only : p
-    use string,           only : strinteger, strlowcase, strsection, strternary
+    use ISO_FORTRAN_ENV,       only : ERROR_UNIT, OUTPUT_UNIT
+    use module_fitstools,      only : ft_open, ft_open_bintable, ft_read_column, ft_readextension, ft_close
+    use precision,             only : p
+    use string,                only : strinteger, strlowcase, strsection, strternary
     implicit none
     private
 
@@ -39,24 +37,26 @@ module module_pacsobservation
     type pacsobservation
 
         private
+        character, public :: channel
+        logical, public   :: transparent_mode
         type(pacsobsinfo), allocatable, public :: info(:)
 
     contains
 
         private
         procedure, public :: init
-        procedure, public :: read
 
     end type pacsobservation
 
 contains
 
 
-    subroutine init(this, filename, status)
+    subroutine init(this, filename, status, verbose)
 
         class(pacsobservation), intent(inout) :: this
         character(len=*), intent(in)          :: filename(:)
         integer, intent(out)                  :: status
+        logical, intent(in), optional         :: verbose
         integer*8                             :: first, last
         integer                               :: iobs
 
@@ -91,6 +91,26 @@ contains
             if (status /= 0) return
 
         end do
+
+        ! make sure the channel is the same for all observations
+        this%channel = this%info(1)%channel
+        if (any(this%info%channel /= this%channel)) then
+            status = 1
+            write (ERROR_UNIT,'(a)') 'ERROR: Observations do not have the same channel.'
+            return
+        end if
+
+        ! make sure the transparent mode is the same for all observations
+        ! that could be relaxed, but we would need to properly handle the bad detector mask
+        this%transparent_mode = this%info(1)%transparent_mode
+        if (any(this%info%transparent_mode .neqv. this%transparent_mode)) then
+            status = 1
+            write (ERROR_UNIT,'(a)') 'ERROR: Observations do not have the same transparent mode.'
+            return
+        end if
+
+        if (.not. present(verbose)) return
+        if (.not. verbose) return
         
         ! print some info
         do iobs = 1, size(filename)
@@ -106,11 +126,11 @@ contains
             write (OUTPUT_UNIT,'(a,$)') "      Channel: "
             select case (this%info(iobs)%channel)
                 case ('b')
-                    write (OUTPUT_UNIT,'(a)') "'Blue'"
+                    write (OUTPUT_UNIT,'(a)') 'Blue'
                 case ('g')
-                    write (OUTPUT_UNIT,'(a)') "'Green'"
+                    write (OUTPUT_UNIT,'(a)') 'Green'
                 case ('r')
-                    write (OUTPUT_UNIT,'(a)') "'Red'"
+                    write (OUTPUT_UNIT,'(a)') 'Red'
                 case default
                     write (OUTPUT_UNIT,'(a)') 'Unknown'
             end select
@@ -463,8 +483,8 @@ contains
         if (delim < length) then
             read (filename(delim+1:length), '(i20)', iostat=status) last
             if (status /= 0) then
-                write (ERROR_UNIT,'(a)') 'ERROR: Invalid last sample: ' //    &
-                      filename(pos-1:length+1)
+                write (ERROR_UNIT,'(a)') "ERROR: Invalid last sample: '" //    &
+                      filename(pos-1:length+1) // "'."
                 return
             end if
         end if
@@ -473,8 +493,8 @@ contains
         if (delim > pos) then
             read (filename(pos:delim-1), '(i20)', iostat=status) first
             if (status /= 0) then
-                write (ERROR_UNIT,'(a)') 'ERROR: Invalid first sample: ' //    &
-                      filename(pos-1:length+1)
+                write (ERROR_UNIT,'(a)') "ERROR: Invalid first sample: '" //    &
+                      filename(pos-1:length+1) // "'."
                 return
             end if
         end if
@@ -497,199 +517,6 @@ contains
         this%filename(pos-1:) = ' '
 
     end subroutine set_filename
-
-
-    !---------------------------------------------------------------------------
-
-
-    subroutine read(obs, pq, signal, mask, status)
-
-        class(pacsobservation), intent(in) :: obs
-        integer, intent(in)                :: pq(:,:)
-        real(p), intent(out)               :: signal(:,:)
-        logical(1), intent(out)            :: mask(:,:)
-        integer, intent(out)               :: status
-        integer*8 :: nsamples, destination
-        integer   :: nobs, iobs
-
-        nobs     = size(obs%info)
-        nsamples = sum(obs%info%nsamples)
-
-        ! check that the total number of samples in the observations is equal
-        ! to the number of samples in the signal and mask arrays
-        if (nsamples /= size(signal,1) .or. nsamples /= size(mask,1)) then
-            status = 1
-            write (ERROR_UNIT,'(a)') 'READ_TOD: invalid dimensions.'
-            return
-        end if
-
-        ! loop over the PACS observations
-        destination = 1
-        do iobs = 1, nobs
-            call read_one(obs%info(iobs), pq, destination, signal, mask, status)
-            if (status /= 0) return
-            destination = destination + obs%info(iobs)%nsamples
-        end do
-   
-    end subroutine read
-
-
-    !---------------------------------------------------------------------------
-
-
-    subroutine read_one(this, pq, destination, signal, mask, status)
-        type(pacsobsinfo), intent(in) :: this
-        integer, intent(in)           :: pq(:,:)
-        integer*8, intent(in)         :: destination
-        real*8, intent(inout)         :: signal(:,:)
-        logical*1, intent(inout)      :: mask  (:,:)
-        integer, intent(out)          :: status
-        integer*8                     :: p, q
-        integer                       :: idetector, unit, length
-        integer                       :: status_close
-        integer, allocatable          :: imageshape(:)
-        logical                       :: mask_found
-        integer*4, allocatable        :: maskcompressed(:)
-        integer*4                     :: maskval
-        integer*8                     :: ncompressed
-        integer*8                     :: isample, icompressed, ibit
-        integer*8                     :: firstcompressed, lastcompressed
-
-        ! old style file format
-        length = len_trim(this%filename)
-        if (this%filename(length-4:length) /= '.fits') then
-            write (ERROR_UNIT,'(a)') 'READ: obsolete file format.'
-            call read_oldstyle(this, pq, destination, signal, mask, status)
-            return
-        end if
-
-        ! read signal HDU
-        call ft_open_image(trim(this%filename) // '[Signal]', unit, 3,         &
-                           imageshape, status)
-        if (status /= 0) return
-
-        do idetector = 1, size(signal,2)
-
-            p = pq(1,idetector)
-            q = pq(2,idetector)
-
-            call ft_readslice(unit, this%first, this%last, q+1, p+1,           &
-                 imageshape, signal(destination:destination+this%nsamples-1,   &
-                 idetector),status)
-            if (status /= 0) go to 999
-
-        end do
-
-        call ft_close(unit, status)
-        if (status /= 0) return
-
-
-        ! read Mask HDU
-        mask(destination:destination+this%nsamples-1,:) = .false.
-        mask_found = ft_test_extension(trim(this%filename)//'[Master]', status)
-        if (status /= 0) return
-
-        if (.not. mask_found) then
-            write (*,'(a)') 'Info: mask Master is not found.'
-            return
-        end if
-
-        call ft_open_image(trim(this%filename) // '[Master]', unit, 3,         &
-                           imageshape, status)
-        if (status /= 0) return
-
-        allocate(maskcompressed(imageshape(1)))
-
-        do idetector = 1, size(mask,2)
-
-            p = pq(1,idetector)
-            q = pq(2,idetector)
-
-
-            firstcompressed = (this%first - 1) / 32 + 1
-            lastcompressed  = (this%last  - 1) / 32 + 1
-            ncompressed = lastcompressed - firstcompressed + 1
-
-            call ft_readslice(unit, firstcompressed, lastcompressed,       &
-                 q+1, p+1, imageshape, maskcompressed(1:ncompressed),status)
-            if (status /= 0) go to 999
-
-            ! loop over the bytes of the compressed mask
-            do icompressed = firstcompressed, lastcompressed
-
-                maskval = maskcompressed(icompressed-firstcompressed+1)
-                if (maskval == 0) cycle
-
-                isample = (icompressed-1)*32 - this%first + destination + 1
-
-                ! loop over the bits of a compressed mask byte
-                do ibit = max(0, this%first - (icompressed-1)*32-1),           &
-                          min(31, this%last - (icompressed-1)*32-1)
-                    mask(isample+ibit,idetector) =                             &
-                         mask(isample+ibit,idetector) .or. btest(maskval,ibit)
-                end do
-
-            end do
-
-        end do
-
-    999 call ft_close(unit, status_close)
-        if (status == 0) status = status_close
-
-    end subroutine read_one
-
-
-    !---------------------------------------------------------------------------
-
-
-    subroutine read_oldstyle(this, pq, dest, signal, mask, status)
-        type(pacsobsinfo), intent(in) :: this
-        integer, intent(in)           :: pq(:,:)
-        integer*8, intent(in)         :: dest
-        real*8, intent(inout)         :: signal(:,:)
-        logical*1, intent(inout)      :: mask(:,:)
-        integer, intent(out)          :: status
-        integer*8                     :: p, q
-        integer                       :: idetector, unit, status_close
-        integer, allocatable          :: imageshape(:)
-
-        ! handle signal
-        call ft_open_image(trim(this%filename) // '_Signal.fits', unit, 3,     &
-                           imageshape, status)
-        if (status /= 0) return
-
-        do idetector = 1, size(signal,2)
-
-            p = pq(1,idetector)
-            q = pq(2,idetector)
-            call ft_readslice(unit, this%first, this%last, q+1, p+1,           &
-                 imageshape, signal(dest:dest+this%nsamples-1,idetector),status)
-            if (status /= 0) go to 999
-
-        end do
-
-        call ft_close(unit, status)
-        if (status /= 0) return
-
-        ! handle mask
-        call ft_open_image(trim(this%filename) // '_Mask.fits', unit, 3,       &
-                           imageshape, status)
-        if (status /= 0) return
-
-        do idetector = 1, size(mask,2)
-
-            p = pq(1,idetector)
-            q = pq(2,idetector)
-            call ft_readslice(unit, this%first, this%last, q+1, p+1,           &
-                 imageshape, mask(dest:dest+this%nsamples-1,idetector), status)
-            if (status /= 0) go to 999
-
-        end do
-
-    999 call ft_close(unit, status_close)
-        if (status == 0) status = status_close
-
-    end subroutine read_oldstyle
 
 
  end module module_pacsobservation
