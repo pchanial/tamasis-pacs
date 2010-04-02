@@ -1,114 +1,74 @@
+#!/usr/bin/python
+from matplotlib.pyplot import figure, plot, show
+import numpy
+from optparse import OptionParser
+import sys
 import tamasisfortran as tmf
 from tamasis import Map, PacsObservation, PacsProjectionSharpEdges
-import numpy
-from matplotlib.pyplot import figure, plot, show
 
-def pacs_photproject(filename='/home/pchanial/work/pacs/data/transparent/NGC6946/1342184520_blue', first=20000, last=86000, header=None, resolution=3., npixels_per_sample=6):
+parser = OptionParser('Usage: %prog [options] fitsfile...')
+parser.add_option('-o', help='write output map to FILE in FITS format [default: %default]', metavar='FILE', dest='outputfile', default='photproject.fits')
+parser.add_option('--header', help='use FITS header in FILE to specify the map projection [default: automatic]', metavar='FILE')
+parser.add_option('--resolution', help='input pixel size of the map in arcseconds [default: %default]', default=3.2)
+parser.add_option('-n', '--npixels-per-sample', help='Maximum number of sky pixels intercepted by a PACS detector [default: %default]', default=6)
+#parser.add_option('--no-flatfield', help='do not divide by calibration flat-field [default: False]', dest='do_flatfield', action='store_false', default=True)
+#parser.add_option('-f', '--filtering', help='method for timeline filtering: mean or none [default: %default]', metavar='METHOD', default='mean')
+parser.add_option('-d', '--deglitching', help='method for timeline deglitching: l2std, l2mad or none [default: %default]', metavar='METHOD', default='none')
+parser.add_option('--nsigma-deglitching', help='N-sigma deglitching value [default: %default]', dest='nsigma', default=5.)
+parser.add_option('--plot', help='plot the map', action='store_true', dest='do_plot', default=False)
 
-    pacs = PacsObservation(filename=filename,
-                           first=first,
-                           last=last,
-                           header=header,
-                           resolution=resolution,
-                           fine_sampling_factor=1,
-                           keep_bad_detectors=False,
-                           npixels_per_sample=npixels_per_sample)
+(options, filename) = parser.parse_args(sys.argv[1:])
 
-    tod = pacs.get_tod()
-    nx = pacs.header['naxis1']
-    ny = pacs.header['naxis2']
+if len(filename) == 0:
+    raise SystemExit(parser.print_help() or 1)
 
-    # compute pointing matrix
-    projection = PacsProjectionSharpEdges(pacs)
+# check options
+options.deglitching = options.deglitching.lower()
+if options.deglitching not in ('none', 'l2std', 'l2mad'):
+    raise ValueError("Invalid deglitching method '"+options.deglitching+"'. Valid methods are 'l2std', 'l2mad' or 'none'.")
 
-    # deglitching
-    tod.mask = tmf.deglitch_l2b_std(projection.pmatrix, nx, ny, tod, tod.mask, 5., pacs.npixels_per_sample)
+#options.filtering = options.filtering.lower()
+#if options.filtering not in ('none', 'mean'):
+#    raise ValueError("Invalid filtering method '"+options.filtering+"'. Valid methods are 'mean', or 'none'.")
 
-    # back projection
-    mymap = Map.zeros([nx, ny], order='f')
-    tmf.backprojection_weighted(projection.pmatrix, tod, tod.mask, mymap, pacs.npixels_per_sample)
-
-    return mymap
-
-filename='/home/pchanial/work/pacs/data/transparent/NGC6946/1342184520_blue'
-first=20000
-last=86000
-header=None
-resolution=3.
-npixels_per_sample=6
 pacs = PacsObservation(filename=filename,
-                       first=first,
-                       last=last,
-                       header=header,
-                       resolution=resolution,
+                       header=options.header,
+                       resolution=options.resolution,
                        fine_sampling_factor=1,
                        keep_bad_detectors=False,
-                       npixels_per_sample=npixels_per_sample)
+                       npixels_per_sample=options.npixels_per_sample)
 
-projection = PacsProjectionSharpEdges(pacs)
+projection = PacsProjectionSharpEdges(pacs, finer_sampling=False)
 
 nx = pacs.header['naxis1']
 ny = pacs.header['naxis2']
 
-# deglitching
 tod = pacs.get_tod()
-nbads = numpy.sum(tod.mask)
-tod.mask = tmf.deglitch_l2b_std(projection.pmatrix, nx, ny, tod, tod.mask, 10., pacs.npixels_per_sample)
-print 'Number of glitches detected:', numpy.sum(tod.mask) - nbads
 
-mymap = Map.zeros([nx, ny], order='f')
-tmf.backprojection_weighted(projection.pmatrix, tod, tod.mask, mymap, pacs.npixels_per_sample)
+# deglitching
+if options.deglitching != 'none':
+    nbads = numpy.sum(tod.mask)
+    if options.deglitching == 'l2std':
+        tod.mask = tmf.deglitch_l2b_std(projection.pmatrix, nx, ny, tod, tod.mask.astype('int8'), options.nsigma, pacs.npixels_per_sample)
+    else:
+        tod.mask = tmf.deglitch_l2b_mad(projection.pmatrix, nx, ny, tod, tod.mask.astype('int8'), options.nsigma, pacs.npixels_per_sample)
+    print 'Number of glitches detected:', numpy.sum(tod.mask) - nbads
 
-idetector = 0
-figure()
-plot(tod[:,idetector])
-index=numpy.where(tod.mask[:,idetector])
-plot(index, tod.data[index,idetector], 'ro')
-show()
+mymap = Map.zeros((nx, ny), order='f', header=pacs.header)
+tmf.backprojection_weighted(projection.pmatrix, tod, tod.mask.astype('int8'), mymap, pacs.npixels_per_sample)
 
-#! command parsing
-#allocate(parser)
-#call parser%init('pacs_photproject [options] fitsfile', 0, 1)
-#call parser%add_option('', 'o', 'Filename of the output map (FITS format)',&
-#                       has_value=.true., default='photproject.fits')
-#call parser%add_option('header', 'h', 'Input FITS header of the map',   &
-#                       has_value=.true.)
-#call parser%add_option('resolution', '', 'Input pixel size of the map', &
-#                       has_value=.true., default='3.')
-#call parser%add_option('npixels-per-sample', 'n', 'Maximum number of sky &
-#                       &pixels intercepted by a PACS detector',          &
-#                       has_value=.true., default='6')
-#call parser%add_option('no-flatfield','','Do not divide by calibration flat field')
-#call parser%add_option('filtering', 'f', 'Timeline filtering (mean|none)', &
-#                       has_value=.true., default='mean')
-#call parser%add_option('deglitching', 'd', 'Timeline deglitching &
-#                       &(l2bl2bc|none)', has_value=.true., default='none')
-#call parser%add_option('nsigma-deglitching', '', 'N-sigma for deglitching',&
-#                       has_value=.true., default='5.')
-#call parser%add_option('first', '', 'First sample in timeline', &
-#                       has_value=.true., default='12001')
-#call parser%add_option('last', '', 'Last sample in timeline',   &
-#                       has_value=.true., default='86000')
-#
-#call parser%parse(status)
-#if (status == -1) stop
-#if (status /=  0) stop 'Aborting.'
-#
-#call parser%print_options()
-#
-#if (parser%get_argument_count() == 1) then
-#   infile = parser%get_argument(1,status)
-#else
-#   infile = filename
-#end if
-#outfile = parser%get_option('o', status) !XXX status gfortran bug
-#headerfile = parser%get_option('header', status)
-#resolution = parser%get_option_as_real('resolution', status)
-#npixels_per_sample = parser%get_option_as_integer('npixels-per-sample', status)
-#first = parser%get_option_as_integer('first', status)
-#last  = parser%get_option_as_integer('last', status)
-#do_flatfield = .not. parser%get_option_as_logical('no-flatfield', status)
-#do_meansubtraction = parser%get_option('filtering', status) == 'mean'
-#do_deglitching_l2b = parser%get_option('deglitching', status) == 'l2b'
-#do_deglitching_l2c = parser%get_option('deglitching', status) == 'l2c'
-#nsigma_deglitching = parser%get_option_as_real('nsigma-deglitching', status)
+
+mymap.writefits(options.outputfile)
+
+if options.do_plot:
+     mymap.imshow()
+     show()
+#    idetector = 0
+#    figure()
+#    plot(tod[:,idetector])
+#    index=numpy.where(tod.mask[:,idetector])
+#    plot(index, tod.data[index,idetector], 'ro')
+#    show()
+
+
+
