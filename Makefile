@@ -66,7 +66,7 @@ test_math = module_math precision
 test_ngc6946_bpj = module_fitstools module_pacsinstrument module_pacsobservation module_pacspointing module_pointingmatrix module_preprocessor module_projection module_math
 test_optionparser = module_optionparser
 test_pacsinstrument = module_pacsinstrument module_pacspointing
-test_pacsobservation =  module_pacsobservation string
+test_pacsobservation = module_pacsinstrument  module_pacsobservation string
 test_pacspointing = module_math module_pacsobservation module_pacspointing
 test_pointingmatrix = module_pointingmatrix
 test_projection = module_projection module_sort
@@ -81,8 +81,8 @@ test_wcslib2 = module_wcslib module_fitstools module_math
 test_wcslibc = module_wcslibc module_cfitsio
 
 .PHONY : all tests
-#all : $(EXECS) tamasisfortran.so
-all : $(EXECS)
+all : $(EXECS) tamasisfortran.so
+#all : $(EXECS)
 
 # if %.mod doesn't exist, make %.o. It will create %.mod with the same 
 # timestamp. If it does, do nothing
