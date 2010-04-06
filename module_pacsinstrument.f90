@@ -519,12 +519,13 @@ contains
         real*8  :: coords(ndims,this%ndetectors*nvertices), coords_yz(ndims,this%ndetectors*nvertices)
         real*8  :: ra, dec, pa, chop, chop_old
         integer :: roi(ndims,2,this%ndetectors)
-        integer :: nsamples,  npixels_per_sample, islice, itime, sampling_factor, nroi, dest
+        integer :: nsamples,  npixels_per_sample, islice, itime, sampling_factor, dest
+        logical :: out
 
         call init_astrometry(header, status=status)
         if (status /= 0) return
 
-        npixels_per_sample = -1
+        npixels_per_sample = 0
         dest = 0
 
         ! loop over the observations
@@ -540,9 +541,10 @@ contains
                sampling_factor = 1
             end if
 
+            out = .false.
             !$omp parallel do default(shared) firstprivate(chop_old)   &
             !$omp private(itime, ra, dec, pa, chop, coords, coords_yz, roi) &
-            !$omp reduction(max : npixels_per_sample)
+            !$omp reduction(max : npixels_per_sample) reduction(.or. : out)
             do itime = 1, nsamples * sampling_factor
                 call pointing%get_position_index(islice, itime, sampling_factor, ra, dec, pa, chop)
                 if (abs(chop-chop_old) > 1.d-2) then
@@ -552,8 +554,7 @@ contains
                  coords = this%yz2ad(coords_yz, ra, dec, pa)
                  coords = ad2xy_gnomonic(coords)
                  roi    = xy2roi(coords, nvertices)
-                 call roi2pmatrix(roi, nvertices, coords, nx, ny, itime + dest, nroi, pmatrix)
-                 npixels_per_sample = max(npixels_per_sample, nroi)
+                 call roi2pmatrix(roi, nvertices, coords, nx, ny, itime + dest, npixels_per_sample, out, pmatrix)
              end do
              !$omp end parallel do
              dest = dest + nsamples * sampling_factor
@@ -561,9 +562,13 @@ contains
 
         if (npixels_per_sample > size(pmatrix,1)) then
             status = 1
-            write(*,'(a,i0,a)') 'Error: Please update npixels_per_sample to ', npixels_per_sample, '.'
+            write(ERROR_UNIT,'(a,i0,a)') 'Error: Please update npixels_per_sample to ', npixels_per_sample, '.'
         else if (npixels_per_sample < size(pmatrix,1)) then
-            write(*,'(a,i0,a)') 'Warning: You may update npixels_per_sample to ', npixels_per_sample, '.'
+            write(OUTPUT_UNIT,'(a,i0,a)') 'Warning: You may update npixels_per_sample to ', npixels_per_sample, '.'
+        end if
+
+        if (out) then
+            write (OUTPUT_UNIT,'(a)') 'Warning: Some detectors fall outside the map.'
         end if
 
     end subroutine compute_projection_sharp_edges

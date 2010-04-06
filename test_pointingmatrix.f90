@@ -11,6 +11,7 @@ program test_pointingmatrix
     integer, allocatable :: roi(:,:,:)
     integer i
     integer :: npixels_per_sample, ntimes, ndetectors, nroi, nx, ny, itime
+    logical :: out
     type(pointingelement), allocatable :: pmatrix(:,:,:)
 
     ndetectors = 100
@@ -33,9 +34,10 @@ program test_pointingmatrix
     if (any(roi(:,1,:) /= 1 .or. roi(:,2,:) /= 2)) stop 'FAILED: xy2roi'
 
     do itime = 1, ntimes
-       call roi2pmatrix(roi, nvertices, xy, nx, ny, itime, nroi, pmatrix)
+       call roi2pmatrix(roi, nvertices, xy, nx, ny, itime, nroi, out, pmatrix)
     end do
     if (nroi > npixels_per_sample) write (*,*) 'update npixels_per_sample:',nroi
+    if (out) stop 'FAILED: roi2pmatrix out'
     if (any(pmatrix%pixel /= 0 .and. pmatrix%pixel /= 1 .and.                  &
         pmatrix%pixel /= 100 .and. pmatrix%pixel /= 101)) stop 'FAILED: roi2pmatrix1'
 

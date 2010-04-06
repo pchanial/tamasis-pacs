@@ -1,9 +1,10 @@
 program test_deglitching
 
-    use :: precision, only : p
-    use :: module_deglitching, only : deglitch_l2b
-    use :: module_math, only : linspace
-    use :: module_pointingmatrix, only : pointingelement, pmatrix_direct, xy2roi, roi2pmatrix
+    use iso_fortran_env,       only : ERROR_UNIT, OUTPUT_UNIT
+    use precision,             only : p
+    use module_deglitching,    only : deglitch_l2b
+    use module_math,           only : linspace
+    use module_pointingmatrix, only : pointingelement, pmatrix_direct, xy2roi, roi2pmatrix
     implicit none
 
     type(pointingelement),allocatable :: pmatrix(:,:,:)
@@ -200,11 +201,13 @@ contains
         real(kind=p) :: h, xy(2,4)
         integer      :: roi(2,2,1)
         integer      :: ntimes, npixels_per_sample, itime, nroi
+        logical      :: out
 
         npixels_per_sample = 0
         ntimes = size(xc)
         if (size(yc) /= ntimes) stop 'Error: x and y do not have the same size.'
 
+        out = .false.
         h = detectorsize / 2._p
         do itime=1, ntimes
             xy(1,:) = [xc(itime)-h, xc(itime)+h, xc(itime)+h, xc(itime)-h]
@@ -216,12 +219,18 @@ contains
             xy(2,4) = yc(itime)+h
 
             roi = xy2roi(xy,4)
-            call roi2pmatrix(roi, 4, xy, nx, ny, itime, nroi, pmatrix)
+            call roi2pmatrix(roi, 4, xy, nx, ny, itime, nroi, out, pmatrix)
             npixels_per_sample = max(npixels_per_sample, nroi)
         end do
 
-        if (npixels_per_sample /= size(pmatrix,1)) then
-            write(*,'(a,i0,a)') 'Warning: to compute the Pointing Matrix, npixels_per_sample may be updated to ', npixels_per_sample, '.'
+        if (npixels_per_sample > size(pmatrix,1)) then
+            write(ERROR_UNIT,'(a,i0,a)') 'Error: Please update npixels_per_sample to ', npixels_per_sample, '.'
+        else if (npixels_per_sample < size(pmatrix,1)) then
+            write(OUTPUT_UNIT,'(a,i0,a)') 'Warning: You may update npixels_per_sample to ', npixels_per_sample, '.'
+        end if
+
+        if (out) then
+            write (OUTPUT_UNIT,'(a)') 'Warning: Some detectors fall outside the map.'
         end if
 
     end subroutine get_pmatrix

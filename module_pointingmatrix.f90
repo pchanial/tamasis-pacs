@@ -201,30 +201,26 @@ contains
     !---------------------------------------------------------------------------
 
 
-    subroutine roi2pmatrix(roi, nvertices, coords, nx, ny, itime, nroi, pmatrix)
+    subroutine roi2pmatrix(roi, nvertices, coords, nx, ny, itime, nroi, out, pmatrix)
         integer, intent(in)                  :: roi(:,:,:)
         integer, intent(in)                  :: nvertices
         real*8, intent(in)                   :: coords(:,:)
         type(pointingelement), intent(inout) :: pmatrix(:,:,:)
         integer, intent(in)                  :: nx, ny, itime
-        integer, intent(out)                 :: nroi
+        integer, intent(inout)               :: nroi
+        logical, intent(inout)               :: out
         real*8                               :: polygon(size(roi,1),nvertices)
 
         integer                              :: npixels_per_sample, idetector, ix, iy, iroi, ipixel
         real*4                               :: weight
 
         ipixel = 0
-        nroi = 0
         npixels_per_sample = size(pmatrix, 1)
         do idetector = 1, size(pmatrix,3)
 
-           if (roi(2,1,idetector) < 1 .or. roi(2,2,idetector) > ny) then
-              write(*,*) 'roi2pmatrix: map y too small', roi(2,:,idetector), ny
-           end if
-
-           if (roi(1,1,idetector) < 1 .or. roi(1,2,idetector) > nx) then
-              write(*,*) 'roi2pmatrix: map x too small', roi(1,:,idetector), nx
-           end if
+            if (roi(2,1,idetector) < 1 .or. roi(2,2,idetector) > ny .or. roi(1,1,idetector) < 1 .or. roi(1,2,idetector) > nx) then
+               out = .true.
+            end if
 
             iroi = 1
             do iy = max(roi(2,1,idetector),1), min(roi(2,2,idetector),ny)
