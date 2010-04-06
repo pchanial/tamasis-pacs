@@ -16,7 +16,7 @@ ifeq "$(FC)" "gfortran"
     LDFLAGS  = -lgomp $(shell pkg-config --libs cfitsio) $(shell pkg-config --libs wcslib)
     FCOMPILER=gnu95
 else ifeq ($(FC),ifort)
-    FFLAGS_DEBUG = -fpp -openmp -traceback
+    FFLAGS_DEBUG = -fpp -O2 -static -fPIC -openmp -traceback
     FFLAGS_RELEASE = -fpp -fast -openmp -ftz -ip  -ipo
     LDFLAGS  = -liomp5 $(shell pkg-config --libs cfitsio) $(shell pkg-config --libs wcslib)
     FCOMPILER = intelem
@@ -28,6 +28,14 @@ ifeq ($(DEBUG),1)
     FFLAGS = $(FFLAGS_DEBUG) -DDEBUG
 else
     FFLAGS = $(FFLAGS_RELEASE)
+endif
+
+ifeq ($(PROF_GEN),1)
+    FFLAGS += -prof_gen -prof_dir/home/pchanial/profiles
+endif
+
+ifeq ($(PROF_USE),1)
+    FFLAGS += -prof_use -prof_dir/home/pchanial/profiles
 endif
 
 INCLUDES = wcslib-4.4.4-Fortran90
