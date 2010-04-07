@@ -21,94 +21,94 @@ program test_fitstools
     call ft_header2str(filename_header, header, status=status)
     if (status /= 0) stop 'FAILED: ft_header2str'
 
-    call ft_readparam(header, 'donotexist', count, ivalue, status=status)
+    call ft_read_parameter(header, 'donotexist', ivalue, count, status=status)
     if (status /= 0 .or. count /= 0) stop 'FAILED: donotexist1'
 
-    call ft_readparam(header, 'donotexist', count, lvalue, status=status)
+    call ft_read_parameter(header, 'donotexist', lvalue, count, status=status)
     if (status /= 0 .or. count /= 0) stop 'FAILED: donotexist2'
 
-    call ft_readparam(header, 'donotexist', count, dvalue, status=status)
+    call ft_read_parameter(header, 'donotexist', dvalue, count, status=status)
     if (status /= 0 .or. count /= 0) stop 'FAILED: donotexist3'
 
-    call ft_readparam(header, 'donotexist', count, cvalue, status=status)
+    call ft_read_parameter(header, 'donotexist', cvalue, count, status=status)
     if (status /= 0 .or. count /= 0) stop 'FAILED: donotexist4'
 
-    call ft_readparam(header, 'donotexist', count, lvalue, status=status)
+    call ft_read_parameter(header, 'donotexist', lvalue, count, status=status)
     if (status /= 0 .or. count /= 0) stop 'FAILED: donotexist5'
 
-    call ft_readparam(header, 'naxis', count, ivalue, status=status)
+    call ft_read_parameter(header, 'naxis', ivalue, count, status=status)
     if (status /= 0 .or. ivalue /= 2) stop 'FAILED: naxis'
 
-    call ft_readparam(header, 'naxis1', count, lvalue, status=status)
+    call ft_read_parameter(header, 'naxis1', lvalue, count, status=status)
     if (status /= 0 .or. lvalue /= 487) stop 'FAILED: naxis1'
 
-    call ft_readparam(header, 'naxis2', count, lvalue, status=status)
+    call ft_read_parameter(header, 'naxis2', lvalue, count, status=status)
     if (status /= 0 .or. lvalue /= 487) stop 'FAILED: naxis2'
 
-    call ft_readparam(header, 'cdelt1', count, dvalue, status=status)
+    call ft_read_parameter(header, 'cdelt1', dvalue, count, status=status)
     if (status /= 0 .or. dvalue /= -0.00083333333333333d0) stop 'FAILED: cdelt1'
 
-    call ft_readparam(header, 'cdelt2', count, dvalue, status=status)
+    call ft_read_parameter(header, 'cdelt2', dvalue, count, status=status)
     if (status /= 0 .or. dvalue /= 0.00083333333333333d0) stop 'FAILED: cdelt2'
 
-    call ft_readparam(header, 'crota2', count, dvalue, status=status)
+    call ft_read_parameter(header, 'crota2', dvalue, count, status=status)
     if (status /= 0 .or. dvalue /= 0) stop 'FAILED.'
 
-    call ft_readparam(header, 'crpix1', count, dvalue, status=status)
+    call ft_read_parameter(header, 'crpix1', dvalue, count, status=status)
     if (status /= 0 .or. dvalue /= 1) stop 'FAILED.'
 
-    call ft_readparam(header, 'crpix2', count, dvalue, status=status)
+    call ft_read_parameter(header, 'crpix2', dvalue, count, status=status)
     if (status /= 0 .or. dvalue /= 1) stop 'FAILED.'
 
-    call ft_readparam(header, 'crval1', count, dvalue, status=status)
+    call ft_read_parameter(header, 'crval1', dvalue, count, status=status)
     if (status /= 0 .or. dvalue /= 308.3404249521426d0) stop 'FAILED: crval1'
 
-    call ft_readparam(header, 'crval2', count, dvalue, status=status)
+    call ft_read_parameter(header, 'crval2', dvalue, count, status=status)
     if (status /= 0 .or. dvalue /= 60.357773247484651d0) stop 'FAILED: crval2'
 
-    call ft_readparam(header, 'ctype1', count, cvalue, status=status)
+    call ft_read_parameter(header, 'ctype1', cvalue, count, status=status)
     if (status /= 0 .or. cvalue /= 'RA---TAN') stop 'FAILED: ctype1'
 
-    call ft_readparam(header, 'ctype2', count, cvalue, status=status)
+    call ft_read_parameter(header, 'ctype2', cvalue, count, status=status)
     if (status /= 0 .or. cvalue /= 'DEC--TAN') stop 'FAILED: ctype2'
 
-    call ft_readparam(header, 'cunit1', count, cvalue, status=status)
+    call ft_read_parameter(header, 'cunit1', cvalue, count, status=status)
     if (status /= 0 .or. cvalue /= 'deg') stop 'FAILED: cunit1'
 
-    call ft_readparam(header, 'cunit2', count, cvalue, status=status)
+    call ft_read_parameter(header, 'cunit2', cvalue, count, status=status)
     if (status /= 0 .or. cvalue /= 'deg') stop 'FAILED: cunit2'
 
-    call ft_readparam(header, 'testme1', count, bvalue, status=status)
+    call ft_read_parameter(header, 'testme1', bvalue, count, status=status)
     if (status /= 0 .or. bvalue .neqv. .true.) stop 'FAILED: testme1'
 
-    call ft_readparam(header, 'testme2', count, bvalue, status=status)
+    call ft_read_parameter(header, 'testme2', bvalue, count, status=status)
     if (status == 0) stop 'FAILED: testme2'
 
-    call ft_readparam(header, 'testme3', count, bvalue, status=status)
+    call ft_read_parameter(header, 'testme3', bvalue, count, status=status)
     if (status /= 0 .or. bvalue .neqv. .false.) stop 'FAILED: testme3'
 
-    call ft_readparam(header, 'testme4', count, bvalue, status=status)
+    call ft_read_parameter(header, 'testme4', bvalue, count, status=status)
     if (status == 0) stop 'FAILED: testme4'
 
-    call ft_readparam(header, 'testme5', count, ivalue, status=status)
+    call ft_read_parameter(header, 'testme5', ivalue, count, status=status)
     if (status == 0) stop 'FAILED: testme5a'
 
-    call ft_readparam(header, 'testme5', count, lvalue, status=status)
+    call ft_read_parameter(header, 'testme5', lvalue, count, status=status)
     if (status == 0) stop 'FAILED: testme5b'
 
-    call ft_readparam(header, 'testme6', count, dvalue, status=status)
+    call ft_read_parameter(header, 'testme6', dvalue, count, status=status)
     if (status == 0) stop 'FAILED: testme6'
 
-    call ft_readparam(header, 'testme7', count, cvalue, status=status)
+    call ft_read_parameter(header, 'testme7', cvalue, count, status=status)
     if (status /= 0 .or. cvalue /= "3'D") stop 'FAILED: testme7'
 
-    call ft_readparam(header, 'testme8', count, cvalue, status=status)
+    call ft_read_parameter(header, 'testme8', cvalue, count, status=status)
     if (status /= 0 .or. cvalue /= "'/") stop 'FAILED: testme8'
 
-    call ft_readparam(header, 'testme9', count, cvalue, status=status)
+    call ft_read_parameter(header, 'testme9', cvalue, count, status=status)
     if (status == 0) stop 'FAILED: testme9'
 
-    call ft_readparam(header, 'testme10',count, cvalue, status=status)
+    call ft_read_parameter(header, 'testme10', cvalue, count, status=status)
     if (status == 0) stop 'FAILED: testme10'
 
     ! test writing an image

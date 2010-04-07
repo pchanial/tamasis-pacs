@@ -1,10 +1,10 @@
 module module_fitstools
 
-    use ISO_C_BINDING
-    use ISO_FORTRAN_ENV, only : ERROR_UNIT, OUTPUT_UNIT
+    use iso_c_binding
+    use iso_fortran_env,  only : ERROR_UNIT, OUTPUT_UNIT
     use module_cfitsio
-    use precision,       only : dp
-    use string,          only : strinteger, strlowcase, strsection, strupcase
+    use module_precision, only : dp
+    use module_string,    only : strinteger, strlowcase, strsection, strupcase
     implicit none
     private
 
@@ -21,9 +21,9 @@ module module_fitstools
     public :: ft_open_bintable
     public :: ft_open_image
     public :: ft_read_column
-    public :: ft_readextension
-    public :: ft_readparam
-    public :: ft_readslice
+    public :: ft_read_extension
+    public :: ft_read_parameter
+    public :: ft_read_slice
     public :: ft_test_extension
     public :: ft_write
 
@@ -32,49 +32,47 @@ module module_fitstools
     integer, private, parameter :: BUFFERSIZE = 1024
 
     interface ft_read_column
-        module procedure ft_read_column_character_filename,                    &
-                         ft_read_column_character_unit,                        &
-                         ft_read_column_int4_filename,                         &
-                         ft_read_column_int4_unit,                             &
-                         ft_read_column_int8_filename,                         &
-                         ft_read_column_int8_unit,                             &
-                         ft_read_column_double_filename,                       &
-                         ft_read_column_double_unit
+        module procedure ft_read_column_character_filename, ft_read_column_character_unit,                                         &
+                         ft_read_column_int4_filename, ft_read_column_int4_unit,                                                   &
+                         ft_read_column_int8_filename, ft_read_column_int8_unit,                                                   &
+                         ft_read_column_double_filename, ft_read_column_double_unit
     end interface ft_read_column
 
-    interface ft_readextension
-        module procedure readext_logical_1d, readext_int8_1d,                  &
-                         readext_double_1d,                                    &
-                         readext_logical_2d, readext_double_2d,                &
-                         readext_logical_3d, readext_double_3d
-    end interface ft_readextension
+    interface ft_read_extension
+        module procedure ft_read_extension_logical_1d, ft_read_extension_int8_1d, ft_read_extension_double_1d,                     &
+                         ft_read_extension_logical_2d, ft_read_extension_double_2d,                                                &
+                         ft_read_extension_logical_3d, ft_read_extension_double_3d
+    end interface ft_read_extension
 
-    interface ft_readslice
-        module procedure readslice_logical_filename, readslice_logical_unit,   &
-                         readslice_int4_filename,   readslice_int4_unit,       &
-                         readslice_int8_filename,   readslice_int8_unit,       &
-                         readslice_double_filename,  readslice_double_unit,    &
-                         readslice_logical_3d, readslice_int4_3d,              &
-                         readslice_int8_3d, readslice_double_3d
-    end interface ft_readslice
+    interface ft_read_slice
+        module procedure ft_read_slice_logical_filename, ft_read_slice_logical_unit,                                               &
+                         ft_read_slice_int4_filename,   ft_read_slice_int4_unit,                                                   &
+                         ft_read_slice_int8_filename,   ft_read_slice_int8_unit,                                                   &
+                         ft_read_slice_double_filename,  ft_read_slice_double_unit,                                                &
+                         ft_read_slice_logical_3d, ft_read_slice_int4_3d,                                                          &
+                         ft_read_slice_int8_3d, ft_read_slice_double_3d
+    end interface ft_read_slice
 
     interface ft_write
         module procedure writefits_double_1d, writefits_double_2d, writefits_double_3d
     end interface ft_write
 
-    interface ft_readparam
-        module procedure ft_readparam_logical, ft_readparam_int4, ft_readparam_int8, ft_readparam_double, ft_readparam_character
-    end interface ft_readparam
+    interface ft_read_parameter
+        module procedure ft_read_parameter_logical, ft_read_parameter_int4, ft_read_parameter_int8, ft_read_parameter_double,      &
+                         ft_read_parameter_character
+    end interface ft_read_parameter
 
 
 contains
 
 
     subroutine ft_read_column_character_filename(filename, colname, data,status)
+
         character(len=*), intent(in)               :: filename
         character(len=*), intent(in)               :: colname
         character(len=*), allocatable, intent(out) :: data(:)
         integer, intent(out)                       :: status
+
         integer :: status_close, nrecords, unit
         
         call ft_open_bintable(filename, unit, nrecords, status)
@@ -90,7 +88,7 @@ contains
     end subroutine ft_read_column_character_filename
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     subroutine ft_read_column_character_unit(unit, colname, first, last, data, &
@@ -100,6 +98,7 @@ contains
         integer, intent(in)           :: first, last
         character(len=*), intent(out) :: data(:)
         integer, intent(out)          :: status
+
         logical                       :: anyf   ! set to true if undef values
         integer                       :: colnum
 
@@ -126,14 +125,16 @@ contains
     end subroutine ft_read_column_character_unit
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     subroutine ft_read_column_int4_filename(filename, colname, data, status)
+
         character(len=*), intent(in)        :: filename
         character(len=*), intent(in)        :: colname
         integer*4, allocatable, intent(out) :: data(:)
         integer, intent(out)                :: status
+
         integer                             :: status_close, nrecords, unit
         
         call ft_open_bintable(filename, unit, nrecords, status)
@@ -148,15 +149,17 @@ contains
     end subroutine ft_read_column_int4_filename
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     subroutine ft_read_column_int4_unit(unit, colname, first, last, data,status)
+
         integer, intent(in)          :: unit
         character(len=*), intent(in) :: colname
         integer, intent(in)          :: first, last
         integer*4, intent(out)       :: data(:)
         integer, intent(out)         :: status
+
         logical                      :: anyf   ! set to true if undef values
         integer                      :: colnum
 
@@ -183,14 +186,16 @@ contains
     end subroutine ft_read_column_int4_unit
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     subroutine ft_read_column_int8_filename(filename, colname, data, status)
+
         character(len=*), intent(in)        :: filename
         character(len=*), intent(in)        :: colname
         integer*8, allocatable, intent(out) :: data(:)
         integer, intent(out)                :: status
+
         integer                             :: status_close, nrecords, unit
         
         call ft_open_bintable(filename, unit, nrecords, status)
@@ -205,15 +210,17 @@ contains
     end subroutine ft_read_column_int8_filename
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     subroutine ft_read_column_int8_unit(unit, colname, first, last, data,status)
+
         integer, intent(in)          :: unit
         character(len=*), intent(in) :: colname
         integer, intent(in)          :: first, last
         integer*8, intent(out)       :: data(:)
         integer, intent(out)         :: status
+
         logical                      :: anyf   ! set to true if undef values
         integer                      :: colnum
 
@@ -240,14 +247,16 @@ contains
     end subroutine ft_read_column_int8_unit
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     subroutine ft_read_column_double_filename(filename, colname, data, status)
+
         character(len=*), intent(in)     :: filename
         character(len=*), intent(in)     :: colname
         real*8, allocatable, intent(out) :: data(:)
         integer, intent(out)             :: status
+
         integer                          :: status_close, nrecords, unit
         
         call ft_open_bintable(filename, unit, nrecords, status)
@@ -262,7 +271,7 @@ contains
     end subroutine ft_read_column_double_filename
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     subroutine ft_read_column_double_unit(unit, colname, first, last, data,    &
@@ -272,6 +281,7 @@ contains
         integer, intent(in)          :: first, last
         real(kind=dp), intent(out)   :: data(:)
         integer, intent(out)         :: status
+
         logical                      :: anyf   ! set to true if undef values
         integer                      :: colnum
 
@@ -298,10 +308,10 @@ contains
     end subroutine ft_read_column_double_unit
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine readext_logical_1d(filename, output, status, hdu)
+    subroutine ft_read_extension_logical_1d(filename, output, status, hdu)
 
         character(len=*), intent(in)        :: filename
         logical*1, allocatable, intent(out) :: output(:)
@@ -324,13 +334,13 @@ contains
         call ft_close(unit, status_close)
         if (status == 0) status = status_close
 
-    end subroutine readext_logical_1d
+    end subroutine ft_read_extension_logical_1d
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine readext_int8_1d(filename, output, status, hdu)
+    subroutine ft_read_extension_int8_1d(filename, output, status, hdu)
 
         character(len=*), intent(in)        :: filename
         integer*8, allocatable, intent(out) :: output(:)
@@ -353,13 +363,13 @@ contains
         call ft_close(unit, status_close)
         if (status == 0) status = status_close
 
-    end subroutine readext_int8_1d
+    end subroutine ft_read_extension_int8_1d
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine readext_double_1d(filename, output, status, hdu)
+    subroutine ft_read_extension_double_1d(filename, output, status, hdu)
 
         character(len=*), intent(in)     :: filename
         real*8, allocatable, intent(out) :: output(:)
@@ -382,21 +392,20 @@ contains
         call ft_close(unit, status_close)
         if (status == 0) status = status_close
 
-    end subroutine readext_double_1d
+    end subroutine ft_read_extension_double_1d
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine readext_logical_2d(filename, output, status, hdu)
+    subroutine ft_read_extension_logical_2d(filename, output, status, hdu)
 
         character(len=*), intent(in)        :: filename
         integer, intent(out)                :: status
         logical*1, allocatable, intent(out) :: output(:,:)
         integer, optional, intent(in)       :: hdu
 
-        integer                             :: unit, firstpix, anynull, j,     &
-                                               status_close
+        integer                             :: unit, firstpix, anynull, j, status_close
         integer, allocatable                :: imageshape(:)
 
         call ft_open_image(filename, unit, 2, imageshape, status, hdu=hdu)
@@ -419,13 +428,13 @@ contains
     999 call ft_close(unit, status_close)
         if (status == 0) status = status_close
 
-    end subroutine readext_logical_2d
+    end subroutine ft_read_extension_logical_2d
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine readext_double_2d(filename, output, status, hdu)
+    subroutine ft_read_extension_double_2d(filename, output, status, hdu)
     
         character(len=*), intent(in)     :: filename
         real*8, allocatable, intent(out) :: output(:,:)
@@ -456,13 +465,13 @@ contains
     999 call ft_close(unit, status_close)
         if (status == 0) status = status_close
 
-    end subroutine readext_double_2d
+    end subroutine ft_read_extension_double_2d
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine readext_logical_3d(filename, output, status)
+    subroutine ft_read_extension_logical_3d(filename, output, status)
 
         character(len=*), intent(in)        :: filename
         logical*1, allocatable, intent(out) :: output(:,:,:)
@@ -494,13 +503,13 @@ contains
         call ft_close(unit, status_close)
         if (status == 0) status = status_close
 
-    end subroutine readext_logical_3d
+    end subroutine ft_read_extension_logical_3d
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine readext_double_3d(filename, output, status)
+    subroutine ft_read_extension_double_3d(filename, output, status)
 
         character(len=*), intent(in)     :: filename
         real*8, allocatable, intent(out) :: output(:,:,:)
@@ -534,71 +543,74 @@ contains
         call ft_close(unit, status_close)
         if (status == 0) status = status_close
 
-    end subroutine readext_double_3d
+    end subroutine ft_read_extension_double_3d
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine readslice_logical_filename(filename, x1, x2, array, status)
+    subroutine ft_read_slice_logical_filename(filename, x1, x2, array, status)
 
         character(len=*), intent(in) :: filename
         integer*8, intent(in)        :: x1, x2
         logical*1, intent(inout)     :: array(x2 - x1 + 1)
         integer, intent(out)         :: status
+
         integer                      :: unit, status_close
 
         call ft_open(filename, unit, status)
         if (status /= 0) return
-        call readslice_logical_unit(unit, x1, x2, array, status)
+        call ft_read_slice_logical_unit(unit, x1, x2, array, status)
         call ft_close(unit, status_close)
         if (status == 0) status = status_close
 
-    end subroutine readslice_logical_filename
+    end subroutine ft_read_slice_logical_filename
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine readslice_logical_unit(unit, x1, x2, array, status)
+    subroutine ft_read_slice_logical_unit(unit, x1, x2, array, status)
 
         integer, intent(in)      :: unit
         integer*8, intent(in)    :: x1, x2
         logical*1, intent(inout) :: array(x2 - x1 + 1)
         integer, intent(out)     :: status
+
         integer                  :: anynull
 
         status = 0
         call ftgpvd(unit, GROUP, x1, x2 - x1 + 1, NULLVAL, array, anynull, status)
         if (ft_checkerror_cfitsio(status)) return
 
-    end subroutine readslice_logical_unit
+    end subroutine ft_read_slice_logical_unit
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine readslice_int4_filename(filename, x1, x2, array, status)
+    subroutine ft_read_slice_int4_filename(filename, x1, x2, array, status)
 
         character(len=*), intent(in) :: filename
         integer*8, intent(in)        :: x1, x2
         integer*4, intent(inout)     :: array(x2 - x1 + 1)
         integer, intent(out)         :: status
+
         integer                      :: unit, status_close
 
         call ft_open(filename, unit, status)
         if (status /= 0) return
-        call readslice_int4_unit(unit, x1, x2, array, status)
+        call ft_read_slice_int4_unit(unit, x1, x2, array, status)
         call ft_close(unit, status_close)
         if (status == 0) status = status_close
 
-    end subroutine readslice_int4_filename
+    end subroutine ft_read_slice_int4_filename
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine readslice_int4_unit(unit, x1, x2, array, status)
+    subroutine ft_read_slice_int4_unit(unit, x1, x2, array, status)
 
         integer, intent(in)      :: unit
         integer*8, intent(in)    :: x1, x2
@@ -610,51 +622,53 @@ contains
         call ftgpvj(unit, GROUP, x1, x2-x1+1, NULLVAL, array, anynull, status)
         if (ft_checkerror_cfitsio(status)) return
 
-    end subroutine readslice_int4_unit
+    end subroutine ft_read_slice_int4_unit
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine readslice_int8_filename(filename, x1, x2, array, status)
+    subroutine ft_read_slice_int8_filename(filename, x1, x2, array, status)
 
         character(len=*), intent(in) :: filename
         integer*8, intent(in)        :: x1, x2
         integer*8, intent(inout)     :: array(x2 - x1 + 1)
         integer, intent(out)         :: status
+
         integer                      :: unit, status_close
 
         call ft_open(filename, unit, status)
         if (status /= 0) return
-        call readslice_int8_unit(unit, x1, x2, array, status)
+        call ft_read_slice_int8_unit(unit, x1, x2, array, status)
         call ft_close(unit, status_close)
         if (status == 0) status = status_close
 
-    end subroutine readslice_int8_filename
+    end subroutine ft_read_slice_int8_filename
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine readslice_int8_unit(unit, x1, x2, array, status)
+    subroutine ft_read_slice_int8_unit(unit, x1, x2, array, status)
 
         integer, intent(in)      :: unit
         integer*8, intent(in)    :: x1, x2
         integer*8, intent(inout) :: array(x2 - x1 + 1)
         integer, intent(out)     :: status
+
         integer                  :: anynull
 
         status = 0
         call ftgpvk(unit, GROUP, x1, x2-x1+1, NULLVAL, array, anynull, status)
         if (ft_checkerror_cfitsio(status)) return
 
-    end subroutine readslice_int8_unit
+    end subroutine ft_read_slice_int8_unit
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine readslice_double_filename(filename, x1, x2, array, status)
+    subroutine ft_read_slice_double_filename(filename, x1, x2, array, status)
 
         character(len=*), intent(in) :: filename
         integer*8, intent(in)        :: x1, x2
@@ -664,35 +678,36 @@ contains
 
         call ft_open(filename, unit, status)
         if (status /= 0) return
-        call readslice_double_unit(unit, x1, x2, array, status)
+        call ft_read_slice_double_unit(unit, x1, x2, array, status)
         call ft_close(unit, status_close)
         if (status == 0) status = status_close
 
-    end subroutine readslice_double_filename
+    end subroutine ft_read_slice_double_filename
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine readslice_double_unit(unit, x1, x2, array, status)
+    subroutine ft_read_slice_double_unit(unit, x1, x2, array, status)
 
         integer, intent(in)    :: unit
         integer*8, intent(in)  :: x1, x2
         real*8, intent(inout)  :: array(x2 - x1 + 1)
         integer, intent(out)   :: status
+
         integer                :: anynull
 
         status = 0
         call ftgpvd(unit, GROUP, x1, x2-x1+1, NULLVAL, array, anynull, status)
         if (ft_checkerror_cfitsio(status)) return
 
-    end subroutine readslice_double_unit
+    end subroutine ft_read_slice_double_unit
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine readslice_logical_3d(unit, x1, x2, y, z, naxes, array, status)
+    subroutine ft_read_slice_logical_3d(unit, x1, x2, y, z, naxes, array, status)
 
         integer, intent(in)      :: unit
         integer*8, intent(in)    :: x1, x2
@@ -700,6 +715,7 @@ contains
         integer, intent(in)      :: naxes(3)
         logical*1, intent(inout) :: array(x2 - x1 + 1)
         integer, intent(out)     :: status
+
         integer                  :: anynull
         integer*8                :: firstpix
 
@@ -708,13 +724,13 @@ contains
         call ftgpvb(unit, GROUP, firstpix, x2 - x1 + 1, NULLVAL, array, anynull, status)
         if (ft_checkerror_cfitsio(status)) return
 
-    end subroutine readslice_logical_3d
+    end subroutine ft_read_slice_logical_3d
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine readslice_int4_3d(unit, x1, x2, y, z, naxes, array, status)
+    subroutine ft_read_slice_int4_3d(unit, x1, x2, y, z, naxes, array, status)
 
         integer, intent(in)      :: unit
         integer*8, intent(in)    :: x1, x2
@@ -722,6 +738,7 @@ contains
         integer, intent(in)      :: naxes(3)
         integer*4, intent(inout) :: array(x2 - x1 + 1)
         integer, intent(out)     :: status
+
         integer                  :: anynull
         integer*8                :: firstpix
 
@@ -730,13 +747,13 @@ contains
         call ftgpvj(unit, GROUP, firstpix, x2 - x1 + 1, NULLVAL, array, anynull, status)
         if (ft_checkerror_cfitsio(status)) return
 
-    end subroutine readslice_int4_3d
+    end subroutine ft_read_slice_int4_3d
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine readslice_int8_3d(unit, x1, x2, y, z, naxes, array, status)
+    subroutine ft_read_slice_int8_3d(unit, x1, x2, y, z, naxes, array, status)
 
         integer, intent(in)      :: unit
         integer*8, intent(in)    :: x1, x2
@@ -744,6 +761,7 @@ contains
         integer, intent(in)      :: naxes(3)
         integer*8, intent(inout) :: array(x2 - x1 + 1)
         integer, intent(out)     :: status
+
         integer                  :: anynull
         integer*8                :: firstpix
 
@@ -752,13 +770,13 @@ contains
         call ftgpvk(unit, GROUP, firstpix, x2 - x1 + 1, NULLVAL, array, anynull, status)
         if (ft_checkerror_cfitsio(status)) return
 
-    end subroutine readslice_int8_3d
+    end subroutine ft_read_slice_int8_3d
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine readslice_double_3d(unit, x1, x2, y, z, naxes, array, status)
+    subroutine ft_read_slice_double_3d(unit, x1, x2, y, z, naxes, array, status)
 
         integer, intent(in)   :: unit
         integer*8, intent(in) :: x1, x2
@@ -766,6 +784,7 @@ contains
         integer, intent(in)   :: naxes(3)
         real*8, intent(inout) :: array(x2 - x1 + 1)
         integer, intent(out)  :: status
+
         integer               :: anynull
         integer*8             :: firstpix
 
@@ -774,17 +793,19 @@ contains
         call ftgpvd(unit, GROUP, firstpix, x2 - x1 + 1, NULLVAL, array, anynull, status)
         if (ft_checkerror_cfitsio(status)) return
 
-    end subroutine readslice_double_3d
+    end subroutine ft_read_slice_double_3d
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     ! return true if extension is false. status may be set to a non-zero value
     ! if a problem unrelated to the existence of the extension occurs.
     function ft_test_extension(filename, status)
+
         logical                      :: ft_test_extension
         character(len=*), intent(in) :: filename
+
         integer                      :: unit
         integer                      :: status, status_close
 
@@ -811,13 +832,15 @@ contains
     end function ft_test_extension
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     subroutine ft_open(filename, unit, status)
+
         character(len=*), intent(in) :: filename
         integer, intent(out)         :: unit
         integer, intent(out)         :: status
+
         integer                      :: status_close
 
         status = 0
@@ -835,10 +858,11 @@ contains
     end subroutine ft_open
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     subroutine ft_open_image(filename, unit, imagerank, imageshape, status, hdu)
+
         character(len=*), intent(in)      :: filename
         integer, intent(out)              :: unit
         integer, intent(in)               :: imagerank
@@ -899,10 +923,11 @@ contains
     end subroutine ft_open_image
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     subroutine ft_open_bintable(filename, unit, nrecords, status)
+
         character(len=*), intent(in) :: filename
         integer, intent(out)         :: unit, nrecords
         integer, intent(out)         :: status
@@ -940,13 +965,14 @@ contains
     end subroutine ft_open_bintable
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     subroutine ft_close(unit, status)
 
         integer, intent(in)  :: unit
         integer, intent(out) :: status
+
         integer              :: status_release
 
         !  The FITS file must always be closed before exiting the program.
@@ -962,7 +988,7 @@ contains
     end subroutine ft_close
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     subroutine ft_create_header(naxis1, naxis2, cdelt1, cdelt2, crota2, crval1, crval2, crpix1, crpix2, header)
@@ -970,6 +996,7 @@ contains
         integer, intent(in) :: naxis1, naxis2
         real*8, intent(in)  :: cdelt1, cdelt2, crval1, crval2, crpix1, crpix2, crota2
         character(len=2880), intent(out) :: header
+
         character(len=*), parameter   :: format_dbl = "(a8,'= ',f20.15)"
         character(len=*), parameter   :: format_int = "(a8,'= ',i20)"
         character(len=*), parameter   :: format_str = "(a8,'= ',a20)"
@@ -996,16 +1023,17 @@ contains
     end subroutine ft_create_header
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     subroutine writefits_double_1d(filename, data, header, status)
+
         character(len=*), intent(in)    :: filename
         real*8, intent(in)              :: data(:)
         character(len=*), intent(in), optional :: header
         integer, intent(out)            :: status
-        integer                         :: irec, unit, blocksize, bitpix,      &
-                                           naxis, naxes(1), status_close
+
+        integer                         :: irec, unit, blocksize, bitpix, naxis, naxes(1), status_close
         logical                         :: simple, extend
 
         ! delete file if it exists
@@ -1046,16 +1074,17 @@ contains
     end subroutine writefits_double_1d
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     subroutine writefits_double_2d(filename, data, header, status)
+
         character(len=*), intent(in)    :: filename
         real*8, intent(in)              :: data(:,:)
         character(len=*), intent(in), optional :: header
         integer, intent(out)            :: status
-        integer                         :: irec, unit, blocksize, bitpix,      &
-                                           naxis, naxes(2), status_close
+
+        integer                         :: irec, unit, blocksize, bitpix, naxis, naxes(2), status_close
         logical                         :: simple, extend
 
         ! delete file if it exists
@@ -1096,16 +1125,17 @@ contains
     end subroutine writefits_double_2d
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     subroutine writefits_double_3d(filename, data, header, status)
+
         character(len=*), intent(in)    :: filename
         real*8, intent(in)              :: data(:,:,:)
         character(len=*), intent(in), optional :: header
         integer, intent(out)            :: status
-        integer                         :: irec, unit, blocksize, bitpix,      &
-                                           naxis, status_close
+
+        integer                         :: irec, unit, blocksize, bitpix, naxis, status_close
         logical                         :: simple, extend
 
         ! delete file if it exists
@@ -1145,13 +1175,15 @@ contains
     end subroutine writefits_double_3d
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     subroutine ft_header2str(filename, header, status)
+
         character(len=*), intent(in)        :: filename
         character(len=*), intent(out)       :: header
         integer, intent(out)                :: status
+
         character(len=len(header)), pointer :: f_header
         type(C_PTR)                         :: fptr, c_header
         integer                             :: nkeyrec
@@ -1183,17 +1215,19 @@ contains
     end subroutine ft_header2str
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_getparam(header, param, count, value, comment, must_exist, status)
+    subroutine ft_getparam(header, param, value, count, comment, must_exist, status)
+
         character(len=*), intent(in)   :: header
         character(len=*), intent(in)   :: param
-        integer, intent(out)           :: count
         character(len=70), intent(out) :: value
+        integer, intent(out)           :: count
         character(len=70), intent(out), optional :: comment
         logical, intent(in), optional  :: must_exist
         integer, intent(out)           :: status
+
         character(len=70)              :: buffer
         character(len=len(param))      :: strlowparam
         integer                        :: ncards, i, iparam
@@ -1270,137 +1304,147 @@ contains
     end subroutine ft_getparam
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_readparam_logical(header, param, count, value, comment, must_exist, status)
+    subroutine ft_read_parameter_logical(header, param, value, count, comment, must_exist, status)
+
         character(len=*), intent(in)             :: header
         character(len=*), intent(in)             :: param
-        integer, intent(out)                     :: count
         logical, intent(out)                     :: value
+        integer, intent(out)                     :: count
         character(len=70), optional, intent(out) :: comment
         logical, optional, intent(in)            :: must_exist
         integer, intent(out)                     :: status
+
         character(len=70)                        :: charvalue
 
         value = .false.
 
-        call ft_getparam(header, param, count, charvalue, comment, must_exist, status)
+        call ft_getparam(header, param, charvalue, count, comment, must_exist, status)
         if (status /= 0 .or. count == 0) return
 
         if (charvalue /= 'F' .and. charvalue /= 'T') then
             status = 1
-            write (ERROR_UNIT,'(a)') "ft_readparam_logical: invalid logical value '" // trim(charvalue) // "' for parameter '" // &
-                                     param // "' in FITS header."
+            write (ERROR_UNIT,'(a)') "ft_read_parameter_logical: invalid logical value '" // trim(charvalue) // "' for parameter '"&
+                  // param // "' in FITS header."
             return
         end if
 
         if (charvalue == 'T') value = .true.
 
-    end subroutine ft_readparam_logical
+    end subroutine ft_read_parameter_logical
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_readparam_int4(header, param, count, value, comment, must_exist, status)
+    subroutine ft_read_parameter_int4(header, param, value, count, comment, must_exist, status)
+
         character(len=*), intent(in)             :: header
         character(len=*), intent(in)             :: param
-        integer, intent(out)                     :: count
         integer*4, intent(out)                   :: value
+        integer, intent(out)                     :: count
         character(len=70), optional, intent(out) :: comment
         logical, optional, intent(in)            :: must_exist
         integer, intent(out)                     :: status
+
         character(len=70)                        :: charvalue
 
         value = 0
 
-        call ft_getparam(header, param, count, charvalue, comment, must_exist, status)
+        call ft_getparam(header, param, charvalue, count, comment, must_exist, status)
         if (status /= 0 .or. count == 0) return
 
         read (charvalue,'(i20)',iostat=status) value
         if (status /= 0) then
-            write (ERROR_UNIT,'(a)') "ft_readparam_int4: invalid integer value '" // trim(charvalue) // "' for parameter '" // &
-                                     param // "' in FITS header."
+            write (ERROR_UNIT,'(a)') "ft_read_parameter_int4: invalid integer value '" // trim(charvalue) // "' for parameter '" //&
+                  param // "' in FITS header."
             return
         end if
 
-    end subroutine ft_readparam_int4
+    end subroutine ft_read_parameter_int4
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_readparam_int8(header, param, count, value, comment, must_exist, status)
+    subroutine ft_read_parameter_int8(header, param, value, count, comment, must_exist, status)
+
         character(len=*), intent(in)             :: header
         character(len=*), intent(in)             :: param
-        integer, intent(out)                     :: count
         integer*8, intent(out)                   :: value
+        integer, intent(out)                     :: count
         character(len=70), optional, intent(out) :: comment
         logical, optional, intent(in)            :: must_exist
         integer, intent(out)                     :: status
+
         character(len=70)                        :: charvalue
 
         value = 0
 
-        call ft_getparam(header, param, count, charvalue, comment, must_exist, status)
+        call ft_getparam(header, param, charvalue, count, comment, must_exist, status)
         if (status /= 0 .or. count == 0) return
 
         read (charvalue,'(i20)',iostat=status) value
         if (status /= 0) then
-            write (ERROR_UNIT,'(a)') "ft_readparam_int8: invalid integer value '" // trim(charvalue) // "' for parameter '" // &
+            write (ERROR_UNIT,'(a)') "ft_read_parameter_int8: invalid integer value '" // trim(charvalue) // "' for parameter '" //&
                                      param // "' in FITS header."
             return
         end if
 
-    end subroutine ft_readparam_int8
+    end subroutine ft_read_parameter_int8
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_readparam_double(header, param, count, value, comment, must_exist, status)
+    subroutine ft_read_parameter_double(header, param, value, count, comment, must_exist, status)
+
         character(len=*), intent(in)             :: header
         character(len=*), intent(in)             :: param
-        integer, intent(out)                     :: count
         real*8, intent(out)                      :: value
+        integer, intent(out)                     :: count
         character(len=70), optional, intent(out) :: comment
         logical, optional, intent(in)            :: must_exist
         integer, intent(out)                     :: status
+
         character(len=70)                        :: charvalue
 
         value = 0.d0
 
-        call ft_getparam(header, param, count, charvalue, comment, must_exist, status)
+        call ft_getparam(header, param, charvalue, count, comment, must_exist, status)
         if (status /= 0 .or. count == 0) return
 
         read (charvalue,'(bn,f20.0)',iostat=status) value
         if (status /= 0) then
-            write (ERROR_UNIT,'(a)') "ft_readparam_double: invalid real value '" // trim(charvalue) // "' for parameter '" // &
+            write (ERROR_UNIT,'(a)') "ft_read_parameter_double: invalid real value '" // trim(charvalue) // "' for parameter '" // &
                                      param // "' in FITS header."
             return
         end if
 
-    end subroutine ft_readparam_double
+    end subroutine ft_read_parameter_double
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_readparam_character(header, param, count, value, comment, must_exist, status)
+    subroutine ft_read_parameter_character(header, param, value, count, comment, must_exist, status)
+
         character(len=*), intent(in)             :: header
         character(len=*), intent(in)             :: param
-        integer, intent(out)                     :: count
         character(len=70), intent(out)           :: value
+        integer, intent(out)                     :: count
         character(len=70), optional, intent(out) :: comment
         logical, optional, intent(in)            :: must_exist
         integer, intent(out)                     :: status
+
         character(len=70)                        :: charvalue
         integer                                  :: ncharvalue, i, j
 
-        value = " "
+        value = ' '
 
-        call ft_getparam(header, param, count, charvalue, comment, must_exist, status)
+        call ft_getparam(header, param, charvalue, count, comment, must_exist, status)
         if (status /= 0 .or. count == 0) return
 
         ! remove quotes
@@ -1421,10 +1465,10 @@ contains
            j = j + 1
         end do
 
-    end subroutine ft_readparam_character
+    end subroutine ft_read_parameter_character
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     function ft_checkerror_cfitsio(status, filename, hdu)
@@ -1436,6 +1480,7 @@ contains
         integer, intent(in)                    :: status
         character(len=*), intent(in), optional :: filename
         integer, intent(in), optional          :: hdu
+
         character                              :: errtext*30, errmessage*80
 
         ft_checkerror_cfitsio = status /= 0

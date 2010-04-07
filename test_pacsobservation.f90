@@ -2,7 +2,7 @@ program test_pacsobservation
 
     use module_pacsinstrument,  only : pacsinstrument
     use module_pacsobservation, only : pacsobservation
-    use string, only : strsection
+    use module_string, only : strsection
     implicit none
 
     class(pacsobservation), allocatable :: obs

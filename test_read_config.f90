@@ -1,7 +1,6 @@
 program test_read_config
  
  use module_instrument
-
  implicit none
  
  type(receiver) :: pacs

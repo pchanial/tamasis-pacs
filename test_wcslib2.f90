@@ -1,7 +1,7 @@
 program test_wcslib2
 
-    use, intrinsic :: ISO_C_BINDING
-    use module_math, only : test_real_eq
+    use iso_c_binding
+    use module_math,      only : neq_real
     use module_fitstools, only : ft_header2str
     use module_wcslib
 
@@ -69,7 +69,7 @@ program test_wcslib2
         end do
     end if
 
-    if (any(.not. test_real_eq(xy, [-6538.19790689358d0,12196.226642292400d0,  &
+    if (any(neq_real(xy, [-6538.19790689358d0,12196.226642292400d0,  &
         -4998.77434749560d0,114.620164770842d0,-4694.59388530175d0,            &
         -2272.629672963080d0], 12))) then
         stop 'wcss2p: Wrong result.'

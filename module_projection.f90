@@ -1,16 +1,19 @@
 module module_projection
 
+    use module_precision, only : p
+    use module_sort,      only : qsortgi
+    use module_stack,     only : stack_int
     implicit none
+    private
 
-    public  :: intersection_polygon_unity_square
-    public  :: intersection_segment_unity_square
-    public  :: surface_parallelogram
-    public  :: surface_convex_polygon
-    public  :: point_in_polygon
-    public  :: convex_hull
-    public  :: set_pivot
-    public  :: qsorti_point
-    private :: compare_point
+    public :: intersection_polygon_unity_square
+    public :: intersection_segment_unity_square
+    public :: surface_parallelogram
+    public :: surface_convex_polygon
+    public :: point_in_polygon
+    public :: convex_hull
+    public :: set_pivot
+    public :: qsorti_point
 
     real*8, private          :: pivot_(2)
     real*8, pointer, private :: array_point(:,:)
@@ -21,11 +24,10 @@ contains
 
     pure function intersection_polygon_unity_square(xy, nvertices) result(output)
 
-        use precision, only : p
-
         real(kind=p), intent(in) :: xy(2,nvertices)
         integer, intent(in)      :: nvertices
         real(kind=p)             :: output
+
         integer                  :: i, j
 
         output = 0
@@ -38,7 +40,7 @@ contains
     end function intersection_polygon_unity_square
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     pure function intersection_segment_unity_square(x1,  y1, &              ! first point coordinates
@@ -159,20 +161,23 @@ contains
     end function intersection_segment_unity_square
 
 
-    !-------------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     ! returns signed surface of a parallelogram
     ! surface = det( (b-a, c-a) )
     ! positive if a, b, c are counter-clockwise, negative otherwise
     pure function point_on_or_left(a, b, c)
+
         real*8, intent(in) :: a(2), b(2), c(2)
         logical            :: point_on_or_left
+
         point_on_or_left = surface_parallelogram(a, b, c) >= 0
+
     end function point_on_or_left
 
 
-    !-------------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     ! returns signed surface of a parallelogram
@@ -186,13 +191,14 @@ contains
     end function surface_parallelogram
 
 
-    !-------------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     pure function surface_convex_polygon(xy) result(output)
 
         real*8, intent(in) :: xy(:,:)
         real*8             :: output
+
         integer            :: i, j
 
         output = 0
@@ -206,21 +212,23 @@ contains
     end function surface_convex_polygon
 
 
-    !-------------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     ! quick sort for points, using 1) angles 2) length (see function compare below)
     subroutine qsorti_point(array, index)
-        use module_sort, only : qsortgi
+
         real*8, intent(in), target :: array(:,:)
         integer, intent(out) :: index(size(array,2))
+
         array_point => array
         call qsortgi(size(array_point,2), compare_point, index)
         array_point => null()
+
     end subroutine qsorti_point
 
 
-    !-------------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     ! compare two points
@@ -230,6 +238,7 @@ contains
 
         integer, intent(in) :: point1, point2
         integer             :: compare_point
+
         real*8              :: area, length
 
         area = surface_parallelogram(pivot_, array_point(:,point1), array_point(:,point2))
@@ -256,23 +265,28 @@ contains
     end function compare_point
 
 
-    !-------------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     ! set pivot in a global variable accessible from compare_point
     subroutine set_pivot(pivot)
+
         real*8, intent(in) :: pivot(2)
+
         pivot_ = pivot
+
     end subroutine set_pivot
 
 
-    !-------------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     ! find the rightmost among the bottommost vertices
     function find_pivot(points)
+
         real*8, intent(in) :: points(:,:)
         integer            :: find_pivot
+
         integer            :: imin(1)
 
         imin = minloc(points(1,:), points(2,:) == minval(points(2,:)))
@@ -281,19 +295,19 @@ contains
     end function find_pivot
 
 
-    !-------------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     ! returns 1, 0, -1 if a point is inside, on an edge or outside a polygon
     ! algo from Simulation of Simplicity: A Technique to Cope with Degenerate Cases in Geometric Algorithms
     ! modified to cope with the cases in which the point lies on an edge
     function point_in_polygon(point, polygon)
+
         real*8, intent(in) :: point(2), polygon(:,:)
         integer            :: point_in_polygon
 
         integer :: i, j, n
         real*8  :: a, b
-
         point_in_polygon = -1
         n = size(polygon, 2)
 
@@ -331,14 +345,15 @@ contains
     end function point_in_polygon
 
 
-    !-------------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     ! Graham scan implementation
     subroutine convex_hull(points, index)
-        use module_stack, only : stack_int
+
         real*8, intent(in)                :: points(:,:)
         integer, intent(out), allocatable :: index(:)
+
         integer                           :: i, n, ipivot, junk
         integer                           :: isort(size(points,2))
         class(stack_int), allocatable     :: stack
@@ -369,5 +384,6 @@ contains
         index = index(size(index):1:-1)
 
     end subroutine convex_hull
+
 
 end module module_projection

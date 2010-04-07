@@ -1,12 +1,12 @@
 module module_math
 
-    use precision, only : p, dp
+    use module_precision, only : p, dp
     implicit none
     private
 
-    public :: pi
-    public :: deg2rad
-    public :: rad2deg
+    public :: PI
+    public :: DEG2RAD
+    public :: RAD2DEG
     public :: mInf
     public :: pInf
     public :: NaN
@@ -22,16 +22,16 @@ module module_math
     public :: stddev
     public :: sum_kahan
     public :: swap
-    public :: test_real_eq
-    public :: test_real_neq
+    public :: eq_real
+    public :: neq_real
 
     interface sum_kahan
         module procedure sum_kahan_1d, sum_kahan_2d, sum_kahan_3d
     end interface sum_kahan
 
-    real(p), parameter :: pi = 4.0_p * atan(1.0_p)
-    real(p), parameter :: deg2rad = pi / 180._p
-    real(p), parameter :: rad2deg = 180._p / pi
+    real(p), parameter :: PI = 4.0_p * atan(1.0_p)
+    real(p), parameter :: DEG2RAD = PI / 180._p
+    real(p), parameter :: RAD2DEG = 180._p / PI
     !XXX should use ieee_arithmetic instead when gfortran implements it
     real(p), parameter ::                                                                       &
         NaN  = transfer('1111111111111000000000000000000000000000000000000000000000000000'b, 0._dp), &
@@ -105,7 +105,7 @@ contains
     end subroutine moment
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     function mean(input)
@@ -117,7 +117,7 @@ contains
     end function mean
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     function stddev(input)
@@ -129,7 +129,7 @@ contains
     end function stddev
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     function sum_kahan_1d(input) result(sum)
@@ -153,7 +153,7 @@ contains
     end function sum_kahan_1d
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     function sum_kahan_2d(input) result(sum)
@@ -177,7 +177,7 @@ contains
     end function sum_kahan_2d
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     function sum_kahan_3d(input) result(sum)
@@ -201,7 +201,7 @@ contains
     end function sum_kahan_3d
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     function linspace(min, max, n)
@@ -215,7 +215,7 @@ contains
     end function linspace
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     function logspace(min, max, n)
@@ -229,7 +229,7 @@ contains
     end function logspace
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     elemental function nint_down(x)
@@ -244,7 +244,7 @@ contains
     end function nint_down
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     elemental function nint_up(x)
@@ -259,7 +259,7 @@ contains
     end function nint_up
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     elemental subroutine swap(a,b)
@@ -271,7 +271,7 @@ contains
     end subroutine swap
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     ! This Quickselect routine is based on the algorithm described in
@@ -340,7 +340,7 @@ contains
     end function median 
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     ! returns the median absolute deviation
@@ -360,42 +360,42 @@ contains
     end function mad
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    elemental function test_real_eq(a, b, n)
-        logical                  :: test_real_eq
+    elemental function eq_real(a, b, n)
+        logical                  :: eq_real
         real(kind=p), intent(in) :: a, b
         integer, intent(in)      :: n
         real(kind=p)             :: epsilon
 
         ! check for NaN values
         if (a /= a) then
-            test_real_eq = b /= b
+            eq_real = b /= b
             return
         end if
         if (b /= b) then
-            test_real_eq = .false.
+            eq_real = .false.
             return
         end if
 
         epsilon = 10_p**(-real(n, kind=p))
-        test_real_eq = abs(a-b) <= epsilon * abs(max(a,b))
+        eq_real = abs(a-b) <= epsilon * abs(max(a,b))
 
-    end function test_real_eq
-
-
-    !---------------------------------------------------------------------------
+    end function eq_real
 
 
-    elemental function test_real_neq(a, b, n)
-        logical                  :: test_real_neq
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    elemental function neq_real(a, b, n)
+        logical                  :: neq_real
         real(kind=p), intent(in) :: a, b
         integer, intent(in)      :: n
         
-        test_real_neq = .not. test_real_eq(a, b, n)
+        neq_real = .not. eq_real(a, b, n)
 
-    end function test_real_neq
+    end function neq_real
 
 
 end module module_math

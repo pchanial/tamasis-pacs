@@ -192,7 +192,7 @@ subroutine pacs_map_header(filename, nfilenames, finer_sampling, fine_sampling_f
     call pointing%init(obs, status)
     if (status /= 0) go to 999
 
-    call pacs%compute_mapheader(pointing, finer_sampling, resolution, header, status)
+    call pacs%compute_map_header(pointing, finer_sampling, resolution, header, status)
     
 999 continue
 
@@ -291,7 +291,7 @@ end subroutine pacs_timeline
 subroutine pacs_pointing_matrix_filename(filename, nfilenames, finer_sampling, fine_sampling_factor, npixels_per_sample, nsamples, &
                                          ndetectors, keep_bad_detectors, bad_detector_mask, nrow, ncol, header, pmatrix, status)
     use iso_fortran_env,        only : ERROR_UNIT
-    use module_fitstools,       only : ft_readparam
+    use module_fitstools,       only : ft_read_parameter
     use module_pacsinstrument,  only : pacsinstrument
     use module_pacsobservation, only : pacsobservation
     use module_pacspointing,    only : pacspointing
@@ -381,9 +381,9 @@ subroutine pacs_pointing_matrix_filename(filename, nfilenames, finer_sampling, f
     if (status /= 0) go to 999
 
     ! get the size of the map
-    call ft_readparam(header, 'naxis1', count, nx, status=status)
+    call ft_read_parameter(header, 'naxis1', nx, count, status=status)
     if (status /= 0 .or. count == 0) go to 999
-    call ft_readparam(header, 'naxis2', count, ny, status=status)
+    call ft_read_parameter(header, 'naxis2', ny, count, status=status)
     if (status /= 0 .or. count == 0) go to 999
 
     ! compute the projector
@@ -450,7 +450,7 @@ end subroutine pacs_pointing_matrix_filename
 !!$        write (*,'(a)') "Info: using user's bad detector mask."
 !!$    end if
 !!$
-!!$    call pacs%compute_mapheader(pointing, .true., resolution, header, status)
+!!$    call pacs%compute_map_header(pointing, .true., resolution, header, status)
 !!$    if (status == 0) return
 !!$
 !!$999 deallocate(obs)
@@ -469,7 +469,7 @@ end subroutine pacs_pointing_matrix_filename
 !!$                                nrow, ncol, header, pmatrix)
 !!$
 !!$    use, intrinsic :: ISO_FORTRAN_ENV
-!!$    use module_fitstools, only : ft_readparam
+!!$    use module_fitstools, only : ft_read_parameter
 !!$    use module_pacsinstrument, only : pacsinstrument
 !!$    use module_pacspointing, only : pacspointing
 !!$    use module_pointingmatrix, only : pointingelement
@@ -523,9 +523,9 @@ end subroutine pacs_pointing_matrix_filename
 !!$        write (*,'(a)') "Info: using user's bad pixel mask."
 !!$    end if
 !!$
-!!$    call ft_readparam(header, 'naxis1', count, nx, status=status)
+!!$    call ft_read_parameter(header, 'naxis1', nx, count, status=status)
 !!$    if (status /= 0 .or. count == 0) go to 999
-!!$    call ft_readparam(header, 'naxis2', count, ny, status=status)
+!!$    call ft_read_parameter(header, 'naxis2', ny, count, status=status)
 !!$    if (status /= 0 .or. count == 0) go to 999
 !!$
 !!$    ! compute the projector

@@ -1,7 +1,11 @@
 module module_wcs
 
-    use ISO_FORTRAN_ENV
-    use module_math, only : deg2rad, rad2deg
+    use iso_c_binding
+    use iso_fortran_env,  only : ERROR_UNIT
+    use module_fitstools, only : ft_read_parameter
+    use module_math,      only : DEG2RAD, RAD2DEG
+    use module_string,    only : strinteger, strlowcase, strupcase
+    use module_wcslib
     implicit none
     private
 
@@ -28,8 +32,7 @@ contains
 
 
     subroutine init_astrometry(header, astr, status)
-        use string, only : strlowcase, strupcase
-        use module_fitstools, only : ft_readparam
+
         character(len=*), intent(in)  :: header
         type(astrometry), intent(out), optional :: astr
         integer, intent(out)          :: status
@@ -43,64 +46,64 @@ contains
         has_cd = 0
         has_cdelt = 0
 
-        call ft_readparam(header, 'naxis1', count, myastr%naxis(1), must_exist=.true., status=status)
+        call ft_read_parameter(header, 'naxis1', myastr%naxis(1), count, must_exist=.true., status=status)
         if (status /= 0) return
 
-        call ft_readparam(header, 'naxis2', count, myastr%naxis(2), must_exist=.true., status=status)
+        call ft_read_parameter(header, 'naxis2', myastr%naxis(2), count, must_exist=.true., status=status)
         if (status /= 0) return
 
-        call ft_readparam(header, 'crpix1', count, myastr%crpix(1), must_exist=.true., status=status)
+        call ft_read_parameter(header, 'crpix1', myastr%crpix(1), count, must_exist=.true., status=status)
         if (status /= 0) return
 
-        call ft_readparam(header, 'crpix2', count, myastr%crpix(2), must_exist=.true., status=status)
+        call ft_read_parameter(header, 'crpix2', myastr%crpix(2), count, must_exist=.true., status=status)
         if (status /= 0) return
 
-        call ft_readparam(header, 'crval1', count, myastr%crval(1), must_exist=.true., status=status)
+        call ft_read_parameter(header, 'crval1', myastr%crval(1), count, must_exist=.true., status=status)
         if (status /= 0) return
 
-        call ft_readparam(header, 'crval2', count, myastr%crval(2), must_exist=.true., status=status)
+        call ft_read_parameter(header, 'crval2', myastr%crval(2), count, must_exist=.true., status=status)
         if (status /= 0) return
 
-        call ft_readparam(header, 'cdelt1', count, myastr%cdelt(1), must_exist=.true., status=status)
-        if (status /= 0) return
-        if (count /= 0) has_cdelt = has_cdelt + 1
-
-        call ft_readparam(header, 'cdelt2', count, myastr%cdelt(2), must_exist=.true., status=status)
+        call ft_read_parameter(header, 'cdelt1', myastr%cdelt(1), count, must_exist=.true., status=status)
         if (status /= 0) return
         if (count /= 0) has_cdelt = has_cdelt + 1
 
-        call ft_readparam(header, 'cd1_1', count, myastr%cd(1,1), must_exist=.false., status=status)
+        call ft_read_parameter(header, 'cdelt2', myastr%cdelt(2), count, must_exist=.true., status=status)
+        if (status /= 0) return
+        if (count /= 0) has_cdelt = has_cdelt + 1
+
+        call ft_read_parameter(header, 'cd1_1', myastr%cd(1,1), count, must_exist=.false., status=status)
         if (status /= 0) return
         if (count /= 0) has_cd = has_cd + 1
 
-        call ft_readparam(header, 'cd2_1', count, myastr%cd(2,1), must_exist=.false., status=status)
+        call ft_read_parameter(header, 'cd2_1', myastr%cd(2,1), count, must_exist=.false., status=status)
         if (status /= 0) return
         if (count /= 0) has_cd = has_cd + 1
 
-        call ft_readparam(header, 'cd1_2', count, myastr%cd(1,2), must_exist=.false., status=status)
+        call ft_read_parameter(header, 'cd1_2', myastr%cd(1,2), count, must_exist=.false., status=status)
         if (status /= 0) return
         if (count /= 0) has_cd = has_cd + 1
 
-        call ft_readparam(header, 'cd2_2', count, myastr%cd(2,2), must_exist=.false., status=status)
+        call ft_read_parameter(header, 'cd2_2', myastr%cd(2,2), count, must_exist=.false., status=status)
         if (status /= 0) return
         if (count /= 0) has_cd = has_cd + 1
 
-        call ft_readparam(header, 'cd2_2', count, myastr%cd(2,2), must_exist=.false., status=status)
+        call ft_read_parameter(header, 'cd2_2', myastr%cd(2,2), count, must_exist=.false., status=status)
         if (status /= 0) return
 
-        call ft_readparam(header, 'ctype1', count, buffer, must_exist=.true., status=status)
+        call ft_read_parameter(header, 'ctype1', buffer, count, must_exist=.true., status=status)
         if (status /= 0) return
         myastr%ctype(1) = strupcase(buffer(1:8))
 
-        call ft_readparam(header, 'ctype2', count, buffer, must_exist=.true., status=status)
+        call ft_read_parameter(header, 'ctype2', buffer, count, must_exist=.true., status=status)
         if (status /= 0) return
         myastr%ctype(2) = strupcase(buffer(1:8))
 
-        call ft_readparam(header, 'cunit1', count, buffer, must_exist=.false., status=status)
+        call ft_read_parameter(header, 'cunit1', buffer, count, must_exist=.false., status=status)
         if (status /= 0) return
         myastr%cunit(1) = strlowcase(buffer(1:8))
 
-        call ft_readparam(header, 'cunit2', count, buffer, must_exist=.false., status=status)
+        call ft_read_parameter(header, 'cunit2', buffer, count, must_exist=.false., status=status)
         if (status /= 0) return
         myastr%cunit(2) = strlowcase(buffer(1:8))
 
@@ -111,7 +114,7 @@ contains
         end if
 
         if (has_cd == 0) then
-            call ft_readparam(header, 'crota2', count, crota2, must_exist=.false., status=status)
+            call ft_read_parameter(header, 'crota2', crota2, count, must_exist=.false., status=status)
             if (status /= 0) return
             if (count == 0) then
                 write (ERROR_UNIT,'(a)') 'Header has no definition for the CD matrix'
@@ -119,7 +122,7 @@ contains
                 return
             end if
             
-            crota2 = crota2 * deg2rad
+            crota2 = crota2 * DEG2RAD
             myastr%cd(1,1) =  cos(crota2)
             myastr%cd(2,1) = -sin(crota2)
             myastr%cd(1,2) =  sin(crota2)
@@ -151,12 +154,13 @@ contains
     end subroutine init_astrometry
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     subroutine print_astrometry(astr)
-        use string, only : strinteger
+
         type(astrometry), intent(in) :: astr
+
         integer :: naxis, i
 
         naxis = 0
@@ -175,29 +179,33 @@ contains
 
     end subroutine print_astrometry
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     subroutine init_gnomonic(astr)
+
         type(astrometry), intent(in) :: astr
+
         real*8 :: lambda0                ! crval(1) in rad
         real*8 :: phi1, cosphi1, sinphi1 ! cos and sin of crval(2)
         common /gnomonic/ lambda0, cosphi1, sinphi1
 
-        lambda0 = astr%crval(1) * deg2rad
-        phi1 = astr%crval(2) * deg2rad
+        lambda0 = astr%crval(1) * DEG2RAD
+        phi1 = astr%crval(2) * DEG2RAD
         cosphi1 = cos(phi1)
         sinphi1 = sin(phi1)
 
     end subroutine init_gnomonic
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     pure function ad2xy_gnomonic(ad) result(xy)
+
         real*8, intent(in) :: ad(:,:)          ! R.A. and declination in degrees
         real*8             :: xy(size(ad,1),size(ad,2))
+
         real*8             :: lambda, phi, invcosc, xsi, eta
         integer            :: i
         real*8             :: lambda0          ! crval[0] in rad
@@ -205,9 +213,9 @@ contains
         common /gnomonic/ lambda0, cosphi1, sinphi1
 
         do i = 1, size(ad,2)
-            lambda = ad(1,i) * deg2rad
-            phi = ad(2,i) * deg2rad
-            invcosc = rad2deg / (sinphi1*sin(phi)+cosphi1*cos(phi)*cos(lambda-lambda0))
+            lambda = ad(1,i) * DEG2RAD
+            phi = ad(2,i) * DEG2RAD
+            invcosc = RAD2DEG / (sinphi1*sin(phi)+cosphi1*cos(phi)*cos(lambda-lambda0))
             xsi = invcosc * cos(phi)*sin(lambda-lambda0)
             eta = invcosc * (cosphi1*sin(phi)-sinphi1*cos(phi)*cos(lambda-lambda0))
 
@@ -217,20 +225,22 @@ contains
     end function ad2xy_gnomonic
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     pure elemental subroutine ad2xy_gnomonic_vect(a, d, x, y)
+
         real*8, intent(in)  :: a, d             ! R.A. and declination in degrees
         real*8, intent(out) :: x, y
+
         real*8              :: lambda, phi, invcosc, xsi, eta
         real*8              :: lambda0          ! crval[0] in rad
         real*8              :: cosphi1, sinphi1 ! cos and sin of crval[1]
         common /gnomonic/ lambda0, cosphi1, sinphi1
 
-        lambda  = a * deg2rad
-        phi     = d * deg2rad
-        invcosc = rad2deg / (sinphi1*sin(phi)+cosphi1*cos(phi)*cos(lambda-lambda0))
+        lambda  = a * DEG2RAD
+        phi     = d * DEG2RAD
+        invcosc = RAD2DEG / (sinphi1*sin(phi)+cosphi1*cos(phi)*cos(lambda-lambda0))
         xsi = invcosc * cos(phi)*sin(lambda-lambda0)
         eta = invcosc * (cosphi1*sin(phi)-sinphi1*cos(phi)*cos(lambda-lambda0))
 
@@ -239,12 +249,13 @@ contains
     end subroutine ad2xy_gnomonic_vect
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     subroutine init_rotation(astr)
 
         type(astrometry), intent(in) :: astr
+
         real*8 :: cdinv(2,2), crpix(2)
         real*8 :: cd(2,2)
         common /rotation/ cdinv,crpix
@@ -259,13 +270,14 @@ contains
     end subroutine init_rotation
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     elemental subroutine xy2xy_rotation(xsi, eta, x, y)
 
         real*8, intent(in)  :: xsi, eta
         real*8, intent(out) :: x, y
+
         real*8              :: cdinv(2,2), crpix(2)
         common /rotation/ cdinv, crpix
 
@@ -275,14 +287,14 @@ contains
     end subroutine xy2xy_rotation
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     subroutine init_wcslib(header, status)
-        use module_fitstools
-        use module_wcslib, only : WCSLEN
+
         character(len=*), intent(in) :: header
         integer, intent(out)         :: status
+
         integer                      :: wcs(WCSLEN), nx, ny
         common /wcslib/ wcs
 
@@ -291,15 +303,16 @@ contains
     end subroutine init_wcslib
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     function ad2xy_wcslib(ad) result(xy)
-        use module_wcslib
+
         real*8, intent(in)   :: ad(:,:)
+        real*8               :: xy(size(ad,1),size(ad,2))
+
         integer              :: status
         integer              :: wcs(WCSLEN)
-        real*8               :: xy(size(ad,1),size(ad,2))
         integer              :: stat(size(ad,2))
         real*8               :: phi(size(ad,2)), theta(size(ad,2)), imgcrd(size(ad,2),size(ad,2))
         common /wcslib/ wcs
@@ -309,7 +322,7 @@ contains
     end function ad2xy_wcslib
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     ! translate the astrometry in a FITS header into a wcslib wcs
@@ -317,13 +330,11 @@ contains
     ! investigate how to keep wcs without wcsp
     subroutine header2wcslib(header, wcs, nx, ny, status)
 
-        use, intrinsic :: ISO_C_BINDING
-        use module_fitstools, only : ft_readparam
-        use module_wcslib
         character(len=*), intent(in)     :: header
         integer(kind=C_INT), intent(out) :: wcs(WCSLEN)
         integer, intent(out)             :: nx, ny
         integer, intent(out)             :: status
+
         integer(kind=C_INT)              :: wcs_(WCSLEN)
 
         integer(kind=C_INT)              :: wcsp
@@ -387,9 +398,9 @@ contains
         end if
 
         ! extract NAXIS1 and NAXIS2 keywords
-        call ft_readparam(header, 'naxis1', count1, nx, status=status)
+        call ft_read_parameter(header, 'naxis1', nx, count1, status=status)
         if (status /= 0) return
-        call ft_readparam(header, 'naxis2', count2, ny, status=status)
+        call ft_read_parameter(header, 'naxis2', ny, count2, status=status)
         if (status /= 0) return
 
         if (count1 == 0 .or. count2 == 0) then
@@ -401,11 +412,11 @@ contains
     end subroutine header2wcslib
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     subroutine free_wcslib()
-        use module_wcslib
+
         integer :: wcs(WCSLEN), status
         common /wcslib/ wcs
 

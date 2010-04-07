@@ -1,9 +1,8 @@
 module module_pointingmatrix
 
     use module_math,            only : nint_down, nint_up
-    use module_pointingelement, only : pointingelement
     use module_projection,      only : intersection_polygon_unity_square
-    use precision,              only : p, sp
+    use module_precision,       only : p, sp
     implicit none
     private
 
@@ -15,6 +14,10 @@ module module_pointingmatrix
     public :: backprojection_weighted
     public :: backprojection_weighted_roi
 
+    type pointingelement
+        integer*4 :: pixel
+        real*4    :: weight
+    end type pointingelement
 
 contains
 
@@ -41,7 +44,7 @@ contains
     end subroutine pmatrix_direct
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     subroutine pmatrix_transpose(pmatrix, timeline, map)
@@ -69,7 +72,7 @@ contains
     end subroutine pmatrix_transpose
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     subroutine backprojection_weighted(pmatrix, timeline, mask, map, threshold)
@@ -123,7 +126,7 @@ contains
     end subroutine backprojection_weighted
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     ! backproject a frame into a minimap
@@ -178,7 +181,7 @@ contains
     end subroutine backprojection_weighted_roi
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     ! roi is a 3-dimensional array: [1=x|2=y,1=min|2=max,idetector]
@@ -198,7 +201,7 @@ contains
     end function xy2roi
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     subroutine roi2pmatrix(roi, nvertices, coords, nx, ny, itime, nroi, out, pmatrix)

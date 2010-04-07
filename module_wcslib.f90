@@ -1,5 +1,6 @@
 ! interface to WCSLIB 4.4
 module module_wcslib
+
     use, intrinsic :: ISO_C_BINDING
     implicit none
 
@@ -162,7 +163,5 @@ module module_wcslib
             integer(kind=C_INT)                    :: wcshdo
         end function wcshdo
     end interface
-
-
 
 end module module_wcslib

@@ -1,9 +1,9 @@
 program test_wcslibc
 
-    use, intrinsic :: ISO_C_BINDING
-    use module_stdio
+    use iso_c_binding
     use module_cfitsio
-    use string, only : strjoin
+    use module_stdio
+    use module_string, only : strjoin
     use module_wcslibc
     implicit none
 

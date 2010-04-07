@@ -1,38 +1,38 @@
 program test_ngc6946_bpj
 
-    use ISO_FORTRAN_ENV
-    use module_fitstools, only : ft_readparam, ft_write
-    use module_pacsinstrument, only : ndims, nvertices, pacsinstrument
+    use iso_fortran_env,        only : ERROR_UNIT, OUTPUT_UNIT
+    use module_fitstools,       only : ft_read_parameter, ft_write
+    use module_math,            only : pInf, neq_real, sum_kahan
+    use module_pacsinstrument,  only : ndims, nvertices, pacsinstrument
     use module_pacsobservation, only : pacsobservation
-    use module_pacspointing, only : pacspointing
-    use module_pointingmatrix, only : pointingelement, pmatrix_direct, pmatrix_transpose
-    use module_preprocessor
-    use module_projection
-    use module_wcs, only : init_astrometry, ad2xy_gnomonic
+    use module_pacspointing,    only : pacspointing
+    use module_pointingmatrix,  only : pointingelement, pmatrix_direct, pmatrix_transpose
+    use module_preprocessor,    only : subtract_meandim1, divide_vectordim2
+    use module_projection,      only : surface_convex_polygon
+    use module_string,          only : strinteger
+    use module_wcs,             only : init_astrometry, ad2xy_gnomonic
     use omp_lib
-    use module_math, only : pInf, test_real_eq, sum_kahan
-    use string, only : strinteger
     implicit none
 
     class(pacsinstrument), allocatable  :: pacs
     class(pacsobservation), allocatable :: obs
     class(pacspointing), allocatable    :: pointing
-    character(len=*), parameter :: inputdir    = '/home/pchanial/work/pacs/data/transparent/NGC6946/'
-    character(len=*), parameter :: filename(1) = inputdir // '1342184520_blue[12001:86000]'
-    integer, parameter          :: npixels_per_sample = 6
-    real*8, allocatable                :: signal(:,:), coords(:,:), coords_yz(:,:)
-    real*8                             :: ra, dec, pa, chop, chop_old
-    real*8, allocatable                :: surface1(:,:), surface2(:,:)
-    logical*1, allocatable             :: mask(:,:)
-    character(len=80)                  :: outfile
-    character(len=2880)                :: header
-    integer                            :: nx, ny
-    integer                            :: status, count, count0, count1
-    integer                            :: count2, count_rate, count_max
-    integer                            :: idetector, isample
-    integer*8                          :: nsamples
-    real*8, allocatable                :: map1d(:)
-    type(pointingelement), allocatable :: pmatrix(:,:,:)
+    character(len=*), parameter         :: inputdir    = '/home/pchanial/work/pacs/data/transparent/NGC6946/'
+    character(len=*), parameter         :: filename(1) = inputdir // '1342184520_blue[12001:86000]'
+    integer, parameter                  :: npixels_per_sample = 6
+    real*8, allocatable                 :: signal(:,:), coords(:,:), coords_yz(:,:)
+    real*8                              :: ra, dec, pa, chop, chop_old
+    real*8, allocatable                 :: surface1(:,:), surface2(:,:)
+    logical*1, allocatable              :: mask(:,:)
+    character(len=80)                   :: outfile
+    character(len=2880)                 :: header
+    integer                             :: nx, ny
+    integer                             :: status, count, count0, count1
+    integer                             :: count2, count_rate, count_max
+    integer                             :: idetector, isample
+    integer*8                           :: nsamples
+    real*8, allocatable                 :: map1d(:)
+    type(pointingelement), allocatable  :: pmatrix(:,:,:)
 
     call system_clock(count0, count_rate, count_max)
 
@@ -53,13 +53,13 @@ program test_ngc6946_bpj
     if (status /= 0) stop 'FAILED: pacspointing%init'
 
     ! get header map
-    call pacs%compute_mapheader(pointing, .false., 3.d0, header, status)
-    if (status /= 0) stop 'FAILED: compute_mapheader.'
+    call pacs%compute_map_header(pointing, .false., 3.d0, header, status)
+    if (status /= 0) stop 'FAILED: compute_map_header.'
 
-    call ft_readparam(header, 'naxis1', count, nx, status=status)
-    if (status /= 0 .or. count == 0) stop 'FAILED: compute_mapheader 2.'
-    call ft_readparam(header, 'naxis2', count, ny, status=status)
-    if (status /= 0 .or. count == 0) stop 'FAILED: compute_mapheader 3.'
+    call ft_read_parameter(header, 'naxis1', nx, count, status=status)
+    if (status /= 0 .or. count == 0) stop 'FAILED: compute_map_header 2.'
+    call ft_read_parameter(header, 'naxis2', ny, count, status=status)
+    if (status /= 0 .or. count == 0) stop 'FAILED: compute_map_header 3.'
 
     ! allocate memory for the map
     allocate(map1d(0:nx*ny-1))
@@ -148,7 +148,7 @@ program test_ngc6946_bpj
     ! test the back projected map
     write (OUTPUT_UNIT,*) 'Sum in map is ', sum_kahan(map1d), ' ...instead of ',&
                          strinteger(int(pacs%ndetectors*nsamples, kind=4))
-    if (.not. test_real_eq(sum_kahan(map1d), real(pacs%ndetectors*nsamples,kind=8), 6)) then
+    if (neq_real(sum_kahan(map1d), real(pacs%ndetectors*nsamples,kind=8), 6)) then
         stop 'FAILED.'
     end if
 
@@ -161,7 +161,7 @@ program test_ngc6946_bpj
     write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
 
     ! test the back projected map
-    if (any(.not. test_real_eq(signal, surface1, 5))) then
+    if (any(neq_real(signal, surface1, 5))) then
         write (ERROR_UNIT,*) 'Invalid signal.'
         stop 'FAILED.'
     end if

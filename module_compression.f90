@@ -29,7 +29,7 @@ contains
     end subroutine compression_average_direct
 
 
-    !-------------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     subroutine compression_average_transpose(compressed, data, factor)

@@ -1,14 +1,14 @@
 module module_pacsinstrument
 
-    use ISO_FORTRAN_ENV,        only : ERROR_UNIT, OUTPUT_UNIT
-    use module_fitstools,       only : ft_close, ft_create_header, ft_open_image, ft_readextension, ft_readslice, ft_test_extension
+    use iso_fortran_env,        only : ERROR_UNIT, OUTPUT_UNIT
+    use module_fitstools,       only : ft_close, ft_create_header, ft_open_image, ft_read_extension, ft_read_slice,ft_test_extension
     use module_math,            only : DEG2RAD, pInf, mInf, NaN, nint_down, nint_up
     use module_pacsobservation, only : pacsobservation, pacsobsinfo
     use module_pacspointing,    only : pacspointing
     use module_pointingmatrix,  only : pointingelement, xy2roi, roi2pmatrix
+    use module_precision,       only : p
     use module_projection,      only : convex_hull
-    use precision,              only : p
-    use string,                 only : strinteger
+    use module_string,          only : strinteger
     use module_wcs,             only : init_astrometry, ad2xy_gnomonic, ad2xy_gnomonic_vect
     implicit none
     private
@@ -67,7 +67,7 @@ module module_pacsinstrument
 
         private
         procedure, public :: init
-        procedure, public :: compute_mapheader
+        procedure, public :: compute_map_header
         procedure, public :: find_minmax
         procedure, public :: compute_projection_sharp_edges
         procedure, public :: destroy
@@ -149,7 +149,7 @@ contains
     end subroutine init
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     subroutine read_calibration_files(this, status)
@@ -178,24 +178,24 @@ contains
 
         ! read bad pixel mask
 
-        call ft_readextension(get_calfile(filename_bpm) // '[blue]', tmplogical, status)
+        call ft_read_extension(get_calfile(filename_bpm) // '[blue]', tmplogical, status)
         if (status /= 0) return
         this%mask_blue = transpose(tmplogical)
 
-        call ft_readextension(get_calfile(filename_bpm) // '[red]', tmplogical, status)
+        call ft_read_extension(get_calfile(filename_bpm) // '[red]', tmplogical, status)
         if (status /= 0) return
         this%mask_red = transpose(tmplogical)
 
 
         ! read flat fields
 
-        call ft_readextension(get_calfile(filename_ff) // '+5',  tmp2, status)
+        call ft_read_extension(get_calfile(filename_ff) // '+5',  tmp2, status)
         if (status /= 0) return
         this%flatfield_blue = transpose(tmp2)
-        call ft_readextension(get_calfile(filename_ff) // '+8', tmp2, status)
+        call ft_read_extension(get_calfile(filename_ff) // '+8', tmp2, status)
         if (status /= 0) return
         this%flatfield_green = transpose(tmp2)
-        call ft_readextension(get_calfile(filename_ff) // '+2',   tmp2, status)
+        call ft_read_extension(get_calfile(filename_ff) // '+2',   tmp2, status)
         if (status /= 0) return
         this%flatfield_red = transpose(tmp2)
 
@@ -204,16 +204,16 @@ contains
 
         do ivertex=1, nvertices
 
-            call ft_readextension(get_calfile(filename_saa), tmp2, status, hdu_blue(ivertex)  )
+            call ft_read_extension(get_calfile(filename_saa), tmp2, status, hdu_blue(ivertex)  )
             if (status /= 0) return
             this%corners_uv_blue(1,ivertex,:,:) = transpose(tmp2)
-            call ft_readextension(get_calfile(filename_saa), tmp2, status, hdu_blue(ivertex)+1)
+            call ft_read_extension(get_calfile(filename_saa), tmp2, status, hdu_blue(ivertex)+1)
             if (status /= 0) return
             this%corners_uv_blue(2,ivertex,:,:) = transpose(tmp2)
-            call ft_readextension(get_calfile(filename_saa), tmp2, status, hdu_red (ivertex)  )
+            call ft_read_extension(get_calfile(filename_saa), tmp2, status, hdu_red (ivertex)  )
             if (status /= 0) return
             this%corners_uv_red (1,ivertex,:,:) = transpose(tmp2)
-            call ft_readextension(get_calfile(filename_saa), tmp2, status, hdu_red (ivertex)+1)
+            call ft_read_extension(get_calfile(filename_saa), tmp2, status, hdu_red (ivertex)+1)
             if (status /= 0) return
             this%corners_uv_red (2,ivertex,:,:) = transpose(tmp2)
 
@@ -222,23 +222,23 @@ contains
 
         ! read the distortion coefficients in the (y,z) plane
 
-        call ft_readextension(get_calfile(filename_ai) // '[ycoeffblue]', tmp3, status)
+        call ft_read_extension(get_calfile(filename_ai) // '[ycoeffblue]', tmp3, status)
         if (status /= 0) return
         this%distortion_yz_blue(1,:,:,:) = tmp3
-        call ft_readextension(get_calfile(filename_ai) // '[zcoeffblue]', tmp3, status)
+        call ft_read_extension(get_calfile(filename_ai) // '[zcoeffblue]', tmp3, status)
         if (status /= 0) return
         this%distortion_yz_blue(2,:,:,:) = tmp3
-        call ft_readextension(get_calfile(filename_ai) // '[ycoeffred]', tmp3, status)
+        call ft_read_extension(get_calfile(filename_ai) // '[ycoeffred]', tmp3, status)
         if (status /= 0) return
         this%distortion_yz_red (1,:,:,:) = tmp3
-        call ft_readextension(get_calfile(filename_ai) // '[zcoeffred]', tmp3, status)
+        call ft_read_extension(get_calfile(filename_ai) // '[zcoeffred]', tmp3, status)
         if (status /= 0) return
         this%distortion_yz_red (2,:,:,:) = tmp3
 
     end subroutine read_calibration_files
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     function get_calfile(filename)
@@ -254,7 +254,7 @@ contains
     end function get_calfile
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     subroutine filter_detectors(this)
@@ -280,7 +280,7 @@ contains
     end subroutine filter_detectors
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     subroutine filter_detectors_array(this, mask, uv, distortion, flatfield)
@@ -334,7 +334,7 @@ contains
     end subroutine filter_detectors_array
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     function uv2yz(uv, distortion_yz, chop) result(yz)
@@ -382,7 +382,7 @@ contains
     end function uv2yz
  
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     function yz2ad(yz, ra0, dec0, pa0) result (ad)
@@ -408,10 +408,10 @@ contains
     end function yz2ad
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine compute_mapheader(this, pointing, finer_sampling, resolution,   &
+    subroutine compute_map_header(this, pointing, finer_sampling, resolution,   &
                                  header, status)
         class(pacsinstrument), intent(in) :: this
         class(pacspointing), intent(in)   :: pointing
@@ -444,10 +444,10 @@ contains
         call ft_create_header(nx, ny, -resolution/3600.d0, resolution/3600.d0, &
                               0.d0, ra0, dec0, -ixmin+2.d0, -iymin+2.d0, header)
 
-    end subroutine compute_mapheader
+    end subroutine compute_map_header
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     ! find minimum and maximum pixel coordinates in maps
@@ -504,7 +504,7 @@ contains
     end subroutine find_minmax
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     subroutine compute_projection_sharp_edges(this, pointing, finer_sampling, header, nx, ny, pmatrix, status)
@@ -574,7 +574,7 @@ contains
     end subroutine compute_projection_sharp_edges
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     subroutine read(this, obs, signal, mask, status)
@@ -594,7 +594,7 @@ contains
         ! to the number of samples in the signal and mask arrays
         if (nsamples /= size(signal,1) .or. nsamples /= size(mask,1)) then
             status = 1
-            write (ERROR_UNIT,'(a)') 'READ_TOD: invalid dimensions.'
+            write (ERROR_UNIT,'(a)') 'READ: invalid dimensions.'
             return
         end if
 
@@ -609,7 +609,7 @@ contains
     end subroutine read
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     subroutine read_one(this, obs, destination, signal, mask, status)
@@ -647,8 +647,7 @@ contains
             p = this%pq(1,idetector)
             q = this%pq(2,idetector)
 
-            call ft_readslice(unit, obs%first, obs%last, q+1, p+1,           &
-                 imageshape, signal(destination:destination+obs%nsamples-1,   &
+            call ft_read_slice(unit, obs%first, obs%last, q+1, p+1, imageshape, signal(destination:destination+obs%nsamples-1,     &
                  idetector),status)
             if (status /= 0) go to 999
 
@@ -688,8 +687,7 @@ contains
             lastcompressed  = (obs%last  - 1) / 32 + 1
             ncompressed = lastcompressed - firstcompressed + 1
 
-            call ft_readslice(unit, firstcompressed, lastcompressed,       &
-                 q+1, p+1, imageshape, maskcompressed(1:ncompressed),status)
+            call ft_read_slice(unit, firstcompressed, lastcompressed, q+1, p+1, imageshape, maskcompressed(1:ncompressed),status)
             if (status /= 0) go to 999
 
             ! loop over the bytes of the compressed mask
@@ -717,7 +715,7 @@ contains
     end subroutine read_one
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     subroutine read_oldstyle(this, obs, dest, signal, mask, status)
@@ -740,8 +738,7 @@ contains
 
             p = this%pq(1,idetector)
             q = this%pq(2,idetector)
-            call ft_readslice(unit, obs%first, obs%last, q+1, p+1,           &
-                 imageshape, signal(dest:dest+obs%nsamples-1,idetector),status)
+            call ft_read_slice(unit, obs%first, obs%last, q+1, p+1, imageshape, signal(dest:dest+obs%nsamples-1,idetector),status)
             if (status /= 0) go to 999
 
         end do
@@ -764,8 +761,7 @@ contains
                 cycle
             end if
 
-            call ft_readslice(unit, obs%first, obs%last, q+1, p+1,           &
-                 imageshape, mask(dest:dest+obs%nsamples-1,idetector), status)
+            call ft_read_slice(unit, obs%first, obs%last, q+1, p+1, imageshape, mask(dest:dest+obs%nsamples-1,idetector), status)
             if (status /= 0) go to 999
 
         end do
@@ -776,7 +772,7 @@ contains
     end subroutine read_oldstyle
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     subroutine multiplexing_direct(signal, sampled_signal, sampling, ij)
@@ -813,7 +809,7 @@ contains
     end subroutine multiplexing_direct
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     subroutine multiplexing_transpose(sampled_signal, signal, sampling, ij)
@@ -852,7 +848,7 @@ contains
     end subroutine multiplexing_transpose
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     subroutine destroy(this)

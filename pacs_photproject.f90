@@ -1,7 +1,7 @@
 program pacs_photproject
 
     use iso_fortran_env,        only : ERROR_UNIT, OUTPUT_UNIT
-    use module_fitstools,       only : ft_header2str, ft_readparam, ft_write
+    use module_fitstools,       only : ft_header2str, ft_read_parameter, ft_write
     use module_deglitching,     only : deglitch_l2b
     use module_optionparser,    only : optionparser
     use module_pacsinstrument,  only : pacsinstrument
@@ -83,15 +83,15 @@ program pacs_photproject
     if (headerfile /= '') then
        call ft_header2str(headerfile, header, status)
     else
-       call pacs%compute_mapheader(pointing, .false., resolution, header, status)
+       call pacs%compute_map_header(pointing, .false., resolution, header, status)
     end if
     if (status /= 0) go to 999
 
     ! allocate memory for the maps
-    call ft_readparam(header, 'naxis1', count, nx, status=status)
+    call ft_read_parameter(header, 'naxis1', nx, count, status=status)
     if (status /= 0 .or. count == 0) go to 999
 
-    call ft_readparam(header, 'naxis2', count, ny, status=status)
+    call ft_read_parameter(header, 'naxis2', ny, count, status=status)
     if (status /= 0 .or. count == 0) go to 999
 
     allocate(map1d(0:nx*ny-1))

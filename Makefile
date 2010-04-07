@@ -40,7 +40,7 @@ endif
 
 INCLUDES = wcslib-4.4.4-Fortran90
 
-MODULES = precision.f90 string.f90 $(wildcard module_*.f90)
+MODULES = $(wildcard module_*.f90)
 SOURCES = $(wildcard test_*.f90) pacs_photproject.f90
 EXECS = $(SOURCES:.f90=)
 
@@ -52,41 +52,42 @@ finddeps = $(1).o $(if $($(1)),$(call map,finddeps,$($(1))))
 
 # define module dependencies
 module_cfitsio = module_stdio
-module_deglitching = module_math module_pointingmatrix precision
-module_fitstools = precision string module_cfitsio
-module_instrument = precision string
-module_math = precision
-module_optionparser = string
+module_deglitching = module_math module_pointingmatrix module_precision
+module_fitstools = module_cfitsio module_precision module_string
+module_instrument = module_precision module_string
+module_math = module_precision
+module_optionparser = module_string
 module_pacsinstrument = module_fitstools module_math module_pacsobservation module_pacspointing module_pointingmatrix module_projection module_wcs 
-module_pacsobservation = module_fitstools precision string
-module_pacspointing = module_fitstools module_pacsobservation precision string
-module_pointingmatrix = module_math module_pointingelement precision module_projection
+module_pacsobservation = module_fitstools module_precision module_string
+module_pacspointing = module_fitstools module_pacsobservation module_precision module_string
+module_pointingmatrix = module_math module_precision module_projection
 module_preprocessor = module_math
-module_projection = precision module_sort module_stack
-module_wcs = module_fitstools module_wcslib string
+module_projection = module_precision module_sort module_stack
+module_wcs = module_fitstools module_math module_string module_wcslib
 
 # define executable dependencies
 pacs_photproject = module_fitstools module_deglitching module_optionparser module_pacsinstrument module_pacsobservation module_pacspointing module_pointingmatrix module_preprocessor
 test_cfitsio = module_cfitsio
-test_deglitching = precision module_deglitching module_math module_pointingmatrix
+test_deglitching = module_deglitching module_math module_pointingmatrix module_precision
 test_fitstools = module_fitstools
-test_math = module_math precision
-test_ngc6946_bpj = module_fitstools module_pacsinstrument module_pacsobservation module_pacspointing module_pointingmatrix module_preprocessor module_projection module_math
+test_math = module_math module_precision
+test_ngc6946_bpj = module_fitstools module_math module_pacsinstrument module_pacsobservation module_pacspointing module_pointingmatrix module_preprocessor module_projection
 test_optionparser = module_optionparser
 test_pacsinstrument = module_pacsinstrument module_pacspointing
-test_pacsobservation = module_pacsinstrument  module_pacsobservation string
+test_pacsobservation = module_pacsinstrument  module_pacsobservation module_string
 test_pacspointing = module_math module_pacsobservation module_pacspointing
 test_pointingmatrix = module_pointingmatrix
 test_projection = module_projection module_sort
 test_read_config = module_instrument
 test_sort = module_sort
 test_stack = module_stack
-test_string = string
-test_stdio = module_stdio module_cfitsio
-test_wcs = module_wcs module_fitstools module_math
-test_wcslib1 = module_wcslib module_cfitsio 
-test_wcslib2 = module_wcslib module_fitstools module_math
-test_wcslibc = module_wcslibc module_cfitsio
+test_string = module_string
+test_module_string = module_string
+test_stdio = module_cfitsio module_stdio
+test_wcs = module_fitstools module_math module_wcs
+test_wcslib1 = module_cfitsio module_wcslib 
+test_wcslib2 = module_fitstools module_math module_wcslib
+test_wcslibc = module_cfitsio module_wcslibc
 
 .PHONY : all tests
 all : $(EXECS) tamasisfortran.so

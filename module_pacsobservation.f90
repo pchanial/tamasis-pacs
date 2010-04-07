@@ -14,10 +14,10 @@
 
 module module_pacsobservation
 
-    use ISO_FORTRAN_ENV,       only : ERROR_UNIT, OUTPUT_UNIT
-    use module_fitstools,      only : ft_open, ft_open_bintable, ft_read_column, ft_readextension, ft_close
-    use precision,             only : p
-    use string,                only : strinteger, strlowcase, strsection, strternary
+    use iso_fortran_env,  only : ERROR_UNIT, OUTPUT_UNIT
+    use module_fitstools, only : ft_open, ft_open_bintable, ft_read_column, ft_read_extension, ft_close
+    use module_precision, only : p
+    use module_string,    only : strinteger, strlowcase, strsection, strternary
     implicit none
     private
 
@@ -147,7 +147,7 @@ contains
     end subroutine init
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     ! sets 'b', 'g' or 'r' for a blue, green or red channel observation
@@ -208,7 +208,7 @@ contains
     end subroutine set_channel
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     subroutine set_compression_mode(this, status)
@@ -263,7 +263,7 @@ contains
     end subroutine set_compression_mode
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     subroutine set_transparent_mode(this, status)
@@ -317,7 +317,7 @@ contains
     end subroutine set_transparent_mode
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     subroutine set_valid_slice(this, first, last, status)
@@ -334,8 +334,7 @@ contains
         if (this%filename(length-4:length) /= '.fits') then
             write(*,'(a)') 'Info: Obsolete file format.'
 
-            call ft_readextension(trim(this%filename) // '_ChopFpuAngle.fits', &
-                                  chop, status)
+            call ft_read_extension(trim(this%filename) // '_ChopFpuAngle.fits', chop, status)
             if (status /= 0) return
 
             nsamples = size(chop)
@@ -348,8 +347,7 @@ contains
 
             if (last > nsamples) then
                status = 1
-               write (ERROR_UNIT,'(a,2(i0,a))') "ERROR: The last sample '",    &
-                    last, "' exceeds the size of the observation '",        &
+               write (ERROR_UNIT,'(a,2(i0,a))') "ERROR: The last sample '", last, "' exceeds the size of the observation '",       &
                     nsamples, "'."
                return
             end if
@@ -431,7 +429,7 @@ contains
     end subroutine set_valid_slice
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     subroutine set_filename(this, filename, first, last, status)

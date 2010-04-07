@@ -1,6 +1,6 @@
 program test_string
 
-    use string
+    use module_string
     implicit none
 
     if (strsection(0,0)     /= ':'      ) stop 'FAILED strsection 1'

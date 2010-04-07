@@ -1,9 +1,8 @@
 module module_deglitching
 
-    use precision, only : p, sp
-    use module_math, only : moment, mad
-    use module_pointingmatrix, only : pointingelement, &
-                                      backprojection_weighted_roi
+    use module_math,           only : moment, mad
+    use module_pointingmatrix, only : pointingelement, backprojection_weighted_roi
+    use module_precision,      only : p, sp
     implicit none
     private
 
@@ -14,13 +13,15 @@ contains
 
 
     subroutine deglitch_l2b(pmatrix, nx, ny, timeline, mask, nsigma, use_mad)
+
         type(pointingelement), intent(in) :: pmatrix(:,:,:)
         integer, intent(in)               :: nx, ny
         real(kind=p), intent(in)          :: timeline(:,:)
         logical(kind=1), intent(inout)    :: mask(:,:)
         real(kind=p), intent(in)          :: nsigma
         logical, intent(in)               :: use_mad
-        integer, parameter                :: min_sample_size = 5
+
+        integer, parameter                :: MIN_SAMPLE_SIZE = 5
         integer         :: npixels_per_sample, npixels_per_frame
         integer         :: ndetectors, ntimes
         integer         :: hitmap(0:nx*ny-1)
@@ -94,7 +95,7 @@ contains
                 end do
 
                 ! check we have enough samples
-                if (nv < min_sample_size) cycle
+                if (nv < MIN_SAMPLE_SIZE) cycle
 
                 ! sigma clip on arrv
                 if (use_mad) then
@@ -126,5 +127,6 @@ contains
         deallocate(map)
 
     end subroutine deglitch_l2b
+
 
 end module module_deglitching

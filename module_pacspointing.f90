@@ -1,10 +1,11 @@
 module module_pacspointing
-    use ISO_FORTRAN_ENV,        only : OUTPUT_UNIT, ERROR_UNIT
-    use module_fitstools,       only : ft_read_column, ft_readextension, ft_open_bintable, ft_close
-    use module_math,            only : NaN, median, test_real_neq
+
+    use iso_fortran_env,        only : OUTPUT_UNIT, ERROR_UNIT
+    use module_fitstools,       only : ft_read_column, ft_read_extension, ft_open_bintable, ft_close
+    use module_math,            only : NaN, median, neq_real
     use module_pacsobservation, only : pacsobservation, pacsobsinfo
-    use precision,              only : p, dp
-    use string,                 only : strinteger, strreal, strternary
+    use module_precision,       only : p, dp
+    use module_string,          only : strinteger, strreal, strternary
     implicit none
     private
 
@@ -140,7 +141,7 @@ contains
     end subroutine init
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     subroutine init_oldstyle(this, obs, iobs, status)
@@ -151,32 +152,32 @@ contains
         real*8, allocatable                :: buffer(:)
         integer*8, allocatable             :: timeus(:)
 
-        call ft_readextension(trim(obs%filename)//'_Time.fits', timeus, status)
+        call ft_read_extension(trim(obs%filename)//'_Time.fits', timeus, status)
         if (status /= 0) return
         allocate(buffer(size(timeus)))
         buffer = timeus * 1.0d-6
         this%time(this%first(iobs):this%last(iobs)) = buffer(obs%first:obs%last)
 
-        call ft_readextension(trim(obs%filename) // '_RaArray.fits', buffer, status)
+        call ft_read_extension(trim(obs%filename) // '_RaArray.fits', buffer, status)
         if (status /= 0) return
         this%ra(this%first(iobs):this%last(iobs)) = buffer(obs%first:obs%last)
 
-        call ft_readextension(trim(obs%filename) // '_DecArray.fits', buffer, status)
+        call ft_read_extension(trim(obs%filename) // '_DecArray.fits', buffer, status)
         if (status /= 0) return
         this%dec(this%first(iobs):this%last(iobs)) = buffer(obs%first:obs%last)
 
-        call ft_readextension(trim(obs%filename) // '_PaArray.fits', buffer, status)
+        call ft_read_extension(trim(obs%filename) // '_PaArray.fits', buffer, status)
         if (status /= 0) return
         this%pa(this%first(iobs):this%last(iobs)) = buffer(obs%first:obs%last)
 
-        call ft_readextension(trim(obs%filename) // '_ChopFpuAngle.fits', buffer, status)
+        call ft_read_extension(trim(obs%filename) // '_ChopFpuAngle.fits', buffer, status)
         if (status /= 0) return
         this%chop(this%first(iobs):this%last(iobs)) = buffer(obs%first:obs%last)
 
     end subroutine init_oldstyle
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     subroutine init_sim(this, time, ra, dec, pa, chop, status)
@@ -235,7 +236,7 @@ contains
     end subroutine init_sim
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     subroutine init2(this, status)
@@ -273,7 +274,7 @@ contains
             ! check if there are gaps
             this%delta(islice) = median(delta)
             delta_max = maxval(abs(delta))
-            if (any(test_real_neq(delta, this%delta(islice), 3))) then
+            if (any(neq_real(delta, this%delta(islice), 3))) then
                 write (*,'(a)') 'Warning: ' // strternary(this%nslices>1, ' In observation '//strinteger(islice)//', t','T') //    &
                       'he pointing time is not evenly spaced.'
                 if (delta_max > 1.5_p * this%delta(islice)) then
@@ -283,7 +284,7 @@ contains
 
             ! check the compression factor from the data themselves
             this%compression_factor(islice) = nint(this%delta(islice) / 0.024996_dp)
-            if (test_real_neq(this%compression_factor(islice) * 0.024996_dp, this%delta(islice), 2)) then
+            if (neq_real(this%compression_factor(islice) * 0.024996_dp, this%delta(islice), 2)) then
                 status = 1
                 write (*,'(a)') 'Error: The sampling time is not an integer number of PACS sampling time (40Hz).'
                 return
@@ -296,7 +297,7 @@ contains
     end subroutine init2
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     ! linear interpolation if time samples are not evenly spaced.
@@ -350,7 +351,7 @@ contains
     end subroutine get_position_time
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     ! The sampling factor is the compression factor times the fine sampling
@@ -388,7 +389,7 @@ contains
     end subroutine get_position_index
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     ! compute the mean value of R.A. and dec, taking into account RA's singularity at 0
@@ -426,7 +427,7 @@ contains
     end subroutine compute_center
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
 
 
     subroutine print(this)
@@ -441,7 +442,8 @@ contains
     end subroutine print
 
 
-    !---------------------------------------------------------------------------
+    !-------------------------------------------------------------------------------------------------------------------------------
+
 
     subroutine destructor(this)
         class(pacspointing), intent(inout) :: this

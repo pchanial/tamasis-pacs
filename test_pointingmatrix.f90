@@ -1,10 +1,11 @@
 program test_pointingmatrix
 
-    use precision, only : p
-    use module_math, only : sum_kahan, test_real_neq
+    use module_math,          only : sum_kahan, neq_real
     use module_pointingmatrix
-    use module_projection, only : surface_convex_polygon
+    use module_precision,     only : p
+    use module_projection,    only : surface_convex_polygon
     implicit none
+
     integer, parameter :: nvertices = 4
     real(p), allocatable, dimension(:)  :: x_vect, y_vect
     real(p), allocatable, dimension(:,:):: xy
@@ -38,12 +39,13 @@ program test_pointingmatrix
     end do
     if (nroi > npixels_per_sample) write (*,*) 'update npixels_per_sample:',nroi
     if (out) stop 'FAILED: roi2pmatrix out'
-    if (any(pmatrix%pixel /= 0 .and. pmatrix%pixel /= 1 .and.                  &
-        pmatrix%pixel /= 100 .and. pmatrix%pixel /= 101)) stop 'FAILED: roi2pmatrix1'
+    if (any(pmatrix%pixel /= 0 .and. pmatrix%pixel /= 1 .and. pmatrix%pixel /= 100 .and. pmatrix%pixel /= 101)) then
+        stop 'FAILED: roi2pmatrix1'
+    end if
 
-    if (test_real_neq(sum_kahan(real(pmatrix%weight,kind=p)),                  &
-        surface_convex_polygon(xy(:,1:4))*ndetectors*ntimes, 8))              &
+    if (neq_real(sum_kahan(real(pmatrix%weight,kind=p)), surface_convex_polygon(xy(:,1:4))*ndetectors*ntimes, 8)) then
         stop 'FAILED: roi2pmatrix2'
+    end if
 
     stop "OK."
  

@@ -1,11 +1,11 @@
 program test_pacsinstrument
 
-    use module_fitstools,       only : ft_readparam, ft_header2str
-    use module_math,            only : mean, test_real_neq
+    use module_fitstools,       only : ft_read_parameter, ft_header2str
+    use module_math,            only : mean, neq_real
     use module_pacsinstrument
     use module_pacsobservation, only : pacsobservation
     use module_pacspointing,    only : pacspointing
-    use string,                 only : strreal
+    use module_string,          only : strreal
     use module_wcs,             only : init_astrometry, ad2xy_gnomonic
     implicit none
 
@@ -102,20 +102,19 @@ program test_pacsinstrument
     ! minmax(dec) 59.980161       67.110813
 
     call pointing%compute_center(ra0, dec0)
-    if (test_real_neq(ra0,  mean(pointing%ra), 15) .or. test_real_neq(dec0,    &
-        mean(pointing%dec), 15)) stop 'FAILED: compute_center'
+    if (neq_real(ra0,  mean(pointing%ra), 15) .or. neq_real(dec0, mean(pointing%dec), 15)) stop 'FAILED: compute_center'
 
     call pacs%find_minmax(pointing, .false., xmin, xmax, ymin, ymax)
     write (*,*) 'Xmin: ', xmin, ', Xmax: ', xmax
     write (*,*) 'Ymin: ', ymin, ', Ymax: ', ymax
 
-    call pacs%compute_mapheader(pointing, .false., 3.d0, header, status)
-    if (status /= 0) stop 'FAILED: compute_mapheader'
+    call pacs%compute_map_header(pointing, .false., 3.d0, header, status)
+    if (status /= 0) stop 'FAILED: compute_map_header'
 
-    call ft_readparam(header, 'naxis1', count1, nx, status=status)
+    call ft_read_parameter(header, 'naxis1', nx, count1, status=status)
     if (status /= 0 .or. count1 == 0) stop 'FAILED: read_param NAXIS1'
 
-    call ft_readparam(header, 'naxis2', count1, ny, status=status)
+    call ft_read_parameter(header, 'naxis2', ny, count1, status=status)
     if (status /= 0 .or. count1 == 0) stop 'FAILED: read_param NAXIS2'
 
     call init_astrometry(header, status=status)

@@ -1,10 +1,10 @@
 program test_deglitching
 
     use iso_fortran_env,       only : ERROR_UNIT, OUTPUT_UNIT
-    use precision,             only : p
-    use module_deglitching,    only : deglitch_l2b
+    use module_deglitching
     use module_math,           only : linspace
     use module_pointingmatrix, only : pointingelement, pmatrix_direct, xy2roi, roi2pmatrix
+    use module_precision,      only : p
     implicit none
 
     type(pointingelement),allocatable :: pmatrix(:,:,:)
