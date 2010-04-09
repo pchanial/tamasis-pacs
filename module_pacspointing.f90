@@ -2,7 +2,7 @@ module module_pacspointing
 
     use iso_fortran_env,        only : OUTPUT_UNIT, ERROR_UNIT
     use module_fitstools,       only : ft_read_column, ft_read_extension, ft_open_bintable, ft_close
-    use module_math,            only : NaN, median, neq_real
+    use module_math,            only : NaN, median_nocopy, neq_real
     use module_pacsobservation, only : pacsobservation, pacsobsinfo
     use module_precision,       only : p, dp
     use module_string,          only : strinteger, strreal, strternary
@@ -272,7 +272,7 @@ contains
             end if
 
             ! check if there are gaps
-            this%delta(islice) = median(delta)
+            this%delta(islice) = median_nocopy(delta)
             delta_max = maxval(abs(delta))
             if (any(neq_real(delta, this%delta(islice), 3))) then
                 write (*,'(a)') 'Warning: ' // strternary(this%nslices>1, ' In observation '//strinteger(islice)//', t','T') //    &
