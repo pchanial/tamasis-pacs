@@ -11,13 +11,13 @@ ifeq "$(origin FC)" "default"
 endif
 
 ifeq "$(FC)" "gfortran"
-    FFLAGS_DEBUG = -g -fbacktrace -Warray-temporaries -O3 -fcheck=all -fopenmp -Wall -fPIC
-    FFLAGS_RELEASE = -fbacktrace -O3 -fopenmp -Wall -fPIC
+    FFLAGS_DEBUG = -g -fbacktrace -Warray-temporaries -O3 -fcheck=all -fopenmp -Wall -fPIC -cpp -DGFORTRAN
+    FFLAGS_RELEASE = -fbacktrace -O3 -fopenmp -Wall -fPIC -cpp -DGFORTRAN
     LDFLAGS  = -lgomp $(shell pkg-config --libs cfitsio) $(shell pkg-config --libs wcslib)
     FCOMPILER=gnu95
 else ifeq ($(FC),ifort)
-    FFLAGS_DEBUG = -fpp -O2 -static -fPIC -openmp -traceback
-    FFLAGS_RELEASE = -fpp -fast -openmp -ftz -ip  -ipo
+    FFLAGS_DEBUG = -fpp -O2 -static -fPIC -openmp -traceback -DIFORT
+    FFLAGS_RELEASE = -fpp -fast -openmp -ftz -ip  -ipo -DIFORT
     LDFLAGS  = -liomp5 $(shell pkg-config --libs cfitsio) $(shell pkg-config --libs wcslib)
     FCOMPILER = intelem
 else
@@ -53,8 +53,10 @@ finddeps = $(1).o $(if $($(1)),$(call map,finddeps,$($(1))))
 # define module dependencies
 module_cfitsio = module_stdio
 module_deglitching = module_math module_pointingmatrix module_precision
+module_filtering = module_precision
 module_fitstools = module_cfitsio module_precision module_string
 module_instrument = module_precision module_string
+module_madcap = module_filtering module_pointingmatrix module_precision module_string
 module_math = module_precision
 module_optionparser = module_string
 module_pacsinstrument = module_fitstools module_math module_pacsobservation module_pacspointing module_pointingmatrix module_projection module_wcs 
@@ -70,6 +72,7 @@ pacs_photproject = module_fitstools module_deglitching module_optionparser modul
 test_cfitsio = module_cfitsio
 test_deglitching = module_deglitching module_math module_pointingmatrix module_precision
 test_fitstools = module_fitstools
+test_madcap = module_filtering module_madcap
 test_math = module_math module_precision
 test_ngc6946_bpj = module_fitstools module_math module_pacsinstrument module_pacsobservation module_pacspointing module_pointingmatrix module_preprocessor module_projection
 test_optionparser = module_optionparser
