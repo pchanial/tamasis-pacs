@@ -16,6 +16,7 @@ module module_math
     public :: mad
     public :: mean
     public :: median
+    public :: median_nocopy
     public :: moment
     public :: nint_down
     public :: nint_up
@@ -146,7 +147,7 @@ contains
     function sum_kahan_1d(input, mask) result(sum)
 
         real(kind=p), intent(in)      :: input(:)
-        logical, intent(in), optional :: mask(size(input))
+        logical, intent(in), optional :: mask(:)
         real(kind=p)                  :: sum, c, t, y
 
         integer                       :: i
@@ -312,12 +313,28 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
+    function median(arr) 
+
+        real(p)             :: median
+        real(p), intent(in) :: arr(:)
+
+        real(p)             :: arr_copy(size(arr))
+
+        arr_copy = arr
+        median = median_nocopy(arr_copy)
+
+    end function median
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
     ! This Quickselect routine is based on the algorithm described in
     ! "Numerical recipes in C", Second Edition,
     ! Cambridge University Press, 1992, Section 8.5, ISBN 0-521-43108-5
     ! input array may be reordered
     ! This code by Nicolas Devillard - 1998. Public domain.
-    function median(arr) 
+    function median_nocopy(arr) result(median)
 
         real(kind=p)                :: median
         real(kind=p), intent(inout) :: arr(0:)
@@ -377,7 +394,7 @@ contains
 
         end do
 
-    end function median 
+    end function median_nocopy
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
@@ -393,9 +410,9 @@ contains
         real(kind=p)                        :: x_(size(x)), med
  
         x_ = x
-        med = median(x_)
+        med = median_nocopy(x_)
         x_ = abs(x_ - med)
-        mad = median(x_)
+        mad = median_nocopy(x_)
 
         if (present(m)) m = med
 
