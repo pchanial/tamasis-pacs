@@ -320,111 +320,72 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
+    ! if the first sample to consider is not specified, we search from the end for the first sample that has abs(chopfpuangle)>0.01
+    ! we then discard the first 10, that might be affected by relaxation
     subroutine set_valid_slice(this, first, last, status)
+
         type(pacsobsinfo), intent(inout) :: this
         integer*8, intent(in)            :: first, last
         integer, intent(out)             :: status
+
         integer*8              :: nsamples
         integer                :: length
         integer*8              :: isample
         integer*8, allocatable :: chop(:)
-        integer*4, allocatable :: lbl(:)
 
         length = len_trim(this%filename)
         if (this%filename(length-4:length) /= '.fits') then
             write(*,'(a)') 'Info: Obsolete file format.'
 
             call ft_read_extension(trim(this%filename) // '_ChopFpuAngle.fits', chop, status)
-            if (status /= 0) return
-
-            nsamples = size(chop)
-
-            if (nsamples == 0) then
-               status = 1
-               write (ERROR_UNIT) 'ERROR: Status extension is empty.'
-               return
-            end if
-
-            if (last > nsamples) then
-               status = 1
-               write (ERROR_UNIT,'(a,2(i0,a))') "ERROR: The last sample '", last, "' exceeds the size of the observation '",       &
-                    nsamples, "'."
-               return
-            end if
-
-            ! set last valid sample
-            if (last == 0) then
-               this%last = nsamples
-            else
-               this%last = last
-            end if
-
-            ! set first valid sample
-            if (first == 0) then
-                if (abs(chop(this%last)) > 1.d0) then
-                    write (OUTPUT_UNIT,'(a)') 'Warning: last sample is invalid.&
-                        & Automatic search for valid slice is disabled.'
-                    this%first = 1
-                else
-                    do isample = this%last-1, 1, -1
-                        if (abs(chop(isample)) > 1.d0) exit
-                    end do
-                  this%first = isample + 1
-                end if
-            else
-                this%first = first
-            end if
-            
-            return
-
+        else 
+           ! XXX we shouldn't need to read that if first is not 0
+            call ft_read_column(trim(this%filename)//'[Status]', 'CHOPFPUANGLE', chop, status)
         end if
-  
-        ! read status column 'LBL', which discriminates valid samples
-        call ft_read_column(trim(this%filename)//'[Status]', 'LBL', lbl, status)
         if (status /= 0) return
 
-        nsamples = size(lbl)
+        nsamples = size(chop)
 
-        ! make sure that the slice is inside the observation range
-        if (first < 0 .or. last > nsamples) then
+        if (nsamples == 0) then
             status = 1
-            write (ERROR_UNIT,'(a)') "ERROR: Slice '[" //                      &
-                 strsection(first, last) // "]' is not inside observation range&
-                 & '[" // strsection(1_8, nsamples) // "]'."
+            write (ERROR_UNIT) 'ERROR: Status extension is empty.'
             return
         end if
-        
-        ! if first or last are specified, use them
-        if (last /= 0) then
-            this%last = last
+
+        if (last > nsamples) then
+           status = 1
+           write (ERROR_UNIT,'(a,2(i0,a))') "ERROR: The last sample '", last, "' exceeds the size of the observation '",       &
+                nsamples, "'."
+           return
+        end if
+
+        ! set last valid sample
+        if (last == 0) then
+           this%last = nsamples
         else
-            this%last = nsamples
+           this%last = last
         end if
-        if (first /= 0) then
+
+        ! set first valid sample
+        if (first == 0) then
+            if (abs(chop(this%last)) > 0.01d0) then
+                write (OUTPUT_UNIT,'(a)') 'Warning: last sample is invalid. Automatic search for valid slice is disabled.'
+                this%first = 1
+            else
+                do isample = this%last-1, 1, -1
+                    if (abs(chop(isample)) > 1.d0) exit
+                end do
+                this%first = isample + 1
+                if (this%first + 10 > this%last) then
+                    write (OUTPUT_UNIT,'(a)') 'Warning: It is not possible to discard the first 10 scan samples. The observation is&
+                          &is too short or the specified last sample is not large enough.'
+                else
+                    this%first = this%first + 10
+                end if
+            end if
+        else
             this%first = first
-            return
-        endif
-
-        ! first = 0, let's determine first valid sample
-        ! if we only have one valid sample, keep it
-        if (nsamples == 1) then
-            this%first = this%last
-            return
         end if
-
-        ! if last is already invalid, keep everything
-        if (lbl(nsamples) /= 0) then
-            write (OUTPUT_UNIT,'(a)') 'Info: last sample is invalid. Automatic &
-                &search for valid slice is disabled.'
-            this%first = 1
-            return
-        end if
-
-        ! find last valid sample and exclude it
-        do isample = nsamples-1, 1, -1
-            if (lbl(isample) /= 0) exit
-        end do
-        this%first = isample + 1
 
     end subroutine set_valid_slice
 
