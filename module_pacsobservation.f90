@@ -320,8 +320,9 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    ! if the first sample to consider is not specified, we search from the end for the first sample that has abs(chopfpuangle)>0.01
-    ! we then discard the first 10, that might be affected by relaxation
+    ! if the first sample to consider is not specified, we search starting from the end for the first sample that satisfies
+    ! abs(chopfpuangle) > 0.01.
+    ! we then discard the first 10, that might be affected by relaxation.
     subroutine set_valid_slice(this, first, last, status)
 
         type(pacsobsinfo), intent(inout) :: this
@@ -373,15 +374,17 @@ contains
                 this%first = 1
             else
                 do isample = this%last-1, 1, -1
-                    if (abs(chop(isample)) > 1.d0) exit
+                    if (abs(chop(isample)) > 1.d0) then
+                        if (this%first + 10 > this%last) then
+                            write (OUTPUT_UNIT,'(a)') 'Warning: It is not possible to discard the first 10 scan samples. The observ&
+                                  &ation is too short or the specified last sample is not large enough.'                            
+                        else
+                            this%first = this%first + 9
+                        end if
+                        exit
+                    end if
                 end do
                 this%first = isample + 1
-                if (this%first + 10 > this%last) then
-                    write (OUTPUT_UNIT,'(a)') 'Warning: It is not possible to discard the first 10 scan samples. The observation is&
-                          &is too short or the specified last sample is not large enough.'
-                else
-                    this%first = this%first + 10
-                end if
             end if
         else
             this%first = first
