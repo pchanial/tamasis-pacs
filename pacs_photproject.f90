@@ -26,10 +26,9 @@ program pacs_photproject
     integer                            :: npixels_per_sample
     logical                            :: do_flatfield, do_meansubtraction
     character(len=256)                 :: deglitching_method
-    integer*8                          :: nsamples
+    integer*8                          :: nsamples, nbads
     integer                            :: nobs, iobs, nx, ny, dest
-    integer                            :: status, count, count1
-    integer                            :: count2, count_rate, count_max
+    integer                            :: status, count1, count2, count_rate, count_max
     real*8                             :: deglitching_nsigma
 
     ! command parsing
@@ -88,11 +87,11 @@ program pacs_photproject
     if (status /= 0) go to 999
 
     ! allocate memory for the maps
-    call ft_read_parameter(header, 'naxis1', nx, count, status=status)
-    if (status /= 0 .or. count == 0) go to 999
+    call ft_read_parameter(header, 'naxis1', nx, count2, status=status)
+    if (status /= 0 .or. count2 == 0) go to 999
 
-    call ft_read_parameter(header, 'naxis2', ny, count, status=status)
-    if (status /= 0 .or. count == 0) go to 999
+    call ft_read_parameter(header, 'naxis2', ny, count2, status=status)
+    if (status /= 0 .or. count2 == 0) go to 999
 
     allocate(map1d(0:nx*ny-1))
 
@@ -124,9 +123,20 @@ program pacs_photproject
         call divide_vectordim2(signal, pacs%flatfield)
     end if
 
+    ! remove mean value in timeline
+    if (do_meansubtraction) then
+        write(*,'(a)') 'Removing mean value... '
+        dest = 1
+        do iobs = 1, nobs
+            call subtract_meandim1(signal(dest:dest+obs%info(iobs)%nsamples-1,:))
+            dest = dest + obs%info(iobs)%nsamples
+        end do
+    end if
+
     ! deglitching
     if (deglitching_method /= 'none') then
         write (*,'(a,$)') 'Deglitching (' // trim(deglitching_method) // ')...'
+        nbads = count(mask)
         call system_clock(count1, count_rate, count_max)
         select case (deglitching_method)
 
@@ -140,17 +150,7 @@ program pacs_photproject
 
          end select
          call system_clock(count2, count_rate, count_max)
-         write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
-    end if
-
-    ! remove mean value in timeline
-    if (do_meansubtraction) then
-        write(*,'(a)') 'Removing mean value... '
-        dest = 1
-        do iobs = 1, nobs
-            call subtract_meandim1(signal(dest:dest+obs%info(iobs)%nsamples-1,:))
-            dest = dest + obs%info(iobs)%nsamples
-        end do
+         write (*,'(f6.2,a,i0,a)') real(count2-count1)/count_rate, 's (number of flagged samples: ', count(mask)-nbads, ')'
     end if
 
     ! back project the timeline

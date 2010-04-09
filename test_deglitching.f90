@@ -23,21 +23,18 @@ program test_deglitching
     ny = 1
     ntimes = (nx-3)*nrepeats
 
-    allocate(pmatrix(npixels_per_sample, ntimes, ndetectors))
-    allocate(map(0:nx*ny-1))
-    allocate(xc(ntimes))
-    allocate(yc(ntimes))
-    allocate(signal(ntimes,ndetectors))
-    allocate(mask(ntimes,ndetectors))
+    allocate (map(0:nx*ny-1))
+    allocate (xc(ntimes))
+    allocate (yc(ntimes))
+    allocate (signal(ntimes,ndetectors))
+    allocate (mask(ntimes,ndetectors))
 
     map = linspace(1._p, 2.25_p, nx*ny)
-!print *, 'g'!, shape(xc)!, shape(yc)
     do i=1,nrepeats
         xc((i-1)*(nx-3)+1:i*(nx-3)) = linspace(1._p, real(nx-3, kind=p), nx-3)
     end do
-    !xc = [(linspace(1._p, real(nx-3, kind=p), nx-3), i=1, nrepeats)]
     yc = 1._p
-    mask = .false.
+
 
     !----------------------------------------------------------------------
     ! test 1: detectors do not overlap map pixels (npixels_per_sample = 1)
@@ -63,10 +60,12 @@ program test_deglitching
     ! xxx : glitch
     ! ooo : no glitch
 
+    allocate (pmatrix(1, ntimes, 2))
+    mask = .false.
     call get_pmatrix(pmatrix(:,:,1:1), nx, ny, xc,      yc, 1._p)
     call get_pmatrix(pmatrix(:,:,2:2), nx, ny, xc+1._p, yc, 1._p)
 
-    ! read map
+    ! read timeline from map
     call pmatrix_direct(pmatrix(:,:,1:2), map, signal(:,1:2))
     ! add noise
     signal(:,1) = signal(:,1) + [([(0.001_p, j=1,nx-3)]*(i-1), i=1, nrepeats)]
@@ -77,6 +76,8 @@ program test_deglitching
 
     call deglitch_l2b(pmatrix(:,:,1:2), nx, ny, signal(:,1:2), mask(:,1:2), 5._p, .true.)
     if (count(mask) /= 6 .or. any(.not. mask([1,4,17],1)) .or. any(.not. mask([3,8,9],2))) stop 'FAILED: deglitch_l2b 1'
+
+    deallocate (pmatrix)
 
 
     !-------------------------------------
@@ -103,6 +104,7 @@ program test_deglitching
     ! oox : masked by contamination
     ! ooo : no glitch
 
+    allocate (pmatrix(npixels_per_sample, ntimes, ndetectors))
     mask = .false.
     call get_pmatrix(pmatrix(:,:,1:1), nx, ny, xc+0.5_p, yc, 1._p)
     call get_pmatrix(pmatrix(:,:,2:2), nx, ny, xc+1.5_p, yc, 1._p)
@@ -119,6 +121,7 @@ program test_deglitching
     call deglitch_l2b(pmatrix(:,:,1:2), nx, ny, signal(:,1:2), mask(:,1:2), 5._p, .true.)
     if (count(mask) /= 14 .or. any(.not. mask([1,3,4,8,9,16,17],1)) .or. &
         any(.not. mask([1,3,4,8,9,16,17],2))) stop 'FAILED: deglitch_l2b 2'
+
 
     !-------------------------------------
     ! test 3: 3 detectors overlap map pixels
@@ -200,7 +203,7 @@ contains
         real(kind=p), intent(in)             :: detectorsize
         real(kind=p) :: h, xy(2,4)
         integer      :: roi(2,2,1)
-        integer      :: ntimes, npixels_per_sample, itime, nroi
+        integer      :: ntimes, npixels_per_sample, itime
         logical      :: out
 
         npixels_per_sample = 0
@@ -219,8 +222,7 @@ contains
             xy(2,4) = yc(itime)+h
 
             roi = xy2roi(xy,4)
-            call roi2pmatrix(roi, 4, xy, nx, ny, itime, nroi, out, pmatrix)
-            npixels_per_sample = max(npixels_per_sample, nroi)
+            call roi2pmatrix(roi, 4, xy, nx, ny, itime, npixels_per_sample, out, pmatrix)
         end do
 
         if (npixels_per_sample > size(pmatrix,1)) then

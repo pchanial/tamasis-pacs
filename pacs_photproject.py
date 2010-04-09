@@ -29,8 +29,8 @@ parser.add_option('-n', '--npixels-per-sample', help='Maximum number of sky pix'
                   'els intercepted by a PACS detector [default: %default]', 
                   default=6)
 parser.add_option('--no-flatfield', help='do not divide by calibration flat-fie'
-                  'ld [default: False]', dest='do_flatfield', action='store_fal'
-                  'se', default=True)
+                  'ld [default: False]', dest='do_flatfielding', action='store_'
+                  'false', default=True)
 parser.add_option('-f', '--filtering', help='method for timeline filtering: mea'
                   'n or none [default: %default]', metavar='METHOD', default='m'
                   'ean')
@@ -75,7 +75,11 @@ ny = pacs.header['naxis2']
 projection = PacsProjectionSharpEdges(pacs, finer_sampling=False)
 
 # Read the timeline
-tod = pacs.get_tod()
+tod = pacs.get_tod(do_flatfielding=options.do_flatfielding, do_subtraction_mean=False)
+
+if options.filtering == 'mean':
+    print 'Removing mean value...'
+    tod -= tod.mean(axis=0)
 
 # Deglitch
 if options.deglitching != 'none':
@@ -89,6 +93,7 @@ if options.deglitching != 'none':
     print 'Number of glitches detected:', numpy.sum(tod.mask) - nbads
 
 # Backproject the timeline and divide it by the weight
+print 'Computing the map...'
 mymap = Map.zeros((nx, ny), order='f', header=pacs.header)
 tmf.backprojection_weighted(projection.pmatrix, tod, tod.mask.astype('int8'), 
                             mymap, pacs.npixels_per_sample)
