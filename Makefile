@@ -11,17 +11,27 @@ ifeq "$(origin FC)" "default"
 endif
 
 ifeq "$(FC)" "gfortran"
-    FFLAGS_DEBUG = -g -fbacktrace -Warray-temporaries -O3 -fcheck=all -fopenmp -Wall -fPIC -cpp -DGFORTRAN
-    FFLAGS_RELEASE = -fbacktrace -O3 -fopenmp -Wall -fPIC -cpp -DGFORTRAN
+    FFLAGS_DEBUG = -g -fbacktrace -Warray-temporaries -O3 -fcheck=all -ffree-form -fopenmp -Wall -fPIC -cpp -DGFORTRAN
+    FFLAGS_RELEASE = -fbacktrace -O3 -ffree-form -fopenmp -Wall -fPIC -cpp -DGFORTRAN
     LDFLAGS  = -lgomp $(shell pkg-config --libs cfitsio) $(shell pkg-config --libs wcslib)
     FCOMPILER=gnu95
 else ifeq ($(FC),ifort)
-    FFLAGS_DEBUG = -fpp -O2 -static -fPIC -openmp -traceback -DIFORT
-    FFLAGS_RELEASE = -fpp -fast -openmp -ftz -ip  -ipo -DIFORT
+    FFLAGS_DEBUG = -fpp -O2 -static -fPIC -free -openmp -ftz -traceback -DIFORT
+    FFLAGS_RELEASE = -fpp -fast -fPIC -free -openmp -ftz -ip  -ipo -DIFORT
     LDFLAGS  = -liomp5 $(shell pkg-config --libs cfitsio) $(shell pkg-config --libs wcslib)
     FCOMPILER = intelem
 else
     $(error Unsupported compiler '$(FC)'.)
+endif
+
+ifeq ($(PROF_GEN),1)
+    FFLAGS_DEBUG += -prof_gen -prof_dir/home/pchanial/profiles
+    DEBUG = 1
+endif
+
+ifeq ($(PROF_USE),1)
+    FFLAGS_RELEASE += -prof_use -prof_dir/home/pchanial/profiles
+    DEBUG = 0
 endif
 
 ifeq ($(DEBUG),1)
@@ -40,9 +50,9 @@ endif
 
 INCLUDES = wcslib-4.4.4-Fortran90
 
-MODULES = $(wildcard module_*.f90)
-SOURCES = $(wildcard test_*.f90) pacs_photproject.f90
-EXECS = $(SOURCES:.f90=)
+MODULES = $(wildcard module_*.f)
+SOURCES = $(wildcard test_*.f) pacs_photproject.f
+EXECS = $(SOURCES:.f=)
 
 # apply a function to each element of a list
 map = $(foreach a,$(2),$(call $(1),$(a)))
@@ -104,17 +114,17 @@ all : $(EXECS) tamasisfortran.so
 	    $(MAKE) $< ;\
 	fi
 
-%.o : %.f90
+%.o : %.f
 	$(FC) $(FFLAGS) -I$(INCLUDES) -c -o $@ $<
 
 %: %.o
 	$(FC) -o $@ $^ $(LDFLAGS)
 
 .SECONDEXPANSION:
-$(MODULES:.f90=.o) $(SOURCES:.f90=.o):%.o: $$(addsuffix .mod,$$($$*))
+$(MODULES:.f=.o) $(SOURCES:.f=.o):%.o: $$(addsuffix .mod,$$($$*))
 $(EXECS):%:$$(sort $$(call finddeps,$$*))
 
-tamasisfortran.so: tamasisfortran.f90 $(MODULES:.f90=.o)
+tamasisfortran.so: tamasisfortran.f90 $(MODULES:.f=.o)
 	unset LDFLAGS ; \
 	f2py --fcompiler=${FCOMPILER} --f90exec=$(FC) --f90flags="$(FFLAGS)" -DF2PY_REPORT_ON_ARRAY_COPY=1 -c $^ -m tamasisfortran $(LDFLAGS)
 
