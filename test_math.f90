@@ -1,6 +1,6 @@
 program test_math
 
-    use module_math,      only : NaN, linspace, logspace, median, moment, nint_down, nint_up, neq_real
+    use module_math,      only : NaN, linspace, logspace, median, moment, nint_down, nint_up, neq_real, sigma_clipping
     use module_precision, only : p
     implicit none
 
@@ -10,12 +10,20 @@ program test_math
                                    0.365442306311204_p,0.319514776903196_p]
     real(kind=p) :: mean, variance, skewness, kurtosis, stddev, meandev
     real(kind=p), allocatable :: x(:)
+    logical, allocatable      :: mask(:)
     integer                   :: i
 
     call moment(sample, mean, variance, skewness, kurtosis, stddev=stddev, meandev=meandev)
 
     if (any(neq_real([mean,variance,skewness,kurtosis,stddev,meandev], mresults, 14))) then
         stop 'FAILED: moment 1'
+    end if
+
+    call moment([-100._p, sample(1:2), +200._p,sample(3:5), -20._p], mean, variance, skewness, kurtosis, stddev=stddev,            &
+         meandev=meandev, mask=[.true., .false., .false., .true., .false., .false., .false., .true.])
+
+    if (any(neq_real([mean,variance,skewness,kurtosis,stddev,meandev], mresults, 14))) then
+        stop 'FAILED: moment 1 with mask'
     end if
 
     !XXX no [] constructor?
@@ -54,10 +62,21 @@ program test_math
     if (any(nint_up  (-x) /=-[0,0,0,1,1,1,1,2])) stop 'FAILED: nint_up 2'
     deallocate(x)
 
-    allocate(x(size(mresults)+1))
+    allocate (x(size(mresults)+1))
     x = [mresults, -999._p]
     if (median(x) /= mresults(2)) stop 'FAILED: median'
-    deallocate(x)
+    deallocate (x)
+
+    allocate(x(100))
+    allocate(mask(size(x)))
+    x = linspace(1._p,1.01_p,size(x))
+    x(10) = 2._p
+    x(20) = 100._p
+    call sigma_clipping(x, mask, 5._p, 1)
+    if (count(mask) /= 1) stop 'FAILED: sigma_clipping 1'
+    call sigma_clipping(x, mask, 5._p)
+    if (count(mask) /= 2) stop 'FAILED: sigma_clipping 2' 
+    deallocate (x, mask)
 
     stop 'OK.'
 

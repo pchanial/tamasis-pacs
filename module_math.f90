@@ -19,6 +19,7 @@ module module_math
     public :: moment
     public :: nint_down
     public :: nint_up
+    public :: sigma_clipping
     public :: stddev
     public :: sum_kahan
     public :: swap
@@ -42,21 +43,27 @@ module module_math
 contains
 
 
-    subroutine moment(input, mean, variance, skewness, kurtosis, stddev, meandev)
+    subroutine moment(input, mean, variance, skewness, kurtosis, stddev, meandev, mask)
+
         real(kind=p), intent(in)            :: input(:)
         real(kind=p), intent(out), optional :: mean, variance, skewness
         real(kind=p), intent(out), optional :: kurtosis, stddev, meandev
+        logical, intent(in), optional       :: mask(:)
+
         integer                   :: nsamples
         real(kind=p)              :: m, var, sdev
         real(kind=p), allocatable :: residuals(:)
 
         nsamples = size(input)
+        if (present(mask)) then
+            nsamples = nsamples - count(mask)
+        end if
 
         ! compute the mean
         if (nsamples == 0) then
             m = NaN
         else
-            m = sum_kahan(input) / nsamples
+            m = sum_kahan(input, mask) / nsamples
         end if
         if (present(mean)) mean = m
 
@@ -64,17 +71,17 @@ contains
             .not. present(variance) .and. .not. present(skewness) .and.&
             .not. present(kurtosis)) return
 
-        allocate(residuals(nsamples))
+        allocate(residuals(size(input)))
         residuals = input - m
 
         ! compute mean deviation
-        if (present(meandev)) meandev = sum_kahan(abs(residuals)) / nsamples
+        if (present(meandev)) meandev = sum_kahan(abs(residuals), mask) / nsamples
 
         ! compute variance
         if (nsamples <= 1) then
             var = NaN
         else
-            var = sum_kahan(residuals**2) / (nsamples-1)
+            var = sum_kahan(residuals**2, mask) / (nsamples-1)
         end if
         if (present(variance)) variance = var
         
@@ -87,7 +94,7 @@ contains
             if (sdev == 0) then
                 skewness = NaN
             else
-                skewness = sum_kahan(residuals**3) / (nsamples * sdev**3)
+                skewness = sum_kahan(residuals**3, mask) / (nsamples * sdev**3)
             end if
         end if
 
@@ -96,7 +103,7 @@ contains
             if (sdev == 0) then
                 kurtosis = NaN
             else
-                kurtosis = sum_kahan(residuals**4) / (nsamples * sdev**4)-3.0_p
+                kurtosis = sum_kahan(residuals**4, mask) / (nsamples * sdev**4)-3.0_p
             end if
         end if
 
@@ -108,11 +115,13 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    function mean(input)
-        real(kind=p)             :: mean
-        real(kind=p), intent(in) :: input(:)
+    function mean(input, mask)
+
+        real(kind=p)                 :: mean
+        real(kind=p), intent(in)     :: input(:)
+        logical, intent(in),optional :: mask(:)
         
-        call moment(input, mean)
+        call moment(input, mean, mask=mask)
 
     end function mean
 
@@ -120,11 +129,13 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    function stddev(input)
-        real(kind=p)             :: stddev
-        real(kind=p), intent(in) :: input(:)
+    function stddev(input, mask)
+
+        real(kind=p)                  :: stddev
+        real(kind=p), intent(in)      :: input(:)
+        logical, intent(in), optional :: mask(:)
         
-        call moment(input, stddev=stddev)
+        call moment(input, stddev=stddev, mask=mask)
 
     end function stddev
 
@@ -132,24 +143,43 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    function sum_kahan_1d(input) result(sum)
-        real(kind=p), intent(in) :: input(:)
-        real(kind=p)             :: sum, c, t, y
-        integer                  :: i
+    function sum_kahan_1d(input, mask) result(sum)
+
+        real(kind=p), intent(in)      :: input(:)
+        logical, intent(in), optional :: mask(size(input))
+        real(kind=p)                  :: sum, c, t, y
+
+        integer                       :: i
 
         if (size(input) == 0) then
             sum = NaN
             return
         end if
 
-        sum = input(1)
+        if (present(mask)) then
+            do i = 1, size(input)
+                if (.not. mask(i)) exit
+            end do
+            if (i > size(input)) then
+                sum = NaN
+                return
+            end if
+        else
+            i = 1
+        end if
+        
+        sum = input(i)
         c = 0.0_p
-        do i = 2, size(input)
+        do i = i+1, size(input)
+            if (present(mask)) then
+                if (mask(i)) cycle
+            end if
             y = input(i) - c
             t = sum + y
             c = (t - sum) - y
             sum = t
         end do
+
     end function sum_kahan_1d
 
 
@@ -157,8 +187,10 @@ contains
 
 
     function sum_kahan_2d(input) result(sum)
+
         real(kind=p), intent(in) :: input(:,:)
         real(kind=p)             :: sum, c, t, y
+
         integer                  :: i
 
         if (size(input) == 0) then
@@ -181,8 +213,10 @@ contains
 
 
     function sum_kahan_3d(input) result(sum)
+
         real(kind=p), intent(in) :: input(:,:,:)
         real(kind=p)             :: sum, c, t, y
+
         integer                  :: i
 
         if (size(input) == 0) then
@@ -205,9 +239,11 @@ contains
 
 
     function linspace(min, max, n)
+
         real(kind=p)              :: linspace(n)
         real(kind=p), intent(in)  :: min, max
         integer, intent(in)       :: n
+
         integer                   :: i
 
         linspace = min + (max - min) / (n-1) * [(i, i=0, n-1)]
@@ -233,6 +269,7 @@ contains
 
 
     elemental function nint_down(x)
+
         integer                  :: nint_down
         real(kind=p), intent(in) :: x
         
@@ -248,6 +285,7 @@ contains
 
 
     elemental function nint_up(x)
+
         integer                  :: nint_up
         real(kind=p), intent(in) :: x
         
@@ -280,8 +318,10 @@ contains
     ! input array may be reordered
     ! This code by Nicolas Devillard - 1998. Public domain.
     function median(arr) 
+
         real(kind=p)                :: median
         real(kind=p), intent(inout) :: arr(0:)
+
         integer                     :: low, high, imedian, middle, ll, hh
 
         low = 0
@@ -345,9 +385,11 @@ contains
 
     ! returns the median absolute deviation
     function mad(x, m)
+
         real(kind=p)                        :: mad
         real(kind=p), intent(in)            :: x(:)
         real(kind=p), intent(out), optional :: m
+
         real(kind=p)                        :: x_(size(x)), med
  
         x_ = x
@@ -363,10 +405,48 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
+    ! sigma clip an input vector. In the output mask, .true. means rejected
+    subroutine sigma_clipping(input, mask, nsigma, nitermax)
+
+        real(p), intent(in)           :: input(:)
+        logical, intent(out)          :: mask(size(input))
+        real(p), intent(in)           :: nsigma
+        integer, intent(in), optional :: nitermax
+
+        integer :: iter, nitermax_
+        real(p) :: mean, stddev
+        logical :: newmask(size(input))
+
+        if (present(nitermax)) then
+            nitermax_ = nitermax
+        else
+            nitermax_ = 0
+        end if
+
+        mask = .false.
+        iter = 1
+        do
+
+            call moment(input, mean, stddev=stddev, mask=mask)
+            newmask = mask .or. abs(input - mean) > nsigma * stddev
+            if (count(newmask) == count(mask)) exit
+            mask = newmask
+            if (iter == nitermax_) exit
+
+        end do
+
+    end subroutine sigma_clipping
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
     elemental function eq_real(a, b, n)
+
         logical                  :: eq_real
         real(kind=p), intent(in) :: a, b
         integer, intent(in)      :: n
+
         real(kind=p)             :: epsilon
 
         ! check for NaN values
@@ -389,8 +469,10 @@ contains
 
 
     elemental function neq_real(a, b, n)
+
         logical                  :: neq_real
         real(kind=p), intent(in) :: a, b
+
         integer, intent(in)      :: n
         
         neq_real = .not. eq_real(a, b, n)
