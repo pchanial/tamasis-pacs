@@ -70,7 +70,6 @@ program test_madcap
     end do
 
     if (any(neq_real(map, map_ref, 15))) stop 'FAILED: map_ref'
-    if (status /= 0) stop 'FAILED: ft_write spiremap'
 
     deallocate (tod, pmatrix, map_ref, coverage, map, map1d)
 
