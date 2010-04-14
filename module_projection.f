@@ -24,9 +24,9 @@ contains
 
     pure function intersection_polygon_unity_square(xy, nvertices) result(output)
 
+        real(kind=p)             :: output
         real(kind=p), intent(in) :: xy(2,nvertices)
         integer, intent(in)      :: nvertices
-        real(kind=p)             :: output
 
         integer                  :: i, j
 
@@ -43,13 +43,12 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    pure function intersection_segment_unity_square(x1,  y1, &              ! first point coordinates
-                                                              x2,  y2) result(output) ! second point coordinates
+    pure function intersection_segment_unity_square(x1,  y1, x2,  y2) result(output)
 
-        real*8, intent(in) :: x1, y1, x2, y2
         real*8             :: output
+        real*8, intent(in) :: x1, y1, x2, y2 ! first and second point coordinates
 
-	    ! we will use the following variables :
+        ! we will use the following variables :
 
         real*8 :: pente               ! The slope of the straight line going through p1, p2
         real*8 :: ordonnee            ! The point where the straight line crosses y-axis
@@ -77,17 +76,16 @@ contains
             xmax = x1
         end if
 
-	    ! And determine the bounds ignoring y for now
-
-	    ! test is p1 and p2 are outside the square along x-axis
+        ! And determine the bounds ignoring y for now
+        ! test is p1 and p2 are outside the square along x-axis
         if (xmin > 1.d0 .or. xmax < 0.d0) then
             output = 0.0d0
             return    ! outside, the area is 0
         end if
 
-	    ! We compute xmin, xmax, clipped between 0 and 1 in x
+        ! We compute xmin, xmax, clipped between 0 and 1 in x
         ! then we compute pente (slope) and ordonnee and use it to get ymin
-	    ! and ymax
+        ! and ymax
         xmin = max(xmin, 0.0d0)
         xmax = min(xmax, 1.0d0)
 
@@ -98,14 +96,14 @@ contains
         ymin = pente * xmin + ordonnee
         ymax = pente * xmax + ordonnee
 
-	    ! Trap segment entirely below axis
+        ! Trap segment entirely below axis
         if (ymin < 0.0d0 .and. ymax < 0.0d0) then
             output = 0.0d0
             return  ! if segment below axis, intercepted surface is 0
         end if
 
-	    ! Adjust bounds if segment crosses axis x-axis
-	    !(to exclude anything below axis)
+        ! Adjust bounds if segment crosses axis x-axis
+        !(to exclude anything below axis)
         if (ymin < 0.0d0) then
             ymin = 0.0d0
             xmin = - ordonnee / pente
@@ -115,8 +113,8 @@ contains
             xmax = - ordonnee / pente
         end if
 
-	    ! There are four possibilities: both y below 1, both y above 1
-	    ! and one of each.
+        ! There are four possibilities: both y below 1, both y above 1
+        ! and one of each.
 
         if (ymin >= 1.d0 .and. ymax >= 1.d0) then
 
@@ -184,10 +182,12 @@ contains
     ! surface = det( (b-a, c-a) )
     ! positive if a, b, c are counter-clockwise, negative otherwise
     pure function surface_parallelogram(a, b, c)
-        real*8, intent(in) :: a(2), b(2), c(2)
+
         real*8             :: surface_parallelogram
-        surface_parallelogram = (b(1) - a(1)) * (c(2) - a(2)) - &
-                                (c(1) - a(1)) * (b(2) - a(2))
+        real*8, intent(in) :: a(2), b(2), c(2)
+
+        surface_parallelogram = (b(1) - a(1)) * (c(2) - a(2)) - (c(1) - a(1)) * (b(2) - a(2))
+
     end function surface_parallelogram
 
 
@@ -250,7 +250,7 @@ contains
             compare_point = -1
             return
         end if
-        length = dot_product(array_point(:,point2), array_point(:,point2)) - &
+        length = dot_product(array_point(:,point2), array_point(:,point2)) -                                                       &
                  dot_product(array_point(:,point1), array_point(:,point1))
         if (length > 0) then
             compare_point = 1
@@ -334,8 +334,8 @@ contains
                 if (a < b) then
                     point_in_polygon = - point_in_polygon;
                 end if
-            else if (polygon(2,i) == polygon(2,j) .and. point(2) == polygon(2,i) .and. &
-                     (polygon(1,i) > point(1) .neqv. polygon(1,j) > point(1))) then
+            else if (polygon(2,i) == polygon(2,j) .and. point(2) == polygon(2,i) .and. (polygon(1,i) > point(1) .neqv. polygon(1,j)&
+                     > point(1))) then
                 point_in_polygon = 0
                 return
             endif
