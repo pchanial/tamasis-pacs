@@ -905,8 +905,7 @@ subroutine unpack_direct(input, nvalids, mask, nx, ny, output)
     integer, intent(in)   :: nx, ny
     real*8, intent(out)   :: output(nx,ny)
 
-    output = NaN
-    output = unpack(input, mask, output)
+    output = unpack(input, mask, NaN)
 
 end subroutine unpack_direct
 
