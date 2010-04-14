@@ -16,8 +16,8 @@ ifeq "$(FC)" "gfortran"
     LDFLAGS  = -lgomp $(shell pkg-config --libs cfitsio) $(shell pkg-config --libs wcslib)
     FCOMPILER=gnu95
 else ifeq ($(FC),ifort)
-    FFLAGS_DEBUG = -fpp -O2 -static -fPIC -free -openmp -ftz -traceback -DIFORT
-    FFLAGS_RELEASE = -fpp -fast -fPIC -free -openmp -ftz -ip  -ipo -DIFORT
+    FFLAGS_DEBUG = -debug -fpp -O2 -static -fPIC -free -openmp -ftz -traceback -DIFORT
+    FFLAGS_RELEASE = -fpp -fast -fPIC -free -openmp -ftz -DIFORT
     LDFLAGS  = -liomp5 $(shell pkg-config --libs cfitsio) $(shell pkg-config --libs wcslib)
     FCOMPILER = intelem
 else
