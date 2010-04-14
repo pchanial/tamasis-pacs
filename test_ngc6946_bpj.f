@@ -1,7 +1,7 @@
 program test_ngc6946_bpj
 
     use iso_fortran_env,        only : ERROR_UNIT, OUTPUT_UNIT
-    use module_fitstools,       only : ft_read_parameter, ft_write
+    use module_fitstools,       only : ft_read_parameter
     use module_math,            only : pInf, neq_real, sum_kahan
     use module_pacsinstrument,  only : ndims, nvertices, pacsinstrument
     use module_pacsobservation, only : pacsobservation
@@ -129,7 +129,6 @@ program test_ngc6946_bpj
     write(*,*) 'Sum pmatrix weight: ', sum(pmatrix%weight), 'max:', maxval(pmatrix%weight)
     write(*,*) 'Sum pmatrix pixel: ', sum(int(pmatrix%pixel,kind=8)), 'max:', maxval(pmatrix%pixel)
     write(*,*) 'Sum signal: ', sum_kahan(signal), 'max:', maxval(signal)
-    !XXX
 
     ! back project the timeline
     write(*,'(a)', advance='no') 'Computing the back projection... '
@@ -138,12 +137,6 @@ program test_ngc6946_bpj
     call pmatrix_transpose(pmatrix, signal, map1d)
     call system_clock(count2, count_rate, count_max)
     write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
-
-    ! write the map as fits file
-    outfile = '/tmp/ngc6946_bpj_' // strinteger(omp_get_max_threads()) //'.fits'
-    write(*,'(a)') 'Writing FITS file... ' // trim(outfile)
-    call ft_write(trim(outfile), reshape(map1d, [nx,ny]), header, status)
-    if (status /= 0) stop 'FAILED: ft_write.'
 
     ! test the back projected map
     write (OUTPUT_UNIT,*) 'Sum in map is ', sum_kahan(map1d), ' ...instead of ',&
