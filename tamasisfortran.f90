@@ -555,7 +555,7 @@ end subroutine pacs_pointing_matrix_filename
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine projection_direct(pmatrix, map1d, signal, npixels_per_sample, nsamples, ndetectors, npixels)
+subroutine pointing_matrix_direct(pmatrix, map1d, signal, npixels_per_sample, nsamples, ndetectors, npixels)
 
     use module_pointingmatrix
     implicit none
@@ -576,13 +576,13 @@ subroutine projection_direct(pmatrix, map1d, signal, npixels_per_sample, nsample
 
     call pmatrix_direct(pmatrix, map1d, signal)
 
-end subroutine projection_direct
+end subroutine pointing_matrix_direct
 
 
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine projection_transpose(pmatrix, signal, map1d, npixels_per_sample, nsamples, ndetectors, npixels)
+subroutine pointing_matrix_transpose(pmatrix, signal, map1d, npixels_per_sample, nsamples, ndetectors, npixels)
 
     use module_pointingmatrix
     implicit none
@@ -603,7 +603,7 @@ subroutine projection_transpose(pmatrix, signal, map1d, npixels_per_sample, nsam
 
     call pmatrix_transpose(pmatrix, signal, map1d)
 
-end subroutine projection_transpose
+end subroutine pointing_matrix_transpose
 
 
 !-----------------------------------------------------------------------------------------------------------------------------------

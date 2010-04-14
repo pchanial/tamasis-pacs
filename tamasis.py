@@ -206,13 +206,13 @@ class Projection(AcquisitionModel):
         self._validate_output_direct(Tod, self._validate_input_direct(Map, map2d))
         map2d.header = self.header
         self._output_transpose = map2d
-        tmf.projection_direct(self.pmatrix, map2d, self._output_direct, self.npixels_per_sample)
+        tmf.pointing_matrix_direct(self.pmatrix, map2d, self._output_direct, self.npixels_per_sample)
         return self._output_direct
 
     def transpose(self, signal):
         self._validate_output_transpose(Map, self._validate_input_transpose(Tod, signal), header=self.header)
         self._output_direct = signal
-        tmf.projection_transpose(self.pmatrix, signal, self._output_transpose,  self.npixels_per_sample)
+        tmf.pointing_matrix_transpose(self.pmatrix, signal, self._output_transpose,  self.npixels_per_sample)
         return self._output_transpose
 
     def __str__(self):
@@ -847,7 +847,9 @@ class Map(FitsMaskedArray):
     def zeros(shape, dtype='float64', order='C', header=None, mask=numpy.ma.nomask):
         return Map(FitsMaskedArray.zeros(shape, dtype, order, header=header, mask=mask))
 
-    def copy(self):
+    def copy(self, order=None):
+        if order is not None and order.lowcase() != 'a' and order.lowcase() != 'any':
+            print 'Warning: Map.copy(order) do not take specified order into account.'
         return Map(self, copy=True)
 
     def imshow(self, num=None, axis=True, title=None):
@@ -905,7 +907,9 @@ class Tod(FitsMaskedArray):
     def zeros(shape, dtype='float64', order='C', header=None, mask=numpy.ma.nomask):
         return Tod(FitsMaskedArray.zeros(shape, dtype, order, header=header, mask=mask))
     
-    def copy(self):
+    def copy(self, order=None):
+        if order is not None and order.lowcase() != 'a' and order.lowcase() != 'any':
+            print 'Warning: Tod.copy(order) do not take specified order into account.'
         return Tod(self, copy=True)
 
     def imshow(self, num=None, axis=True, title=None):
