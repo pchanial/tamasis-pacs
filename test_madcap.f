@@ -49,25 +49,19 @@ program test_madcap
     call ft_read_extension('tests/madmap1/madmapSpirePsw.fits[coverage]', coverage, status)
     if (status /= 0) stop 'FAILED: ft_read_extension coverage'
 
+#ifdef GFORTRAN
     where (coverage < 1e-15_p)
-         coverage = 0
+         coverage = NaN
          map_ref  = NaN
     end where
+#endif
 
     allocate (map(nx, ny))
     allocate (map1d(0:maxval(pmatrix%pixel)))
-    map = NaN
 
     call backprojection_weighted(pmatrix, tod, map=map1d)
     
-    imap = 0
-    do j = 1, ny
-         do i = 1, nx
-              if (coverage(i,j) == 0) cycle
-              map(i,j) = map1d(imap)  
-              imap = imap + 1
-         end do
-    end do
+    map = unpack(map1d, coverage == coverage, NaN)
 
     if (any(neq_real(map, map_ref, 15))) stop 'FAILED: map_ref'
 
