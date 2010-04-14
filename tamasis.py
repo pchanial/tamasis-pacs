@@ -848,7 +848,7 @@ class Map(FitsMaskedArray):
         return Map(FitsMaskedArray.zeros(shape, dtype, order, header=header, mask=mask))
 
     def copy(self, order=None):
-        if order is not None and order.lowcase() != 'a' and order.lowcase() != 'any':
+        if order is not None and order.lower() != 'a' and order.lower() != 'any':
             print 'Warning: Map.copy(order) do not take specified order into account.'
         return Map(self, copy=True)
 
@@ -908,7 +908,7 @@ class Tod(FitsMaskedArray):
         return Tod(FitsMaskedArray.zeros(shape, dtype, order, header=header, mask=mask))
     
     def copy(self, order=None):
-        if order is not None and order.lowcase() != 'a' and order.lowcase() != 'any':
+        if order is not None and order.lower() != 'a' and order.lower() != 'any':
             print 'Warning: Tod.copy(order) do not take specified order into account.'
         return Tod(self, copy=True)
 
