@@ -257,6 +257,8 @@ contains
         integer   :: npixels_per_sample, ndetectors, nslices, idetector, islice
 #ifdef GFORTRAN
         integer*4 :: sarray(13)
+#else
+        integer   :: ipixel
 #endif
 
         ndetectors = size(tod,2)
@@ -306,7 +308,14 @@ contains
 
                     read (11, iostat=status) tod(isample,idetector)
                     if (status /= 0) go to 999
+#ifdef GFORTRAN
                     read (11, iostat=status) pmatrix(:,isample,idetector)
+#else
+                    ! ifort 11.1: endianness conversion fails with derived types
+                    do ipixel = 1, npixels_per_sample
+                        read (11, iostat=status) pmatrix(ipixel,isample,idetector)%weight, pmatrix(ipixel,isample,idetector)%pixel
+                    end do
+#endif
                     if (status /= 0) go to 999
 
                 end do
