@@ -3,6 +3,7 @@
 ! Author: P. Chanial
 
 subroutine pacs_info_channel(filename, nfilenames, channel, status)
+
     use module_pacsobservation, only : pacsobservation
     implicit none
 
@@ -10,6 +11,7 @@ subroutine pacs_info_channel(filename, nfilenames, channel, status)
     !f2py intent(in)   nfilenames
     !f2py intent(out)  channel
     !f2py intent(out)  status
+
     character(len=*), intent(in) :: filename
     integer, intent(in)          :: nfilenames
     character, intent(out)       :: channel
@@ -50,6 +52,7 @@ end subroutine pacs_info_channel
 
 subroutine pacs_info(filename, nfilenames, fine_sampling_factor, keep_bad_detectors, use_bad_detector_mask, bad_detector_mask,     &
                      nrows, ncolumns, ndetectors, output_mask, transparent_mode, compression_factor, nsamples, status)
+
     use module_pacsinstrument, only : pacsinstrument
     use module_pacsobservation, only : pacsobservation
     implicit none
@@ -68,6 +71,7 @@ subroutine pacs_info(filename, nfilenames, fine_sampling_factor, keep_bad_detect
     !f2py intent(out)  compression_factor
     !f2py intent(out)  nsamples
     !f2py intent(out)  status
+
     character(len=*), intent(in) :: filename
     integer, intent(in)          :: nfilenames
     integer, intent(in)          :: fine_sampling_factor
@@ -130,6 +134,7 @@ end subroutine pacs_info
 
 subroutine pacs_map_header(filename, nfilenames, finer_sampling, fine_sampling_factor, keep_bad_detectors, use_bad_detector_mask,  &
                            bad_detector_mask, nrows, ncolumns, resolution, header, status)
+
     use module_pacsinstrument,  only : pacsinstrument
     use module_pacsobservation, only : pacsobservation
     use module_pacspointing,    only : pacspointing
@@ -147,6 +152,7 @@ subroutine pacs_map_header(filename, nfilenames, finer_sampling, fine_sampling_f
     !f2py intent(in)   resolution
     !f2py intent(out)  header
     !f2py intent(out)  status
+
     character(len=*), intent(in) :: filename
     integer, intent(in)          :: nfilenames
     logical, intent(in)          :: finer_sampling
@@ -204,6 +210,7 @@ end subroutine pacs_map_header
 
 subroutine pacs_timeline(filename, nfilenames, nsamples, ndetectors, keep_bad_detectors, bad_detector_mask, nrow, ncol,            &
                          do_flatfielding, do_subtraction_mean, signal, mask, status)
+
     use iso_fortran_env,        only : ERROR_UNIT
     use module_pacsinstrument,  only : pacsinstrument
     use module_pacsobservation, only : pacsobservation
@@ -224,6 +231,7 @@ subroutine pacs_timeline(filename, nfilenames, nsamples, ndetectors, keep_bad_de
     !f2py intent(out)  :: signal
     !f2py intent(out)  :: mask
     !f2py intent(out)  :: status
+
     character(len=*), intent(in) :: filename
     integer, intent(in)          :: nfilenames
     integer, intent(in)          :: nsamples
@@ -290,6 +298,7 @@ end subroutine pacs_timeline
 
 subroutine pacs_pointing_matrix_filename(filename, nfilenames, finer_sampling, fine_sampling_factor, npixels_per_sample, nsamples, &
                                          ndetectors, keep_bad_detectors, bad_detector_mask, nrow, ncol, header, pmatrix, status)
+
     use iso_fortran_env,        only : ERROR_UNIT
     use module_fitstools,       only : ft_read_parameter
     use module_pacsinstrument,  only : pacsinstrument
@@ -313,6 +322,7 @@ subroutine pacs_pointing_matrix_filename(filename, nfilenames, finer_sampling, f
     !f2py intent(in)   :: header
     !f2py integer*8, intent(inout) :: pmatrix(npixels_per_sample*nsamples*ndetectors)
     !f2py intent(out)  :: status
+
     character(len=*), intent(in) :: filename
     integer, intent(in)          :: nfilenames
     logical, intent(in)          :: finer_sampling
@@ -545,7 +555,7 @@ end subroutine pacs_pointing_matrix_filename
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine pacs_projection_sharp_edges_direct(pmatrix, map1d, signal, npixels_per_sample, nsamples, ndetectors, npixels)
+subroutine projection_direct(pmatrix, map1d, signal, npixels_per_sample, nsamples, ndetectors, npixels)
 
     use module_pointingmatrix
     implicit none
@@ -558,6 +568,7 @@ subroutine pacs_projection_sharp_edges_direct(pmatrix, map1d, signal, npixels_pe
     !f2py intent(hide)    :: nsamples = shape(signal,0)
     !f2py intent(hide)    :: ndetectors = shape(signal,1)
     !f2py intent(hide)    :: npixels = size(map1d)
+
     type(pointingelement), intent(inout) :: pmatrix(npixels_per_sample, nsamples, ndetectors)
     real*8, intent(in)    :: map1d(npixels)
     real*8, intent(inout) :: signal(nsamples, ndetectors)
@@ -565,13 +576,13 @@ subroutine pacs_projection_sharp_edges_direct(pmatrix, map1d, signal, npixels_pe
 
     call pmatrix_direct(pmatrix, map1d, signal)
 
-end subroutine pacs_projection_sharp_edges_direct
+end subroutine projection_direct
 
 
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine pacs_projection_sharp_edges_transpose(pmatrix, signal, map1d, npixels_per_sample, nsamples, ndetectors, npixels)
+subroutine projection_transpose(pmatrix, signal, map1d, npixels_per_sample, nsamples, ndetectors, npixels)
 
     use module_pointingmatrix
     implicit none
@@ -584,6 +595,7 @@ subroutine pacs_projection_sharp_edges_transpose(pmatrix, signal, map1d, npixels
     !f2py intent(hide)  :: nsamples = shape(signal,0)
     !f2py intent(hide)  :: ndetectors = shape(signal,1)
     !f2py intent(hide)  :: npixels = size(map1d)
+
     type(pointingelement), intent(inout) :: pmatrix(npixels_per_sample, nsamples, ndetectors)
     real*8, intent(in)    :: signal(nsamples, ndetectors)
     real*8, intent(inout) :: map1d(npixels)
@@ -591,7 +603,7 @@ subroutine pacs_projection_sharp_edges_transpose(pmatrix, signal, map1d, npixels
 
     call pmatrix_transpose(pmatrix, signal, map1d)
 
-end subroutine pacs_projection_sharp_edges_transpose
+end subroutine projection_transpose
 
 
 !-----------------------------------------------------------------------------------------------------------------------------------
@@ -609,6 +621,7 @@ subroutine pacs_multiplexing_direct(signal, multiplexed, fine_sampling_factor, i
     !f2py intent(in)      :: ij
     !f2py intent(hide)    :: nsamples = shape(signal,0)
     !f2py intent(hide)    :: ndetectors = shape(signal,1)
+
     integer, intent(in)   :: nsamples, ndetectors
     real*8, intent(in)    :: signal(nsamples, ndetectors)
     integer, intent(in)   :: fine_sampling_factor, ij(2, ndetectors)
@@ -659,6 +672,7 @@ subroutine compression_average_direct(data, compressed, factor, nsamples, ndetec
     !f2py intent(in)      :: factor
     !f2py intent(hide)    :: nsamples = shape(data,0)/factor
     !f2py intent(hide)    :: ndetectors = shape(data,1)
+
     integer, intent(in)   :: factor, nsamples, ndetectors
     real*8, intent(in)    :: data(nsamples*factor,ndetectors)
     real*8, intent(out)   :: compressed(nsamples,ndetectors)
@@ -682,6 +696,7 @@ subroutine compression_average_transpose(compressed, data, factor, nsamples, nde
     !f2py intent(in)      :: factor
     !f2py intent(hide)    :: nsamples = shape(data,0)/factor
     !f2py intent(hide)    :: ndetectors = shape(data,1)
+
     integer, intent(in)   :: factor, nsamples, ndetectors
     real*8, intent(in)    :: compressed(nsamples,ndetectors)
     real*8, intent(out)   :: data(nsamples*factor,ndetectors)
@@ -724,9 +739,11 @@ end subroutine backprojection_weighted
 
 
 subroutine deglitch_l2b_std(pmatrix, nx, ny, data, mask, nsigma, outmask, npixels_per_sample, nsamples, ndetectors)
+
     use module_pointingmatrix, only : pointingelement
     use module_deglitching, only : deglitch_l2b
     implicit none
+
     !f2py integer*8, intent(in) :: pmatrix(npixels_per_sample*nsamples*ndetectors)
     !f2py intent(in)    :: nx, ny
     !f2py intent(in)    :: data
@@ -736,6 +753,7 @@ subroutine deglitch_l2b_std(pmatrix, nx, ny, data, mask, nsigma, outmask, npixel
     !f2py intent(hide)  :: nsamples = shape(data,0)
     !f2py intent(hide)  :: ndetectors = shape(data,1)
     !f2py intent(out)   :: outmask
+
     type(pointingelement), intent(in) :: pmatrix(npixels_per_sample,nsamples,ndetectors)
     integer, intent(in)               :: nx, ny
     real*8, intent(in)                :: data(nsamples,ndetectors)
@@ -743,6 +761,7 @@ subroutine deglitch_l2b_std(pmatrix, nx, ny, data, mask, nsigma, outmask, npixel
     logical*1, intent(out)            :: outmask(nsamples,ndetectors)
     real*8, intent(in)                :: nsigma
     integer, intent(in)               :: npixels_per_sample, nsamples, ndetectors
+
     integer                           :: count1, count2, count_rate, count_max
 
     write(*,'(a)', advance='no') 'Info: deglitching (std)... '
@@ -759,9 +778,11 @@ end subroutine deglitch_l2b_std
 
 
 subroutine deglitch_l2b_mad(pmatrix, nx, ny, data, mask, nsigma, outmask, npixels_per_sample, nsamples, ndetectors)
+
     use module_pointingmatrix, only : pointingelement
     use module_deglitching, only : deglitch_l2b
     implicit none
+
     !f2py integer*8, intent(in) :: pmatrix(npixels_per_sample*nsamples*ndetectors)
     !f2py intent(in)    :: nx, ny
     !f2py intent(in)    :: data
@@ -771,6 +792,7 @@ subroutine deglitch_l2b_mad(pmatrix, nx, ny, data, mask, nsigma, outmask, npixel
     !f2py intent(hide)  :: nsamples = shape(data,0)
     !f2py intent(hide)  :: ndetectors = shape(data,1)
     !f2py intent(out)   :: outmask
+
     type(pointingelement), intent(in) :: pmatrix(npixels_per_sample,nsamples,ndetectors)
     integer, intent(in)               :: nx, ny
     real*8, intent(in)                :: data(nsamples,ndetectors)
@@ -778,6 +800,7 @@ subroutine deglitch_l2b_mad(pmatrix, nx, ny, data, mask, nsigma, outmask, npixel
     logical*1, intent(out)            :: outmask(nsamples,ndetectors)
     real*8, intent(in)                :: nsigma
     integer, intent(in)               :: npixels_per_sample, nsamples, ndetectors
+
     integer                           :: count1, count2, count_rate, count_max
 
     write(*,'(a)', advance='no') 'Info: deglitching (mad)... '
@@ -789,3 +812,131 @@ subroutine deglitch_l2b_mad(pmatrix, nx, ny, data, mask, nsigma, outmask, npixel
 
 end subroutine deglitch_l2b_mad
 
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine read_madmap1_info(todfile, convert, ndetectors, npixels_per_sample, nsamples, status)
+
+    use module_madcap, only : read_tod_header
+    implicit none
+
+    !f2py threadsafe
+    !f2py intent(in)  :: todfile
+    !f2py intent(in)  :: convert
+    !f2py intent(in)  :: ndetectors
+    !f2py intent(out) :: npixels_per_sample
+    !f2py intent(out) :: nsamples
+    !f2py intent(out) :: status
+
+    character(len=*), intent(in) :: todfile
+    character(len=*), intent(in) :: convert
+    integer, intent(in)          :: ndetectors
+    integer, intent(out)         :: npixels_per_sample
+    integer*8, intent(out)       :: nsamples
+    integer, intent(out)         :: status
+
+    call read_tod_header(todfile, convert, ndetectors, nsamples, npixels_per_sample, status)
+
+end subroutine read_madmap1_info
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine read_madmap1(todfile, invnttfile, convert, npixels_per_sample, nsamples, ndetectors, tod, pmatrix, status)
+
+    use module_filtering,      only : filterset
+    use module_madcap,         only : read_filter, read_tod
+    use module_pointingmatrix, only : pointingelement
+    implicit none
+
+    !f2py threadsafe
+    !f2py intent(in)               :: todfile
+    !f2py intent(in)               :: invnttfile
+    !f2py intent(in)               :: convert
+    !f2py intent(in)               :: npixels_per_sample
+    !f2py intent(hide)             :: nsamples = shape(tod,0)
+    !f2py intent(hide)             :: ndetectors = shape(tod,1)
+    !f2py intent(inout)            :: tod(nsamples,ndetectors)
+    !f2py integer*8, intent(inout) :: pmatrix(npixels_per_sample*nsamples*ndetectors)
+    !f2py intent(out)              :: status
+
+    character(len=*), intent(in)         :: todfile
+    character(len=*), intent(in)         :: invnttfile
+    character(len=*), intent(in)         :: convert
+    integer, intent(in)                  :: npixels_per_sample
+    integer*8, intent(in)                :: nsamples
+    integer, intent(in)                  :: ndetectors
+    real*8, intent(inout)                :: tod(nsamples,ndetectors)
+    type(pointingelement), intent(inout) :: pmatrix(npixels_per_sample,nsamples,ndetectors)
+    integer, intent(out)                 :: status
+
+    type(filterset)                      :: filter
+    
+
+    call read_filter(invnttfile, convert, ndetectors, filter, status)
+    if (status /= 0) return
+
+    call read_tod(todfile, convert, filter%first, filter%last, tod, pmatrix, status)
+
+end subroutine read_madmap1
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine unpack_direct(input, nvalids, mask, nx, ny, output)
+
+    use module_math, only : NaN
+    implicit none
+
+    !f2py threadsafe
+    !f2py intent(in)    :: input
+    !f2py intent(hide)  :: nvalids = size(input)
+    !f2py intent(in)    :: mask
+    !f2py intent(hide)  :: nx=shape(mask,0)
+    !f2py intent(hide)  :: ny=shape(mask,1)
+    !f2py intent(inout) :: output(nx,ny)
+
+    real*8, intent(in)    :: input(nvalids)
+    integer, intent(in)   :: nvalids
+    logical*1, intent(in) :: mask(nx,ny)
+    integer, intent(in)   :: nx, ny
+    real*8, intent(out)   :: output(nx,ny)
+
+    output = NaN
+    output = unpack(input, mask, output)
+
+end subroutine unpack_direct
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine unpack_transpose(input, mask, nx, ny, nvalids, output)
+
+    use iso_fortran_env, only : ERROR_UNIT
+    implicit none
+
+    !f2py threadsafe
+    !f2py intent(in)    :: input
+    !f2py intent(in)    :: mask(nx,ny)
+    !f2py intent(hide)  :: nx=shape(input,0)
+    !f2py intent(hide)  :: ny=shape(input,1)
+    !f2py intent(hide)  :: nvalids = size(output)
+    !f2py intent(inout) :: output(nvalids)
+
+    real*8, intent(in)    :: input(nx,ny)
+    logical*1, intent(in) :: mask(nx,ny)
+    integer, intent(in)   :: nx, ny
+    integer, intent(in)   :: nvalids
+    real*8, intent(out)   :: output(nvalids)
+
+    if (count(mask) /= nvalids) then
+        write (ERROR_UNIT,'(a)') 'UNPACK_TRANSPOSE: The mask is not compatible with the output size.'
+        return
+    endif
+    output = pack(input, mask)
+
+end subroutine unpack_transpose

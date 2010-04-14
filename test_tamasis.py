@@ -1,11 +1,11 @@
-from tamasis import Identity, CompressionAverage, PacsProjectionSharpEdges, PacsMultiplexing, Masking, PacsObservation, PacsSimulation, Map, Tod, hcss_photproject, LeastSquareMatvec, RLSMatvec,  PcgCallback
+from tamasis import *
 from copy import copy
 import numpy
 import scipy
 from scipy.sparse import dia_matrix
 from scipy.sparse.linalg import LinearOperator, cgs
 
-pacs = PacsObservation(filename='tests/frames_blue.fits',#filename='/home/pchanial/work/pacs/data/transparent/NGC6946/1342184520_blue[20000:86000]',
+pacs = PacsObservation(filename='tests/frames_blue.fits',
                        resolution=3.2,
                        fine_sampling_factor=1,
                        npixels_per_sample=6, 
@@ -14,25 +14,19 @@ pacs = PacsObservation(filename='tests/frames_blue.fits',#filename='/home/pchani
 tod = pacs.get_tod()
 
 telescope    = Identity('Telescope PSF')
-projection   = PacsProjectionSharpEdges(pacs, finer_sampling=False)
+projection   = Projection(pacs, finer_sampling=False)
 multiplexing = CompressionAverage(pacs.fine_sampling_factor, 'Multiplexing')
 crosstalk    = Identity('Crosstalk')
 compression  = CompressionAverage(pacs.compression_factor)
 masking      = Masking(tod.mask)
 
-model = crosstalk * multiplexing * projection * telescope
+model = masking * crosstalk * multiplexing * projection * telescope
 print model
 
-tod = pacs.get_tod()
-backmap = model.transpose(tod).copy('f')
-backmap.mask=numpy.ma.nomask
-tod[:] = 1.
-weights = copy(model.transpose(tod))
-map0 = Map(backmap / weights, mask=weights <= 1)
-backmap.mask = map0.mask
+map_naive = naive_mapper(model, tod)
 
-
-
+#map0 = Map(backmap / weights, mask=weights <= 1)
+#backmap.mask = map0.mask
 #shape = 2*(map0.count(),)
 #matvec = RLSMatvec(1e-3, model, map0.mask)
 #operator = LinearOperator(matvec=matvec, dtype=numpy.float64, shape=shape)

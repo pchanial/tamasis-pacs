@@ -24,12 +24,13 @@ module module_madcap
 contains
 
 
-    subroutine read_tod_header_pix_per_sample_is_one(signalfile, weightfile, pixelfile, nsamples, npixels_per_sample,     &
+    subroutine read_tod_header_pix_per_sample_is_one(signalfile, weightfile, pixelfile, ndetectors, nsamples, npixels_per_sample,  &
                                                      status)
 
-        character(len=*), intent(in)       :: signalfile, weightfile, pixelfile
-        integer*8, intent(out)             :: nsamples
-        integer, intent(out)               :: npixels_per_sample, status
+        character(len=*), intent(in) :: signalfile, weightfile, pixelfile
+        integer, intent(in)          :: ndetectors
+        integer*8, intent(out)       :: nsamples
+        integer, intent(out)         :: npixels_per_sample, status
 
         integer*8 :: signalsize, othersize
         logical   :: exist
@@ -93,6 +94,13 @@ contains
 
         nsamples = signalsize / 8
         npixels_per_sample = 1
+
+        if (mod(nsamples, ndetectors) /= 0) then
+            write (ERROR_UNIT,'(a)') 'Error: Detectors do not have an equal number of samples.'
+            return
+        end if
+        nsamples = nsamples / ndetectors
+
         status = 0
 
     end subroutine read_tod_header_pix_per_sample_is_one
@@ -101,10 +109,11 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine read_tod_header_madmap1(filename, convert, nsamples, npixels_per_sample, status)
+    subroutine read_tod_header_madmap1(filename, convert, ndetectors, nsamples, npixels_per_sample, status)
 
         character(len=*), intent(in) :: filename
         character(len=*), intent(in) :: convert
+        integer, intent(in)          :: ndetectors
         integer*8, intent(out)       :: nsamples
         integer, intent(out)         :: npixels_per_sample, status
 
@@ -146,6 +155,12 @@ contains
                   npixels_per_sample, ', npixels in map=', npixels_map, '). Check endianness.'
             return
         end if
+
+        if (mod(nsamples, ndetectors) /= 0) then
+            write (ERROR_UNIT,'(a)') 'Error: Detectors do not have an equal number of samples.'
+            return
+        end if
+        nsamples = nsamples / ndetectors
 
         status = 0
 
@@ -255,10 +270,6 @@ contains
         filesize = sarray(8)
 #endif
 
-print *, 'f', first
-print *, last
-print *, 'nsamples:',nsamples, 'npixels_per_sample', npixels_per_sample, 'ndetector', ndetectors
-        
         if (filesize /= 4*8 + 8 * nsamples * (1 + npixels_per_sample) * ndetectors) then
             status = 1
             write (ERROR_UNIT,'(a,2(i0,a))') "Error: Invalid file size ('", filesize, "' instead of '",                            &
@@ -276,6 +287,13 @@ print *, 'nsamples:',nsamples, 'npixels_per_sample', npixels_per_sample, 'ndetec
             status = 1
             write (ERROR_UNIT,'(a,2(i0,a))') "Error: Invalid number of samples in input tod ('", size(tod,1), "' instead of '",    &
                   sum(last-first+1), "')."
+            return
+        end if
+
+        ! skip the header
+        read (11, iostat=status, pos=4*8+1)
+        if (status /= 0) then
+            write (ERROR_UNIT,'(a)') "Error: Failed to read data past header in '" // filename // "'."
             return
         end if
 

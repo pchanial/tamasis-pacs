@@ -175,43 +175,48 @@ class AcquisitionModel(object):
             result += ']'
         if len(self) == 0:
             return result
-        result += '\n  '+'\n  '.join((str(block) for block in reversed(self)))
+        result += '\n  '+'\n  '.join((str(block) for block in self))
         return result
 
 
 #-------------------------------------------------------------------------------
 
 
-class PacsProjectionSharpEdges(AcquisitionModel):
+class Projection(AcquisitionModel):
     """
-    This class handles the integration of the sky inside the PACS detectors.
-    It is assumed that the detectors have sharp edges, so that the integration is simply equal 
-    to the sum of the sky pixels values weighted by their intersections with the detector surface.
+    This class handles the direct and transpose operations by the pointing matrix
+    The input observation has the following required attributes/methods: 
+        - header
+        - npixels_per_sample
+        - nfinesamples
+        - nsamples
+        - ndetectors
+        - get_pointing_matrix()
     Author: P. Chanial
     """
-    def __init__(self, pacs, description=None, finer_sampling=True):
+    def __init__(self, observation, description=None, finer_sampling=True):
         AcquisitionModel.__init__(self, description)
-        self.npixels_per_sample = pacs.npixels_per_sample
-        self.header = pacs.header
-        self.pmatrix = pacs.get_pointing_matrix(finer_sampling=finer_sampling)
-        self.shapein = (pacs.header["naxis1"], pacs.header["naxis2"])
-        self.shapeout = (pacs.nfinesamples if finer_sampling else numpy.sum(pacs.nsamples), pacs.ndetectors) 
+        self.npixels_per_sample = observation.npixels_per_sample
+        self.header = observation.header
+        self.pmatrix = observation.get_pointing_matrix(finer_sampling=finer_sampling)
+        self.shapein = tuple([self.header['naxis'+str(i+1)] for i in range(self.header['naxis'])])
+        self.shapeout = (observation.nfinesamples if finer_sampling else numpy.sum(observation.nsamples), observation.ndetectors) 
 
     def direct(self, map2d):
         self._validate_output_direct(Tod, self._validate_input_direct(Map, map2d))
         map2d.header = self.header
         self._output_transpose = map2d
-        tmf.pacs_projection_sharp_edges_direct(self.pmatrix, map2d, self._output_direct, self.npixels_per_sample)
+        tmf.projection_direct(self.pmatrix, map2d, self._output_direct, self.npixels_per_sample)
         return self._output_direct
 
     def transpose(self, signal):
         self._validate_output_transpose(Map, self._validate_input_transpose(Tod, signal), header=self.header)
         self._output_direct = signal
-        tmf.pacs_projection_sharp_edges_transpose(self.pmatrix, signal, self._output_transpose,  self.npixels_per_sample)
+        tmf.projection_transpose(self.pmatrix, signal, self._output_transpose,  self.npixels_per_sample)
         return self._output_transpose
 
     def __str__(self):
-        return super(PacsProjectionSharpEdges, self).__str__()#+' => '+self.filename+' ['+str(self.first)+','+str(self.last)+']'
+        return super(Projection, self).__str__()#+' => '+self.filename+' ['+str(self.first)+','+str(self.last)+']'
 
 
 #-------------------------------------------------------------------------------
@@ -368,6 +373,55 @@ class Masking(AcquisitionModel):
         return self.direct(signal)
    
 
+#-------------------------------------------------------------------------------
+
+
+class Pack(AcquisitionModel):
+    """
+    Convert 2d map into 1d map, under the control of a mask (true means observed)
+    Author: P. Chanial
+    """
+    def __init__(self, mask, description=None):
+        AcquisitionModel.__init__(self, description)
+        self.mask = numpy.array(mask, order='f', dtype='bool').astype('int8')
+        self.shapein  = tuple(self.mask.shape)
+        self.shapeout = (numpy.sum(self.mask),)
+
+    def direct(self, unpacked):
+        self._validate_output_direct(Map, self._validate_input_direct(Map, unpacked))
+        tmf.unpack_transpose(unpacked, self.mask, self._output_direct)
+        return self._output_direct
+
+    def transpose(self, packed):
+        self._validate_output_transpose(Map, self._validate_input_transpose(Map, packed))
+        tmf.unpack_direct(packed, self.mask, self._output_transpose)
+        return self._output_transpose
+
+
+#-------------------------------------------------------------------------------
+
+
+class Unpack(AcquisitionModel):
+    """
+    Convert 1d map into 2d map, under the control of a mask (true means observed)
+    Author: P. Chanial
+    """
+    def __init__(self, mask, description=None):
+        AcquisitionModel.__init__(self, description)
+        self.mask = numpy.array(mask, order='f', dtype='bool').astype('int8')
+        self.shapein  = (numpy.sum(self.mask),)
+        self.shapeout = tuple(self.mask.shape)
+
+    def direct(self, packed):
+        self._validate_output_direct(Map, self._validate_input_direct(Map, packed))
+        tmf.unpack_transpose(packed, self.mask, self._output_direct)
+        return self._output_direct
+
+    def transpose(self, unpacked):
+        self._validate_output_transpose(Map, self._validate_input_transpose(Map, unpacked))
+        tmf.unpack_direct(unpacked, self.mask, self._output_transpose)
+        return self._output_transpose
+
 
 
 #-------------------------------------------------------------------------------
@@ -463,31 +517,16 @@ class _Pacs():
         self.ij = None
 
 
-    @staticmethod
-    def _str2fitsheader(string):
-        """
-        Convert a string into a pyfits.Header object
-        All cards are extracted from the input string until the END keyword is reached.
-        """
-        import pyfits
-        header = pyfits.Header()
-        cards = header.ascardlist()
-        iline = 0
-        while (iline*80 < len(string)):
-            line = string[iline*80:(iline+1)*80]
-            if line[0:3] == 'END': break
-            cards.append(pyfits.Card().fromstring(line))
-            iline += 1
-        return header
-    
-
 #-------------------------------------------------------------------------------
 
 
 class PacsObservation(_Pacs):
     """
     Class which encapsulates handy information about the PACS instrument and the processed 
-    observation. It contains the following attributes:
+    observation.
+    It is assumed that the detectors have sharp edges, so that the integration is simply equal 
+    to the sum of the sky pixels values weighted by their intersections with the detector surface.
+    It contains the following attributes:
     - filename           : name of the file name, including the array colour, but excluding 
                            the type. Example: '1342184520_blue'.
     - header             : pyfits header of the sky map
@@ -533,7 +572,7 @@ class PacsObservation(_Pacs):
         if header is None:
             hstr, status = tmf.pacs_map_header(filename_, nfilenames, True, fine_sampling_factor, keep_bad_detectors, use_mask, bad_detector_mask.astype('int8'), resolution)
             if status != 0: raise RuntimeError()
-            header = self._str2fitsheader(hstr)
+            header = str2fitsheader(hstr)
 
         self.filename = filename
         
@@ -643,6 +682,58 @@ class PacsSimulation(_Pacs):
 
     
 
+#-------------------------------------------------------------------------------
+#
+# MADmap1 observations
+#
+#-------------------------------------------------------------------------------
+
+
+class MadMap1Observation(object):
+    """Class for the handling of an observation in the MADMAP1 format"""
+    def __init__(self, todfile, invnttfile, mapmaskfile, convert, ndetectors):
+        import pyfits
+        import re
+        self.npixels_per_sample, self.nfinesamples, status = tmf.read_madmap1_info(todfile, convert, ndetectors)
+        if (status != 0): raise RuntimeError()
+
+        self.todfile = todfile
+        self.invnttfile = invnttfile
+        m=re.search(r'(?P<filename>.*)\[(?P<extname>\w+)\]$', mapmaskfile)
+        if m is None:
+            raise ValueError('Invalid filename of the map mask.')
+        filename = m.group('filename')
+        extname  = m.group('extname')
+        coverage = pyfits.fitsopen(filename)[extname].data > 1.e-15
+        self.mapmask = numpy.array(coverage.T, order='f', dtype='int8')
+        self.convert = convert
+        self.ndetectors = ndetectors
+        self.nsamples = (self.nfinesamples,)
+        header = pyfits.Header()
+        header.update('simple', True)
+        header.update('bitpix', -64)
+        header.update('extend', True)
+        header.update('naxis', 1)
+        header.update('naxis1', numpy.sum(self.mapmask))
+        self.header = header
+
+    def get_pointing_matrix(self, finer_sampling=False):
+        tod = Tod(numpy.zeros((self.nfinesamples,self.ndetectors), dtype='double', order='f'))
+        sizeofpmatrix = self.npixels_per_sample * self.nfinesamples * self.ndetectors
+        print 'Info: allocating '+str(sizeofpmatrix/2.**17)+' MiB for the pointing matrix.'
+        pmatrix = numpy.zeros(sizeofpmatrix, dtype=numpy.int64)
+        status = tmf.read_madmap1(self.todfile, self.invnttfile, self.convert, self.npixels_per_sample, tod, pmatrix)
+        if (status != 0): raise RuntimeError()
+        return pmatrix
+
+    def get_tod(self):
+        tod = Tod(numpy.zeros((self.nfinesamples,self.ndetectors), dtype='double', order='f'))
+        sizeofpmatrix = self.npixels_per_sample * self.nfinesamples * self.ndetectors
+        pmatrix = numpy.zeros(sizeofpmatrix, dtype=numpy.int64)
+        status = tmf.read_madmap1(self.todfile, self.invnttfile, self.convert, self.npixels_per_sample, tod, pmatrix)
+        if (status != 0): raise RuntimeError()
+        return tod
+
 
 #-------------------------------------------------------------------------------
 #
@@ -655,12 +746,13 @@ class PacsSimulation(_Pacs):
 class FitsMaskedArray(numpy.ma.MaskedArray):
 
     def __new__(cls, data, dtype=None, copy=False, mask=numpy.ma.nomask, header=None):
+        from copy import copy as cp
         result = numpy.ma.MaskedArray(data, dtype=dtype, copy=copy, mask=mask)
         result = result.view(cls)
         if header is not None:
             result.header = header
-        elif hasattr(data, 'header'):
-            result.header = data.header
+        elif isinstance(data, FitsMaskedArray):
+            result.header = cp(data.header) if copy else data.header
         else:
             result.header = None
         return result
@@ -755,6 +847,9 @@ class Map(FitsMaskedArray):
     def zeros(shape, dtype='float64', order='C', header=None, mask=numpy.ma.nomask):
         return Map(FitsMaskedArray.zeros(shape, dtype, order, header=header, mask=mask))
 
+    def copy(self):
+        return Map(self, copy=True)
+
     def imshow(self, num=None, axis=True, title=None):
         """A simple graphical display function for the Map class"""
         from matplotlib.pyplot import gray, figure, imshow, colorbar, \
@@ -766,7 +861,7 @@ class Map(FitsMaskedArray):
         #gray()
         figure(num=num)
 
-        # HACK!!!
+        # HACK around bug in imshow !!!
         imshow(self.T if self.flags.f_contiguous else self, 
                interpolation='nearest', 
                origin='lower')
@@ -810,6 +905,9 @@ class Tod(FitsMaskedArray):
     def zeros(shape, dtype='float64', order='C', header=None, mask=numpy.ma.nomask):
         return Tod(FitsMaskedArray.zeros(shape, dtype, order, header=header, mask=mask))
     
+    def copy(self):
+        return Tod(self, copy=True)
+
     def imshow(self, num=None, axis=True, title=None):
         """A simple graphical display function for the Map class"""
         from matplotlib.pyplot import gray, figure, imshow, colorbar, \
@@ -912,19 +1010,43 @@ def diffT(arr, axis=-1):
 #-------------------------------------------------------------------------------
 
 
-def hcss_photproject(pacs):
+def naive_mapper(model, tod):
     """
-    Returns a map, as calculated by HCSS's PhotProject
+    Returns a naive map, i.e.: model.transpose(tod) / model.transpose(1)
     """
-    from copy import copy
-    if pacs.fine_sampling_factor != 1:
-        raise ValueError('Fine sampling factor should be 1 for hcssPhotProject.') # or add decimation
-    tod = pacs.get_tod()
-    model = Masking(tod.mask) * PacsProjectionSharpEdges(pacs)
-    mymap = copy(model.transpose(tod))
-    tod[:] = 1.
-    weights = model.transpose(tod)
+    mymap = model.transpose(tod).copy()
+    unity = tod.copy()
+    unity[:] = 1.
+    weights = model.transpose(unity)
     mymap /= weights
     return mymap
 
  
+#-------------------------------------------------------------------------------
+
+
+def str2fitsheader(string):
+    """
+    Convert a string into a pyfits.Header object
+    All cards are extracted from the input string until the END keyword is reached.
+    """
+    import pyfits
+    header = pyfits.Header()
+    cards = header.ascardlist()
+    iline = 0
+    while (iline*80 < len(string)):
+        line = string[iline*80:(iline+1)*80]
+        if line[0:3] == 'END': break
+        cards.append(pyfits.Card().fromstring(line))
+        iline += 1
+    return header
+    
+
+#-------------------------------------------------------------------------------
+
+
+def any_neq(a,b, precision):
+    mask = numpy.isnan(a)
+    if numpy.any(mask != numpy.isnan(b)):
+        return True
+    return numpy.any((abs(a-b) > 10.**(-precision) * abs(a))[numpy.isnan(a).__neg__()])

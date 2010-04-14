@@ -13,6 +13,7 @@ tamasisfortran.so
 test_cfitsio
 test_deglitching
 test_fitstools
+test_madcap
 test_math
 test_ngc6946_bpj
 test_optionparser
