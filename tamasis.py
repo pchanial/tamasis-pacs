@@ -326,7 +326,19 @@ class CompressionAverage(Compression):
     """
     def __init__(self, compression_factor, description=None):
         Compression.__init__(self, tmf.compression_average_direct, tmf.compression_average_transpose, compression_factor, description)
-        
+         
+
+#-------------------------------------------------------------------------------
+
+
+class DownSampling(Compression):
+    """
+    Downsample the input signal by picking up one out of specified compression factor
+    Author: P. Chanial
+    """
+    def __init__(self, compression_factor, description=None):
+        Compression.__init__(self, tmf.downsampling_direct, tmf.downsampling_transpose, compression_factor, description)
+       
 
 #-------------------------------------------------------------------------------
 

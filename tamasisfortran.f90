@@ -709,9 +709,59 @@ end subroutine compression_average_transpose
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
+subroutine downsampling_direct(data, compressed, factor, nsamples, ndetectors)
+
+    use module_compression, only : direct => downsampling_direct
+    implicit none
+
+    !f2py threadsafe
+    !f2py intent(in)      :: data
+    !f2py intent(inout)   :: compressed
+    !f2py intent(in)      :: factor
+    !f2py intent(hide)    :: nsamples = shape(data,0)/factor
+    !f2py intent(hide)    :: ndetectors = shape(data,1)
+
+    integer, intent(in)   :: factor, nsamples, ndetectors
+    real*8, intent(in)    :: data(nsamples*factor,ndetectors)
+    real*8, intent(out)   :: compressed(nsamples,ndetectors)
+
+    call direct(data, compressed, factor)
+
+end subroutine downsampling_direct
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine downsampling_transpose(compressed, data, factor, nsamples, ndetectors)
+
+    use module_compression, only : transpos => downsampling_transpose
+    implicit none
+
+    !f2py threadsafe
+    !f2py intent(inout)   :: compressed
+    !f2py intent(in)      :: data
+    !f2py intent(in)      :: factor
+    !f2py intent(hide)    :: nsamples = shape(data,0)/factor
+    !f2py intent(hide)    :: ndetectors = shape(data,1)
+
+    integer, intent(in)   :: factor, nsamples, ndetectors
+    real*8, intent(in)    :: compressed(nsamples,ndetectors)
+    real*8, intent(out)   :: data(nsamples*factor,ndetectors)
+
+    call transpos(compressed, data, factor)
+
+end subroutine downsampling_transpose
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
 subroutine backprojection_weighted(pmatrix, data, mask, map1d, npixels_per_sample, nsamples, ndetectors, npixels)
+
     use module_pointingmatrix, only : bpw => backprojection_weighted, pointingelement
     implicit none
+
     !f2py integer*8,intent(in):: pmatrix(npixels_per_sample*nsamples*ndetectors)
     !f2py intent(in)          :: data
     !f2py intent(in)          :: mask

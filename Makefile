@@ -80,6 +80,7 @@ module_wcs = module_fitstools module_math module_string module_wcslib
 # define executable dependencies
 pacs_photproject = module_fitstools module_deglitching module_optionparser module_pacsinstrument module_pacsobservation module_pacspointing module_pointingmatrix module_preprocessor
 test_cfitsio = module_cfitsio
+test_compression = module_compression module_math module_precision
 test_deglitching = module_deglitching module_math module_pointingmatrix module_precision
 test_fitstools = module_fitstools
 test_madcap = module_filtering module_fitstools module_madcap

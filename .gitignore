@@ -11,6 +11,7 @@ pacs_photproject
 tamasis.pyc
 tamasisfortran.so
 test_cfitsio
+test_compression
 test_deglitching
 test_fitstools
 test_madcap
