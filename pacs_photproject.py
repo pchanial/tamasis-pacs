@@ -14,7 +14,7 @@ import numpy
 from   optparse import OptionParser
 import sys
 import tamasisfortran as tmf
-from   tamasis import Map, PacsObservation, PacsProjectionSharpEdges
+from   tamasis import Map, PacsObservation, Projection
 
 # set up the option parser
 parser = OptionParser('Usage: %prog [options] fitsfile...')
@@ -72,7 +72,7 @@ ny = pacs.header['naxis2']
 
 # Set up the acquisition model. finer_sampling is set to False because
 # photproject does not attempt to sample better than what is transmitted
-projection = PacsProjectionSharpEdges(pacs, finer_sampling=False)
+projection = Projection(pacs, finer_sampling=False)
 
 # Read the timeline
 tod = pacs.get_tod(do_flatfielding=options.do_flatfielding, do_subtraction_mean=False)
