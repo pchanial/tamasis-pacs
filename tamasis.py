@@ -1026,7 +1026,7 @@ def diffT(arr, axis=-1):
 #-------------------------------------------------------------------------------
 
 
-def naive_mapper(model, tod):
+def naive_mapper(tod, model):
     """
     Returns a naive map, i.e.: model.transpose(tod) / model.transpose(1)
     """
@@ -1036,6 +1036,36 @@ def naive_mapper(model, tod):
     weights = model.transpose(unity)
     mymap /= weights
     return mymap
+
+ 
+#-------------------------------------------------------------------------------
+
+
+def deglitch_l2std(tod, projection, nsigma=5.):
+    """
+    Second level deglitching. Each frame is projected onto the sky. The values associated
+    to a sky map pixel are then sigma clipped, using the standard deviation to the mean.
+    """
+    nx = projection.header['naxis1']
+    ny = projection.header['naxis2']
+    npixels_per_sample = projection.npixels_per_sample
+    tod.mask = tmf.deglitch_l2b_std(projection.pmatrix, nx, ny, tod, 
+        tod.mask.astype('int8'), nsigma, npixels_per_sample)
+
+ 
+#-------------------------------------------------------------------------------
+
+
+def deglitch_l2mad(tod, projection, nsigma=5.):
+    """
+    Second level deglitching. Each frame is projected onto the sky. The values associated
+    to a sky map pixel are then sigma clipped, using the MAD (median absolute deviation to the median)
+    """
+    nx = projection.header['naxis1']
+    ny = projection.header['naxis2']
+    npixels_per_sample = projection.npixels_per_sample
+    tod.mask = tmf.deglitch_l2b_mad(projection.pmatrix, nx, ny, tod, 
+        tod.mask.astype('int8'), nsigma, npixels_per_sample)
 
  
 #-------------------------------------------------------------------------------

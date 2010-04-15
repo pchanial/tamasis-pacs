@@ -8,7 +8,7 @@ projection = Projection(observation)
 pack = Pack(observation.mapmask)
 model = projection * pack
 
-map_naive = naive_mapper(model, observation.get_tod())
+map_naive = naive_mapper(observation.get_tod(), model)
 map_ref = pyfits.fitsopen('tests/madmap1/naivemapSpirePsw.fits')['image'].data.T
 if any_neq(map_naive,map_ref,15): print 'FAILED: naive_mapper madcap'
 
