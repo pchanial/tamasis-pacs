@@ -36,15 +36,19 @@ class AcquisitionModel(object):
         self.description = description
 
     #abstractmethod
-    def direct(self, data):
+    def direct(self, data, copy=True):
         for model in self:
             data = model.direct(data)
+        if copy:
+            return data.copy()
         return data
 
     #abstractmethod
-    def transpose(self, data):
+    def transpose(self, data, copy=True):
         for model in reversed(self):
             data = model.transpose(data)
+        if copy:
+            return data.copy()
         return data
 
     def __validate_chain_direct(self, shapein):
