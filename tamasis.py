@@ -37,18 +37,14 @@ class AcquisitionModel(object):
 
     #abstractmethod
     def direct(self, data, copy=True):
-        for model in self:
-            data = model.direct(data)
-        if copy:
-            return data.copy()
+        for i, model in enumerate(self):
+            data = model.direct(data, copyin=copy and i == 0, copyout=copy and i==len(self)-1)
         return data
 
     #abstractmethod
     def transpose(self, data, copy=True):
-        for model in reversed(self):
-            data = model.transpose(data)
-        if copy:
-            return data.copy()
+        for i, model in enumerate(reversed(self)):
+            data = model.transpose(data, copyin=copy and i == 0, copyout=copy and i==len(self)-1)
         return data
 
     def __validate_chain_direct(self, shapein):
@@ -206,18 +202,20 @@ class Projection(AcquisitionModel):
         self.shapein = tuple([self.header['naxis'+str(i+1)] for i in range(self.header['naxis'])])
         self.shapeout = (observation.nfinesamples if finer_sampling else numpy.sum(observation.nsamples), observation.ndetectors) 
 
-    def direct(self, map2d):
+    def direct(self, map2d, copyin=True, copyout=True):
         self._validate_output_direct(Tod, self._validate_input_direct(Map, map2d))
         map2d.header = self.header
-        self._output_transpose = map2d
+        if not copyin: self._output_transpose = map2d
         tmf.pointing_matrix_direct(self.pmatrix, map2d, self._output_direct, self.npixels_per_sample)
-        return self._output_direct
+        if not copyout: return self._output_direct
+        return self._output_direct.copy('a')
 
-    def transpose(self, signal):
+    def transpose(self, signal, copyin=True, copyout=True):
         self._validate_output_transpose(Map, self._validate_input_transpose(Tod, signal), header=self.header)
-        self._output_direct = signal
+        if not copyin: self._output_direct = signal
         tmf.pointing_matrix_transpose(self.pmatrix, signal, self._output_transpose,  self.npixels_per_sample)
-        return self._output_transpose
+        if not copyout: return self._output_transpose
+        return self._output_transpose.copy('a')
 
     def __str__(self):
         return super(Projection, self).__str__()#+' => '+self.filename+' ['+str(self.first)+','+str(self.last)+']'
@@ -237,17 +235,19 @@ class PacsMultiplexing(AcquisitionModel):
         self.fine_sampling_factor = pacs.fine_sampling_factor
         self.ij = pacs.ij
 
-    def direct(self, signal):
+    def direct(self, signal, copyin=True, copyout=True):
         self._validate_output_direct(Tod, self._validate_input_direct(Tod, signal))
-        self._output_transpose = signal
+        if not copyin: self._output_transpose = signal
         tmf.pacs_multiplexing_direct(signal, self._output_direct, self.fine_sampling_factor, self.ij)
-        return self._output_direct
+        if not copyout: return self._output_direct
+        return self._output_direct.copy('a')
 
-    def transpose(self, signal):
+    def transpose(self, signal, copyin=True, copyout=True):
         self._validate_output_transpose(Tod, self._validate_input_transpose(Tod, signal))
-        self._output_direct = signal
+        if not copyin: self._output_direct = signal
         tmf.pacs_multiplexing_transpose(signal, self._output_transpose, self.fine_sampling_factor, self.ij)
-        return self._output_transpose
+        if not copyout: return self._output_transpose
+        return self._output_transpose.copy('a')
 
     def _validate_shape_direct(self, shapein):
         if shapein is None:
@@ -282,21 +282,25 @@ class Compression(AcquisitionModel):
         self.compression_transpose = compression_transpose
         self.compression_factor = compression_factor
 
-    def direct(self, signal):
+    def direct(self, signal, copyin=True, copyout=True):
         if self.compression_factor == 1:
+            if copyin or copyout: return signal.copy('a')
             return signal
         self._validate_output_direct(Tod, self._validate_input_direct(Tod, signal))
-        self._output_transpose = signal
+        if not copyin: self._output_transpose = signal
         self.compression_direct(signal, self._output_direct, self.compression_factor)
-        return self._output_direct
+        if not copyout: return self._output_direct
+        return self._output_direct.copy('a')
 
-    def transpose(self, compressed):
+    def transpose(self, compressed, copyin=True, copyout=True):
         if self.compression_factor == 1:
+            if copyin or copyout: return compressed.copy('a')
             return compressed
         self._validate_output_transpose(Tod, self._validate_input_transpose(Tod, compressed))
-        self._output_direct = compressed
+        if not copyin: self._output_direct = compressed
         self.compression_transpose(compressed, self._output_transpose, self.compression_factor)
-        return self._output_transpose
+        if not copyout: return self._output_transpose
+        return self._output_transpose.copy('a')
 
     def _validate_shape_direct(self, shapein):
         if shapein is None:
@@ -355,10 +359,12 @@ class Identity(AcquisitionModel):
     def __init__(self, description=None):
         AcquisitionModel.__init__(self, description)
 
-    def direct(self, signal):
+    def direct(self, signal, copyin=True, copyout=True):
+        if copyin or copyout: return signal.copy('a')
         return signal
 
-    def transpose(self, signal):
+    def transpose(self, signal, copyin=True, copyout=True):
+        if copyin or copyout: return signal.copy('a')
         return signal
         
 
@@ -377,7 +383,8 @@ class Masking(AcquisitionModel):
         else:
             self.mask = mask
 
-    def direct(self, signal):
+    def direct(self, signal, copyin=True, copyout=True):
+        if copyin or copyout: signal = signal.copy('a')
         if isinstance(signal, FitsMaskedArray):
             signal.mask = self.mask
         else:
@@ -385,8 +392,8 @@ class Masking(AcquisitionModel):
         numpy.putmask(signal, signal.mask, 0.)
         return signal
 
-    def transpose(self, signal):
-        return self.direct(signal)
+    def transpose(self, signal, copyin=True, copyout=True):
+        return self.direct(signal, copyin=copyin, copyout=copyout)
    
 
 #-------------------------------------------------------------------------------
@@ -403,15 +410,19 @@ class Pack(AcquisitionModel):
         self.shapein  = tuple(self.mask.shape)
         self.shapeout = (numpy.sum(self.mask),)
 
-    def direct(self, unpacked):
+    def direct(self, unpacked, copyin=True, copyout=True):
         self._validate_output_direct(Map, self._validate_input_direct(Map, unpacked))
+        if not copyin: self._output_transpose = unpacked
         tmf.unpack_transpose(unpacked, self.mask, self._output_direct)
-        return self._output_direct
+        if not copyout: return self._output_direct
+        return self._output_direct.copy('a')
 
-    def transpose(self, packed):
+    def transpose(self, packed, copyin=True, copyout=True):
         self._validate_output_transpose(Map, self._validate_input_transpose(Map, packed))
+        if not copyin: self._output_direct = packed
         tmf.unpack_direct(packed, self.mask, self._output_transpose)
-        return self._output_transpose
+        if not copyout: return self._output_transpose
+        return self._output_transpose.copy('a')
 
 
 #-------------------------------------------------------------------------------
@@ -428,15 +439,19 @@ class Unpack(AcquisitionModel):
         self.shapein  = (numpy.sum(self.mask),)
         self.shapeout = tuple(self.mask.shape)
 
-    def direct(self, packed):
+    def direct(self, packed, copyin=True, copyout=True):
         self._validate_output_direct(Map, self._validate_input_direct(Map, packed))
+        if not copyin: self._output_transpose = packed
         tmf.unpack_transpose(packed, self.mask, self._output_direct)
-        return self._output_direct
+        if not copyout: return self._output_direct
+        return self._output_direct.copy('a')
 
-    def transpose(self, unpacked):
+    def transpose(self, unpacked, copyin=True, copyout=True):
         self._validate_output_transpose(Map, self._validate_input_transpose(Map, unpacked))
+        if not copyin: self._output_direct = unpacked
         tmf.unpack_direct(unpacked, self.mask, self._output_transpose)
-        return self._output_transpose
+        if not copyout: return self._output_transpose
+        return self._output_transpose.copy('a')
 
 
 
@@ -1034,10 +1049,10 @@ def naive_mapper(tod, model):
     """
     Returns a naive map, i.e.: model.transpose(tod) / model.transpose(1)
     """
-    mymap = model.transpose(tod).copy()
+    mymap = model.transpose(tod)
     unity = tod.copy()
     unity[:] = 1.
-    weights = model.transpose(unity)
+    weights = model.transpose(unity, copy=False)
     mymap /= weights
     return mymap
 
