@@ -34,10 +34,11 @@ program test_pointingmatrix
 
     if (any(roi(:,1,:) /= 1 .or. roi(:,2,:) /= 2)) stop 'FAILED: xy2roi'
 
+    nroi = 0
     do itime = 1, ntimes
        call roi2pmatrix(roi, nvertices, xy, nx, ny, itime, nroi, out, pmatrix)
     end do
-    if (nroi > npixels_per_sample) write (*,*) 'update npixels_per_sample:',nroi
+    if (nroi /= npixels_per_sample) stop 'FAILED: update npixels_per_sample'
     if (out) stop 'FAILED: roi2pmatrix out'
     if (any(pmatrix%pixel /= 0 .and. pmatrix%pixel /= 1 .and. pmatrix%pixel /= 100 .and. pmatrix%pixel /= 101)) then
         stop 'FAILED: roi2pmatrix1'
