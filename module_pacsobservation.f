@@ -367,24 +367,20 @@ contains
            this%last = last
         end if
 
-        ! set first valid sample
+        ! set first valid sample. 
         if (first == 0) then
-            if (abs(chop(this%last)) > 0.01d0) then
+            do isample = this%last, 1, -1
+                if (abs(chop(isample)) > 1.d0) exit
+            end do
+            this%first = isample + 1
+            if (this%first > this%last) then
                 write (OUTPUT_UNIT,'(a)') 'Warning: last sample is invalid. Automatic search for valid slice is disabled.'
                 this%first = 1
+            else if (this%first + 10 > this%last) then
+                write (OUTPUT_UNIT,'(a)') 'Warning: It is not possible to discard the first 10 scan samples. The observation is too&
+                      & short or the specified last sample is not large enough.'
             else
-                do isample = this%last-1, 1, -1
-                    if (abs(chop(isample)) > 1.d0) then
-                        if (this%first + 10 > this%last) then
-                            write (OUTPUT_UNIT,'(a)') 'Warning: It is not possible to discard the first 10 scan samples. The observ&
-                                  &ation is too short or the specified last sample is not large enough.'                            
-                        else
-                            this%first = this%first + 9
-                        end if
-                        exit
-                    end if
-                end do
-                this%first = isample + 1
+                this%first = this%first + 10
             end if
         else
             this%first = first
