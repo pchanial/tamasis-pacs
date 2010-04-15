@@ -23,21 +23,23 @@ masking      = Masking(tod.mask)
 model = masking * crosstalk * multiplexing * projection * telescope
 print model
 
-map_naive = naive_mapper(tod, model)
+# naive map
+backmap = model.transpose(tod)
+tod[:] = 1
+weights = model.transpose(tod)
+map_naive = Map(backmap / weights, mask=weights <=1)
 
-#map0 = Map(backmap / weights, mask=weights <= 1)
-#backmap.mask = map0.mask
-#shape = 2*(map0.count(),)
-#matvec = RLSMatvec(1e-3, model, map0.mask)
-#operator = LinearOperator(matvec=matvec, dtype=numpy.float64, shape=shape)
-#b  = backmap.compressed()
-#x0 = map0.compressed()
-#M  = dia_matrix(((1./weights)[weights > 1], 0), shape=shape)
-#solution, nit = cgs(operator, b, x0=x0, M=M, tol=1.e-4, maxiter=20, callback=PcgCallback())
-#mymap = copy(map0)
-#mymap[mymap.mask == False] = solution
-
-#map = hcss_photproject(pacs)
+# iterative map
+backmap.mask = map_naive.mask
+shape = 2*(map_naive.count(),)
+matvec = RLSMatvec(1e-3, model, map_naive.mask)
+operator = LinearOperator(matvec=matvec, dtype=numpy.float64, shape=shape)
+b  = backmap.compressed()
+x0 = map_naive.compressed()
+M  = dia_matrix(((1./weights)[weights > 1], 0), shape=shape)
+solution, nit = cgs(operator, b, x0=x0, M=M, tol=1.e-4, maxiter=20, callback=PcgCallback())
+map_iter = map_naive.copy()
+map_iter[map_naive.mask == False] = solution
 
 #ra0  = 20.
 #dec0 = 0.1
