@@ -379,7 +379,7 @@ contains
             else if (this%first + 10 > this%last) then
                 write (OUTPUT_UNIT,'(a)') 'Warning: It is not possible to discard the first 10 scan samples. The observation is too&
                       & short or the specified last sample is not large enough.'
-            else
+            else if (this%first /= 1) then
                 this%first = this%first + 10
             end if
         else
