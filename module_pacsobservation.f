@@ -301,14 +301,10 @@ contains
         end do
 
         call ftgkys(unit, 'META_'//strinteger(ikey), compression, comment, status)
-        if (compression == 'Photometry Default Mode') then
-            this%transparent_mode = .false.
-        else if (compression == 'Photometry Lossless Compression Mode') then
+        if (compression == 'Photometry Lossless Compression Mode') then
             this%transparent_mode = .true.
-        else
-            status = 1
-            write (ERROR_UNIT,'(a)') "ERROR: Unknown compression mode: '" // trim(compression) // "'."
-            go to 999
+        else if (compression /= 'Photometry Default Mode' .and. compression /= 'Photometry Double Compression Mode') then
+            write (OUTPUT_UNIT,'(a)') "Warning: Unknown compression mode: '" // trim(compression) // "'."
         end if
 
     999 call ft_close(unit, status_close)
