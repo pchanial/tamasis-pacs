@@ -684,7 +684,7 @@ class PacsObservation(_Pacs):
         filename_, nfilenames = self._files2tmf(self.filename)
         signal, mask, status = tmf.pacs_timeline(filename_, self.nobservations, numpy.sum(self.nsamples), self.ndetectors, self.keep_bad_detectors, self.bad_detector_mask, do_flatfielding, do_subtraction_mean)
         if status != 0: raise RuntimeError()
-
+        
         return Tod(signal, mask=mask)
 
     def get_pointing_matrix(self, finer_sampling=True):
@@ -803,7 +803,8 @@ class MadMap1Observation(object):
         self.header = header
 
     def get_pointing_matrix(self, finer_sampling=False):
-        tod = Tod(numpy.zeros((self.nfinesamples,self.ndetectors), dtype='double', order='f'))
+        print 'zero:', (self.nfinesamples,self.ndetectors)
+        tod = Tod.zeros((self.nfinesamples,self.ndetectors))
         sizeofpmatrix = self.npixels_per_sample * self.nfinesamples * self.ndetectors
         print 'Info: allocating '+str(sizeofpmatrix/2.**17)+' MiB for the pointing matrix.'
         pmatrix = numpy.zeros(sizeofpmatrix, dtype=numpy.int64)
@@ -812,7 +813,7 @@ class MadMap1Observation(object):
         return pmatrix
 
     def get_tod(self):
-        tod = Tod(numpy.zeros((self.nfinesamples,self.ndetectors), dtype='double', order='f'))
+        tod = Tod.zeros((self.nfinesamples,self.ndetectors))
         sizeofpmatrix = self.npixels_per_sample * self.nfinesamples * self.ndetectors
         pmatrix = numpy.zeros(sizeofpmatrix, dtype=numpy.int64)
         status = tmf.read_madmap1(self.todfile, self.invnttfile, self.convert, self.npixels_per_sample, tod, pmatrix)
@@ -828,45 +829,40 @@ class MadMap1Observation(object):
 
 
 
-class FitsMaskedArray(numpy.ma.MaskedArray):
+class FitsArray(numpy.ndarray):
 
-    def __new__(cls, data, dtype=None, copy=False, mask=numpy.ma.nomask, header=None):
+    def __new__(cls, data, dtype=None, copy=False, header=None):
         from copy import copy as cp
-        result = numpy.ma.MaskedArray(data, dtype=dtype, copy=copy, mask=mask)
+        result = numpy.array(data, dtype=dtype, copy=copy)
         result = result.view(cls)
         if header is not None:
             result.header = header
-        elif isinstance(data, FitsMaskedArray):
+        elif isinstance(data, FitsArray):
             result.header = cp(data.header) if copy else data.header
         else:
             result.header = None
         return result
 
     def __array_finalize__(self, obj):
-        numpy.ma.MaskedArray.__array_finalize__(self, obj)
         if obj is None: return
         self.header = getattr(obj, '_header', None)
 
     def __array_wrap__(self, obj, context=None):
-        result = numpy.ma.MaskedArray.__array_wrap__(self, obj, context=context).view(type(self))
+        result = numpy.ndarray.__array_wrap__(self, obj, context).view(type(self))
         result.header = self.header
         return result
 
-    #XXX NUMPY BUG ma.MaskedArray incorrectly overrides ndarray.ravel(order)
-    def ravel(self, order='C'):
-        return super(numpy.ma.MaskedArray, self).ravel(order)
+    @staticmethod
+    def empty(shape, dtype='float64', order='C', header=None):
+        return FitsArray(numpy.empty(shape, dtype, order), header=header)
 
     @staticmethod
-    def empty(shape, dtype='float64', order='C', header=None, mask=numpy.ma.nomask):
-        return FitsMaskedArray(numpy.ma.empty(shape, dtype, order), header=header, mask=mask)
+    def ones(shape, dtype='float64', order='C', header=None):
+        return FitsArray(numpy.ones(shape, dtype, order), header=header)
 
     @staticmethod
-    def ones(shape, dtype='float64', order='C', header=None, mask=numpy.ma.nomask):
-        return FitsMaskedArray(numpy.ma.ones(shape, dtype, order), header=header, mask=mask)
-
-    @staticmethod
-    def zeros(shape, dtype='float64', order='C', header=None, mask=numpy.ma.nomask):
-        return FitsMaskedArray(numpy.ma.zeros(shape, dtype, order), header=header, mask=mask)
+    def zeros(shape, dtype='float64', order='C', header=None):
+        return FitsArray(numpy.zeros(shape, dtype, order), header=header)
 
     @property
     def header(self):
@@ -880,10 +876,10 @@ class FitsMaskedArray(numpy.ma.MaskedArray):
         self._header = header
 
     def tofile(self, fid, sep="", format="%s"):
-        super(numpy.ma.MaskedArray,self).tofile(fid, sep, format)
+        super(FitsArray,self).tofile(fid, sep, format)
 
     def writefits(self, filename):
-        """Save a FitsMaskedArray instance to a fits file given a filename
+        """Save a FitsArray instance to a fits file given a filename
         
         If the same file already exist it overwrites it.
         It should correspond to the input required by the PACS simulator
@@ -907,34 +903,34 @@ class FitsMaskedArray(numpy.ma.MaskedArray):
 #-------------------------------------------------------------------------------
 
 
-class Map(FitsMaskedArray):
+class Map(FitsArray):
 
-    def __new__(cls, data, dtype=None, copy=False, mask=numpy.ma.nomask, header=None):
-        result = FitsMaskedArray(data, dtype=dtype, copy=copy, mask=mask, header=header)
+    def __new__(cls, data, dtype=None, copy=False, header=None):
+        result = FitsArray(data, dtype=dtype, copy=copy, header=header)
         result = result.view(cls)
         return result
 
     def __array_finalize__(self, obj):
-        FitsMaskedArray.__array_finalize__(self, obj)
+        FitsArray.__array_finalize__(self, obj)
         if obj is None: return
         self.mytoddata = getattr(obj, 'mytoddata', None)
 
     def __array_wrap__(self, obj, context=None):
-        result = FitsMaskedArray.__array_wrap__(self, obj, context=context).view(type(self))
+        result = FitsArray.__array_wrap__(self, obj, context=context).view(type(self))
         result.header = self.header
         return result
 
     @staticmethod
-    def empty(shape, dtype='float64', order='C', header=None, mask=numpy.ma.nomask):
-        return Map(FitsMaskedArray.empty(shape, dtype, order, header=header, mask=mask))
+    def empty(shape, dtype='float64', order='f', header=None):
+        return Map(FitsArray.empty(shape, dtype, order, header=header))
 
     @staticmethod
-    def ones(shape, dtype='float64', order='C', header=None, mask=numpy.ma.nomask):
-        return Map(FitsMaskedArray.ones(shape, dtype, order, header=header, mask=mask))
+    def ones(shape, dtype='float64', order='f', header=None):
+        return Map(FitsArray.ones(shape, dtype, order, header=header))
 
     @staticmethod
-    def zeros(shape, dtype='float64', order='C', header=None, mask=numpy.ma.nomask):
-        return Map(FitsMaskedArray.zeros(shape, dtype, order, header=header, mask=mask))
+    def zeros(shape, dtype='float64', order='f', header=None):
+        return Map(FitsArray.zeros(shape, dtype, order, header=header))
 
     def copy(self, order=None):
         if order is not None and order.lower() != 'a' and order.lower() != 'any':
@@ -945,9 +941,6 @@ class Map(FitsMaskedArray):
         """A simple graphical display function for the Map class"""
         from matplotlib.pyplot import gray, figure, imshow, colorbar, \
             draw, show, xlabel, ylabel, title as pyplottitle
-
-        if self.mask.all():
-            raise ValueError('All pixels are masked.')
 
         #gray()
         figure(num=num)
@@ -967,33 +960,34 @@ class Map(FitsMaskedArray):
 #-------------------------------------------------------------------------------
 
 
-class Tod(FitsMaskedArray):
+class Tod(FitsArray):
 
-    def __new__(cls, data, dtype=None, copy=False, mask=numpy.ma.nomask, header=None):
-        result = FitsMaskedArray(data, dtype=dtype, copy=copy, mask=mask, header=header)
+    def __new__(cls, data, dtype=None, copy=False, header=None, mask=None):
+        result = FitsArray(data, dtype=dtype, copy=copy, header=header)
         result = result.view(cls)
+        result.mask = mask
         return result
 
     def __array_finalize__(self, obj):
-        FitsMaskedArray.__array_finalize__(self, obj)
+        FitsArray.__array_finalize__(self, obj)
         if obj is None: return
 
     def __array_wrap__(self, obj, context=None):
-        result = FitsMaskedArray.__array_wrap__(self, obj, context=context).view(type(self))
+        result = FitsArray.__array_wrap__(self, obj, context=context).view(type(self))
         result.header = self.header
         return result
 
     @staticmethod
-    def empty(shape, dtype='float64', order='C', header=None, mask=numpy.ma.nomask):
-        return Tod(FitsMaskedArray.empty(shape, dtype, order, header=header, mask=mask))
+    def empty(shape, dtype='float64', order='f', header=None):
+        return Tod(FitsArray.empty(shape, dtype, order, header=header))
 
     @staticmethod
-    def ones(shape, dtype='float64', order='C', header=None, mask=numpy.ma.nomask):
-        return Tod(FitsMaskedArray.ones(shape, dtype, order, header=header, mask=mask))
+    def ones(shape, dtype='float64', order='f', header=None):
+        return Tod(FitsArray.ones(shape, dtype, order, header=header))
 
     @staticmethod
-    def zeros(shape, dtype='float64', order='C', header=None, mask=numpy.ma.nomask):
-        return Tod(FitsMaskedArray.zeros(shape, dtype, order, header=header, mask=mask))
+    def zeros(shape, dtype='float64', order='f', header=None):
+        return Tod(FitsArray.zeros(shape, dtype, order, header=header))
     
     def copy(self, order=None):
         if order is not None and order.lower() != 'a' and order.lower() != 'any':
@@ -1004,9 +998,6 @@ class Tod(FitsMaskedArray):
         """A simple graphical display function for the Map class"""
         from matplotlib.pyplot import gray, figure, imshow, colorbar, \
             draw, show, xlabel, ylabel, title as pyplottitle
-
-        if self.mask.all():
-            raise ValueError('All pixels are masked.')
 
         gray()
         figure(num=num)
@@ -1048,7 +1039,7 @@ class PcgCallback():
         print 'PCG Iteration '+str(self.count)
         self.count += 1
 
-class RegularisedLeastSquareMatvec(LeastSquareMatvec):
+class RegularizedLeastSquareMatvec(LeastSquareMatvec):
     def __init__(self, model, unpacking, hyper):
         LeastSquareMatvec.__init__(self, model, unpacking)
         # to enforce 2d hyper
@@ -1060,7 +1051,7 @@ class RegularisedLeastSquareMatvec(LeastSquareMatvec):
         self.prior_transpose = [SmoothT(i) for i in xrange(len(hyper))]
     def __call__(self, xvec):
         # likelihood
-        xout = super(RegularisedLeastSquareMatvec, self).__call__(xvec)
+        xout = super(RegularizedLeastSquareMatvec, self).__call__(xvec)
         x = self.unpacking.direct(xvec)
         # add prior component
         for i in xrange(len(self.hyper)):

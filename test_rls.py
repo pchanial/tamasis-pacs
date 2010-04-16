@@ -36,7 +36,7 @@ backmap.mask = map_mask
 unpacking = Unpacking(map_mask)
 
 shape = 2*(numpy.sum(map_mask == False),)
-matvec = RegularisedLeastSquareMatvec(model, unpacking, hyper)
+matvec = RegularizedLeastSquareMatvec(model, unpacking, hyper)
 operator = LinearOperator(matvec=matvec, dtype=numpy.float64, shape=shape)
 b  = unpacking.transpose(backmap)
 x0 = unpacking.transpose(map_naive)
@@ -48,7 +48,7 @@ map_iter1 = unpacking.direct(Map(solution))
 unpacking = Masking(map_mask) * Reshaping(numpy.product(map_naive.shape), map_naive.shape)
 
 shape = 2*(map_naive.size,)
-matvec = RegularisedLeastSquareMatvec(model, unpacking, hyper)
+matvec = RegularizedLeastSquareMatvec(model, unpacking, hyper)
 operator = LinearOperator(matvec=matvec, dtype=numpy.float64, shape=shape)
 b  = unpacking.transpose(backmap)
 x0 = unpacking.transpose(map_naive)
