@@ -53,6 +53,8 @@ INCLUDES = wcslib-4.4.4-Fortran90
 MODULES = $(wildcard module_*.f)
 SOURCES = $(wildcard test_*.f) pacs_photproject.f
 EXECS = $(SOURCES:.f=)
+FORTRANTESTS = $(wildcard test_*.f)
+PYTHONTESTS = $(wildcard test_*.py)
 
 # apply a function to each element of a list
 map = $(foreach a,$(2),$(call $(1),$(a)))
@@ -132,10 +134,21 @@ tamasisfortran.so: tamasisfortran.f90 $(MODULES:.f=.o)
 clean:
 	rm -f *.o *.mod *.so *~ $(EXECS)
 
-tests: $$(filter-out test_wcslib%,$$(filter test_%,$$(EXECS)))
+tests: tests_fortran tests_python
+
+tests_fortran: $$(filter-out test_wcslib%,$(FORTRANTESTS:.f=))
 	@for test in $^; do \
 	echo;\
-	echo "Running test: "$$test"...";\
-	echo "=============";\
+	echo "Running Fortran test: "$$test"...";\
+	echo "=====================";\
 	./$$test; \
 	done
+
+tests_python:
+	@for test in $(PYTHONTESTS); do \
+	echo;\
+	echo "Running Python test: "$$test"...";\
+	echo "====================";\
+	python $$test; \
+	done
+
