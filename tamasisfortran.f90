@@ -788,7 +788,7 @@ end subroutine backprojection_weighted
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine deglitch_l2b_std(pmatrix, nx, ny, data, mask, nsigma, outmask, npixels_per_sample, nsamples, ndetectors)
+subroutine deglitch_l2b_std(pmatrix, nx, ny, data, mask, nsigma, npixels_per_sample, nsamples, ndetectors)
 
     use module_pointingmatrix, only : pointingelement
     use module_deglitching, only : deglitch_l2b
@@ -797,18 +797,16 @@ subroutine deglitch_l2b_std(pmatrix, nx, ny, data, mask, nsigma, outmask, npixel
     !f2py integer*8, intent(in) :: pmatrix(npixels_per_sample*nsamples*ndetectors)
     !f2py intent(in)    :: nx, ny
     !f2py intent(in)    :: data
-    !f2py intent(in)    :: mask
+    !f2py intent(inout) :: mask
     !f2py intent(in)    :: nsigma
     !f2py intent(in)    :: npixels_per_sample
     !f2py intent(hide)  :: nsamples = shape(data,0)
     !f2py intent(hide)  :: ndetectors = shape(data,1)
-    !f2py intent(out)   :: outmask
 
     type(pointingelement), intent(in) :: pmatrix(npixels_per_sample,nsamples,ndetectors)
     integer, intent(in)               :: nx, ny
     real*8, intent(in)                :: data(nsamples,ndetectors)
-    logical*1, intent(in)             :: mask(nsamples,ndetectors)
-    logical*1, intent(out)            :: outmask(nsamples,ndetectors)
+    logical*1, intent(inout)          :: mask(nsamples,ndetectors)
     real*8, intent(in)                :: nsigma
     integer, intent(in)               :: npixels_per_sample, nsamples, ndetectors
 
@@ -816,8 +814,7 @@ subroutine deglitch_l2b_std(pmatrix, nx, ny, data, mask, nsigma, outmask, npixel
 
     write(*,'(a)', advance='no') 'Info: deglitching (std)... '
     call system_clock(count1, count_rate, count_max)
-    outmask = mask
-    call deglitch_l2b(pmatrix, nx, ny, data, outmask, nsigma, .false.)
+    call deglitch_l2b(pmatrix, nx, ny, data, mask, nsigma, .false.)
     call system_clock(count2, count_rate, count_max)
     write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
 
@@ -827,7 +824,7 @@ end subroutine deglitch_l2b_std
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine deglitch_l2b_mad(pmatrix, nx, ny, data, mask, nsigma, outmask, npixels_per_sample, nsamples, ndetectors)
+subroutine deglitch_l2b_mad(pmatrix, nx, ny, data, mask, nsigma, npixels_per_sample, nsamples, ndetectors)
 
     use module_pointingmatrix, only : pointingelement
     use module_deglitching, only : deglitch_l2b
@@ -836,18 +833,16 @@ subroutine deglitch_l2b_mad(pmatrix, nx, ny, data, mask, nsigma, outmask, npixel
     !f2py integer*8, intent(in) :: pmatrix(npixels_per_sample*nsamples*ndetectors)
     !f2py intent(in)    :: nx, ny
     !f2py intent(in)    :: data
-    !f2py intent(in)    :: mask
+    !f2py intent(inout) :: mask
     !f2py intent(in)    :: nsigma
     !f2py intent(in)    :: npixels_per_sample
     !f2py intent(hide)  :: nsamples = shape(data,0)
     !f2py intent(hide)  :: ndetectors = shape(data,1)
-    !f2py intent(out)   :: outmask
 
     type(pointingelement), intent(in) :: pmatrix(npixels_per_sample,nsamples,ndetectors)
     integer, intent(in)               :: nx, ny
     real*8, intent(in)                :: data(nsamples,ndetectors)
-    logical*1, intent(in)             :: mask(nsamples,ndetectors)
-    logical*1, intent(out)            :: outmask(nsamples,ndetectors)
+    logical*1, intent(inout)          :: mask(nsamples,ndetectors)
     real*8, intent(in)                :: nsigma
     integer, intent(in)               :: npixels_per_sample, nsamples, ndetectors
 
@@ -855,8 +850,7 @@ subroutine deglitch_l2b_mad(pmatrix, nx, ny, data, mask, nsigma, outmask, npixel
 
     write(*,'(a)', advance='no') 'Info: deglitching (mad)... '
     call system_clock(count1, count_rate, count_max)
-    outmask = mask
-    call deglitch_l2b(pmatrix, nx, ny, data, outmask, nsigma, .true.)
+    call deglitch_l2b(pmatrix, nx, ny, data, mask, nsigma, .true.)
     call system_clock(count2, count_rate, count_max)
     write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
 
@@ -936,9 +930,9 @@ end subroutine read_madmap1
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine unpack_direct(input, nvalids, mask, nx, ny, output)
+subroutine unpack_direct(input, nvalids, mask, nx, ny, output, field)
 
-    use module_math, only : NaN
+    use iso_fortran_env, only : ERROR_UNIT
     implicit none
 
     !f2py threadsafe
@@ -948,14 +942,20 @@ subroutine unpack_direct(input, nvalids, mask, nx, ny, output)
     !f2py intent(hide)  :: nx=shape(mask,0)
     !f2py intent(hide)  :: ny=shape(mask,1)
     !f2py intent(inout) :: output(nx,ny)
+    !f2py intent(in)    :: field
 
     real*8, intent(in)    :: input(nvalids)
     integer, intent(in)   :: nvalids
     logical*1, intent(in) :: mask(nx,ny)
     integer, intent(in)   :: nx, ny
     real*8, intent(out)   :: output(nx,ny)
+    real*8, intent(in)    :: field
 
-    output = unpack(input, mask, NaN)
+    if (count(.not. mask) /= nvalids) then
+        write (ERROR_UNIT,'(a)') 'UNPACK_DIRECT: The mask is not compatible with the input size.'
+        return
+    endif
+    output = unpack(input, .not. mask, field)
 
 end subroutine unpack_direct
 
@@ -982,10 +982,47 @@ subroutine unpack_transpose(input, mask, nx, ny, nvalids, output)
     integer, intent(in)   :: nvalids
     real*8, intent(out)   :: output(nvalids)
 
-    if (count(mask) /= nvalids) then
+    if (count(.not. mask) /= nvalids) then
         write (ERROR_UNIT,'(a)') 'UNPACK_TRANSPOSE: The mask is not compatible with the output size.'
         return
     endif
-    output = pack(input, mask)
+    output = pack(input, .not. mask)
 
 end subroutine unpack_transpose
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine masking(input, ninputs, mask, nmasks, status)
+
+    use iso_fortran_env, only : ERROR_UNIT
+    implicit none
+
+    !f2py threadsafe
+    !f2py intent(inout) :: input
+    !f2py intent(hide)  :: ninputs=size(input)
+    !f2py intent(in)    :: mask(nx)
+    !f2py intent(hide)  :: nmasks=size(mask)
+    !f2py intent(out)   :: status
+
+    real*8, intent(inout) :: input(ninputs)
+    logical*1, intent(in) :: mask(nmasks)
+    integer, intent(in)   :: ninputs, nmasks
+    integer, intent(out)  :: status
+
+    if (ninputs /= nmasks) then
+        write (ERROR_UNIT,'(a,2(i0,a))') "The data array has a size incompatible with the mask ('", ninputs, "' instead of '",     &
+              nmasks, "')."
+        status = 1
+    end if
+
+    !$omp parallel workshare
+    where (mask)
+        input = 0.d0
+    end where
+    !$omp end parallel workshare
+
+    status = 0
+
+end subroutine masking

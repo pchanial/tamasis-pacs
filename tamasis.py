@@ -83,12 +83,12 @@ class AcquisitionModel(object):
 
     def _validate_input_direct(self, cls, data):
         if not isinstance(data, cls):
-            raise TypeError("The input of '"+self.__class__.__name__+"' has an invalid type '"+cls.__name__+"'.")
+            raise TypeError("The input of '"+self.__class__.__name__+"' has an invalid type '"+data.__class__.__name__+"' instead of '"+cls.__name__+"'.")
         return self._validate_shape_direct(data.shape)
 
     def _validate_input_transpose(self, cls, data):
         if not isinstance(data, cls):
-            raise TypeError("The input of '"+self.__class__.__name__+"' transpose has an invalid type '"+cls.__name__+"'.")
+            raise TypeError("The input of the transpose of '"+self.__class__.__name__+"' has an invalid type '"+data.__class__.__name__+"' instead of '"+cls.__name__+"'.")
         return self._validate_shape_transpose(data.shape)
 
     def _validate_output_direct(self, cls, shapeout, **options):
@@ -218,7 +218,7 @@ class Projection(AcquisitionModel):
         return self._output_transpose.copy('a')
 
     def __str__(self):
-        return super(Projection, self).__str__()#+' => '+self.filename+' ['+str(self.first)+','+str(self.last)+']'
+        return super(Projection, self).__str__()
 
 
 #-------------------------------------------------------------------------------
@@ -341,7 +341,7 @@ class CompressionAverage(Compression):
 
 class DownSampling(Compression):
     """
-    Downsample the input signal by picking up one out of specified compression factor
+    Downsample the input signal by picking up one sample out of a number specified by the compression factor
     Author: P. Chanial
     """
     def __init__(self, compression_factor, description=None):
@@ -360,10 +360,12 @@ class Identity(AcquisitionModel):
         AcquisitionModel.__init__(self, description)
 
     def direct(self, signal, copyin=True, copyout=True):
+        self._validate_input_direct(numpy.ndarray, signal)
         if copyin or copyout: return signal.copy('a')
         return signal
 
     def transpose(self, signal, copyin=True, copyout=True):
+        self._validate_input_transpose(numpy.ndarray, signal)
         if copyin or copyout: return signal.copy('a')
         return signal
         
@@ -373,42 +375,68 @@ class Identity(AcquisitionModel):
 
 class Masking(AcquisitionModel):
     """
-    Apply a mask. Ensure that the output is a FitsMaskedArray.
+    Apply a mask: where the mask is non-null or True, the input values are set to zero
     Author: P. Chanial
     """
     def __init__(self, mask, description=None):
         AcquisitionModel.__init__(self, description)
         if mask is None:
-            self.mask = numpy.ma.nomask
+            self.mask = None
+            self.shapein = None
+            self.shapeout = None
         else:
             self.mask = mask
+            self.shapein = mask.shape
+            self.shapeout = mask.shape
 
     def direct(self, signal, copyin=True, copyout=True):
+        self._validate_input_direct(numpy.ndarray, signal)
+        if isinstance(signal, Map) and not signal.flags.f_contiguous:
+            signal = Map(numpy.asfortranarray(signal), header=signal.header)
+        elif isinstance(signal, Tod) and not signal.flags.f_contiguous:
+            signal = Tod(numpy.asfortranarray(signal), header=signal.header)
+        elif not signal.flags.f_contiguous:
+            signal = numpy.asfortranarray(signal)
         if copyin or copyout: signal = signal.copy('a')
-        if isinstance(signal, FitsMaskedArray):
-            signal.mask = self.mask
-        else:
-            signal = FitsMaskedArray(signal, mask=self.mask)
-        numpy.putmask(signal, signal.mask, 0.)
+        status = tmf.masking(signal, self.mask)
+        if status != 0: raise RuntimeError()
         return signal
 
     def transpose(self, signal, copyin=True, copyout=True):
         return self.direct(signal, copyin=copyin, copyout=copyout)
    
+    @property
+    def mask(self):
+        return self._mask
+
+    @mask.setter
+    def mask(self, mask):
+        if mask is None:
+            self._mask = None
+        elif not isinstance(mask, numpy.ndarray):
+            raise TypeError('Incorrect type for the input mask ('+str(type(mask))+').')
+        elif numpy.rank(mask) == 0:
+            raise ValueError('The input mask should not be scalar.')
+        elif self.shapein is not None and self.shapein != mask.shapein:
+            raise ValueError('The input mask has an incompatible shape '+str(mask.shape)+' instead of '+str(self.shapein)+'.')
+        else:
+            self._mask = numpy.array(mask, dtype='int8', order='f', copy=False)
+
 
 #-------------------------------------------------------------------------------
 
 
-class Pack(AcquisitionModel):
+class Packing(AcquisitionModel):
     """
     Convert 2d map into 1d map, under the control of a mask (true means observed)
     Author: P. Chanial
     """
-    def __init__(self, mask, description=None):
+    def __init__(self, mask, field=numpy.nan, description=None):
         AcquisitionModel.__init__(self, description)
-        self.mask = numpy.array(mask, order='f', dtype='bool').astype('int8')
+        self.mask = numpy.array(mask, dtype='int8', order='f', copy=False)
+        self.field = field
         self.shapein  = tuple(self.mask.shape)
-        self.shapeout = (numpy.sum(self.mask),)
+        self.shapeout = (numpy.sum(self.mask == 0),)
 
     def direct(self, unpacked, copyin=True, copyout=True):
         self._validate_output_direct(Map, self._validate_input_direct(Map, unpacked))
@@ -420,7 +448,7 @@ class Pack(AcquisitionModel):
     def transpose(self, packed, copyin=True, copyout=True):
         self._validate_output_transpose(Map, self._validate_input_transpose(Map, packed))
         if not copyin: self._output_direct = packed
-        tmf.unpack_direct(packed, self.mask, self._output_transpose)
+        tmf.unpack_direct(packed, self.mask, self._output_transpose, self.field)
         if not copyout: return self._output_transpose
         return self._output_transpose.copy('a')
 
@@ -428,30 +456,53 @@ class Pack(AcquisitionModel):
 #-------------------------------------------------------------------------------
 
 
-class Unpack(AcquisitionModel):
+class Unpacking(AcquisitionModel):
     """
-    Convert 1d map into 2d map, under the control of a mask (true means observed)
+    Convert 1d map into 2d map, under the control of a mask (true means non-observed)
     Author: P. Chanial
     """
-    def __init__(self, mask, description=None):
+    def __init__(self, mask, field=0., description=None):
         AcquisitionModel.__init__(self, description)
-        self.mask = numpy.array(mask, order='f', dtype='bool').astype('int8')
-        self.shapein  = (numpy.sum(self.mask),)
+        self.mask = numpy.array(mask, dtype='int8', order='f', copy=False)
+        self.field = field
+        self.shapein  = (numpy.sum(self.mask == 0),)
         self.shapeout = tuple(self.mask.shape)
 
     def direct(self, packed, copyin=True, copyout=True):
-        self._validate_output_direct(Map, self._validate_input_direct(Map, packed))
-        if not copyin: self._output_transpose = packed
-        tmf.unpack_transpose(packed, self.mask, self._output_direct)
+        self._validate_output_direct(Map, self._validate_input_direct(numpy.ndarray, packed))
+        if not copyin: self._output_transpose = numpy.asfortranarray(packed)
+        tmf.unpack_direct(packed, self.mask, self._output_direct, self.field)
         if not copyout: return self._output_direct
         return self._output_direct.copy('a')
 
     def transpose(self, unpacked, copyin=True, copyout=True):
-        self._validate_output_transpose(Map, self._validate_input_transpose(Map, unpacked))
-        if not copyin: self._output_direct = unpacked
-        tmf.unpack_direct(unpacked, self.mask, self._output_transpose)
+        self._validate_output_transpose(Map, self._validate_input_transpose(numpy.ndarray, unpacked))
+        if not copyin: self._output_direct = numpy.asfortranarray(unpacked)
+        tmf.unpack_transpose(unpacked, self.mask, self._output_transpose)
         if not copyout: return self._output_transpose
         return self._output_transpose.copy('a')
+
+
+#-------------------------------------------------------------------------------
+
+
+class Reshaping(AcquisitionModel):
+    """
+    Reshape arrays
+    Author: P. Chanial
+    """
+    def __init__(self, shapein, shapeout, description=None):
+        AcquisitionModel.__init__(self, description)
+        self.shapein  = shapein
+        self.shapeout = shapeout
+
+    def direct(self, array, copyin=True, copyout=True):
+        self._validate_input_direct(numpy.ndarray, array)
+        return array.reshape(self.shapeout, order='f')
+
+    def transpose(self, array, copyin=True, copyout=True):
+        self._validate_input_transpose(numpy.ndarray, array)
+        return array.reshape(self.shapein, order='f')
 
 
 
@@ -528,12 +579,13 @@ class _Pacs():
         
         if bad_detector_mask is None:
             bad_detector_maskFile = join(getenv('TAMASIS_DIR'),'data','PCalPhotometer_BadPixelMask_FM_v3.fits')
-            bad_detector_mask = numpy.array(fitsopen(bad_detector_maskFile)[self.array].data, order='fortran')
+            bad_detector_mask = numpy.array(fitsopen(bad_detector_maskFile)[self.array].data, dtype='int8', order='fortran')
         else:
             array_shapes = {'blue':(32,64), 'green':(32,64), 'red':(16,32)}
             if bad_detector_mask.shape != array_shapes[self.array]:
                 raise ValueError('Input bad pixel mask has incorrect shape '+str(bad_detector_mask.shape)+' instead of '+str(array_shapes[self.array]))
-        self.bad_detector_mask = bad_detector_mask.copy('fortran').astype(bool)
+            bad_detector_mask = numpy.array(bad_detector_mask, dtype='int8', order='f', copy=False)
+        self.bad_detector_mask = bad_detector_mask
         if self.transparent_mode:
             self.bad_detector_mask[:,0:16] = True
             self.bad_detector_mask[16:32,16:32] = True
@@ -588,6 +640,8 @@ class PacsObservation(_Pacs):
             else:
                 if bad_detector_mask.shape != (32,64):
                     raise ValueError('Invalid shape of the input blue bad detector mask: '+str(bad_detector_mask.shape)+'.')
+            bad_detector_mask = numpy.array(bad_detector_mask, dtype='int8', order='f', copy=False)
+
         else:
             if channel == 'r':
                 bad_detector_mask = numpy.zeros((16,32), dtype='int8', order='f')
@@ -595,13 +649,13 @@ class PacsObservation(_Pacs):
                 bad_detector_mask = numpy.zeros((32,64), dtype='int8', order='f')
              
         # retrieve information from the observations
-        ndetectors, bad_detector_mask, transparent_mode, compression_factor, nsamples, status = tmf.pacs_info(filename_, nfilenames, fine_sampling_factor, keep_bad_detectors, use_mask, bad_detector_mask.astype('int8'))
+        ndetectors, bad_detector_mask, transparent_mode, compression_factor, nsamples, status = tmf.pacs_info(filename_, nfilenames, fine_sampling_factor, keep_bad_detectors, use_mask, bad_detector_mask)
         if status != 0: raise RuntimeError()
 
         if resolution is None:
             resolution = 3.
         if header is None:
-            hstr, status = tmf.pacs_map_header(filename_, nfilenames, True, fine_sampling_factor, keep_bad_detectors, use_mask, bad_detector_mask.astype('int8'), resolution)
+            hstr, status = tmf.pacs_map_header(filename_, nfilenames, True, fine_sampling_factor, keep_bad_detectors, use_mask, bad_detector_mask, resolution)
             if status != 0: raise RuntimeError()
             header = str2fitsheader(hstr)
 
@@ -613,7 +667,7 @@ class PacsObservation(_Pacs):
         self.nsamples = nsamples
         self.nfinesamples = numpy.sum(nsamples * compression_factor) * fine_sampling_factor
         self.ndetectors = ndetectors
-        self.bad_detector_mask = bad_detector_mask.astype(bool)
+        self.bad_detector_mask = bad_detector_mask
         self.keep_bad_detectors = keep_bad_detectors
         self.fine_sampling_factor = fine_sampling_factor
         self.transparent_mode = transparent_mode
@@ -628,10 +682,10 @@ class PacsObservation(_Pacs):
         Returns the signal and mask timelines as fortran arrays.
         """
         filename_, nfilenames = self._files2tmf(self.filename)
-        signal, mask, status = tmf.pacs_timeline(filename_, self.nobservations, numpy.sum(self.nsamples), self.ndetectors, self.keep_bad_detectors, self.bad_detector_mask.astype('int8'), do_flatfielding, do_subtraction_mean)
+        signal, mask, status = tmf.pacs_timeline(filename_, self.nobservations, numpy.sum(self.nsamples), self.ndetectors, self.keep_bad_detectors, self.bad_detector_mask, do_flatfielding, do_subtraction_mean)
         if status != 0: raise RuntimeError()
 
-        return Tod(signal, mask=numpy.array(mask, dtype=bool))
+        return Tod(signal, mask=mask)
 
     def get_pointing_matrix(self, finer_sampling=True):
         nsamples = self.nfinesamples if finer_sampling else numpy.sum(self.nsamples)
@@ -639,7 +693,7 @@ class PacsObservation(_Pacs):
         print 'Info: allocating '+str(sizeofpmatrix/2.**17)+' MiB for the pointing matrix.'
         pmatrix = numpy.zeros(sizeofpmatrix, dtype=numpy.int64)
         filename_, nfilenames = self._files2tmf(self.filename)
-        status = tmf.pacs_pointing_matrix_filename(filename_, self.nobservations, finer_sampling, self.fine_sampling_factor, self.npixels_per_sample, nsamples, self.ndetectors, self.keep_bad_detectors, self.bad_detector_mask.astype('int8'), str(self.header).replace('\n', ''), pmatrix)
+        status = tmf.pacs_pointing_matrix_filename(filename_, self.nobservations, finer_sampling, self.fine_sampling_factor, self.npixels_per_sample, nsamples, self.ndetectors, self.keep_bad_detectors, self.bad_detector_mask, str(self.header).replace('\n', ''), pmatrix)
         if status != 0: raise RuntimeError()
         return pmatrix
 
@@ -704,7 +758,7 @@ class PacsSimulation(_Pacs):
         if self.keep_bad_detectors:
             mask = numpy.zeros(signal.shape, dtype=bool, order='fortran')
             for idetector, badpixel in enumerate(self.bad_detector_mask.flat):
-                if badpixel:
+                if badpixel != 0:
                     mask[:,idetector] = True
         else:
             mask = None
@@ -735,8 +789,8 @@ class MadMap1Observation(object):
             raise ValueError('Invalid filename of the map mask.')
         filename = m.group('filename')
         extname  = m.group('extname')
-        coverage = pyfits.fitsopen(filename)[extname].data > 1.e-15
-        self.mapmask = numpy.array(coverage.T, order='f', dtype='int8')
+        coverage = pyfits.fitsopen(filename)[extname].data.T
+        self.mapmask = numpy.array(numpy.isnan(coverage), dtype='int8', order='f')
         self.convert = convert
         self.ndetectors = ndetectors
         self.nsamples = (self.nfinesamples,)
@@ -745,7 +799,7 @@ class MadMap1Observation(object):
         header.update('bitpix', -64)
         header.update('extend', True)
         header.update('naxis', 1)
-        header.update('naxis1', numpy.sum(self.mapmask))
+        header.update('naxis1', numpy.sum(self.mapmask == 0))
         self.header = header
 
     def get_pointing_matrix(self, finer_sampling=False):
@@ -797,6 +851,10 @@ class FitsMaskedArray(numpy.ma.MaskedArray):
         result = numpy.ma.MaskedArray.__array_wrap__(self, obj, context=context).view(type(self))
         result.header = self.header
         return result
+
+    #XXX NUMPY BUG ma.MaskedArray incorrectly overrides ndarray.ravel(order)
+    def ravel(self, order='C'):
+        return super(numpy.ma.MaskedArray, self).ravel(order)
 
     @staticmethod
     def empty(shape, dtype='float64', order='C', header=None, mask=numpy.ma.nomask):
@@ -919,7 +977,6 @@ class Tod(FitsMaskedArray):
     def __array_finalize__(self, obj):
         FitsMaskedArray.__array_finalize__(self, obj)
         if obj is None: return
-        self.mytoddata = getattr(obj, 'mytoddata', None)
 
     def __array_wrap__(self, obj, context=None):
         result = FitsMaskedArray.__array_wrap__(self, obj, context=context).view(type(self))
@@ -973,15 +1030,15 @@ class Tod(FitsMaskedArray):
 #-------------------------------------------------------------------------------
 
 
-class LeastSquareMatvec():
-    def __init__(self, model, mask=numpy.ma.nomask):
-        from copy import copy
+class LeastSquareMatvec(object):
+    def __init__(self, model, unpacking=None):
         self.model = model
-        self.xmap = Map.empty(model.shapein, mask=mask, order='f')
-    def __call__(self, x):
-        self.xmap[self.xmap.mask == False] = x
-        self.xmap = self.model.transpose(self.model.direct(self.xmap))
-        xout = self.xmap.compressed()
+        if unpacking is None:
+            self.unpacking = Reshaping(numpy.product(model.shapein), model.shapein)
+        else:
+            self.unpacking = unpacking
+    def __call__(self, xvec):
+        xout = self.unpacking.transpose(self.model.transpose(self.model.direct(self.unpacking.direct(Map(xvec, copy=True)), copy=False), copy=False)).copy()
         return xout
 
 class PcgCallback():
@@ -991,9 +1048,9 @@ class PcgCallback():
         print 'PCG Iteration '+str(self.count)
         self.count += 1
 
-class RLSMatvec(LeastSquareMatvec):
-    def __init__(self, hyper, *args, **kargs):
-        LeastSquareMatvec.__init__(self, *args, **kargs)
+class RegularisedLeastSquareMatvec(LeastSquareMatvec):
+    def __init__(self, model, unpacking, hyper):
+        LeastSquareMatvec.__init__(self, model, unpacking)
         # to enforce 2d hyper
         if numpy.size(hyper) == 1:
             hyper = 2 * (hyper,)
@@ -1001,15 +1058,15 @@ class RLSMatvec(LeastSquareMatvec):
         # define smooth prior
         self.prior_direct = [Smooth(i) for i in xrange(len(hyper))]
         self.prior_transpose = [SmoothT(i) for i in xrange(len(hyper))]
-    def __call__(self, x):
+    def __call__(self, xvec):
         # likelihood
-        self.xmap[self.xmap.mask == False] = x
-        xout = self.model.transpose(self.model.direct(self.xmap))
+        xout = super(RegularisedLeastSquareMatvec, self).__call__(xvec)
+        x = self.unpacking.direct(xvec)
         # add prior component
         for i in xrange(len(self.hyper)):
-            xout += self.hyper[i] * self.prior_transpose[i](self.prior_direct[i](self.xmap))
-        self.xmap = xout
-        xout = self.xmap.compressed()
+            dTd = self.prior_transpose[i](self.prior_direct[i](x))
+            dTd *= self.hyper[i]
+            xout += self.unpacking.transpose(dTd)
         return xout
 
 # Priors
@@ -1018,15 +1075,14 @@ class Smooth():
     def __init__(self, axis):
         self.axis = axis
     def __call__(self, arr):
-        d =  numpy.diff(arr, axis=self.axis)
-        return d
+        return numpy.asfortranarray(numpy.diff(arr, axis=self.axis))
+
 class SmoothT(Smooth):
     """Define smoothness priors along specific axis
     This is the transpose model
     """
     def __call__(self, arr):
-        d = diffT(arr, axis=self.axis)
-        return d
+        return numpy.asfortranarray(diffT(arr, axis=self.axis))
 
 def diffT(arr, axis=-1):
     """transpose of diff for n=1"""
@@ -1045,15 +1101,17 @@ def diffT(arr, axis=-1):
 #-------------------------------------------------------------------------------
 
 
-def naive_mapper(tod, model):
+def naive_mapper(tod, model, weights=False):
     """
     Returns a naive map, i.e.: model.transpose(tod) / model.transpose(1)
     """
     mymap = model.transpose(tod)
     unity = tod.copy()
     unity[:] = 1.
-    weights = model.transpose(unity, copy=False)
-    mymap /= weights
+    map_weights = model.transpose(unity, copy=False)
+    mymap /= map_weights
+    if weights:
+        return mymap, map_weights.copy()
     return mymap
 
  
@@ -1068,8 +1126,7 @@ def deglitch_l2std(tod, projection, nsigma=5.):
     nx = projection.header['naxis1']
     ny = projection.header['naxis2']
     npixels_per_sample = projection.npixels_per_sample
-    tod.mask = tmf.deglitch_l2b_std(projection.pmatrix, nx, ny, tod, 
-        tod.mask.astype('int8'), nsigma, npixels_per_sample)
+    tmf.deglitch_l2b_std(projection.pmatrix, nx, ny, tod, tod.mask, nsigma, npixels_per_sample)
 
  
 #-------------------------------------------------------------------------------
@@ -1083,8 +1140,7 @@ def deglitch_l2mad(tod, projection, nsigma=5.):
     nx = projection.header['naxis1']
     ny = projection.header['naxis2']
     npixels_per_sample = projection.npixels_per_sample
-    tod.mask = tmf.deglitch_l2b_mad(projection.pmatrix, nx, ny, tod, 
-        tod.mask.astype('int8'), nsigma, npixels_per_sample)
+    tmf.deglitch_l2b_mad(projection.pmatrix, nx, ny, tod, tod.mask, nsigma, npixels_per_sample)
 
  
 #-------------------------------------------------------------------------------

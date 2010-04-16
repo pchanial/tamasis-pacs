@@ -27,19 +27,7 @@ print model
 backmap = model.transpose(tod)
 tod[:] = 1
 weights = model.transpose(tod)
-map_naive = Map(backmap / weights, mask=weights <=1)
-
-# iterative map
-backmap.mask = map_naive.mask
-shape = 2*(map_naive.count(),)
-matvec = RLSMatvec(1e-3, model, map_naive.mask)
-operator = LinearOperator(matvec=matvec, dtype=numpy.float64, shape=shape)
-b  = backmap.compressed()
-x0 = map_naive.compressed()
-M  = dia_matrix(((1./weights)[weights > 1], 0), shape=shape)
-solution, nit = cgs(operator, b, x0=x0, M=M, tol=1.e-4, maxiter=20, callback=PcgCallback())
-map_iter = map_naive.copy()
-map_iter[map_naive.mask == False] = solution
+map_naive = backmap / weights
 
 #ra0  = 20.
 #dec0 = 0.1
