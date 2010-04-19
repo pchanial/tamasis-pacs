@@ -1,8 +1,6 @@
 import tamasisfortran as tmf
 import numpy
-import scipy.sparse.linalg
-    
-
+import scipy.sparse.linalg    
 
 
 #-------------------------------------------------------------------------------
@@ -10,7 +8,6 @@ import scipy.sparse.linalg
 # Acquisition models
 #
 #-------------------------------------------------------------------------------
-
 
 
 class ValidationError(Exception): pass
@@ -36,15 +33,15 @@ class AcquisitionModel(object):
         self.description = description
 
     #abstractmethod
-    def direct(self, data, copy=True):
+    def direct(self, data, reusein=False, copyout=True):
         for i, model in enumerate(self):
-            data = model.direct(data, copyin=copy and i == 0, copyout=copy and i==len(self)-1)
+            data = model.direct(data, reusein=reusein or i != 0, copyout=copyout and i==len(self)-1)
         return data
 
     #abstractmethod
-    def transpose(self, data, copy=True):
+    def transpose(self, data, reusein=False, copyout=True):
         for i, model in enumerate(reversed(self)):
-            data = model.transpose(data, copyin=copy and i == 0, copyout=copy and i==len(self)-1)
+            data = model.transpose(data, reusein=reusein or i != 0, copyout=copyout and i==len(self)-1)
         return data
 
     def __validate_chain_direct(self, shapein):
@@ -81,15 +78,19 @@ class AcquisitionModel(object):
             raise ValidationError('The input of '+self.__class__.__name__+' transpose has incompatible shape '+str(shapeout)+' instead of '+str(self.shapeout)+'.')
         return self.shapein
 
-    def _validate_input_direct(self, cls, data):
+    def _validate_input_direct(self, cls, data, reusein):
         if not isinstance(data, cls):
             raise TypeError("The input of '"+self.__class__.__name__+"' has an invalid type '"+data.__class__.__name__+"' instead of '"+cls.__name__+"'.")
-        return self._validate_shape_direct(data.shape)
+        shapeout = self._validate_shape_direct(data.shape)
+        if reusein: self._output_transpose = data
+        return data, shapeout
 
-    def _validate_input_transpose(self, cls, data):
+    def _validate_input_transpose(self, cls, data, reusein):
         if not isinstance(data, cls):
             raise TypeError("The input of the transpose of '"+self.__class__.__name__+"' has an invalid type '"+data.__class__.__name__+"' instead of '"+cls.__name__+"'.")
-        return self._validate_shape_transpose(data.shape)
+        shapein = self._validate_shape_transpose(data.shape)
+        if reusein: self._output_direct = data
+        return data, shapein
 
     def _validate_output_direct(self, cls, shapeout, **options):
         if shapeout is None:
@@ -97,7 +98,10 @@ class AcquisitionModel(object):
         if self._output_direct is not None and shapeout == self._output_direct.shape:
             return
         print 'Info: allocating '+str(numpy.product(shapeout)/2.**17)+' MiB for the output of '+self.__class__.__name__
-        self._output_direct = cls.empty(shapeout, dtype=numpy.float64, order='fortran', **options)
+        if cls == numpy.ndarray:
+            self._output_direct = numpy.empty(shapeout, dtype=numpy.float64, **options)
+        else:
+            self._output_direct = cls.empty(shapeout, dtype=numpy.float64, **options)
 
     def _validate_output_transpose(self, cls, shapein, **options):
         if shapein is None:
@@ -105,7 +109,10 @@ class AcquisitionModel(object):
         if self._output_transpose is not None and shapein == self._output_transpose.shape:
             return
         print 'Info: allocating '+str(numpy.product(shapein)/2.**17)+' MiB for the output of the transpose of '+self.__class__.__name__
-        self._output_transpose = cls.empty(shapein, dtype=numpy.float64, order='fortran', **options)
+        if cls == numpy.ndarray:
+            self._output_transpose = numpy.empty(shapein, dtype=numpy.float64, **options)
+        else:
+            self._output_transpose = cls.empty(shapein, dtype=numpy.float64, **options)
 
     shapein           = None   # input is unconstrained
     shapeout          = None   # output is unconstrained
@@ -199,21 +206,21 @@ class Projection(AcquisitionModel):
         self.npixels_per_sample = observation.npixels_per_sample
         self.header = observation.header
         self.pmatrix = observation.get_pointing_matrix(finer_sampling=finer_sampling)
-        self.shapein = tuple([self.header['naxis'+str(i+1)] for i in range(self.header['naxis'])])
-        self.shapeout = (observation.nfinesamples if finer_sampling else numpy.sum(observation.nsamples), observation.ndetectors) 
+        self.shapein = tuple([self.header['naxis'+str(i+1)] for i in reversed(range(self.header['naxis']))])
+        self.shapeout = (observation.ndetectors, observation.nfinesamples if finer_sampling else numpy.sum(observation.nsamples)) 
 
-    def direct(self, map2d, copyin=True, copyout=True):
-        self._validate_output_direct(Tod, self._validate_input_direct(Map, map2d))
+    def direct(self, map2d, reusein=False, copyout=True):
+        map2d, shapeout = self._validate_input_direct(Map, map2d, reusein)
+        self._validate_output_direct(Tod, shapeout)
         map2d.header = self.header
-        if not copyin: self._output_transpose = map2d
-        tmf.pointing_matrix_direct(self.pmatrix, map2d, self._output_direct, self.npixels_per_sample)
+        tmf.pointing_matrix_direct(self.pmatrix, map2d.T, self._output_direct.T, self.npixels_per_sample)
         if not copyout: return self._output_direct
         return self._output_direct.copy('a')
 
-    def transpose(self, signal, copyin=True, copyout=True):
-        self._validate_output_transpose(Map, self._validate_input_transpose(Tod, signal), header=self.header)
-        if not copyin: self._output_direct = signal
-        tmf.pointing_matrix_transpose(self.pmatrix, signal, self._output_transpose,  self.npixels_per_sample)
+    def transpose(self, signal, reusein=False, copyout=True):
+        signal, shapein = self._validate_input_transpose(Tod, signal, reusein)
+        self._validate_output_transpose(Map, shapein, header=self.header)
+        tmf.pointing_matrix_transpose(self.pmatrix, signal.T, self._output_transpose.T,  self.npixels_per_sample)
         if not copyout: return self._output_transpose
         return self._output_transpose.copy('a')
 
@@ -235,17 +242,17 @@ class PacsMultiplexing(AcquisitionModel):
         self.fine_sampling_factor = pacs.fine_sampling_factor
         self.ij = pacs.ij
 
-    def direct(self, signal, copyin=True, copyout=True):
-        self._validate_output_direct(Tod, self._validate_input_direct(Tod, signal))
-        if not copyin: self._output_transpose = signal
-        tmf.pacs_multiplexing_direct(signal, self._output_direct, self.fine_sampling_factor, self.ij)
+    def direct(self, signal, reusein=False, copyout=True):
+        signal, shapeout = self._validate_input_direct(Tod, signal, reusein)
+        self._validate_output_direct(Tod, shapeout)
+        tmf.pacs_multiplexing_direct(signal.T, self._output_direct.T, self.fine_sampling_factor, self.ij)
         if not copyout: return self._output_direct
         return self._output_direct.copy('a')
 
-    def transpose(self, signal, copyin=True, copyout=True):
-        self._validate_output_transpose(Tod, self._validate_input_transpose(Tod, signal))
-        if not copyin: self._output_direct = signal
-        tmf.pacs_multiplexing_transpose(signal, self._output_transpose, self.fine_sampling_factor, self.ij)
+    def transpose(self, signal, reusein=False, copyout=True):
+        signal, shapein = self._validate_input_transpose(Tod, signal, reusein)
+        self._validate_output_transpose(Tod, shapein)
+        tmf.pacs_multiplexing_transpose(signal.T, self._output_transpose.T, self.fine_sampling_factor, self.ij)
         if not copyout: return self._output_transpose
         return self._output_transpose.copy('a')
 
@@ -253,10 +260,10 @@ class PacsMultiplexing(AcquisitionModel):
         if shapein is None:
             return None
         super(PacsMultiplexing, self)._validate_shape_direct(shapein)
-        if shapein[0] % self.fine_sampling_factor != 0:
-            raise ValidationError('The input timeline size ('+str(shapein[0])+') is not an integer times the fine sampling factor ('+str(self.fine_sampling_factor)+').')
+        if shapein[1] % self.fine_sampling_factor != 0:
+            raise ValidationError('The input timeline size ('+str(shapein[1])+') is not an integer times the fine sampling factor ('+str(self.fine_sampling_factor)+').')
         shapeout = list(shapein)
-        shapeout[0] = shapeout[0] / self.fine_sampling_factor
+        shapeout[1] = shapeout[1] / self.fine_sampling_factor
         return tuple(shapeout)
 
     def _validate_shape_transpose(self, shapeout):
@@ -264,7 +271,7 @@ class PacsMultiplexing(AcquisitionModel):
             return
         super(PacsMultiplexing, self)._validate_shape_transpose(shapeout)
         shapein = list(shapeout)
-        shapein[0] = shapein[0] * self.fine_sampling_factor
+        shapein[1] = shapein[1] * self.fine_sampling_factor
         return tuple(shapein)
 
 
@@ -278,27 +285,27 @@ class Compression(AcquisitionModel):
     """
     def __init__(self, compression_direct, compression_transpose, compression_factor, description):
         AcquisitionModel.__init__(self, description)
-        self.compression_direct = compression_direct
-        self.compression_transpose = compression_transpose
+        self._compression_direct = compression_direct
+        self._compression_transpose = compression_transpose
         self.compression_factor = compression_factor
 
-    def direct(self, signal, copyin=True, copyout=True):
+    def direct(self, signal, reusein=False, copyout=True):
         if self.compression_factor == 1:
-            if copyin or copyout: return signal.copy('a')
+            if copyout: return signal.copy('a')
             return signal
-        self._validate_output_direct(Tod, self._validate_input_direct(Tod, signal))
-        if not copyin: self._output_transpose = signal
-        self.compression_direct(signal, self._output_direct, self.compression_factor)
+        signal, shapeout = self._validate_input_direct(Tod, signal, reusein)
+        self._validate_output_direct(Tod, shapeout)
+        self._compression_direct(signal, self._output_direct, self.compression_factor)
         if not copyout: return self._output_direct
         return self._output_direct.copy('a')
 
-    def transpose(self, compressed, copyin=True, copyout=True):
+    def transpose(self, compressed, reusein=False, copyout=True):
         if self.compression_factor == 1:
-            if copyin or copyout: return compressed.copy('a')
+            if copyout: return compressed.copy('a')
             return compressed
-        self._validate_output_transpose(Tod, self._validate_input_transpose(Tod, compressed))
-        if not copyin: self._output_direct = compressed
-        self.compression_transpose(compressed, self._output_transpose, self.compression_factor)
+        compressed, shapein = self._validate_input_transpose(Tod, compressed, reusein)
+        self._validate_output_transpose(Tod, shapein)
+        self._compression_transpose(compressed, self._output_transpose, self.compression_factor)
         if not copyout: return self._output_transpose
         return self._output_transpose.copy('a')
 
@@ -306,10 +313,10 @@ class Compression(AcquisitionModel):
         if shapein is None:
             return None
         super(Compression, self)._validate_shape_direct(shapein)
-        if shapein[0] % self.compression_factor != 0:
-            raise ValidationError('The input timeline size ('+str(shapein[0])+') is not an integer times the compression factor ('+str(self.compression_factor)+').')
+        if shapein[1] % self.compression_factor != 0:
+            raise ValidationError('The input timeline size ('+str(shapein[1])+') is not an integer times the compression factor ('+str(self.compression_factor)+').')
         shapeout = list(shapein)
-        shapeout[0] /= self.compression_factor
+        shapeout[1] /= self.compression_factor
         return tuple(shapeout)
 
     def _validate_shape_transpose(self, shapeout):
@@ -317,7 +324,7 @@ class Compression(AcquisitionModel):
             return
         super(Compression, self)._validate_shape_transpose(shapeout)
         shapein = list(shapeout)
-        shapein[0] *= self.compression_factor
+        shapein[1] *= self.compression_factor
         return tuple(shapein)
 
     def __str__(self):
@@ -333,7 +340,13 @@ class CompressionAverage(Compression):
     Author: P. Chanial
     """
     def __init__(self, compression_factor, description=None):
-        Compression.__init__(self, tmf.compression_average_direct, tmf.compression_average_transpose, compression_factor, description)
+        Compression.__init__(self, self.compression_average_direct, self.compression_average_transpose, compression_factor, description)
+
+    def compression_average_direct(self, signal, output, compression_factor):
+        tmf.compression_average_direct(signal.T, output.T, compression_factor)
+         
+    def compression_average_transpose(self, signal, output, compression_factor):
+        tmf.compression_average_transpose(signal.T, output.T, compression_factor)
          
 
 #-------------------------------------------------------------------------------
@@ -359,14 +372,14 @@ class Identity(AcquisitionModel):
     def __init__(self, description=None):
         AcquisitionModel.__init__(self, description)
 
-    def direct(self, signal, copyin=True, copyout=True):
-        self._validate_input_direct(numpy.ndarray, signal)
-        if copyin or copyout: return signal.copy('a')
+    def direct(self, signal, reusein=False, copyout=True):
+        self._validate_input_direct(numpy.ndarray, signal, False)
+        if copyout: return signal.copy('a')
         return signal
 
-    def transpose(self, signal, copyin=True, copyout=True):
-        self._validate_input_transpose(numpy.ndarray, signal)
-        if copyin or copyout: return signal.copy('a')
+    def transpose(self, signal, reusein=False, copyout=True):
+        self._validate_input_transpose(numpy.ndarray, signal, False)
+        if copyout: return signal.copy('a')
         return signal
         
 
@@ -389,21 +402,15 @@ class Masking(AcquisitionModel):
             self.shapein = mask.shape
             self.shapeout = mask.shape
 
-    def direct(self, signal, copyin=True, copyout=True):
-        self._validate_input_direct(numpy.ndarray, signal)
-        if isinstance(signal, Map) and not signal.flags.f_contiguous:
-            signal = Map(numpy.asfortranarray(signal), header=signal.header)
-        elif isinstance(signal, Tod) and not signal.flags.f_contiguous:
-            signal = Tod(numpy.asfortranarray(signal), header=signal.header)
-        elif not signal.flags.f_contiguous:
-            signal = numpy.asfortranarray(signal)
-        if copyin or copyout: signal = signal.copy('a')
-        status = tmf.masking(signal, self.mask)
+    def direct(self, signal, reusein=False, copyout=True):
+        self._validate_input_direct(numpy.ndarray, signal, False)
+        if copyout: signal = signal.copy('a')
+        status = tmf.masking(signal.T, self.mask.T)
         if status != 0: raise RuntimeError()
         return signal
 
-    def transpose(self, signal, copyin=True, copyout=True):
-        return self.direct(signal, copyin=copyin, copyout=copyout)
+    def transpose(self, signal, reusein=False, copyout=True):
+        return self.direct(signal, reusein=reusein, copyout=copyout)
    
     @property
     def mask(self):
@@ -420,7 +427,7 @@ class Masking(AcquisitionModel):
         elif self.shapein is not None and self.shapein != mask.shapein:
             raise ValueError('The input mask has an incompatible shape '+str(mask.shape)+' instead of '+str(self.shapein)+'.')
         else:
-            self._mask = numpy.array(mask, dtype='int8', order='f', copy=False)
+            self._mask = numpy.array(mask, dtype='int8', copy=False)
 
 
 #-------------------------------------------------------------------------------
@@ -433,24 +440,24 @@ class Packing(AcquisitionModel):
     """
     def __init__(self, mask, field=numpy.nan, description=None):
         AcquisitionModel.__init__(self, description)
-        self.mask = numpy.array(mask, dtype='int8', order='f', copy=False)
+        self.mask = numpy.array(mask, dtype='int8', copy=False)
         self.field = field
         self.shapein  = tuple(self.mask.shape)
         self.shapeout = (numpy.sum(self.mask == 0),)
 
-    def direct(self, unpacked, copyin=True, copyout=True):
-        self._validate_output_direct(Map, self._validate_input_direct(Map, unpacked))
-        if not copyin: self._output_transpose = unpacked
-        tmf.unpack_transpose(unpacked, self.mask, self._output_direct)
-        if not copyout: return self._output_direct
-        return self._output_direct.copy('a')
+    def direct(self, unpacked, reusein=False, copyout=True):
+        unpacked, shapeout = self._validate_input_direct(Map, unpacked, reusein)
+        self._validate_output_direct(numpy.ndarray, shapeout)
+        tmf.unpack_transpose(unpacked.T, self.mask.T, self._output_direct.T)
+        if copyout: return self._output_direct.copy('a')
+        return self._output_direct
 
-    def transpose(self, packed, copyin=True, copyout=True):
-        self._validate_output_transpose(Map, self._validate_input_transpose(Map, packed))
-        if not copyin: self._output_direct = packed
-        tmf.unpack_direct(packed, self.mask, self._output_transpose, self.field)
-        if not copyout: return self._output_transpose
-        return self._output_transpose.copy('a')
+    def transpose(self, packed, reusein=False, copyout=True):
+        packed, shapein = self._validate_input_transpose(Map, packed, reusein)
+        self._validate_output_transpose(numpy.ndarray, shapein)
+        tmf.unpack_direct(packed.T, self.mask.T, self._output_transpose.T, self.field)
+        if copyout: return self._output_transpose.copy('a')
+        return self._output_transpose
 
 
 #-------------------------------------------------------------------------------
@@ -463,24 +470,24 @@ class Unpacking(AcquisitionModel):
     """
     def __init__(self, mask, field=0., description=None):
         AcquisitionModel.__init__(self, description)
-        self.mask = numpy.array(mask, dtype='int8', order='f', copy=False)
+        self.mask = numpy.array(mask, dtype='int8', copy=False)
         self.field = field
         self.shapein  = (numpy.sum(self.mask == 0),)
         self.shapeout = tuple(self.mask.shape)
 
-    def direct(self, packed, copyin=True, copyout=True):
-        self._validate_output_direct(Map, self._validate_input_direct(numpy.ndarray, packed))
-        if not copyin: self._output_transpose = numpy.asfortranarray(packed)
-        tmf.unpack_direct(packed, self.mask, self._output_direct, self.field)
-        if not copyout: return self._output_direct
-        return self._output_direct.copy('a')
+    def direct(self, packed, reusein=False, copyout=True):
+        packed, shapeout = self._validate_input_direct(numpy.ndarray, packed, reusein)
+        self._validate_output_direct(Map, shapeout)
+        tmf.unpack_direct(packed.T, self.mask.T, self._output_direct.T, self.field)
+        if copyout: return self._output_direct.copy('a')
+        return self._output_direct
 
-    def transpose(self, unpacked, copyin=True, copyout=True):
-        self._validate_output_transpose(Map, self._validate_input_transpose(numpy.ndarray, unpacked))
-        if not copyin: self._output_direct = numpy.asfortranarray(unpacked)
-        tmf.unpack_transpose(unpacked, self.mask, self._output_transpose)
-        if not copyout: return self._output_transpose
-        return self._output_transpose.copy('a')
+    def transpose(self, unpacked, reusein=False, copyout=True):
+        unpacked, shapein = self._validate_input_transpose(Map, unpacked, reusein)
+        self._validate_output_transpose(numpy.ndarray, shapein)
+        tmf.unpack_transpose(unpacked.T, self.mask.T, self._output_transpose.T)
+        if copyout: return self._output_transpose.copy('a')
+        return self._output_transpose
 
 
 #-------------------------------------------------------------------------------
@@ -496,13 +503,17 @@ class Reshaping(AcquisitionModel):
         self.shapein  = shapein
         self.shapeout = shapeout
 
-    def direct(self, array, copyin=True, copyout=True):
-        self._validate_input_direct(numpy.ndarray, array)
-        return array.reshape(self.shapeout, order='f')
+    def direct(self, array, reusein=False, copyout=True):
+        self._validate_input_direct(numpy.ndarray, array, False)
+        output = array.reshape(self.shapeout)
+        if copyout: return output.copy('a')
+        return output
 
-    def transpose(self, array, copyin=True, copyout=True):
-        self._validate_input_transpose(numpy.ndarray, array)
-        return array.reshape(self.shapein, order='f')
+    def transpose(self, array, reusein=False, copyout=True):
+        self._validate_input_transpose(numpy.ndarray, array, False)
+        output = array.reshape(self.shapein)
+        if copyout: return output.copy('a')
+        return output
 
 
 
@@ -579,12 +590,12 @@ class _Pacs():
         
         if bad_detector_mask is None:
             bad_detector_maskFile = join(getenv('TAMASIS_DIR'),'data','PCalPhotometer_BadPixelMask_FM_v3.fits')
-            bad_detector_mask = numpy.array(fitsopen(bad_detector_maskFile)[self.array].data, dtype='int8', order='fortran')
+            bad_detector_mask = numpy.array(fitsopen(bad_detector_maskFile)[self.array].data, dtype='int8')
         else:
             array_shapes = {'blue':(32,64), 'green':(32,64), 'red':(16,32)}
             if bad_detector_mask.shape != array_shapes[self.array]:
                 raise ValueError('Input bad pixel mask has incorrect shape '+str(bad_detector_mask.shape)+' instead of '+str(array_shapes[self.array]))
-            bad_detector_mask = numpy.array(bad_detector_mask, dtype='int8', order='f', copy=False)
+            bad_detector_mask = numpy.array(bad_detector_mask, dtype='int8', copy=False)
         self.bad_detector_mask = bad_detector_mask
         if self.transparent_mode:
             self.bad_detector_mask[:,0:16] = True
@@ -640,16 +651,16 @@ class PacsObservation(_Pacs):
             else:
                 if bad_detector_mask.shape != (32,64):
                     raise ValueError('Invalid shape of the input blue bad detector mask: '+str(bad_detector_mask.shape)+'.')
-            bad_detector_mask = numpy.array(bad_detector_mask, dtype='int8', order='f', copy=False)
+            bad_detector_mask = numpy.array(bad_detector_mask, dtype='int8', copy=False)
 
         else:
             if channel == 'r':
-                bad_detector_mask = numpy.zeros((16,32), dtype='int8', order='f')
+                bad_detector_mask = numpy.zeros((16,32), dtype='int8')
             else:
-                bad_detector_mask = numpy.zeros((32,64), dtype='int8', order='f')
+                bad_detector_mask = numpy.zeros((32,64), dtype='int8')
              
         # retrieve information from the observations
-        ndetectors, bad_detector_mask, transparent_mode, compression_factor, nsamples, status = tmf.pacs_info(filename_, nfilenames, fine_sampling_factor, keep_bad_detectors, use_mask, bad_detector_mask)
+        ndetectors, bad_detector_mask, transparent_mode, compression_factor, nsamples, status = tmf.pacs_info(filename_, nfilenames, fine_sampling_factor, keep_bad_detectors, use_mask, numpy.asfortranarray(bad_detector_mask))
         if status != 0: raise RuntimeError()
 
         if resolution is None:
@@ -667,7 +678,7 @@ class PacsObservation(_Pacs):
         self.nsamples = nsamples
         self.nfinesamples = numpy.sum(nsamples * compression_factor) * fine_sampling_factor
         self.ndetectors = ndetectors
-        self.bad_detector_mask = bad_detector_mask
+        self.bad_detector_mask = numpy.ascontiguousarray(bad_detector_mask)
         self.keep_bad_detectors = keep_bad_detectors
         self.fine_sampling_factor = fine_sampling_factor
         self.transparent_mode = transparent_mode
@@ -679,13 +690,13 @@ class PacsObservation(_Pacs):
 
     def get_tod(self, do_flatfielding=True, do_subtraction_mean=True):
         """
-        Returns the signal and mask timelines as fortran arrays.
+        Returns the signal and mask timelines.
         """
         filename_, nfilenames = self._files2tmf(self.filename)
-        signal, mask, status = tmf.pacs_timeline(filename_, self.nobservations, numpy.sum(self.nsamples), self.ndetectors, self.keep_bad_detectors, self.bad_detector_mask, do_flatfielding, do_subtraction_mean)
+        signal, mask, status = tmf.pacs_timeline(filename_, self.nobservations, numpy.sum(self.nsamples), self.ndetectors, self.keep_bad_detectors, numpy.asfortranarray(self.bad_detector_mask), do_flatfielding, do_subtraction_mean)
         if status != 0: raise RuntimeError()
         
-        return Tod(signal, mask=mask)
+        return Tod(signal.T, mask=mask.T)
 
     def get_pointing_matrix(self, finer_sampling=True):
         nsamples = self.nfinesamples if finer_sampling else numpy.sum(self.nsamples)
@@ -693,7 +704,7 @@ class PacsObservation(_Pacs):
         print 'Info: allocating '+str(sizeofpmatrix/2.**17)+' MiB for the pointing matrix.'
         pmatrix = numpy.zeros(sizeofpmatrix, dtype=numpy.int64)
         filename_, nfilenames = self._files2tmf(self.filename)
-        status = tmf.pacs_pointing_matrix_filename(filename_, self.nobservations, finer_sampling, self.fine_sampling_factor, self.npixels_per_sample, nsamples, self.ndetectors, self.keep_bad_detectors, self.bad_detector_mask, str(self.header).replace('\n', ''), pmatrix)
+        status = tmf.pacs_pointing_matrix_filename(filename_, self.nobservations, finer_sampling, self.fine_sampling_factor, self.npixels_per_sample, nsamples, self.ndetectors, self.keep_bad_detectors, numpy.asfortranarray(self.bad_detector_mask), str(self.header).replace('\n', ''), pmatrix)
         if status != 0: raise RuntimeError()
         return pmatrix
 
@@ -730,7 +741,7 @@ class PacsSimulation(_Pacs):
     - compression_factor  : number of frames which are collapsed during the compression stage
     - array              : 'blue', 'green' or 'red' array name
     - ndetectors         : number of detectors involved in the processing
-    - bad_detector_mask  : (nx,ny) mask of uint8 values (0 or 1). 1 means dead pixel.
+    - bad_detector_mask  : (nx,ny) mask of int8 values (0 or 1). 1 means dead pixel.
     - keep_bad_detectors : if set to True, force the processing to include all pixels
     - ij(2,ndetectors)   : the row and column number (starting from 0) of the detectors
     Author: P. Chanial
@@ -756,10 +767,10 @@ class PacsSimulation(_Pacs):
         """
         signal = model.direct(self.inputmap)
         if self.keep_bad_detectors:
-            mask = numpy.zeros(signal.shape, dtype=bool, order='fortran')
+            mask = numpy.zeros(signal.shape, dtype=bool)
             for idetector, badpixel in enumerate(self.bad_detector_mask.flat):
                 if badpixel != 0:
-                    mask[:,idetector] = True
+                    mask[idetector,:] = True
         else:
             mask = None
 
@@ -789,8 +800,8 @@ class MadMap1Observation(object):
             raise ValueError('Invalid filename of the map mask.')
         filename = m.group('filename')
         extname  = m.group('extname')
-        coverage = pyfits.fitsopen(filename)[extname].data.T
-        self.mapmask = numpy.array(numpy.isnan(coverage), dtype='int8', order='f')
+        coverage = pyfits.fitsopen(filename)[extname].data
+        self.mapmask = numpy.array(numpy.isnan(coverage), dtype='int8')
         self.convert = convert
         self.ndetectors = ndetectors
         self.nsamples = (self.nfinesamples,)
@@ -803,20 +814,19 @@ class MadMap1Observation(object):
         self.header = header
 
     def get_pointing_matrix(self, finer_sampling=False):
-        print 'zero:', (self.nfinesamples,self.ndetectors)
-        tod = Tod.zeros((self.nfinesamples,self.ndetectors))
+        tod = Tod.zeros((self.ndetectors,self.nfinesamples))
         sizeofpmatrix = self.npixels_per_sample * self.nfinesamples * self.ndetectors
         print 'Info: allocating '+str(sizeofpmatrix/2.**17)+' MiB for the pointing matrix.'
         pmatrix = numpy.zeros(sizeofpmatrix, dtype=numpy.int64)
-        status = tmf.read_madmap1(self.todfile, self.invnttfile, self.convert, self.npixels_per_sample, tod, pmatrix)
+        status = tmf.read_madmap1(self.todfile, self.invnttfile, self.convert, self.npixels_per_sample, tod.T, pmatrix)
         if (status != 0): raise RuntimeError()
         return pmatrix
 
     def get_tod(self):
-        tod = Tod.zeros((self.nfinesamples,self.ndetectors))
+        tod = Tod.zeros((self.ndetectors,self.nfinesamples))
         sizeofpmatrix = self.npixels_per_sample * self.nfinesamples * self.ndetectors
         pmatrix = numpy.zeros(sizeofpmatrix, dtype=numpy.int64)
-        status = tmf.read_madmap1(self.todfile, self.invnttfile, self.convert, self.npixels_per_sample, tod, pmatrix)
+        status = tmf.read_madmap1(self.todfile, self.invnttfile, self.convert, self.npixels_per_sample, tod.T, pmatrix)
         if (status != 0): raise RuntimeError()
         return tod
 
@@ -831,10 +841,11 @@ class MadMap1Observation(object):
 
 class FitsArray(numpy.ndarray):
 
-    def __new__(cls, data, dtype=None, copy=False, header=None):
+    def __new__(cls, data, dtype=None, order='C', header=None, copy=True):
         from copy import copy as cp
-        result = numpy.array(data, dtype=dtype, copy=copy)
-        result = result.view(cls)
+        result = numpy.array(data, dtype=dtype, order=order, copy=copy, subok=True)
+        if not isinstance(result, FitsArray):
+            result = result.view(cls)
         if header is not None:
             result.header = header
         elif isinstance(data, FitsArray):
@@ -845,24 +856,24 @@ class FitsArray(numpy.ndarray):
 
     def __array_finalize__(self, obj):
         if obj is None: return
-        self.header = getattr(obj, '_header', None)
+        self._header = getattr(obj, '_header', None)
 
     def __array_wrap__(self, obj, context=None):
         result = numpy.ndarray.__array_wrap__(self, obj, context).view(type(self))
-        result.header = self.header
+        result._header = self._header
         return result
 
     @staticmethod
     def empty(shape, dtype='float64', order='C', header=None):
-        return FitsArray(numpy.empty(shape, dtype, order), header=header)
+        return FitsArray(numpy.empty(shape, dtype, order), header=header, copy=False)
 
     @staticmethod
     def ones(shape, dtype='float64', order='C', header=None):
-        return FitsArray(numpy.ones(shape, dtype, order), header=header)
+        return FitsArray(numpy.ones(shape, dtype, order), header=header, copy=False)
 
     @staticmethod
     def zeros(shape, dtype='float64', order='C', header=None):
-        return FitsArray(numpy.zeros(shape, dtype, order), header=header)
+        return FitsArray(numpy.zeros(shape, dtype, order), header=header, copy=False)
 
     @property
     def header(self):
@@ -875,7 +886,7 @@ class FitsArray(numpy.ndarray):
             raise TypeError('Incorrect type for the input header ('+str(type(header))+').') 
         self._header = header
 
-    def tofile(self, fid, sep="", format="%s"):
+    def tofile(self, fid, sep='', format='%s'):
         super(FitsArray,self).tofile(fid, sep, format)
 
     def writefits(self, filename):
@@ -888,7 +899,6 @@ class FitsArray(numpy.ndarray):
         from os.path import isfile
         from os import remove
    
-        # HACK!
         hdu = PrimaryHDU(self.T if self.flags.f_contiguous else self, self.header)
         try:
             remove(filename)
@@ -905,15 +915,14 @@ class FitsArray(numpy.ndarray):
 
 class Map(FitsArray):
 
-    def __new__(cls, data, dtype=None, copy=False, header=None):
-        result = FitsArray(data, dtype=dtype, copy=copy, header=header)
-        result = result.view(cls)
+    def __new__(cls, data, dtype=None, order='C', header=None, copy=True):
+        result = FitsArray(data, dtype=dtype, order=order, copy=copy, header=header)
+        if not isinstance(data,Map): result = result.view(cls)
         return result
 
     def __array_finalize__(self, obj):
         FitsArray.__array_finalize__(self, obj)
         if obj is None: return
-        self.mytoddata = getattr(obj, 'mytoddata', None)
 
     def __array_wrap__(self, obj, context=None):
         result = FitsArray.__array_wrap__(self, obj, context=context).view(type(self))
@@ -921,21 +930,19 @@ class Map(FitsArray):
         return result
 
     @staticmethod
-    def empty(shape, dtype='float64', order='f', header=None):
-        return Map(FitsArray.empty(shape, dtype, order, header=header))
+    def empty(shape, dtype='float64', order='C', header=None):
+        return Map(FitsArray.empty(shape, dtype, order, header), copy=False)
 
     @staticmethod
-    def ones(shape, dtype='float64', order='f', header=None):
-        return Map(FitsArray.ones(shape, dtype, order, header=header))
+    def ones(shape, dtype='float64', order='C', header=None):
+        return Map(FitsArray.ones(shape, dtype, order, header), copy=False)
 
     @staticmethod
-    def zeros(shape, dtype='float64', order='f', header=None):
-        return Map(FitsArray.zeros(shape, dtype, order, header=header))
+    def zeros(shape, dtype='float64', order='C', header=None):
+        return Map(FitsArray.zeros(shape, dtype, order, header), copy=False)
 
-    def copy(self, order=None):
-        if order is not None and order.lower() != 'a' and order.lower() != 'any':
-            print 'Warning: Map.copy(order) do not take specified order into account.'
-        return Map(self, copy=True)
+    def copy(self, order='C'):
+        return Map(self, order=order, copy=True)
 
     def imshow(self, num=None, axis=True, title=None):
         """A simple graphical display function for the Map class"""
@@ -962,37 +969,41 @@ class Map(FitsArray):
 
 class Tod(FitsArray):
 
-    def __new__(cls, data, dtype=None, copy=False, header=None, mask=None):
-        result = FitsArray(data, dtype=dtype, copy=copy, header=header)
-        result = result.view(cls)
+    def __new__(cls, data, dtype=None, order='C', header=None, mask=None, copy=False):
+        result = FitsArray(data, dtype=dtype, order=order, copy=copy, header=header)
+        if not isinstance(data, Tod):
+            result = result.view(cls)
+        if mask is None and isinstance(data, Tod):
+            mask = data.mask
+        if mask is not None:
+            mask = numpy.array(mask, dtype='int8', copy=copy, order=order)
         result.mask = mask
         return result
 
     def __array_finalize__(self, obj):
         FitsArray.__array_finalize__(self, obj)
         if obj is None: return
+        self.mask = getattr(obj, 'mask', None)
 
     def __array_wrap__(self, obj, context=None):
         result = FitsArray.__array_wrap__(self, obj, context=context).view(type(self))
-        result.header = self.header
+        result.mask = self.mask
         return result
 
     @staticmethod
-    def empty(shape, dtype='float64', order='f', header=None):
-        return Tod(FitsArray.empty(shape, dtype, order, header=header))
+    def empty(shape, dtype='float64', order='C', header=None, mask=None):
+        return Tod(FitsArray.empty(shape, dtype, order, header), mask=mask, copy=False)
 
     @staticmethod
-    def ones(shape, dtype='float64', order='f', header=None):
-        return Tod(FitsArray.ones(shape, dtype, order, header=header))
+    def ones(shape, dtype='float64', order='C', header=None, mask=None):
+        return Tod(FitsArray.ones(shape, dtype, order, header), mask=mask, copy=False)
 
     @staticmethod
-    def zeros(shape, dtype='float64', order='f', header=None):
-        return Tod(FitsArray.zeros(shape, dtype, order, header=header))
+    def zeros(shape, dtype='float64', order='C', header=None, mask=None):
+        return Tod(FitsArray.zeros(shape, dtype, order, header), mask=mask, copy=False)
     
-    def copy(self, order=None):
-        if order is not None and order.lower() != 'a' and order.lower() != 'any':
-            print 'Warning: Tod.copy(order) do not take specified order into account.'
-        return Tod(self, copy=True)
+    def copy(self, order='C'):
+        return Tod(self, order=order, copy=True)
 
     def imshow(self, num=None, axis=True, title=None):
         """A simple graphical display function for the Map class"""
@@ -1023,13 +1034,13 @@ class Tod(FitsArray):
 
 class LeastSquareMatvec(object):
     def __init__(self, model, unpacking=None):
-        self.model = model
         if unpacking is None:
             self.unpacking = Reshaping(numpy.product(model.shapein), model.shapein)
         else:
             self.unpacking = unpacking
+        self.model = model * unpacking
     def __call__(self, xvec):
-        xout = self.unpacking.transpose(self.model.transpose(self.model.direct(self.unpacking.direct(Map(xvec, copy=True)), copy=False), copy=False)).copy()
+        xout = self.model.transpose(self.model.direct(Map(xvec, copy=False), copyout=False))
         return xout
 
 class PcgCallback():
@@ -1052,12 +1063,12 @@ class RegularizedLeastSquareMatvec(LeastSquareMatvec):
     def __call__(self, xvec):
         # likelihood
         xout = super(RegularizedLeastSquareMatvec, self).__call__(xvec)
-        x = self.unpacking.direct(xvec)
+        x = self.unpacking.direct(Map(xvec, copy=False), copyout=False)
         # add prior component
         for i in xrange(len(self.hyper)):
-            dTd = self.prior_transpose[i](self.prior_direct[i](x))
+            dTd = Map(self.prior_transpose[i](self.prior_direct[i](x)), copy=False)
             dTd *= self.hyper[i]
-            xout += self.unpacking.transpose(dTd)
+            xout += self.unpacking.transpose(dTd, copyout=False)
         return xout
 
 # Priors
@@ -1066,14 +1077,14 @@ class Smooth():
     def __init__(self, axis):
         self.axis = axis
     def __call__(self, arr):
-        return numpy.asfortranarray(numpy.diff(arr, axis=self.axis))
+        return numpy.diff(arr, axis=self.axis)
 
 class SmoothT(Smooth):
     """Define smoothness priors along specific axis
     This is the transpose model
     """
     def __call__(self, arr):
-        return numpy.asfortranarray(diffT(arr, axis=self.axis))
+        return diffT(arr, axis=self.axis)
 
 def diffT(arr, axis=-1):
     """transpose of diff for n=1"""
@@ -1099,10 +1110,10 @@ def naive_mapper(tod, model, weights=False):
     mymap = model.transpose(tod)
     unity = tod.copy()
     unity[:] = 1.
-    map_weights = model.transpose(unity, copy=False)
+    map_weights = model.transpose(unity)
     mymap /= map_weights
     if weights:
-        return mymap, map_weights.copy()
+        return mymap, map_weights
     return mymap
 
  
@@ -1117,7 +1128,7 @@ def deglitch_l2std(tod, projection, nsigma=5.):
     nx = projection.header['naxis1']
     ny = projection.header['naxis2']
     npixels_per_sample = projection.npixels_per_sample
-    tmf.deglitch_l2b_std(projection.pmatrix, nx, ny, tod, tod.mask, nsigma, npixels_per_sample)
+    tmf.deglitch_l2b_std(projection.pmatrix, nx, ny, tod.T, tod.mask.T, nsigma, npixels_per_sample)
 
  
 #-------------------------------------------------------------------------------
@@ -1131,7 +1142,7 @@ def deglitch_l2mad(tod, projection, nsigma=5.):
     nx = projection.header['naxis1']
     ny = projection.header['naxis2']
     npixels_per_sample = projection.npixels_per_sample
-    tmf.deglitch_l2b_mad(projection.pmatrix, nx, ny, tod, tod.mask, nsigma, npixels_per_sample)
+    tmf.deglitch_l2b_mad(projection.pmatrix, nx, ny, tod.T, tod.mask.T, nsigma, npixels_per_sample)
 
  
 #-------------------------------------------------------------------------------

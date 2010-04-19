@@ -75,30 +75,25 @@ ny = pacs.header['naxis2']
 projection = Projection(pacs, finer_sampling=False)
 
 # Read the timeline
-tod = pacs.get_tod(do_flatfielding=options.do_flatfielding, do_subtraction_mean=False)
-
-if options.filtering == 'mean':
-    print 'Removing mean value...'
-    tod -= tod.mean(axis=0)
+tod = pacs.get_tod(do_flatfielding=options.do_flatfielding, do_subtraction_mean=options.filtering == 'mean')
 
 # Deglitch
 if options.deglitching != 'none':
     nbads = numpy.sum(tod.mask)
     if options.deglitching == 'l2std':
-        tod.mask = tmf.deglitch_l2b_std(projection.pmatrix, nx, ny, tod, 
-            tod.mask.astype('int8'), options.nsigma, pacs.npixels_per_sample)
+        deglitch_l2std(tod, projection, nsigma=options.nsigma)
     else:
-        tod.mask = tmf.deglitch_l2b_mad(projection.pmatrix, nx, ny, tod, 
-            tod.mask.astype('int8'), options.nsigma, pacs.npixels_per_sample)
+        deglitch_l2mad(tod, projection, nsigma=options.nsigma)
     print 'Number of glitches detected:', numpy.sum(tod.mask) - nbads
 
 # Backproject the timeline and divide it by the weight
 print 'Computing the map...'
-mymap = Map.zeros((nx, ny), order='f', header=pacs.header)
-tmf.backprojection_weighted(projection.pmatrix, tod, tod.mask.astype('int8'), 
-                            mymap, pacs.npixels_per_sample)
+mymap = Map.zeros((ny,nx), header=pacs.header)
+tmf.backprojection_weighted(projection.pmatrix, tod.T, tod.mask.T, 
+                            mymap.T, pacs.npixels_per_sample)
 
 # Write resulting map as a FITS file
+print 'Writing the map...'
 mymap.writefits(options.outputfile)
 
 # Plot the map

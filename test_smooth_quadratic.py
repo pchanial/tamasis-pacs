@@ -24,17 +24,17 @@ model = compression * crosstalk * multiplexing * projection * telescope
 tod40Hz = pacs.get_tod()
 
 # remove drift
-x = numpy.arange(tod40Hz.shape[0])
-slope = scipy.polyfit(x, tod40Hz, deg=6)
+x = numpy.arange(tod40Hz.shape[1])
+slope = scipy.polyfit(x, tod40Hz.T, deg=6)
 drift = tod40Hz.copy()
-for i in xrange(tod40Hz.shape[1]):
-    drift[:, i] = scipy.polyval(slope[:, i], x)
+for i in xrange(tod40Hz.shape[0]):
+    drift[i,:] = scipy.polyval(slope[:,i], x)
 
 idetector=5
 if do_plot:
     figure()
-    plot(tod40Hz[:,idetector])
-    plot(drift[:,idetector],'r')
+    plot(tod40Hz[idetector,:])
+    plot(drift[idetector,:],'r')
     show()
 
 tod40Hz -= drift
@@ -46,9 +46,9 @@ deglitch_l2mad(tod40Hz, projection)
 
 if do_plot:
     figure()
-    plot(tod40Hz[:,idetector])
-    index=numpy.where(tod40Hz.mask[:,idetector])
-    plot(index,tod40Hz.data[index,idetector],'ro')
+    plot(tod40Hz[idetector,:])
+    index=numpy.where(tod40Hz.mask[idetector,:])
+    plot(index,tod40Hz[idetector,index],'ro')
     show()
 
 masking   = Masking(tod40Hz.mask)

@@ -1,9 +1,5 @@
 from tamasis import *
-from copy import copy
 import numpy
-import scipy
-from scipy.sparse import dia_matrix
-from scipy.sparse.linalg import LinearOperator, cgs
 
 pacs = PacsObservation(filename='tests/frames_blue.fits',
                        resolution=3.2,
@@ -21,6 +17,7 @@ compression  = CompressionAverage(pacs.compression_factor)
 masking      = Masking(tod.mask)
 
 model = masking * crosstalk * multiplexing * projection * telescope
+model = projection
 print model
 
 # naive map
@@ -28,6 +25,8 @@ backmap = model.transpose(tod)
 tod[:] = 1
 weights = model.transpose(tod)
 map_naive = backmap / weights
+
+print 'OK.'
 
 #ra0  = 20.
 #dec0 = 0.1
