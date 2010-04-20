@@ -414,15 +414,25 @@ contains
 
         ! set first valid sample. 
         if (first == 0) then
-            do isample = this%last, 1, -1
-                if (not_in_scan(isample)) exit
-            end do
-            this%first = isample + 1
-            if (this%first + 10 > this%last) then
-                write (OUTPUT_UNIT,'(a)') 'Warning: It is not possible to discard the first 10 scan samples. The observation is too&
-                      & short or the specified last sample is not large enough.'
-            else if (this%first /= 1) then
-                this%first = this%first + 10
+            if (maxval(bbtype) == 0) then
+                do isample = this%last, 1, -1
+                    if (not_in_scan(isample)) exit
+                end do
+                this%first = isample + 1
+            else
+                do isample = 1, this%last
+                    if (.not. not_in_scan(isample)) exit
+                end do
+            end if
+
+            ! discard first 10 samples if invalid samples have been detected
+            if (this%first /= 1) then
+                if (this%first + 10 > this%last) then
+                    write (OUTPUT_UNIT,'(a)') 'Warning: It is not possible to discard the first 10 scan samples. The observation is&
+                          & too short or the specified last sample is not large enough.'
+                else
+                    this%first = this%first + 10
+                end if
             end if
         else
             this%first = first
