@@ -103,7 +103,7 @@ contains
             call this%info(iobs)%set_filename(filename(iobs), first, last, status)
             if (status /= 0) return
 
-            call this%info(iobs)%set_valid_slice(first, last, this%maskarray_policy, status)
+            call this%info(iobs)%set_valid_slice(first, last, this%maskarray_policy, verbose, status)
             if (status /= 0) return
 
             call this%info(iobs)%set_channel(status)
@@ -341,17 +341,19 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    ! if the first sample to consider is not specified, we search starting from the end for the first sample that satisfies
-    ! abs(chopfpuangle) > 0.01.
-    ! we then discard the first 10, that might be affected by relaxation.
-    subroutine set_valid_slice(this, first, last, maskarray_policy, status)
+    ! if the first sample to consider is not specified, then:
+    !     - if the bbtype is set, we search starting from the beginning the first valid sample
+    !     - otherwise, we search starting from the end for the first sample that satisfies abs(chopfpuangle) > 0.01.
+    ! if invalid samples have been found, we then discard the first 10, that might be affected by relaxation.
+    subroutine set_valid_slice(this, first, last, maskarray_policy, verbose, status)
 
         class(pacsobsinfo), intent(inout) :: this
         integer*8, intent(in)             :: first, last
         type(pacsmaskarray), intent(in)   :: maskarray_policy
+        logical, intent(in), optional     :: verbose
         integer, intent(out)              :: status
-        logical(1), allocatable           :: not_in_scan(:)
 
+        logical(1), allocatable           :: not_in_scan(:)
         integer*8               :: nsamples
         integer                 :: length
         integer*8               :: isample
@@ -397,7 +399,6 @@ contains
 
         ! set last valid sample
         if (last == 0) then
-           this%last = nsamples
            do isample = nsamples, 1, -1
                if (.not. not_in_scan(isample)) exit
            end do
@@ -423,6 +424,7 @@ contains
                 do isample = 1, this%last
                     if (.not. not_in_scan(isample)) exit
                 end do
+                this%first = isample
             end if
 
             ! discard first 10 samples if invalid samples have been detected
@@ -442,7 +444,7 @@ contains
         allocate (this%maskarray(this%nsamples))
         this%maskarray%invalid_master = .false.
 
-        call this%set_maskarray('not in scan', maskarray_policy, not_in_scan(this%first:this%last))
+        call this%set_maskarray('not in scan', maskarray_policy, not_in_scan(this%first:this%last), verbose)
 
     end subroutine set_valid_slice
 
