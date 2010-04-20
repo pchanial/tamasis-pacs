@@ -26,7 +26,7 @@ contains
         integer         :: ndetectors, ntimes
         integer         :: hitmap(0:nx*ny-1)
         integer         :: roi(2,2,size(timeline,1))
-        integer         :: i, j, ipixel, itime, idetector, isample, imap, iv
+        integer         :: i, j, ipixel, itime, idetector, isample, imap, iminimap, iv
         integer         :: xmin, xmax, ymin, ymax
         integer         :: nv, nhits_max
         real(kind=p)    :: mv, stddev
@@ -74,7 +74,7 @@ contains
 
         nhits_max = maxval(hitmap)
 
-        !$omp parallel private(i,j,itime,imap,nv,ipixel,arrv,arrt,isglitch,mv,stddev)
+        !$omp parallel private(i,j,itime,imap,iminimap,nv,ipixel,arrv,arrt,isglitch,mv,stddev)
         allocate (arrv(nhits_max))
         allocate (arrt(nhits_max))
         allocate (isglitch(nhits_max))
@@ -85,6 +85,9 @@ contains
 
             do i=1, nx
 
+                imap = (i-1) + (j-1)*nx
+                if (hitmap(imap) < MIN_SAMPLE_SIZE) cycle
+
                 ! construct the sample of sky pixels in the minimaps that match the current sky map pixel (i,j)
                 nv = 0
                 do itime=1, ntimes
@@ -94,12 +97,12 @@ contains
                         j < roi(2,1,itime) .or. j > roi(2,2,itime)) cycle
 
                     ! test that the current sky pixel is not NaN in the minimap
-                    imap = i-roi(1,1,itime) + (roi(1,2,itime)-roi(1,1,itime)+1) * (j-roi(2,1,itime))
-                    if (map(imap,itime) /= map(imap,itime)) cycle
+                    iminimap = i-roi(1,1,itime) + (roi(1,2,itime)-roi(1,1,itime)+1) * (j-roi(2,1,itime))
+                    if (map(iminimap,itime) /= map(iminimap,itime)) cycle
 
                     ! the sky pixel is in the minimap, let's add it to the sample
                     nv = nv + 1
-                    arrv(nv) = map(imap,itime)
+                    arrv(nv) = map(iminimap,itime)
                     arrt(nv) = itime
 
                 end do
@@ -117,7 +120,6 @@ contains
                 
 
                 ! update mask
-                imap = (i-1) + (j-1)*nx
                 do iv=1, nv
                     if (.not. isglitch(iv)) cycle
                     do idetector=1, ndetectors
