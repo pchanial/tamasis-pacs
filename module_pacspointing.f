@@ -299,13 +299,13 @@ contains
                     this%dec (first+isample-1) = this%dec (first+isample-2)
                     this%pa  (first+isample-1) = this%pa  (first+isample-2)
                     this%chop(first+isample-1) = this%chop(first+isample-2)
-                    delta(isample-1) = this%delta(islice)
                 end if
             end do
 
             if (njumps > 0) then
-                write (OUTPUT_UNIT,'(a,i0,a)') 'Warning: The pointing time has ', njumps, ' negative jump(s). The affected frames h&
-                      &ave been masked.'
+                write (OUTPUT_UNIT,'(a,i0,a)') 'Warning: The pointing fine time has ', njumps, ' negative jump(s). The affected fra&
+                      &mes have been masked.'
+                delta = this%time(first+1:last) - this%time(first:last-1)
             end if
 
             ! check if there are gaps
