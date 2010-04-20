@@ -5,7 +5,7 @@ program pacs_photproject
     use module_deglitching,     only : deglitch_l2b
     use module_optionparser,    only : optionparser
     use module_pacsinstrument,  only : pacsinstrument
-    use module_pacsobservation, only : pacsobservation
+    use module_pacsobservation, only : pacsobservation, pacsmaskarray
     use module_pacspointing,    only : pacspointing
     use module_pointingmatrix,  only : backprojection_weighted, pointingelement
     use module_preprocessor,    only : divide_vectordim2, subtract_meandim1
@@ -14,6 +14,7 @@ program pacs_photproject
     class(pacsinstrument), allocatable :: pacs
     class(pacsobservation), allocatable:: obs
     class(pacspointing), allocatable   :: pointing
+    type(pacsmaskarray)                :: maskarray_policy
     type(pointingelement), allocatable :: pmatrix(:,:,:)
     class(optionparser), allocatable   :: parser
     real*8, allocatable                :: signal(:,:)
@@ -64,13 +65,13 @@ program pacs_photproject
     allocate(obs)
     call parser%get_arguments(infile, status)
     if (status /= 0) go to 999
-    call obs%init(infile, status, verbose=.true.)
+    call obs%init(infile, maskarray_policy, status, verbose=.true.)
     if (status /= 0) go to 999
     nsamples = sum(obs%info%nsamples)
 
     ! initialise pointing information
     allocate(pointing)
-    call pointing%init(obs, status)
+    call pointing%init(obs, status, verbose=.true.)
     if (status /= 0) go to 999
 
     ! initialise pacs instrument

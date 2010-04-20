@@ -17,6 +17,7 @@ module module_pacspointing
         integer*8, allocatable :: nsamples(:), first(:), last(:)
         integer, allocatable   :: compression_factor(:)
         real*8, allocatable    :: time(:), ra(:), dec(:), pa(:), chop(:)
+        logical*1, allocatable :: invalid_time(:)
         real(dp), allocatable  :: delta(:)
 
     contains
@@ -38,15 +39,16 @@ module module_pacspointing
 contains
 
 
-    subroutine init(this, obs, status)
+    subroutine init(this, obs, status, verbose)
 
-        class(pacspointing), intent(inout) :: this
-        class(pacsobservation), intent(in) :: obs
-        integer, intent(out)               :: status
+        class(pacspointing), intent(inout)    :: this
+        class(pacsobservation), intent(inout) :: obs
+        integer, intent(out)                  :: status
+        logical, intent(in), optional         :: verbose
 
-        real(kind=dp), allocatable         :: buffer(:)
-        integer*8, allocatable             :: timeus(:)
-        integer                            :: nsamples
+        real(kind=dp), allocatable :: buffer(:)
+        integer*8, allocatable     :: timeus(:)
+        integer                    :: nsamples
         integer :: first, last
         integer :: length, unit, status_close, iobs
 
@@ -62,6 +64,7 @@ contains
         allocate(this%dec     (this%nsamples_tot))
         allocate(this%pa      (this%nsamples_tot))
         allocate(this%chop    (this%nsamples_tot))
+        allocate(this%invalid_time(this%nsamples_tot))
         this%nsamples = obs%info%nsamples
 
         do iobs = 1, this%nslices
@@ -120,17 +123,26 @@ contains
 
         end do
 
+        this%invalid_time = .false.
+
         call this%init2(status)
         if (status /= 0) return
 
-        ! check that the compression factor taken from the observation headers and from the pointing is the same
+        ! some post processing
         do iobs = 1, this%nslices
+
+            ! check that the compression factor taken from the observation headers and from the pointing is the same
             if (this%compression_factor(iobs) /= obs%info(iobs)%compression_factor) then
                 status = 1
                 write (ERROR_UNIT, '(a)') 'Error: ' // strternary(this%nslices>1,'In observation '//strinteger(iobs)//', i','I') //&
                       "ncompatible compression factor from header '" // strinteger(obs%info(iobs)%compression_factor) // "' and poi&
                       &nting '" // strinteger(this%compression_factor(iobs)) // "'."
             end if
+            
+            ! propagate the mask up the pacs observation
+            call obs%info(iobs)%set_maskarray('invalid time', obs%maskarray_policy, this%invalid_time(this%first(iobs):            &
+                 this%last(iobs)), verbose)
+
         end do
         return
 
@@ -145,8 +157,9 @@ contains
 
 
     subroutine init_oldstyle(this, obs, iobs, status)
+
         class(pacspointing), intent(inout) :: this
-        type(pacsobsinfo), intent(in)      :: obs
+        class(pacsobsinfo), intent(in)     :: obs
         integer, intent(in)                :: iobs
         integer, intent(out)               :: status
         real*8, allocatable                :: buffer(:)
@@ -218,6 +231,7 @@ contains
         allocate(this%dec (nsamples))
         allocate(this%pa  (nsamples))
         allocate(this%chop(nsamples))
+        allocate(this%invalid_time(nsamples))
 
         this%nslices      = 1
         this%nsamples_tot = nsamples
@@ -230,6 +244,7 @@ contains
         this%dec          = dec
         this%pa           = pa
         this%chop         = chop
+        this%invalid_time = .false.
 
         call this%init2(status)
 
@@ -239,10 +254,12 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
+    ! in case of a negative pointing time jump (should affect only one frame, otherwise an error is triggered)
+    ! the position is taken as the previous one and the frame is masked
     subroutine init2(this, status)
         class(pacspointing), intent(inout) :: this
         integer, intent(out) :: status
-        integer   :: islice
+        integer   :: islice, isample, njumps
         integer*8 :: nsamples, first, last
         real(dp), allocatable :: delta(:)
         real(dp)              :: delta_max
@@ -264,15 +281,34 @@ contains
             ! check that the input time is monotonous (and increasing)
             allocate(delta(this%nsamples(islice)-1))
             delta = this%time(first+1:last) - this%time(first:last-1)
-            if (any(delta <= 0)) then
-                status = 1
-                deallocate(delta)
-                write (ERROR_UNIT,'(a)') "ERROR: The pointing time is not strictly increasing"
-                return
+            this%delta(islice) = median_nocopy(delta)
+            njumps = 0
+            do isample = 2, nsamples
+                if (delta(isample-1) <= 0) then
+                    if (isample < nsamples) then
+                        if (delta(isample) <= 0) then
+                            status = 1
+                            deallocate(delta)
+                            write (ERROR_UNIT,'(a)') "ERROR: The pointing time is not strictly increasing."
+                        end if
+                    end if
+                    njumps = njumps + 1
+                    this%invalid_time(first+isample-1) = .true.
+                    this%time(first+isample-1) = this%time(first+isample-2) + this%delta(islice)
+                    this%ra  (first+isample-1) = this%ra  (first+isample-2)
+                    this%dec (first+isample-1) = this%dec (first+isample-2)
+                    this%pa  (first+isample-1) = this%pa  (first+isample-2)
+                    this%chop(first+isample-1) = this%chop(first+isample-2)
+                    delta(isample-1) = this%delta(islice)
+                end if
+            end do
+
+            if (njumps > 0) then
+                write (OUTPUT_UNIT,'(a,i0,a)') 'Warning: The pointing time has ', njumps, ' negative jump(s). The affected frames h&
+                      &ave been masked.'
             end if
 
             ! check if there are gaps
-            this%delta(islice) = median_nocopy(delta)
             delta_max = maxval(abs(delta))
             if (any(neq_real(delta, this%delta(islice), 3))) then
                 write (*,'(a)') 'Warning: ' // strternary(this%nslices>1, ' In observation '//strinteger(islice)//', t','T') //    &
@@ -446,18 +482,20 @@ contains
 
 
     subroutine destructor(this)
+
         class(pacspointing), intent(inout) :: this
 
-        if (allocated(this%time))     deallocate(this%time)
-        if (allocated(this%ra))       deallocate(this%ra)
-        if (allocated(this%dec))      deallocate(this%dec)
-        if (allocated(this%pa))       deallocate(this%pa)
-        if (allocated(this%chop))     deallocate(this%chop)
-        if (allocated(this%nsamples)) deallocate(this%nsamples)
-        if (allocated(this%first))    deallocate(this%first)
-        if (allocated(this%last ))    deallocate(this%last)
-        if (allocated(this%delta))    deallocate(this%delta)
-        if (allocated(this%compression_factor)) deallocate(this%compression_factor)
+        if (allocated(this%time))     deallocate (this%time)
+        if (allocated(this%ra))       deallocate (this%ra)
+        if (allocated(this%dec))      deallocate (this%dec)
+        if (allocated(this%pa))       deallocate (this%pa)
+        if (allocated(this%chop))     deallocate (this%chop)
+        if (allocated(this%invalid_time)) deallocate (this%invalid_time)
+        if (allocated(this%nsamples)) deallocate (this%nsamples)
+        if (allocated(this%first))    deallocate (this%first)
+        if (allocated(this%last ))    deallocate (this%last)
+        if (allocated(this%delta))    deallocate (this%delta)
+        if (allocated(this%compression_factor)) deallocate (this%compression_factor)
 
     end subroutine
 

@@ -23,22 +23,45 @@ module module_pacsobservation
 
     public :: pacsobservation
     public :: pacsobsinfo
+    public :: pacsmaskarray
+
+    type pacsmaskarray
+
+        logical(1) :: invalid_master = .true.
+        logical(1) :: invalid_time   = .true.
+        logical(1) :: not_in_scan    = .true.
+
+    end type pacsmaskarray
 
     type pacsobsinfo
-        character(len=256) :: filename
-        character          :: channel
-        logical            :: transparent_mode
-        integer            :: compression_factor
-        integer*8          :: nsamples
-        integer*8          :: first
-        integer*8          :: last
+
+        character(len=256)  :: filename
+        character           :: channel
+        logical             :: transparent_mode
+        integer             :: compression_factor
+        integer*8           :: nsamples
+        integer*8           :: first
+        integer*8           :: last
+        type(pacsmaskarray), allocatable :: maskarray(:)
+
+    contains
+
+        private
+        procedure :: set_filename
+        procedure :: set_valid_slice
+        procedure :: set_channel
+        procedure :: set_compression_mode
+        procedure :: set_transparent_mode
+        procedure, public :: set_maskarray
+
     end type pacsobsinfo
 
     type pacsobservation
 
         private
-        character, public :: channel
-        logical, public   :: transparent_mode
+        character, public           :: channel
+        logical, public             :: transparent_mode
+        type(pacsmaskarray), public :: maskarray_policy
         type(pacsobsinfo), allocatable, public :: info(:)
 
     contains
@@ -48,13 +71,15 @@ module module_pacsobservation
 
     end type pacsobservation
 
+
 contains
 
 
-    subroutine init(this, filename, status, verbose)
+    subroutine init(this, filename, maskarray_policy, status, verbose)
 
         class(pacsobservation), intent(inout) :: this
         character(len=*), intent(in)          :: filename(:)
+        type(pacsmaskarray), intent(in)       :: maskarray_policy
         integer, intent(out)                  :: status
         logical, intent(in), optional         :: verbose
         integer*8                             :: first, last
@@ -66,28 +91,28 @@ contains
             write (ERROR_UNIT,'(a)')'INIT_PACSOBSERVATION: Array has zero size.'
             return
         end if
+
+        ! set the mask policy '.true.' means 'taken into account'
+        this%maskarray_policy = maskarray_policy
         
         if (allocated(this%info)) deallocate(this%info)
         allocate(this%info(size(filename)))
 
         do iobs = 1, size(filename)
-            call set_filename(this%info(iobs), filename(iobs), first, last,    &
-                              status)
+
+            call this%info(iobs)%set_filename(filename(iobs), first, last, status)
             if (status /= 0) return
 
-            call set_valid_slice(this%info(iobs), first, last, status)
+            call this%info(iobs)%set_valid_slice(first, last, this%maskarray_policy, status)
             if (status /= 0) return
 
-            this%info(iobs)%nsamples = this%info(iobs)%last -                  &
-                                       this%info(iobs)%first + 1
-
-            call set_channel(this%info(iobs), status)
+            call this%info(iobs)%set_channel(status)
             if (status /= 0) return
 
-            call set_compression_mode(this%info(iobs), status)
+            call this%info(iobs)%set_compression_mode(status)
             if (status /= 0) return
         
-            call set_transparent_mode(this%info(iobs), status)
+            call this%info(iobs)%set_transparent_mode(status)
             if (status /= 0) return
 
         end do
@@ -152,11 +177,11 @@ contains
 
     ! sets 'b', 'g' or 'r' for a blue, green or red channel observation
     subroutine set_channel(this, status)
-        type(pacsobsinfo), intent(inout) :: this
-        integer, intent(out)             :: status
-        integer                          :: length, unit, nsamples
-        integer                          :: status_close
-        character(len=2), allocatable    :: channels(:)
+        class(pacsobsinfo), intent(inout) :: this
+        integer, intent(out)              :: status
+        integer                           :: length, unit, nsamples
+        integer                           :: status_close
+        character(len=2), allocatable     :: channels(:)
 
         this%channel = ' '
 
@@ -212,8 +237,8 @@ contains
 
 
     subroutine set_compression_mode(this, status)
-        type(pacsobsinfo), intent(inout) :: this
-        integer, intent(out)             :: status
+        class(pacsobsinfo), intent(inout) :: this
+        integer, intent(out)              :: status
         integer           :: unit, ikey, length, status_close
         character(len=72) :: algorithm, keyword, comment
 
@@ -267,10 +292,10 @@ contains
 
 
     subroutine set_transparent_mode(this, status)
-        type(pacsobsinfo), intent(inout) :: this
-        integer, intent(out)             :: status
-        integer                          :: unit, ikey, length, status_close
-        character(len=72)                :: compression, keyword, comment
+        class(pacsobsinfo), intent(inout) :: this
+        integer, intent(out)              :: status
+        integer                           :: unit, ikey, length, status_close
+        character(len=72)                 :: compression, keyword, comment
 
         this%transparent_mode = .false.
 
@@ -319,34 +344,48 @@ contains
     ! if the first sample to consider is not specified, we search starting from the end for the first sample that satisfies
     ! abs(chopfpuangle) > 0.01.
     ! we then discard the first 10, that might be affected by relaxation.
-    subroutine set_valid_slice(this, first, last, status)
+    subroutine set_valid_slice(this, first, last, maskarray_policy, status)
 
-        type(pacsobsinfo), intent(inout) :: this
-        integer*8, intent(in)            :: first, last
-        integer, intent(out)             :: status
+        class(pacsobsinfo), intent(inout) :: this
+        integer*8, intent(in)             :: first, last
+        type(pacsmaskarray), intent(in)   :: maskarray_policy
+        integer, intent(out)              :: status
+        logical(1), allocatable           :: not_in_scan(:)
 
-        integer*8              :: nsamples
-        integer                :: length
-        integer*8              :: isample
-        integer*8, allocatable :: chop(:)
+        integer*8               :: nsamples
+        integer                 :: length
+        integer*8               :: isample
+        integer*8, allocatable  :: bbtype(:)
+        integer*8, allocatable  :: chop(:)
 
         length = len_trim(this%filename)
         if (this%filename(length-4:length) /= '.fits') then
-            write(*,'(a)') 'Info: Obsolete file format.'
-
+            write (OUTPUT_UNIT,'(a)') 'Warning: Obsolete file format.'
             call ft_read_extension(trim(this%filename) // '_ChopFpuAngle.fits', chop, status)
-        else 
-           ! XXX we shouldn't need to read that if first is not 0
+            if (status /= 0) return
+            allocate (bbtype(size(chop)))
+            bbtype = 0
+        else
+            call ft_read_column(trim(this%filename)//'[Status]', 'BBTYPE', bbtype, status)
+            if (status /= 0) return
             call ft_read_column(trim(this%filename)//'[Status]', 'CHOPFPUANGLE', chop, status)
+            if (status /= 0) return
         end if
-        if (status /= 0) return
 
-        nsamples = size(chop)
+        nsamples = size(bbtype)
 
         if (nsamples == 0) then
             status = 1
             write (ERROR_UNIT) 'ERROR: Status extension is empty.'
             return
+        end if
+
+        allocate (not_in_scan(nsamples))
+
+        if (maxval(bbtype) == 0) then
+            not_in_scan = abs(chop) > 1._p
+        else
+            not_in_scan = bbtype /= 3282
         end if
 
         if (last > nsamples) then
@@ -359,6 +398,16 @@ contains
         ! set last valid sample
         if (last == 0) then
            this%last = nsamples
+           do isample = nsamples, 1, -1
+               if (.not. not_in_scan(isample)) exit
+           end do
+           if (isample == 0) then
+               write (OUTPUT_UNIT,'(a)') 'Warning: No in-scan sample. Automatic search for valid slice is disabled.'
+               this%first = 1
+               this%last  = nsamples
+               go to 999
+           end if
+           this%last = isample
         else
            this%last = last
         end if
@@ -366,13 +415,10 @@ contains
         ! set first valid sample. 
         if (first == 0) then
             do isample = this%last, 1, -1
-                if (abs(chop(isample)) > 1.d0) exit
+                if (not_in_scan(isample)) exit
             end do
             this%first = isample + 1
-            if (this%first > this%last) then
-                write (OUTPUT_UNIT,'(a)') 'Warning: last sample is invalid. Automatic search for valid slice is disabled.'
-                this%first = 1
-            else if (this%first + 10 > this%last) then
+            if (this%first + 10 > this%last) then
                 write (OUTPUT_UNIT,'(a)') 'Warning: It is not possible to discard the first 10 scan samples. The observation is too&
                       & short or the specified last sample is not large enough.'
             else if (this%first /= 1) then
@@ -381,6 +427,12 @@ contains
         else
             this%first = first
         end if
+        
+    999 this%nsamples = this%last - this%first + 1
+        allocate (this%maskarray(this%nsamples))
+        this%maskarray%invalid_master = .false.
+
+        call this%set_maskarray('not in scan', maskarray_policy, not_in_scan(this%first:this%last))
 
     end subroutine set_valid_slice
 
@@ -389,11 +441,12 @@ contains
 
 
     subroutine set_filename(this, filename, first, last, status)
-        type(pacsobsinfo), intent(inout) :: this
-        character(len=*), intent(in)     :: filename
-        integer*8, intent(out)           :: first, last
-        integer, intent(out)             :: status
-        integer                          :: pos, length, delim
+
+        class(pacsobsinfo), intent(inout) :: this
+        character(len=*), intent(in)      :: filename
+        integer*8, intent(out)            :: first, last
+        integer, intent(out)              :: status
+        integer                           :: pos, length, delim
  
         status = 0
         first = 0
@@ -472,5 +525,53 @@ contains
 
     end subroutine set_filename
 
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine set_maskarray(this, mask_name, maskarray_policy, invalid, verbose)
+
+        class(pacsobsinfo), intent(inout) :: this
+        character(len=*), intent(in)      :: mask_name
+        type(pacsmaskarray), intent(in)   :: maskarray_policy
+        logical(1), intent(in)            :: invalid(:)
+        logical, intent(in), optional     :: verbose
+
+        integer                           :: nrejected
+        
+        if (size(invalid) /= this%nsamples) then
+            write (ERROR_UNIT,'(a,2(i0,a))') "SET_MASKARRAY: invalid input mask size '", size(invalid), "' instead of '",          &
+                  this%nsamples, "' for mask '" // mask_name // "'."
+            stop
+        end if
+
+        nrejected = 0
+        if (.not. maskarray_policy%invalid_master) return
+        
+        select case (mask_name)
+            case ('invalid time')
+                this%maskarray%invalid_time = invalid
+                if (maskarray_policy%invalid_time) then
+                    this%maskarray%invalid_master = this%maskarray%invalid_master .or. invalid
+                    nrejected = count(invalid)
+                end if
+            case ('not in scan')
+                this%maskarray%not_in_scan = invalid
+                if (maskarray_policy%not_in_scan) then
+                    this%maskarray%invalid_master = this%maskarray%invalid_master .or. invalid
+                    nrejected = count(invalid)
+                endif
+            case default
+                write (ERROR_UNIT,'(a)') "SET_MASKARRAY: Invalid mask name '" // mask_name // "'."
+                stop
+        end select
+
+        if (present(verbose) .and. nrejected > 0) then
+            if (verbose) then
+                write (OUTPUT_UNIT,'(a,2(i0,a))') "Info: Mask '" // mask_name // "': Rejecting ", nrejected, ' / ',size(invalid),'.'
+            end if
+        end if
+
+    end subroutine set_maskarray
 
  end module module_pacsobservation

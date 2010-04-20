@@ -3,7 +3,7 @@ program test_pacsinstrument
     use module_fitstools,       only : ft_read_parameter, ft_header2str
     use module_math,            only : mean, neq_real
     use module_pacsinstrument
-    use module_pacsobservation, only : pacsobservation
+    use module_pacsobservation, only : pacsobservation, pacsmaskarray
     use module_pacspointing,    only : pacspointing
     use module_string,          only : strreal
     use module_wcs,             only : init_astrometry, ad2xy_gnomonic
@@ -12,6 +12,7 @@ program test_pacsinstrument
     class(pacsinstrument), allocatable  :: pacs
     class(pacsobservation), allocatable :: obs
     class(pacspointing), allocatable    :: pointing
+    type(pacsmaskarray)                 :: maskarray_policy
     character(len=*), parameter :: filename(1) = 'tests/frames_blue.fits'
     character(len=*), parameter :: filename_header = 'tests/csh_header_ngc6946.fits'
 
@@ -26,7 +27,7 @@ program test_pacsinstrument
 
     ! initialise observation
     allocate(obs)
-    call obs%init(filename, status)
+    call obs%init(filename, maskarray_policy, status)
     if (status /= 0) stop 'FAILED: init_pacsobservation'
 
     ! initialise pacs instrument

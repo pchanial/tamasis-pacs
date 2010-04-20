@@ -4,7 +4,7 @@ program test_ngc6946_bpj
     use module_fitstools,       only : ft_read_parameter
     use module_math,            only : pInf, neq_real, sum_kahan
     use module_pacsinstrument,  only : ndims, nvertices, pacsinstrument
-    use module_pacsobservation, only : pacsobservation
+    use module_pacsobservation, only : pacsobservation, pacsmaskarray
     use module_pacspointing,    only : pacspointing
     use module_pointingmatrix,  only : pointingelement, pmatrix_direct, pmatrix_transpose
     use module_preprocessor,    only : subtract_meandim1, divide_vectordim2
@@ -17,6 +17,7 @@ program test_ngc6946_bpj
     class(pacsinstrument), allocatable  :: pacs
     class(pacsobservation), allocatable :: obs
     class(pacspointing), allocatable    :: pointing
+    type(pacsmaskarray)                 :: maskarray_policy
     character(len=*), parameter         :: inputdir    = '/home/pchanial/work/pacs/data/transparent/NGC6946/'
     character(len=*), parameter         :: filename(1) = inputdir // '1342184520_blue[12001:86000]'
     integer, parameter                  :: npixels_per_sample = 6
@@ -24,7 +25,6 @@ program test_ngc6946_bpj
     real*8                              :: ra, dec, pa, chop, chop_old
     real*8, allocatable                 :: surface1(:,:), surface2(:,:)
     logical*1, allocatable              :: mask(:,:)
-    character(len=80)                   :: outfile
     character(len=2880)                 :: header
     integer                             :: nx, ny
     integer                             :: status, count, count0, count1
@@ -38,7 +38,7 @@ program test_ngc6946_bpj
 
     ! initialise observation
     allocate(obs)
-    call obs%init(filename, status)
+    call obs%init(filename, maskarray_policy, status)
     if (status /= 0) stop 'FAILED: pacsobservation%init'
     nsamples = obs%info(1)%nsamples
 

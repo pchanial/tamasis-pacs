@@ -1,77 +1,78 @@
 program test_pacsobservation
 
     use module_pacsinstrument,  only : pacsinstrument
-    use module_pacsobservation, only : pacsobservation
-    use module_string, only : strsection
+    use module_pacsobservation, only : pacsobservation, pacsmaskarray
+    use module_string,          only : strsection
     implicit none
 
     class(pacsobservation), allocatable :: obs
     class(pacsinstrument), allocatable  :: pacs
+    type(pacsmaskarray)                 :: maskarray_policy
     character(len=*), parameter :: filename = 'tests/frames_blue.fits'
     character(len=50), allocatable :: afilename(:)
     integer                     :: status, idetector
     real*8, allocatable    :: signal(:,:)
     logical*1, allocatable :: mask(:,:)
     integer*8              :: first, last
-    logical*1              :: mask_ref(360)
+    logical*1              :: mask_ref(360), mask_frame(360)
 
     ! valid calls
     allocate(obs)
-    call obs%init([filename], status)
+    call obs%init([filename], maskarray_policy, status)
     if (status /= 0 .or. obs%info(1)%first /= 1 .or. obs%info(1)%last /= 360)  &
         stop 'FAILED: init1'
 
-    call obs%init([filename // '[23:23]'], status)
+    call obs%init([filename // '[23:23]'], maskarray_policy, status)
     if (status /= 0 .or. obs%info(1)%first /= 23 .or. obs%info(1)%last /= 23)  &
         stop 'FAILED: init2'
 
-    call obs%init([filename // '[200:]'], status)
+    call obs%init([filename // '[200:]'], maskarray_policy, status)
     if (status /= 0 .or. obs%info(1)%first /= 200 .or. obs%info(1)%last /= 360)&
         stop 'FAILED: init3'
 
-    call obs%init([filename // '[:130]'], status)
+    call obs%init([filename // '[:130]'], maskarray_policy, status)
     if (status /= 0 .or. obs%info(1)%first /= 1 .or. obs%info(1)%last /= 130)  &
         stop 'FAILED: init4'
 
-    call obs%init([filename // '[:]'], status)
+    call obs%init([filename // '[:]'], maskarray_policy, status)
     if (status /= 0 .or. obs%info(1)%first /= 1 .or. obs%info(1)%last /= 360)  &
         stop 'FAILED: init5'
 
-    call obs%init([filename // '[]'], status)
+    call obs%init([filename // '[]'], maskarray_policy, status)
     if (status /= 0 .or. obs%info(1)%first /= 1 .or. obs%info(1)%last /= 360)  &
         stop 'FAILED: init6'
    
     ! invalid calls
-    call obs%init([filename // '[32:23]'], status)
+    call obs%init([filename // '[32:23]'], maskarray_policy, status)
     if (status == 0) stop 'FAILED: badinit1'
 
-    call obs%init([filename // '[32:361]'], status)
+    call obs%init([filename // '[32:361]'], maskarray_policy, status)
     if (status == 0) stop 'FAILED: badinit2'
 
-    call obs%init([filename // '[ljdf]'], status)
+    call obs%init([filename // '[ljdf]'], maskarray_policy, status)
     if (status == 0) stop 'FAILED: badinit4'
 
-    call obs%init([filename // '[:l+]'], status)
+    call obs%init([filename // '[:l+]'], maskarray_policy, status)
     if (status == 0) stop 'FAILED: badinit5'
 
     ! array
     allocate(afilename(2))
     afilename(1) = trim(filename) // '[3:100]'
     afilename(2) = trim(filename) // '[201:300]'
-    call obs%init(afilename, status)
+    call obs%init(afilename, maskarray_policy, status)
     if (status /= 0 .or. sum(obs%info%nsamples) /= 198 .or.                    &
         obs%info(1)%first /= 3   .or. obs%info(1)%last /= 100 .or.             &
         obs%info(2)%first /= 201 .or. obs%info(2)%last /= 300) stop 'FAILED: ainit1'
     deallocate(afilename)
  
     allocate(afilename(0))
-    call obs%init(afilename, status)
+    call obs%init(afilename, maskarray_policy, status)
     if (status == 0) stop 'FAILED: ainit2'
     deallocate(afilename)
 
     
     ! test reading observation
-    call obs%init([filename], status)
+    call obs%init([filename], maskarray_policy, status)
     if (status /= 0) stop 'FAILED: init_pacsobservation loop'
 
     allocate(pacs)
@@ -86,12 +87,16 @@ program test_pacsobservation
 
     mask_ref = .false.
     mask_ref([5,6,7,151]) = .true. ! 27 64
+    mask_frame = .false.
     
-    do first = 1, 360,7
+    do first = 1, 360, 7
         do last = first, 360, 11
            obs%info(1)%first = first
            obs%info(1)%last = last
            obs%info(1)%nsamples = last - first + 1
+           if (allocated(obs%info(1)%maskarray)) deallocate (obs%info(1)%maskarray)
+           allocate (obs%info(1)%maskarray(last-first+1))
+           obs%info(1)%maskarray%invalid_master = .false.
            allocate(signal(obs%info(1)%nsamples,pacs%ndetectors))
            allocate(mask  (obs%info(1)%nsamples,pacs%ndetectors))
            call pacs%read(obs, signal, mask, status)

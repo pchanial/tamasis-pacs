@@ -4,7 +4,7 @@
 
 subroutine pacs_info_channel(filename, nfilenames, channel, status)
 
-    use module_pacsobservation, only : pacsobservation
+    use module_pacsobservation, only : pacsobservation, pacsmaskarray
     implicit none
 
     !f2py intent(in)   filename
@@ -18,6 +18,7 @@ subroutine pacs_info_channel(filename, nfilenames, channel, status)
     integer, intent(out)         :: status
 
     class(pacsobservation), allocatable :: obs
+    type(pacsmaskarray)                 :: maskarray_policy
     character(len=len(filename)/nfilenames), allocatable :: filename_(:)
     integer :: iobs
 
@@ -33,7 +34,7 @@ subroutine pacs_info_channel(filename, nfilenames, channel, status)
     end do
 
     allocate(obs)
-    call obs%init(filename_, status)
+    call obs%init(filename_, maskarray_policy, status)
     if (status /= 0) go to 999
 
     channel = obs%info(1)%channel
@@ -54,7 +55,7 @@ subroutine pacs_info(filename, nfilenames, fine_sampling_factor, keep_bad_detect
                      nrows, ncolumns, ndetectors, output_mask, transparent_mode, compression_factor, nsamples, status)
 
     use module_pacsinstrument, only : pacsinstrument
-    use module_pacsobservation, only : pacsobservation
+    use module_pacsobservation, only : pacsobservation, pacsmaskarray
     implicit none
 
     !f2py intent(in)   filename
@@ -88,6 +89,7 @@ subroutine pacs_info(filename, nfilenames, fine_sampling_factor, keep_bad_detect
 
     class(pacsobservation), allocatable :: obs
     class(pacsinstrument), allocatable  :: pacs
+    type(pacsmaskarray)                 :: maskarray_policy
     character(len=len(filename)/nfilenames), allocatable :: filename_(:)
     integer :: iobs
 
@@ -104,7 +106,7 @@ subroutine pacs_info(filename, nfilenames, fine_sampling_factor, keep_bad_detect
     end do
 
     allocate(obs)
-    call obs%init(filename_, status, verbose=.true.)
+    call obs%init(filename_, maskarray_policy, status, verbose=.true.)
     if (status /= 0) go to 999
 
     allocate(pacs)
@@ -136,7 +138,7 @@ subroutine pacs_map_header(filename, nfilenames, finer_sampling, fine_sampling_f
                            bad_detector_mask, nrows, ncolumns, resolution, header, status)
 
     use module_pacsinstrument,  only : pacsinstrument
-    use module_pacsobservation, only : pacsobservation
+    use module_pacsobservation, only : pacsobservation, pacsmaskarray
     use module_pacspointing,    only : pacspointing
     implicit none
 
@@ -168,6 +170,7 @@ subroutine pacs_map_header(filename, nfilenames, finer_sampling, fine_sampling_f
     class(pacsobservation), allocatable :: obs
     class(pacsinstrument), allocatable  :: pacs
     class(pacspointing), allocatable    :: pointing
+    type(pacsmaskarray)                 :: maskarray_policy
     character(len=len(filename)/nfilenames), allocatable :: filename_(:)
     integer :: iobs
     
@@ -183,7 +186,7 @@ subroutine pacs_map_header(filename, nfilenames, finer_sampling, fine_sampling_f
     end do
 
     allocate(obs)
-    call obs%init(filename_, status)
+    call obs%init(filename_, maskarray_policy, status)
     if (status /= 0) go to 999
 
     allocate(pacs)
@@ -213,7 +216,8 @@ subroutine pacs_timeline(filename, nfilenames, nsamples, ndetectors, keep_bad_de
 
     use iso_fortran_env,        only : ERROR_UNIT
     use module_pacsinstrument,  only : pacsinstrument
-    use module_pacsobservation, only : pacsobservation
+    use module_pacsobservation, only : pacsobservation, pacsmaskarray
+    use module_pacspointing,    only : pacspointing
     use module_preprocessor,    only : divide_vectordim2, subtract_meandim1
     implicit none
 
@@ -246,6 +250,8 @@ subroutine pacs_timeline(filename, nfilenames, nsamples, ndetectors, keep_bad_de
 
     class(pacsobservation), allocatable :: obs
     class(pacsinstrument), allocatable  :: pacs
+    class(pacspointing), allocatable    :: pointing
+    type(pacsmaskarray)                 :: maskarray_policy
     character(len=len(filename)/nfilenames), allocatable :: filename_(:)
     integer                                              :: iobs, destination
 
@@ -262,8 +268,13 @@ subroutine pacs_timeline(filename, nfilenames, nsamples, ndetectors, keep_bad_de
 
     ! initialise observations
     allocate(obs)
-    call obs%init(filename_, status)
+    call obs%init(filename_, maskarray_policy, status)
     if (status /= 0) go to 999
+
+    ! initialise pointing information
+    allocate(pointing)
+    call pointing%init(obs, status)
+    if (status /= 0) stop 'FAILED: pacspointing%init'
 
     ! initialise pacs instrument
     allocate(pacs)
@@ -302,7 +313,7 @@ subroutine pacs_pointing_matrix_filename(filename, nfilenames, finer_sampling, f
     use iso_fortran_env,        only : ERROR_UNIT
     use module_fitstools,       only : ft_read_parameter
     use module_pacsinstrument,  only : pacsinstrument
-    use module_pacsobservation, only : pacsobservation
+    use module_pacsobservation, only : pacsobservation, pacsmaskarray
     use module_pacspointing,    only : pacspointing
     use module_pointingmatrix,  only : pointingelement
     implicit none
@@ -340,6 +351,7 @@ subroutine pacs_pointing_matrix_filename(filename, nfilenames, finer_sampling, f
     class(pacsobservation), allocatable :: obs
     class(pacsinstrument), allocatable  :: pacs
     class(pacspointing), allocatable    :: pointing
+    type(pacsmaskarray)                 :: maskarray_policy
     character(len=len(filename)/nfilenames), allocatable :: filename_(:)
     integer                                              :: iobs, nx, ny, count, nsamples_expected
 
@@ -356,7 +368,7 @@ subroutine pacs_pointing_matrix_filename(filename, nfilenames, finer_sampling, f
 
     ! initialise observations
     allocate(obs)
-    call obs%init(filename_, status)
+    call obs%init(filename_, maskarray_policy, status)
     if (status /= 0) go to 999
 
     ! initialise pacs instrument

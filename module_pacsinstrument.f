@@ -587,13 +587,13 @@ contains
         integer*8 :: nsamples, destination
         integer   :: nobs, iobs
 
+        status   = 1
         nobs     = size(obs%info)
         nsamples = sum(obs%info%nsamples)
 
         ! check that the total number of samples in the observations is equal
         ! to the number of samples in the signal and mask arrays
         if (nsamples /= size(signal,1) .or. nsamples /= size(mask,1)) then
-            status = 1
             write (ERROR_UNIT,'(a)') 'READ: invalid dimensions.'
             return
         end if
@@ -605,7 +605,7 @@ contains
             if (status /= 0) return
             destination = destination + obs%info(iobs)%nsamples
         end do
-   
+
     end subroutine read
 
 
@@ -613,22 +613,24 @@ contains
 
 
     subroutine read_one(this, obs, destination, signal, mask, status)
+
         class(pacsinstrument), intent(in) :: this
         class(pacsobsinfo), intent(in)    :: obs
-        integer*8, intent(in)         :: destination
-        real*8, intent(inout)         :: signal(:,:)
-        logical*1, intent(inout)      :: mask  (:,:)
-        integer, intent(out)          :: status
-        integer*8                     :: p, q
-        integer                       :: idetector, unit, length
-        integer                       :: status_close
-        integer, allocatable          :: imageshape(:)
-        logical                       :: mask_found
-        integer*4, allocatable        :: maskcompressed(:)
-        integer*4                     :: maskval
-        integer*8                     :: ncompressed
-        integer*8                     :: isample, icompressed, ibit
-        integer*8                     :: firstcompressed, lastcompressed
+        integer*8, intent(in)             :: destination
+        real*8, intent(inout)             :: signal(:,:)
+        logical*1, intent(inout)          :: mask  (:,:)
+        integer, intent(out)              :: status
+
+        integer*8              :: p, q
+        integer                :: idetector, unit, length
+        integer                :: status_close
+        integer, allocatable   :: imageshape(:)
+        logical                :: mask_found
+        integer*4, allocatable :: maskcompressed(:)
+        integer*4              :: maskval
+        integer*8              :: ncompressed
+        integer*8              :: isample, icompressed, ibit
+        integer*8              :: firstcompressed, lastcompressed
 
         ! old style file format
         length = len_trim(obs%filename)
@@ -638,8 +640,7 @@ contains
         end if
 
         ! read signal HDU
-        call ft_open_image(trim(obs%filename) // '[Signal]', unit, 3,         &
-                           imageshape, status)
+        call ft_open_image(trim(obs%filename) // '[Signal]', unit, 3, imageshape, status)
         if (status /= 0) return
 
         do idetector = 1, size(signal,2)
@@ -667,8 +668,7 @@ contains
             return
         end if
 
-        call ft_open_image(trim(obs%filename) // '[Master]', unit, 3,         &
-                           imageshape, status)
+        call ft_open_image(trim(obs%filename) // '[Master]', unit, 3, imageshape, status)
         if (status /= 0) return
 
         allocate(maskcompressed(imageshape(1)))
@@ -699,14 +699,17 @@ contains
                 isample = (icompressed-1)*32 - obs%first + destination + 1
 
                 ! loop over the bits of a compressed mask byte
-                do ibit = max(0, obs%first - (icompressed-1)*32-1),           &
-                          min(31, obs%last - (icompressed-1)*32-1)
-                    mask(isample+ibit,idetector) =                             &
-                         mask(isample+ibit,idetector) .or. btest(maskval,ibit)
+                do ibit = max(0, obs%first - (icompressed-1)*32-1), min(31, obs%last - (icompressed-1)*32-1)
+                    mask(isample+ibit,idetector) = mask(isample+ibit,idetector) .or. btest(maskval,ibit)
                 end do
 
             end do
 
+        end do
+
+        ! propagate the array mask into the timeline mask
+        do isample = 1, obs%nsamples
+            if (obs%maskarray(isample)%invalid_master) mask(destination+isample-1,:) = .true.
         end do
 
     999 call ft_close(unit, status_close)
