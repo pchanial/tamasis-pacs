@@ -14,7 +14,7 @@ import numpy
 from   optparse import OptionParser
 import sys
 import tamasisfortran as tmf
-from   tamasis import Map, PacsObservation, Projection
+from   tamasis import *
 
 # set up the option parser
 parser = OptionParser('Usage: %prog [options] fitsfile...')
@@ -26,8 +26,7 @@ parser.add_option('--header', help='use FITS header in FILE to specify the map '
 parser.add_option('--resolution', help='input pixel size of the map in arcsecon'
                   'ds [default: %default]', default=3.2)
 parser.add_option('-n', '--npixels-per-sample', help='Maximum number of sky pix'
-                  'els intercepted by a PACS detector [default: %default]', 
-                  default=6)
+                  'els intercepted by a PACS detector [default: 5 and 11 for the blue and red channel side]')
 parser.add_option('--no-flatfield', help='do not divide by calibration flat-fie'
                   'ld [default: False]', dest='do_flatfielding', action='store_'
                   'false', default=True)
@@ -58,11 +57,21 @@ if options.filtering not in ('none', 'mean'):
     raise ValueError("Invalid filtering method '"+options.filtering+"'. Valid m"
                      "ethods are 'mean', or 'none'.")
 
+print
+
+bad_detector_mask = None
+# uncomment the following lines to make a map with fewer detectors
+# 1 means bad detector
+#
+bad_detector_mask = numpy.ones([32,64], dtype='int8')
+bad_detector_mask[0,0] = 0
+
 # Set up the PACS observation(s)
 pacs = PacsObservation(filename=filename,
                        header=options.header,
                        resolution=options.resolution,
                        fine_sampling_factor=1,
+                       bad_detector_mask = bad_detector_mask,
                        keep_bad_detectors=False,
                        npixels_per_sample=options.npixels_per_sample)
 
@@ -79,7 +88,7 @@ tod = pacs.get_tod(do_flatfielding=options.do_flatfielding, do_subtraction_mean=
 
 # Deglitch
 if options.deglitching != 'none':
-    nbads = numpy.sum(tod.mask)
+    nbads = numpy.sum(tod.mask != 0)
     if options.deglitching == 'l2std':
         deglitch_l2std(tod, projection, nsigma=options.nsigma)
     else:

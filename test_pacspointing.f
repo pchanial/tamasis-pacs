@@ -1,14 +1,12 @@
 program test_pacspointing
 
     use module_math,            only : NaN, neq_real
-    use module_pacsobservation, only : pacsobservation, pacsmaskarray
-    use module_pacspointing
+    use module_pacsobservation, only : pacsobservation, maskarray
     use module_precision,       only : p
     implicit none
 
-    class(pacspointing), allocatable    :: ptg
     class(pacsobservation), allocatable :: obs
-    type(pacsmaskarray)                 :: maskarray_policy
+    type(maskarray)             :: maskarray_policy
     character(len=*), parameter :: filename(1) = 'tests/frames_blue.fits'
     integer                     :: i, index
     real*8                      :: time(12), ra(12), dec(12), pa(12), chop(12)
@@ -27,45 +25,41 @@ program test_pacspointing
     call obs%init(filename, maskarray_policy, status)
     if (status /= 0) stop 'FAILED: init_pacsobservation'
 
-    allocate(ptg)
-    call ptg%init(obs, status)
-    if (status /= 0) stop 'FAILED: ptg%init'
-
     index = 0
     do i = 1, 6
-        call ptg%get_position_time(1, timetest(i), ra(i), dec(i), pa(i), chop(i), index)
+        call obs%get_position_time(1, timetest(i), ra(i), dec(i), pa(i), chop(i), index)
     end do
     if (any(neq_real(ra  (1:6), ratest,   15))) stop 'FAILED: ra'
     if (any(neq_real(dec (1:6), dectest,  15))) stop 'FAILED: dec'
     if (any(neq_real(pa  (1:6), patest,   15))) stop 'FAILED: pa'
     if (any(neq_real(chop(1:6), choptest, 15))) stop 'FAILED: chop'
 
-    call ptg%destructor()
+    call obs%destructor()
 
     time = [(i * 0.5_p, i = -2, 9)]
 
     ! test interpolation (evenly spaced sampling)
-    call ptg%init_sim([1._p, 2._p], [0._p, 1._p], [3._p, 3._p], [2._p, 1._p], [0._p, 0._p], status)
+    call obs%init_sim([1._p, 2._p], [0._p, 1._p], [3._p, 3._p], [2._p, 1._p], [0._p, 0._p], status)
     if (status /= 0) stop 'FAILED: init_sim 1'
 
     index = 0
     do i = 1, size(time)
-       call ptg%get_position_time(1, time(i), ra(i), dec(i), pa(i), chop(i), index)
+       call obs%get_position_time(1, time(i), ra(i), dec(i), pa(i), chop(i), index)
     end do
     if (any(neq_real(ra,  [nan, nan,-1.0_p,-0.5_p, 0.0_p, 0.5_p, 1.0_p, 1.5_p, 2.0_p, nan, nan, nan], 10) .or.                     &
             neq_real(dec, [nan, nan, 3.0_p, 3.0_p, 3.0_p, 3.0_p, 3.0_p, 3.0_p, 3.0_p, nan, nan, nan], 10) .or.                     &
             neq_real(pa,  [nan, nan, 3.0_p, 2.5_p, 2.0_p, 1.5_p, 1.0_p, 0.5_p, 0.0_p, nan, nan, nan], 10)))                        &
         stop 'FAILED: get_position_time 1'
-    call ptg%destructor()
+    call obs%destructor()
 
     ! test slow interpolation (unevenly spaced sampling)
-    call ptg%init_sim([0.5_p, 1.5_p, 2.5_p, 3._p], [0._p, 1._p, 2._p, 2.5_p], [3._p, 3._p, 3._p, 3._p], [3._p, 2._p, 1._p, 0.5_p], &
+    call obs%init_sim([0.5_p, 1.5_p, 2.5_p, 3._p], [0._p, 1._p, 2._p, 2.5_p], [3._p, 3._p, 3._p, 3._p], [3._p, 2._p, 1._p, 0.5_p], &
                       [0._p, 0._p, 0._p, 1._p], status)
     if (status /= 0) stop 'FAILED: init_sim 2'
 
     index = 0
     do i = 1, size(time)
-        call ptg%get_position_time(1, time(i), ra(i), dec(i), pa(i), chop(i), index)
+        call obs%get_position_time(1, time(i), ra(i), dec(i), pa(i), chop(i), index)
     end do
 
     ! time starts from -1 to 4.5
@@ -77,7 +71,7 @@ program test_pacspointing
     end if
 
     do i = 1, size(time)
-        call ptg%get_position_index(1, i, 3, ra(i), dec(i), pa(i), chop(i))
+        call obs%get_position_index(1, i, 3, ra(i), dec(i), pa(i), chop(i))
     end do
 
     if (any(neq_real(ra, [(0._p+i/3._p,i=0,2), (1._p+i/3._p,i=0,2), (2._p+0.5_p*i/3._p,i=0,2),(2.5_p+0.5_p*i/3._p,i=0,2)], 15)     &
@@ -85,7 +79,7 @@ program test_pacspointing
         .or. neq_real(pa, [(3._p-i/3._p,i=0,2), (2._p-i/3._p,i=0,2), (1.-0.5_p*i/3._p,i=0,2), (0.5_p-0.5_p*i/3._p, i=0,2)],15)     &
         .or. neq_real(chop, [(0.0_p, i=1,6), (0.0_p+i/3.0_p, i=0,5)], 15))) stop 'FAILED: get_position_index'
 
-    call ptg%destructor()
+    call obs%destructor()
 
     stop "OK."
 

@@ -4,8 +4,7 @@ program test_ngc6946_bpj
     use module_fitstools,       only : ft_read_parameter
     use module_math,            only : pInf, neq_real, sum_kahan
     use module_pacsinstrument,  only : ndims, nvertices, pacsinstrument
-    use module_pacsobservation, only : pacsobservation, pacsmaskarray
-    use module_pacspointing,    only : pacspointing
+    use module_pacsobservation, only : pacsobservation, maskarray
     use module_pointingmatrix,  only : pointingelement, pmatrix_direct, pmatrix_transpose
     use module_preprocessor,    only : subtract_meandim1, divide_vectordim2
     use module_projection,      only : surface_convex_polygon
@@ -16,10 +15,10 @@ program test_ngc6946_bpj
 
     class(pacsinstrument), allocatable  :: pacs
     class(pacsobservation), allocatable :: obs
-    class(pacspointing), allocatable    :: pointing
-    type(pacsmaskarray)                 :: maskarray_policy
+    type(maskarray)                     :: maskarray_policy
     character(len=*), parameter         :: inputdir    = '/home/pchanial/work/pacs/data/transparent/NGC6946/'
-    character(len=*), parameter         :: filename(1) = inputdir // '1342184520_blue[12001:86000]'
+!!$    character(len=*), parameter         :: filename(1) = inputdir // '1342184520_blue[12001:86000]'
+    character(len=*), parameter         :: filename(1) = inputdir // '1342184520_blue[12001:16000]'
     integer, parameter                  :: npixels_per_sample = 6
     real*8, allocatable                 :: signal(:,:), coords(:,:), coords_yz(:,:)
     real*8                              :: ra, dec, pa, chop, chop_old
@@ -38,22 +37,19 @@ program test_ngc6946_bpj
 
     ! initialise observation
     allocate(obs)
-    call obs%init(filename, maskarray_policy, status)
+    call obs%init(filename, maskarray_policy, status, verbose=.true.)
     if (status /= 0) stop 'FAILED: pacsobservation%init'
-    nsamples = obs%info(1)%nsamples
+    nsamples = obs%slice(1)%nsamples
+
+    call obs%print()
 
     ! initialise pacs instrument
     allocate(pacs)
-    call pacs%init(obs%channel, obs%transparent_mode, 1, .false., status)
+    call pacs%init(obs%channel, obs%observing_mode == 'Transparent', 1, .false., status)
     if (status /= 0) stop 'FAILED: pacsinstrument%init'
 
-    ! initialise pointing information
-    allocate(pointing)
-    call pointing%init(obs, status)
-    if (status /= 0) stop 'FAILED: pacspointing%init'
-
     ! get header map
-    call pacs%compute_map_header(pointing, .false., 3.d0, header, status)
+    call pacs%compute_map_header(obs, .false., 3.d0, header, status)
     if (status /= 0) stop 'FAILED: compute_map_header.'
 
     call ft_read_parameter(header, 'naxis1', nx, count, status=status)
@@ -86,7 +82,7 @@ program test_ngc6946_bpj
     write(*,'(a)', advance='no') 'Computing the projector... '
     allocate(pmatrix(npixels_per_sample,nsamples,pacs%ndetectors))
     call system_clock(count1, count_rate, count_max)
-    call pacs%compute_projection_sharp_edges(pointing, .false., header, nx, ny, pmatrix, status)
+    call pacs%compute_projection_sharp_edges(obs, .false., header, nx, ny, pmatrix, status)
     if (status /= 0) stop 'FAILED: compute_projection_sharp_edges.'
     call system_clock(count2, count_rate, count_max)
     write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
@@ -108,7 +104,7 @@ program test_ngc6946_bpj
     !XXX IFORT bug
     !!$omp parallel do default(shared) firstprivate(chop_old) private(isample, ra, dec, pa, chop, coords, coords_yz)
     do isample = 1, nsamples
-        call pointing%get_position_index(1, isample, 1, ra, dec, pa, chop)
+        call obs%get_position_index(1, isample, 1, ra, dec, pa, chop)
         if (abs(chop-chop_old) > 1.d-2) then
             coords_yz = pacs%uv2yz(pacs%corners_uv, pacs%distortion_yz, chop)
             chop_old = chop

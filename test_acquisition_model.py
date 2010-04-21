@@ -55,7 +55,7 @@ except TypeError:
 else: 
     raise TestFailure('mask None wrong type object')
 
-a = numpy.array([0, 0., 1., 3., 0., 2])
+a = numpy.array([0, 0., 1., 1., 0., 1])
 mask = Masking(a)
 if mask.shapein != a.shape or mask.shapeout != a.shape:
     raise TestFailure('mask 1d')
@@ -68,7 +68,7 @@ if numpy.any(mask.direct(b) != c):
 if numpy.any(mask.transpose(b) != c):
     raise TestFailure('mask 1d transpose')
 
-a = numpy.array([[0, 0.], [1., 3.], [0., 2]])
+a = numpy.array([[0, 0.], [1., 1.], [0., 1.]])
 mask = Masking(a)
 if mask.shapein != a.shape or mask.shapeout != a.shape:
     raise TestFailure('mask 2d')
@@ -79,7 +79,7 @@ if numpy.any(mask.direct(b) != c):
 if numpy.any(mask.transpose(b) != c):
     raise TestFailure('mask 2d transpose')
 
-a = numpy.array([[[0, 0.], [1., 3.]], [[0., 2], [1, 1]]])
+a = numpy.array([[[0, 0.], [1., 1.]], [[0., 1], [1, 1]]])
 mask = Masking(a)
 if mask.shapein != a.shape or mask.shapeout != a.shape:
     raise TestFailure('mask 2d')

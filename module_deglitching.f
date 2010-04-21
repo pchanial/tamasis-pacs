@@ -3,6 +3,7 @@ module module_deglitching
     use module_math,           only : moment, mad, sigma_clipping
     use module_pointingmatrix, only : pointingelement, backprojection_weighted_roi
     use module_precision,      only : p, sp
+    use module_string,         only : strternary
     implicit none
     private
 
@@ -34,7 +35,14 @@ contains
         real(kind=p), allocatable :: arrv(:)
         integer, allocatable      :: arrt(:)
         logical, allocatable      :: isglitch(:)
+        integer                   :: count1, count2, count_rate, count_max
+        integer*8                 :: nbads
         
+        
+        write (*,'(a,$)') 'Info: Deglitching (' // strternary(use_mad, 'mad','std') // ')...'
+        nbads = count(mask)
+        call system_clock(count1, count_rate, count_max)
+
         npixels_per_sample = size(pmatrix,1)
         ntimes     = size(pmatrix,2)
         ndetectors = size(pmatrix,3)
@@ -81,54 +89,52 @@ contains
 
         ! we loop over each sky pixel
         !$omp do
-        do j=1, ny
+        do imap = 0, nx*ny-1
 
-            do i=1, nx
+            i = mod(imap, nx)
+            j = imap / nx
 
-                imap = (i-1) + (j-1)*nx
-                if (hitmap(imap) < MIN_SAMPLE_SIZE) cycle
+            if (hitmap(imap) < MIN_SAMPLE_SIZE) cycle
 
-                ! construct the sample of sky pixels in the minimaps that match the current sky map pixel (i,j)
-                nv = 0
-                do itime=1, ntimes
+            ! construct the sample of sky pixels in the minimaps that match the current sky map pixel (i,j)
+            nv = 0
+            do itime=1, ntimes
 
-                    ! test if the current sky pixel is in the minimap
-                    if (i < roi(1,1,itime) .or. i > roi(1,2,itime) .or. &
-                        j < roi(2,1,itime) .or. j > roi(2,2,itime)) cycle
-
-                    ! test that the current sky pixel is not NaN in the minimap
-                    iminimap = i-roi(1,1,itime) + (roi(1,2,itime)-roi(1,1,itime)+1) * (j-roi(2,1,itime))
-                    if (map(iminimap,itime) /= map(iminimap,itime)) cycle
-
-                    ! the sky pixel is in the minimap, let's add it to the sample
-                    nv = nv + 1
-                    arrv(nv) = map(iminimap,itime)
-                    arrt(nv) = itime
-
-                end do
-
-                ! check we have enough samples
-                if (nv < MIN_SAMPLE_SIZE) cycle
-
-                ! sigma clip on arrv
-                if (use_mad) then
-                    stddev = 1.4826_p * mad(arrv(1:nv),mv)
-                    isglitch(1:nv) = abs(arrv(1:nv)-mv) >  nsigma * stddev
-                else
-                    call sigma_clipping(arrv(1:nv), isglitch(1:nv), nsigma)
-                end if
+                ! test if the current sky pixel is in the minimap
+                if (i < roi(1,1,itime) .or. i > roi(1,2,itime) .or. j < roi(2,1,itime) .or. j > roi(2,2,itime)) cycle
                 
+                ! test that the current sky pixel is not NaN in the minimap
+                iminimap = i-roi(1,1,itime) + (roi(1,2,itime)-roi(1,1,itime)+1) * (j-roi(2,1,itime))
+                if (map(iminimap,itime) /= map(iminimap,itime)) cycle
 
-                ! update mask
-                do iv=1, nv
-                    if (.not. isglitch(iv)) cycle
-                    do idetector=1, ndetectors
-                        do ipixel=1, npixels_per_sample
-                            if (pmatrix(ipixel,arrt(iv),idetector)%pixel == imap) then
-                                mask(arrt(iv),idetector) = .true.
-                                exit
-                            end if
-                        end do
+                ! the sky pixel is in the minimap, let's add it to the sample
+                nv = nv + 1
+                arrv(nv) = map(iminimap,itime)
+                arrt(nv) = itime
+                
+            end do
+            
+            ! check we have enough samples
+            if (nv < MIN_SAMPLE_SIZE) cycle
+            
+            ! sigma clip on arrv
+            if (use_mad) then
+                stddev = 1.4826_p * mad(arrv(1:nv),mv)
+                isglitch(1:nv) = abs(arrv(1:nv)-mv) >  nsigma * stddev
+            else
+                call sigma_clipping(arrv(1:nv), isglitch(1:nv), nsigma)
+            end if
+            
+            
+            ! update mask
+            do iv=1, nv
+                if (.not. isglitch(iv)) cycle
+                do idetector=1, ndetectors
+                    do ipixel=1, npixels_per_sample
+                        if (pmatrix(ipixel,arrt(iv),idetector)%pixel == imap) then
+                            mask(arrt(iv),idetector) = .true.
+                            exit
+                        end if
                     end do
                 end do
             end do
@@ -140,6 +146,8 @@ contains
         !$omp end parallel
 
         deallocate (map)
+        call system_clock(count2, count_rate, count_max)
+        write (*,'(f6.2,a,i0,a)') real(count2-count1)/count_rate, 's (number of flagged samples: ', count(mask)-nbads, ')'
 
     end subroutine deglitch_l2b
 

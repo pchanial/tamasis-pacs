@@ -97,7 +97,7 @@ class AcquisitionModel(object):
             raise ValueError('The shape of the output of '+self.__class__.__name__+' is not known.')
         if self._output_direct is not None and shapeout == self._output_direct.shape:
             return
-        print 'Info: allocating '+str(numpy.product(shapeout)/2.**17)+' MiB for the output of '+self.__class__.__name__
+        print 'Info: Allocating '+str(numpy.product(shapeout)/2.**17)+' MiB for the output of '+self.__class__.__name__
         if cls == numpy.ndarray:
             self._output_direct = numpy.empty(shapeout, dtype=numpy.float64, **options)
         else:
@@ -108,7 +108,7 @@ class AcquisitionModel(object):
             raise ValueError('The shape of the input of '+self.__class__.__name__+' is not known.')
         if self._output_transpose is not None and shapein == self._output_transpose.shape:
             return
-        print 'Info: allocating '+str(numpy.product(shapein)/2.**17)+' MiB for the output of the transpose of '+self.__class__.__name__
+        print 'Info: Allocating '+str(numpy.product(shapein)/2.**17)+' MiB for the output of the transpose of '+self.__class__.__name__
         if cls == numpy.ndarray:
             self._output_transpose = numpy.empty(shapein, dtype=numpy.float64, **options)
         else:
@@ -631,7 +631,7 @@ class PacsObservation(_Pacs):
     - ij(2,ndetectors)   : the row and column number (starting from 0) of the detectors
     Author: P. Chanial
     """
-    def __init__(self, filename, header=None, resolution=None, npixels_per_sample=6, fine_sampling_factor=1, bad_detector_mask=None, keep_bad_detectors=False):
+    def __init__(self, filename, header=None, resolution=None, npixels_per_sample=None, fine_sampling_factor=1, bad_detector_mask=None, keep_bad_detectors=False):
 
         import pyfits
 
@@ -642,6 +642,9 @@ class PacsObservation(_Pacs):
 
         channel, status = tmf.pacs_info_channel(filename_, nfilenames)
         if status != 0: raise RuntimeError()
+
+        if npixels_per_sample is None:
+            npixels_per_sample = 11 if channel == 'r' else 5
 
         use_mask = bad_detector_mask is not None
         if use_mask:
@@ -658,7 +661,7 @@ class PacsObservation(_Pacs):
                 bad_detector_mask = numpy.zeros((16,32), dtype='int8')
             else:
                 bad_detector_mask = numpy.zeros((32,64), dtype='int8')
-             
+
         # retrieve information from the observations
         ndetectors, bad_detector_mask, transparent_mode, compression_factor, nsamples, status = tmf.pacs_info(filename_, nfilenames, fine_sampling_factor, keep_bad_detectors, use_mask, numpy.asfortranarray(bad_detector_mask))
         if status != 0: raise RuntimeError()
@@ -701,7 +704,7 @@ class PacsObservation(_Pacs):
     def get_pointing_matrix(self, finer_sampling=True):
         nsamples = self.nfinesamples if finer_sampling else numpy.sum(self.nsamples)
         sizeofpmatrix = self.npixels_per_sample * nsamples * self.ndetectors
-        print 'Info: allocating '+str(sizeofpmatrix/2.**17)+' MiB for the pointing matrix.'
+        print 'Info: Allocating '+str(sizeofpmatrix/2.**17)+' MiB for the pointing matrix.'
         pmatrix = numpy.zeros(sizeofpmatrix, dtype=numpy.int64)
         filename_, nfilenames = self._files2tmf(self.filename)
         status = tmf.pacs_pointing_matrix_filename(filename_, self.nobservations, finer_sampling, self.fine_sampling_factor, self.npixels_per_sample, nsamples, self.ndetectors, self.keep_bad_detectors, numpy.asfortranarray(self.bad_detector_mask), str(self.header).replace('\n', ''), pmatrix)
@@ -816,7 +819,7 @@ class MadMap1Observation(object):
     def get_pointing_matrix(self, finer_sampling=False):
         tod = Tod.zeros((self.ndetectors,self.nfinesamples))
         sizeofpmatrix = self.npixels_per_sample * self.nfinesamples * self.ndetectors
-        print 'Info: allocating '+str(sizeofpmatrix/2.**17)+' MiB for the pointing matrix.'
+        print 'Info: Allocating '+str(sizeofpmatrix/2.**17)+' MiB for the pointing matrix.'
         pmatrix = numpy.zeros(sizeofpmatrix, dtype=numpy.int64)
         status = tmf.read_madmap1(self.todfile, self.invnttfile, self.convert, self.npixels_per_sample, tod.T, pmatrix)
         if (status != 0): raise RuntimeError()

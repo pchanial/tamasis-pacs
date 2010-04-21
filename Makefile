@@ -64,34 +64,34 @@ finddeps = $(1).o $(if $($(1)),$(call map,finddeps,$($(1))))
 
 # define module dependencies
 module_cfitsio = module_stdio
-module_deglitching = module_math module_pointingmatrix module_precision
+module_deglitching = module_math module_pointingmatrix module_precision module_string
 module_filtering = module_precision
 module_fitstools = module_cfitsio module_precision module_string
 module_instrument = module_precision module_string
 module_madcap = module_filtering module_pointingmatrix module_precision module_string
 module_math = module_precision
+module_observation = module_fitstools module_math module_precision module_string
 module_optionparser = module_string
-module_pacsinstrument = module_fitstools module_math module_pacsobservation module_pacspointing module_pointingmatrix module_projection module_wcs 
-module_pacsobservation = module_fitstools module_precision module_string
-module_pacspointing = module_fitstools module_pacsobservation module_precision module_string
+module_pacsinstrument = module_fitstools module_math module_pacsobservation module_pointingmatrix module_projection module_wcs 
+module_pacsobservation = module_fitstools module_math module_observation module_precision module_string
 module_pointingmatrix = module_math module_precision module_projection
 module_preprocessor = module_math
 module_projection = module_precision module_sort module_stack
 module_wcs = module_fitstools module_math module_string module_wcslib
 
 # define executable dependencies
-pacs_photproject = module_fitstools module_deglitching module_optionparser module_pacsinstrument module_pacsobservation module_pacspointing module_pointingmatrix module_preprocessor
+pacs_photproject = module_fitstools module_deglitching module_optionparser module_pacsinstrument module_pacsobservation module_pointingmatrix module_preprocessor
 test_cfitsio = module_cfitsio
 test_compression = module_compression module_math module_precision
 test_deglitching = module_deglitching module_math module_pointingmatrix module_precision
 test_fitstools = module_fitstools
 test_madcap = module_filtering module_fitstools module_madcap
 test_math = module_math module_precision
-test_ngc6946_bpj = module_fitstools module_math module_pacsinstrument module_pacsobservation module_pacspointing module_pointingmatrix module_preprocessor module_projection
+test_ngc6946_bpj = module_fitstools module_math module_pacsinstrument module_pacsobservation module_pointingmatrix module_preprocessor module_projection
 test_optionparser = module_optionparser
-test_pacsinstrument = module_pacsinstrument module_pacspointing
+test_pacsinstrument = module_pacsinstrument module_pacsobservation
 test_pacsobservation = module_pacsinstrument  module_pacsobservation module_string
-test_pacspointing = module_math module_pacsobservation module_pacspointing
+test_pacspointing = module_math module_pacsobservation module_precision
 test_pointingmatrix = module_pointingmatrix
 test_projection = module_projection module_sort
 test_read_config = module_instrument

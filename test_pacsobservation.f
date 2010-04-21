@@ -1,16 +1,16 @@
 program test_pacsobservation
 
     use module_pacsinstrument,  only : pacsinstrument
-    use module_pacsobservation, only : pacsobservation, pacsmaskarray
+    use module_pacsobservation, only : pacsobservation, maskarray
     use module_string,          only : strsection
     implicit none
 
     class(pacsobservation), allocatable :: obs
     class(pacsinstrument), allocatable  :: pacs
-    type(pacsmaskarray)                 :: maskarray_policy
-    character(len=*), parameter :: filename = 'tests/frames_blue.fits'
-    character(len=50), allocatable :: afilename(:)
-    integer                     :: status, idetector
+    type(maskarray)                     :: maskarray_policy
+    character(len=*), parameter         :: filename = 'tests/frames_blue.fits'
+    character(len=50), allocatable      :: afilename(:)
+    integer                :: status, idetector
     real*8, allocatable    :: signal(:,:)
     logical*1, allocatable :: mask(:,:)
     integer*8              :: first, last
@@ -19,28 +19,22 @@ program test_pacsobservation
     ! valid calls
     allocate(obs)
     call obs%init([filename], maskarray_policy, status)
-    if (status /= 0 .or. obs%info(1)%first /= 1 .or. obs%info(1)%last /= 360)  &
-        stop 'FAILED: init1'
+    if (status /= 0 .or. obs%slice(1)%first /= 1 .or. obs%slice(1)%last /= 360) stop 'FAILED: init1'
 
     call obs%init([filename // '[23:23]'], maskarray_policy, status)
-    if (status /= 0 .or. obs%info(1)%first /= 23 .or. obs%info(1)%last /= 23)  &
-        stop 'FAILED: init2'
+    if (status == 0 .or. obs%slice(1)%first /= 23 .or. obs%slice(1)%last /= 23) stop 'FAILED: init2'
 
     call obs%init([filename // '[200:]'], maskarray_policy, status)
-    if (status /= 0 .or. obs%info(1)%first /= 200 .or. obs%info(1)%last /= 360)&
-        stop 'FAILED: init3'
+    if (status /= 0 .or. obs%slice(1)%first /= 200 .or. obs%slice(1)%last /= 360) stop 'FAILED: init3'
 
     call obs%init([filename // '[:130]'], maskarray_policy, status)
-    if (status /= 0 .or. obs%info(1)%first /= 1 .or. obs%info(1)%last /= 130)  &
-        stop 'FAILED: init4'
+    if (status /= 0 .or. obs%slice(1)%first /= 1 .or. obs%slice(1)%last /= 130) stop 'FAILED: init4'
 
     call obs%init([filename // '[:]'], maskarray_policy, status)
-    if (status /= 0 .or. obs%info(1)%first /= 1 .or. obs%info(1)%last /= 360)  &
-        stop 'FAILED: init5'
+    if (status /= 0 .or. obs%slice(1)%first /= 1 .or. obs%slice(1)%last /= 360) stop 'FAILED: init5'
 
     call obs%init([filename // '[]'], maskarray_policy, status)
-    if (status /= 0 .or. obs%info(1)%first /= 1 .or. obs%info(1)%last /= 360)  &
-        stop 'FAILED: init6'
+    if (status /= 0 .or. obs%slice(1)%first /= 1 .or. obs%slice(1)%last /= 360) stop 'FAILED: init6'
    
     ! invalid calls
     call obs%init([filename // '[32:23]'], maskarray_policy, status)
@@ -60,9 +54,9 @@ program test_pacsobservation
     afilename(1) = trim(filename) // '[3:100]'
     afilename(2) = trim(filename) // '[201:300]'
     call obs%init(afilename, maskarray_policy, status)
-    if (status /= 0 .or. sum(obs%info%nsamples) /= 198 .or.                    &
-        obs%info(1)%first /= 3   .or. obs%info(1)%last /= 100 .or.             &
-        obs%info(2)%first /= 201 .or. obs%info(2)%last /= 300) stop 'FAILED: ainit1'
+    if (status /= 0 .or. sum(obs%slice%nsamples) /= 198 .or.                     &
+        obs%slice(1)%first /= 3   .or. obs%slice(1)%last /= 100 .or.             &
+        obs%slice(2)%first /= 201 .or. obs%slice(2)%last /= 300) stop 'FAILED: ainit1'
     deallocate(afilename)
  
     allocate(afilename(0))
@@ -76,9 +70,8 @@ program test_pacsobservation
     if (status /= 0) stop 'FAILED: init_pacsobservation loop'
 
     allocate(pacs)
-    call pacs%init(obs%channel, obs%transparent_mode, 1, .false., status)
-    if (status /= 0 .or. pacs%channel /= 'b' .or. pacs%transparent_mode)       &
-        stop 'FAILED: pacs%init'
+    call pacs%init(obs%channel, obs%observing_mode == 'Transparent', 1, .false., status)
+    if (status /= 0 .or. pacs%channel /= 'b' .or. pacs%transparent_mode) stop 'FAILED: pacs%init'
 
     ! get a detector that has been hit by a glitch
     do idetector = 1, pacs%ndetectors
@@ -91,14 +84,15 @@ program test_pacsobservation
     
     do first = 1, 360, 7
         do last = first, 360, 11
-           obs%info(1)%first = first
-           obs%info(1)%last = last
-           obs%info(1)%nsamples = last - first + 1
-           if (allocated(obs%info(1)%maskarray)) deallocate (obs%info(1)%maskarray)
-           allocate (obs%info(1)%maskarray(last-first+1))
-           obs%info(1)%maskarray%invalid_master = .false.
-           allocate(signal(obs%info(1)%nsamples,pacs%ndetectors))
-           allocate(mask  (obs%info(1)%nsamples,pacs%ndetectors))
+           obs%slice(1)%first = first
+           obs%slice(1)%last = last
+           obs%slice(1)%nsamples = last - first + 1
+           obs%nsamples_tot = last - first + 1
+           if (allocated(obs%slice(1)%p)) deallocate (obs%slice(1)%p)
+           allocate (obs%slice(1)%p(last-first+1))
+           obs%slice(1)%p%invalid = .false.
+           allocate(signal(obs%slice(1)%nsamples,pacs%ndetectors))
+           allocate(mask  (obs%slice(1)%nsamples,pacs%ndetectors))
            call pacs%read(obs, signal, mask, status)
            if (status /= 0) stop 'FAILED: read_pacsobservation loop'
            if (any(mask(1:last-first+1,idetector) .neqv. mask_ref(first:last))) then

@@ -3,16 +3,14 @@ program test_pacsinstrument
     use module_fitstools,       only : ft_read_parameter, ft_header2str
     use module_math,            only : mean, neq_real
     use module_pacsinstrument
-    use module_pacsobservation, only : pacsobservation, pacsmaskarray
-    use module_pacspointing,    only : pacspointing
+    use module_pacsobservation, only : pacsobservation, maskarray
     use module_string,          only : strreal
     use module_wcs,             only : init_astrometry, ad2xy_gnomonic
     implicit none
 
     class(pacsinstrument), allocatable  :: pacs
     class(pacsobservation), allocatable :: obs
-    class(pacspointing), allocatable    :: pointing
-    type(pacsmaskarray)                 :: maskarray_policy
+    type(maskarray)                     :: maskarray_policy
     character(len=*), parameter :: filename(1) = 'tests/frames_blue.fits'
     character(len=*), parameter :: filename_header = 'tests/csh_header_ngc6946.fits'
 
@@ -32,19 +30,14 @@ program test_pacsinstrument
 
     ! initialise pacs instrument
     allocate(pacs)
-    call pacs%init(obs%channel, obs%transparent_mode, 1, .false., status)
+    call pacs%init(obs%channel, obs%observing_mode == 'Transparent', 1, .false., status)
     if (status /= 0) stop 'FAILED: pacsinstrument%init'
 
-    ! initialise pointing information
-    allocate(pointing)
-    call pointing%init(obs, status)
-    if (status /= 0) stop 'FAILED: pacspointing%init'
-
-    allocate(time(pointing%nsamples_tot))
-    time = pointing%time
+    allocate(time(obs%nsamples_tot))
+    time = obs%slice(1)%p%time
 
     if (pacs%ndetectors /= 1998) stop 'FAILED: ndetectors'
-    if (pointing%nsamples_tot /= 360) stop 'FAILED: nsamples'
+    if (size(time) /= 360) stop 'FAILED: nsamples'
     if (any(shape(pacs%corners_uv) /= [2,4*pacs%ndetectors])) stop 'FAILED: shape corners_uv'
 
     i = count(.not. pacs%mask_blue(1,:))
@@ -68,7 +61,7 @@ program test_pacsinstrument
     if (status /= 0) stop 'FAILED: init_astrometry.'
 
     index = 0
-    call pointing%get_position_time(1, pointing%time(1), ra, dec, pa, chop, index)
+    call obs%get_position_time(1, time(1), ra, dec, pa, chop, index)
 
     yz = pacs%uv2yz(pacs%corners_uv, pacs%distortion_yz_blue, chop)
 
@@ -102,14 +95,14 @@ program test_pacsinstrument
     ! minmax(ra) 258.50445       309.04262
     ! minmax(dec) 59.980161       67.110813
 
-    call pointing%compute_center(ra0, dec0)
-    if (neq_real(ra0,  mean(pointing%ra), 15) .or. neq_real(dec0, mean(pointing%dec), 15)) stop 'FAILED: compute_center'
+    call obs%compute_center(ra0, dec0)
+    if (neq_real(ra0,  mean(obs%slice(1)%p%ra), 15) .or. neq_real(dec0, mean(obs%slice(1)%p%dec), 15)) stop 'FAILED: compute_center'
 
-    call pacs%find_minmax(pointing, .false., xmin, xmax, ymin, ymax)
+    call pacs%find_minmax(obs, .false., xmin, xmax, ymin, ymax)
     write (*,*) 'Xmin: ', xmin, ', Xmax: ', xmax
     write (*,*) 'Ymin: ', ymin, ', Ymax: ', ymax
 
-    call pacs%compute_map_header(pointing, .false., 3.d0, header, status)
+    call pacs%compute_map_header(obs, .false., 3.d0, header, status)
     if (status /= 0) stop 'FAILED: compute_map_header'
 
     call ft_read_parameter(header, 'naxis1', nx, count1, status=status)
@@ -125,7 +118,7 @@ program test_pacsinstrument
     index = 0
     call system_clock(count1, count_rate, count_max)
     do i = 1, size(time)
-        call pointing%get_position_time(1, time(i), ra, dec, pa, chop, index)
+        call obs%get_position_time(1, time(i), ra, dec, pa, chop, index)
         yz = pacs%uv2yz(pacs%corners_uv, pacs%distortion_yz_blue, chop)
         ad = pacs%yz2ad(yz, ra, dec, pa)
         xy = ad2xy_gnomonic(ad)

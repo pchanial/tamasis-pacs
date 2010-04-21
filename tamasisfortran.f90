@@ -4,7 +4,7 @@
 
 subroutine pacs_info_channel(filename, nfilenames, channel, status)
 
-    use module_pacsobservation, only : pacsobservation, pacsmaskarray
+    use module_pacsobservation, only : pacsobservation, maskarray
     implicit none
 
     !f2py intent(in)   filename
@@ -17,10 +17,10 @@ subroutine pacs_info_channel(filename, nfilenames, channel, status)
     character, intent(out)       :: channel
     integer, intent(out)         :: status
 
-    class(pacsobservation), allocatable :: obs
-    type(pacsmaskarray)                 :: maskarray_policy
     character(len=len(filename)/nfilenames), allocatable :: filename_(:)
-    integer :: iobs
+    class(pacsobservation), allocatable :: obs
+    type(maskarray)                     :: maskarray_policy
+    integer                             :: iobs
 
     ! split input filename
     if (mod(len(filename), nfilenames) /= 0) then
@@ -35,15 +35,9 @@ subroutine pacs_info_channel(filename, nfilenames, channel, status)
 
     allocate(obs)
     call obs%init(filename_, maskarray_policy, status)
-    if (status /= 0) go to 999
+    if (status /= 0) return
 
-    channel = obs%info(1)%channel
-
-!XXX GFORTRAN: segfaults with allocatable scalars... claims that obs is unallocated
-!999 deallocate(obs)
-!    if (allocated(pacs)) deallocate(pacs)
-! deallocate filenames too
-999 continue
+    channel = obs%channel
 
 end subroutine pacs_info_channel
 
@@ -55,7 +49,7 @@ subroutine pacs_info(filename, nfilenames, fine_sampling_factor, keep_bad_detect
                      nrows, ncolumns, ndetectors, output_mask, transparent_mode, compression_factor, nsamples, status)
 
     use module_pacsinstrument, only : pacsinstrument
-    use module_pacsobservation, only : pacsobservation, pacsmaskarray
+    use module_pacsobservation, only : pacsobservation, maskarray
     implicit none
 
     !f2py intent(in)   filename
@@ -87,11 +81,11 @@ subroutine pacs_info(filename, nfilenames, fine_sampling_factor, keep_bad_detect
     integer, intent(out)         :: nsamples(nfilenames)
     integer, intent(out)         :: status
 
+    character(len=len(filename)/nfilenames), allocatable :: filename_(:)
     class(pacsobservation), allocatable :: obs
     class(pacsinstrument), allocatable  :: pacs
-    type(pacsmaskarray)                 :: maskarray_policy
-    character(len=len(filename)/nfilenames), allocatable :: filename_(:)
-    integer :: iobs
+    type(maskarray)                     :: maskarray_policy
+    integer                             :: iobs
 
     
     ! split input filename
@@ -107,26 +101,24 @@ subroutine pacs_info(filename, nfilenames, fine_sampling_factor, keep_bad_detect
 
     allocate(obs)
     call obs%init(filename_, maskarray_policy, status, verbose=.true.)
-    if (status /= 0) go to 999
+    if (status /= 0) return
 
+    ! print some information about the observation
+    call obs%print()
+
+    transparent_mode = obs%slice(1)%observing_mode == 'Transparent'
     allocate(pacs)
     if (use_bad_detector_mask) then
-        call pacs%init(obs%channel, obs%transparent_mode, fine_sampling_factor, keep_bad_detectors, status, bad_detector_mask)
+        call pacs%init(obs%channel, transparent_mode, fine_sampling_factor, keep_bad_detectors, status, bad_detector_mask)
     else
-        call pacs%init(obs%channel, obs%transparent_mode, fine_sampling_factor, keep_bad_detectors, status)
+        call pacs%init(obs%channel, transparent_mode, fine_sampling_factor, keep_bad_detectors, status)
     end if
-    if (status /= 0) go to 999
+    if (status /= 0) return
 
     ndetectors  = pacs%ndetectors
     output_mask = pacs%mask
-    transparent_mode = obs%info(1)%transparent_mode
-    compression_factor = obs%info%compression_factor
-    nsamples = obs%info%nsamples
-
-!XXX GFORTRAN: segfaults... claims that obs is unallocated
-!999 deallocate(obs)
-!    if (allocated(pacs)) deallocate(pacs)
-999 continue
+    compression_factor = obs%slice%compression_factor
+    nsamples = obs%slice%nsamples
 
 end subroutine pacs_info
 
@@ -138,8 +130,7 @@ subroutine pacs_map_header(filename, nfilenames, finer_sampling, fine_sampling_f
                            bad_detector_mask, nrows, ncolumns, resolution, header, status)
 
     use module_pacsinstrument,  only : pacsinstrument
-    use module_pacsobservation, only : pacsobservation, pacsmaskarray
-    use module_pacspointing,    only : pacspointing
+    use module_pacsobservation, only : pacsobservation, maskarray
     implicit none
 
     !f2py intent(in)   filename
@@ -167,12 +158,11 @@ subroutine pacs_map_header(filename, nfilenames, finer_sampling, fine_sampling_f
     character(len=2880), intent(out) :: header
     integer, intent(out)             :: status
 
+    character(len=len(filename)/nfilenames), allocatable :: filename_(:)
     class(pacsobservation), allocatable :: obs
     class(pacsinstrument), allocatable  :: pacs
-    class(pacspointing), allocatable    :: pointing
-    type(pacsmaskarray)                 :: maskarray_policy
-    character(len=len(filename)/nfilenames), allocatable :: filename_(:)
-    integer :: iobs
+    type(maskarray)                     :: maskarray_policy
+    integer                             :: iobs
     
     ! split input filename
     if (mod(len(filename), nfilenames) /= 0) then
@@ -191,17 +181,14 @@ subroutine pacs_map_header(filename, nfilenames, finer_sampling, fine_sampling_f
 
     allocate(pacs)
     if (use_bad_detector_mask) then
-        call pacs%init(obs%channel, obs%transparent_mode, fine_sampling_factor, keep_bad_detectors, status, bad_detector_mask)
+        call pacs%init(obs%channel, obs%slice(1)%observing_mode == 'Transparent', fine_sampling_factor, keep_bad_detectors, status,&
+             bad_detector_mask)
     else
-        call pacs%init(obs%channel, obs%transparent_mode, fine_sampling_factor, keep_bad_detectors, status)
+        call pacs%init(obs%channel, obs%slice(1)%observing_mode == 'Transparent', fine_sampling_factor, keep_bad_detectors,status)
     end if
     if (status /= 0) go to 999
     
-    allocate(pointing)
-    call pointing%init(obs, status)
-    if (status /= 0) go to 999
-
-    call pacs%compute_map_header(pointing, finer_sampling, resolution, header, status)
+    call pacs%compute_map_header(obs, finer_sampling, resolution, header, status)
     
 999 continue
 
@@ -216,8 +203,7 @@ subroutine pacs_timeline(filename, nfilenames, nsamples, ndetectors, keep_bad_de
 
     use iso_fortran_env,        only : ERROR_UNIT
     use module_pacsinstrument,  only : pacsinstrument
-    use module_pacsobservation, only : pacsobservation, pacsmaskarray
-    use module_pacspointing,    only : pacspointing
+    use module_pacsobservation, only : pacsobservation, maskarray
     use module_preprocessor,    only : divide_vectordim2, subtract_meandim1
     implicit none
 
@@ -248,12 +234,11 @@ subroutine pacs_timeline(filename, nfilenames, nsamples, ndetectors, keep_bad_de
     logical*1, intent(out)       :: mask(nsamples, ndetectors)
     integer, intent(out)         :: status
 
+    character(len=len(filename)/nfilenames), allocatable :: filename_(:)
     class(pacsobservation), allocatable :: obs
     class(pacsinstrument), allocatable  :: pacs
-    class(pacspointing), allocatable    :: pointing
-    type(pacsmaskarray)                 :: maskarray_policy
-    character(len=len(filename)/nfilenames), allocatable :: filename_(:)
-    integer                                              :: iobs, destination
+    type(maskarray)                     :: maskarray_policy
+    integer                             :: iobs, destination
 
     ! split input filename
     if (mod(len(filename), nfilenames) /= 0) then
@@ -271,14 +256,9 @@ subroutine pacs_timeline(filename, nfilenames, nsamples, ndetectors, keep_bad_de
     call obs%init(filename_, maskarray_policy, status)
     if (status /= 0) go to 999
 
-    ! initialise pointing information
-    allocate(pointing)
-    call pointing%init(obs, status)
-    if (status /= 0) stop 'FAILED: pacspointing%init'
-
     ! initialise pacs instrument
     allocate(pacs)
-    call pacs%init(obs%channel, obs%transparent_mode, 1, keep_bad_detectors, status, bad_detector_mask)
+    call pacs%init(obs%channel, obs%observing_mode == 'Transparent', 1, keep_bad_detectors, status, bad_detector_mask)
     if (status /= 0) go to 999
 
     ! read timeline
@@ -294,8 +274,8 @@ subroutine pacs_timeline(filename, nfilenames, nsamples, ndetectors, keep_bad_de
     if (do_subtraction_mean) then
         destination = 1
         do iobs=1, nfilenames
-            call subtract_meandim1(signal(destination:destination+obs%info(iobs)%nsamples-1,:))
-            destination = destination + obs%info(iobs)%nsamples
+            call subtract_meandim1(signal(destination:destination+obs%slice(iobs)%nsamples-1,:))
+            destination = destination + obs%slice(iobs)%nsamples
          end do
     end if
 
@@ -313,8 +293,7 @@ subroutine pacs_pointing_matrix_filename(filename, nfilenames, finer_sampling, f
     use iso_fortran_env,        only : ERROR_UNIT
     use module_fitstools,       only : ft_read_parameter
     use module_pacsinstrument,  only : pacsinstrument
-    use module_pacsobservation, only : pacsobservation, pacsmaskarray
-    use module_pacspointing,    only : pacspointing
+    use module_pacsobservation, only : pacsobservation, maskarray
     use module_pointingmatrix,  only : pointingelement
     implicit none
 
@@ -348,12 +327,11 @@ subroutine pacs_pointing_matrix_filename(filename, nfilenames, finer_sampling, f
     type(pointingelement), intent(inout) :: pmatrix(npixels_per_sample,nsamples,ndetectors)
     integer, intent(out)         :: status
 
+    character(len=len(filename)/nfilenames), allocatable :: filename_(:)
     class(pacsobservation), allocatable :: obs
     class(pacsinstrument), allocatable  :: pacs
-    class(pacspointing), allocatable    :: pointing
-    type(pacsmaskarray)                 :: maskarray_policy
-    character(len=len(filename)/nfilenames), allocatable :: filename_(:)
-    integer                                              :: iobs, nx, ny, count, nsamples_expected
+    type(maskarray)                     :: maskarray_policy
+    integer                             :: iobs, nx, ny, count, nsamples_expected
 
     ! split input filename
     if (mod(len(filename), nfilenames) /= 0) then
@@ -369,12 +347,13 @@ subroutine pacs_pointing_matrix_filename(filename, nfilenames, finer_sampling, f
     ! initialise observations
     allocate(obs)
     call obs%init(filename_, maskarray_policy, status)
-    if (status /= 0) go to 999
+    if (status /= 0) return
 
     ! initialise pacs instrument
     allocate(pacs)
-    call pacs%init(obs%channel, obs%transparent_mode, fine_sampling_factor, keep_bad_detectors, status, bad_detector_mask)
-    if (status /= 0) go to 999
+    call pacs%init(obs%channel, obs%slice(1)%observing_mode == 'Transparent', fine_sampling_factor, keep_bad_detectors, status,    &
+                   bad_detector_mask)
+    if (status /= 0) return
 
     ! check number of detectors
     if (pacs%ndetectors /= ndetectors) then
@@ -386,9 +365,9 @@ subroutine pacs_pointing_matrix_filename(filename, nfilenames, finer_sampling, f
 
     ! check number of fine samples
     if (finer_sampling) then
-        nsamples_expected = sum(obs%info%nsamples * obs%info%compression_factor)*fine_sampling_factor
+        nsamples_expected = sum(obs%slice%nsamples * obs%slice%compression_factor)*fine_sampling_factor
     else
-        nsamples_expected = sum(obs%info%nsamples)
+        nsamples_expected = sum(obs%slice%nsamples)
     end if
     if (nsamples /= nsamples_expected) then
         status = 1
@@ -397,21 +376,14 @@ subroutine pacs_pointing_matrix_filename(filename, nfilenames, finer_sampling, f
         return
     end if
 
-    ! initialise pointing
-    allocate(pointing)
-    call pointing%init(obs, status)
-    if (status /= 0) go to 999
-
     ! get the size of the map
-    call ft_read_parameter(header, 'naxis1', nx, count, status=status)
-    if (status /= 0 .or. count == 0) go to 999
-    call ft_read_parameter(header, 'naxis2', ny, count, status=status)
-    if (status /= 0 .or. count == 0) go to 999
+    call ft_read_parameter(header, 'naxis1', nx, count, must_exist=.true., status=status)
+    if (status /= 0) return
+    call ft_read_parameter(header, 'naxis2', ny, count, must_exist=.true., status=status)
+    if (status /= 0) return
 
     ! compute the projector
-    call pacs%compute_projection_sharp_edges(pointing, finer_sampling, header,  nx, ny, pmatrix, status)
-
-999 continue
+    call pacs%compute_projection_sharp_edges(obs, finer_sampling, header, nx, ny, pmatrix, status)
 
 end subroutine pacs_pointing_matrix_filename
 
@@ -545,10 +517,10 @@ end subroutine pacs_pointing_matrix_filename
 !!$        write (*,'(a)') "Info: using user's bad pixel mask."
 !!$    end if
 !!$
-!!$    call ft_read_parameter(header, 'naxis1', nx, count, status=status)
-!!$    if (status /= 0 .or. count == 0) go to 999
-!!$    call ft_read_parameter(header, 'naxis2', ny, count, status=status)
-!!$    if (status /= 0 .or. count == 0) go to 999
+!!$    call ft_read_parameter(header, 'naxis1', nx, count, must_exist=.true., status=status)
+!!$    if (status /= 0) return
+!!$    call ft_read_parameter(header, 'naxis2', ny, count, must_exist=.true., status=status)
+!!$    if (status /= 0) return
 !!$
 !!$    ! compute the projector
 !!$    write(*,'(a)', advance='no') 'Info: computing the projector... '
@@ -822,13 +794,8 @@ subroutine deglitch_l2b_std(pmatrix, nx, ny, data, mask, nsigma, npixels_per_sam
     real*8, intent(in)                :: nsigma
     integer, intent(in)               :: npixels_per_sample, nsamples, ndetectors
 
-    integer                           :: count1, count2, count_rate, count_max
-
-    write(*,'(a)', advance='no') 'Info: deglitching (std)... '
-    call system_clock(count1, count_rate, count_max)
+print *, 'deglitch mask', count(mask)
     call deglitch_l2b(pmatrix, nx, ny, data, mask, nsigma, .false.)
-    call system_clock(count2, count_rate, count_max)
-    write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
 
 end subroutine deglitch_l2b_std
 
@@ -858,13 +825,8 @@ subroutine deglitch_l2b_mad(pmatrix, nx, ny, data, mask, nsigma, npixels_per_sam
     real*8, intent(in)                :: nsigma
     integer, intent(in)               :: npixels_per_sample, nsamples, ndetectors
 
-    integer                           :: count1, count2, count_rate, count_max
-
-    write(*,'(a)', advance='no') 'Info: deglitching (mad)... '
-    call system_clock(count1, count_rate, count_max)
+print *, 'deglitch mask', count(mask)
     call deglitch_l2b(pmatrix, nx, ny, data, mask, nsigma, .true.)
-    call system_clock(count2, count_rate, count_max)
-    write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
 
 end subroutine deglitch_l2b_mad
 
@@ -1023,6 +985,7 @@ subroutine masking(input, ninputs, mask, nmasks, status)
     integer, intent(in)   :: ninputs, nmasks
     integer, intent(out)  :: status
 
+print *, 'masking mask', count(mask)
     if (ninputs /= nmasks) then
         write (ERROR_UNIT,'(a,2(i0,a))') "The data array has a size incompatible with the mask ('", ninputs, "' instead of '",     &
               nmasks, "')."

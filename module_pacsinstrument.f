@@ -3,8 +3,7 @@ module module_pacsinstrument
     use iso_fortran_env,        only : ERROR_UNIT, OUTPUT_UNIT
     use module_fitstools,       only : ft_close, ft_create_header, ft_open_image, ft_read_extension, ft_read_slice,ft_test_extension
     use module_math,            only : DEG2RAD, pInf, mInf, NaN, nint_down, nint_up
-    use module_pacsobservation, only : pacsobservation, pacsobsinfo
-    use module_pacspointing,    only : pacspointing
+    use module_pacsobservation, only : pacsobservationslice, pacsobservation
     use module_pointingmatrix,  only : pointingelement, xy2roi, roi2pmatrix
     use module_precision,       only : p
     use module_projection,      only : convex_hull
@@ -30,8 +29,9 @@ module module_pacsinstrument
 
     type pacsinstrument
  
-        logical*1            :: mask_blue(shape_blue(1), shape_blue(2))
-        logical*1            :: mask_red (shape_red (1), shape_red (2))
+        logical*1            :: mask_blue (shape_blue(1), shape_blue(2))
+        logical*1            :: mask_green(shape_blue(1), shape_blue(2))
+        logical*1            :: mask_red  (shape_red (1), shape_red (2))
 
         real*8               :: flatfield_blue (shape_blue(1), shape_blue(2))
         real*8               :: flatfield_green(shape_blue(1), shape_blue(2))
@@ -121,26 +121,33 @@ contains
         if (status /= 0) return
 
         if (present(bad_detector_mask)) then
-            if (this%channel == 'r') then
-                !XXX gfortran bug test_bug_shape
-                ! should be any(shape(bad_detector_mask) /= shape(this%mask_red))
-                if (size(bad_detector_mask,1) /= size(this%mask_red,1) .or.    &
-                    size(bad_detector_mask,2) /= size(this%mask_red,2)) then
-                   status = 1
-                   write (ERROR_UNIT,'(a)') 'INIT: input red mask has invalid size.'
-                   return
-                end if
-                this%mask_red = bad_detector_mask
-            else
-                if (this%channel == 'g') write (*,*) 'pacs%init: check me.'
-                if (size(bad_detector_mask,1) /= size(this%mask_blue,1) .or.   &
-                    size(bad_detector_mask,2) /= size(this%mask_blue,2)) then
-                   status = 1
-                   write (ERROR_UNIT,'(a)') 'INIT: input blue mask has invalid size.'
-                   return
-                end if
-                this%mask_blue = bad_detector_mask
-            end if
+
+            select case (this%channel)
+                case ('b')
+                    if (any(shape(bad_detector_mask) /= shape_blue)) then
+                        status = 1
+                        write (ERROR_UNIT,'(a)') 'INIT: input blue bad detector mask has invalid size.'
+                        return
+                    end if
+                    this%mask_blue = bad_detector_mask
+                case ('g')
+                    if (any(shape(bad_detector_mask) /= shape_blue)) then
+                        status = 1
+                        write (ERROR_UNIT,'(a)') 'INIT: input green bad detector mask has invalid size.'
+                        return
+                    end if
+                    this%mask_green = bad_detector_mask
+                case ('r')
+                    if (any(shape(bad_detector_mask) /= shape_red)) then
+                        status = 1
+                        write (ERROR_UNIT,'(a)') 'INIT: input red bad detector mask has invalid size.'
+                        return
+                    end if
+                    this%mask_red = bad_detector_mask
+                case default
+                    status = 1
+                    write (ERROR_UNIT,'(a)') "INIT: invalid channel: '" // this%channel // "'."
+            end select
 
         end if
         
@@ -181,6 +188,10 @@ contains
         call ft_read_extension(get_calfile(filename_bpm) // '[blue]', tmplogical, status)
         if (status /= 0) return
         this%mask_blue = transpose(tmplogical)
+
+        call ft_read_extension(get_calfile(filename_bpm) // '[green]', tmplogical, status)
+        if (status /= 0) return
+        this%mask_green = transpose(tmplogical)
 
         call ft_read_extension(get_calfile(filename_bpm) // '[red]', tmplogical, status)
         if (status /= 0) return
@@ -258,23 +269,16 @@ contains
 
 
     subroutine filter_detectors(this)
+
         class(pacsinstrument), intent(inout)   :: this
 
         select case (this%channel)
            case ('r')
-              call this%filter_detectors_array(this%mask_red,                  &
-                   this%corners_uv_red, this%distortion_yz_red,                &
-                   this%flatfield_red)
+              call this%filter_detectors_array(this%mask_red,   this%corners_uv_red,  this%distortion_yz_red,  this%flatfield_red)
            case ('g')
-              write(*,*) 'XXX FILTER_DETECTORS: Check calibration files for the green band...'
-              call this%filter_detectors_array(this%mask_blue,                 &
-                   this%corners_uv_blue, this%distortion_yz_blue,              &
-                   this%flatfield_green)
+              call this%filter_detectors_array(this%mask_green, this%corners_uv_blue, this%distortion_yz_blue, this%flatfield_green)
            case ('b')
-              call this%filter_detectors_array(this%mask_blue,                 &
-                   this%corners_uv_blue, this%distortion_yz_blue,              &
-                   this%flatfield_blue)
-
+              call this%filter_detectors_array(this%mask_blue,  this%corners_uv_blue, this%distortion_yz_blue, this%flatfield_blue)
         end select
 
     end subroutine filter_detectors
@@ -411,26 +415,28 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine compute_map_header(this, pointing, finer_sampling, resolution,   &
-                                 header, status)
-        class(pacsinstrument), intent(in) :: this
-        class(pacspointing), intent(in)   :: pointing
-        logical, intent(in)               :: finer_sampling
-        real*8, intent(in)                :: resolution
-        character(len=2880), intent(out)  :: header
-        integer, intent(out)              :: status
-        integer                           :: nx, ny
-        integer                           :: ixmin, ixmax, iymin, iymax
-        real*8                            :: ra0, dec0, xmin, xmax, ymin, ymax
+    subroutine compute_map_header(this, obs, finer_sampling, resolution, header, status)
 
-        call pointing%compute_center(ra0, dec0)
+        class(pacsinstrument), intent(in)  :: this
+        class(pacsobservation), intent(in) :: obs
+        logical, intent(in)                :: finer_sampling
+        real*8, intent(in)                 :: resolution
+        character(len=2880), intent(out)   :: header
+        integer, intent(out)               :: status
+
+        integer :: nx, ny
+        integer :: ixmin, ixmax, iymin, iymax
+        real*8  :: ra0, dec0, xmin, xmax, ymin, ymax
+
+
+        call obs%compute_center(ra0, dec0)
 
         call ft_create_header(0, 0, -resolution/3600.d0, resolution/3600.d0, 0.d0, ra0, dec0, 1.d0, 1.d0, header)
 
         call init_astrometry(header, status=status)
         if (status /= 0) return
 
-        call this%find_minmax(pointing, finer_sampling, xmin, xmax, ymin, ymax)
+        call this%find_minmax(obs, finer_sampling, xmin, xmax, ymin, ymax)
 
         ixmin = nint(xmin)
         ixmax = nint(xmax)
@@ -441,8 +447,7 @@ contains
         ny = iymax-iymin+1
 
         ! move the reference pixel (not the reference value!)
-        call ft_create_header(nx, ny, -resolution/3600.d0, resolution/3600.d0, &
-                              0.d0, ra0, dec0, -ixmin+2.d0, -iymin+2.d0, header)
+        call ft_create_header(nx, ny, -resolution/3600.d0, resolution/3600.d0, 0.d0, ra0, dec0, -ixmin+2.d0, -iymin+2.d0, header)
 
     end subroutine compute_map_header
 
@@ -451,15 +456,15 @@ contains
 
 
     ! find minimum and maximum pixel coordinates in maps
-    subroutine find_minmax(this, pointing, finer_sampling, xmin, xmax, ymin, ymax)
-        class(pacsinstrument), intent(in) :: this
-        class(pacspointing), intent(in)   :: pointing
-        logical, intent(in)               :: finer_sampling
-        real*8, intent(out)               :: xmin, xmax, ymin, ymax
-        real*8                            :: ra, dec, pa, chop
-        real*8, allocatable               :: hull_uv(:,:), hull(:,:)
-        integer, allocatable              :: ihull(:)
-        integer                           :: sampling_factor, islice, itime
+    subroutine find_minmax(this, obs, finer_sampling, xmin, xmax, ymin, ymax)
+        class(pacsinstrument), intent(in)  :: this
+        class(pacsobservation), intent(in) :: obs
+        logical, intent(in)                :: finer_sampling
+        real*8, intent(out)                :: xmin, xmax, ymin, ymax
+        real*8               :: ra, dec, pa, chop
+        real*8, allocatable  :: hull_uv(:,:), hull(:,:)
+        integer, allocatable :: ihull(:)
+        integer              :: sampling_factor, islice, itime
 
         xmin = pInf
         xmax = mInf
@@ -472,11 +477,11 @@ contains
         allocate(hull(ndims, size(ihull)))
         hull_uv = this%corners_uv(:,ihull)
 
-        do islice = 1, pointing%nslices
+        do islice = 1, obs%nslices
 
             ! check if it is required to interpolate pointing positions
             if (finer_sampling) then
-               sampling_factor = this%fine_sampling_factor * pointing%compression_factor(islice)
+               sampling_factor = this%fine_sampling_factor * obs%slice(islice)%compression_factor
             else
                sampling_factor = 1
             end if
@@ -485,9 +490,9 @@ contains
             !!$omp parallel do default(shared) reduction(min:xmin,ymin) &
             !!$omp reduction(max:xmax,ymax) &
             !!$omp private(itime,ra,dec,pa,chop,hull) firstprivate(index)
-            do itime = 1, pointing%nsamples(islice) * sampling_factor
+            do itime = 1, obs%slice(islice)%nsamples * sampling_factor
 
-                call pointing%get_position_index(islice, itime, sampling_factor, ra, dec, pa, chop)
+                call obs%get_position_index(islice, itime, sampling_factor, ra, dec, pa, chop)
                 hull = this%uv2yz(hull_uv, this%distortion_yz_blue, chop)
                 hull = this%yz2ad(hull, ra, dec, pa)
                 hull = ad2xy_gnomonic(hull)
@@ -507,9 +512,9 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine compute_projection_sharp_edges(this, pointing, finer_sampling, header, nx, ny, pmatrix, status)
+    subroutine compute_projection_sharp_edges(this, obs, finer_sampling, header, nx, ny, pmatrix, status)
         class(pacsinstrument), intent(in)  :: this
-        class(pacspointing), intent(in)    :: pointing
+        class(pacsobservation), intent(in) :: obs
         logical, intent(in)                :: finer_sampling
         character(len=*), intent(in)       :: header
         integer, intent(in)                :: nx, ny
@@ -519,8 +524,12 @@ contains
         real*8  :: coords(ndims,this%ndetectors*nvertices), coords_yz(ndims,this%ndetectors*nvertices)
         real*8  :: ra, dec, pa, chop, chop_old
         integer :: roi(ndims,2,this%ndetectors)
-        integer :: nsamples,  npixels_per_sample, islice, itime, sampling_factor, dest
+        integer :: nsamples, npixels_per_sample, islice, itime, sampling_factor, dest
+        integer :: count1, count2, count_rate, count_max
         logical :: out
+
+        write(*,'(a)', advance='no') 'Info: Computing the projector... '
+        call system_clock(count1, count_rate, count_max)
 
         call init_astrometry(header, status=status)
         if (status /= 0) return
@@ -529,14 +538,14 @@ contains
         dest = 0
 
         ! loop over the observations
-        do islice = 1, pointing%nslices
+        do islice = 1, obs%nslices
 
-            nsamples = int(pointing%nsamples(islice), kind=kind(0))
+            nsamples = int(obs%slice(islice)%nsamples, kind=kind(0))
             chop_old = pInf
 
             ! check if it is required to interpolate pointing positions
             if (finer_sampling) then
-               sampling_factor = this%fine_sampling_factor * pointing%compression_factor(islice)
+               sampling_factor = this%fine_sampling_factor * obs%slice(islice)%compression_factor
             else
                sampling_factor = 1
             end if
@@ -546,7 +555,7 @@ contains
             !$omp private(itime, ra, dec, pa, chop, coords, coords_yz, roi) &
             !$omp reduction(max : npixels_per_sample) reduction(.or. : out)
             do itime = 1, nsamples * sampling_factor
-                call pointing%get_position_index(islice, itime, sampling_factor, ra, dec, pa, chop)
+                call obs%get_position_index(islice, itime, sampling_factor, ra, dec, pa, chop)
                 if (abs(chop-chop_old) > 1.d-2) then
                     coords_yz = this%uv2yz(this%corners_uv, this%distortion_yz, chop)
                     chop_old = chop
@@ -559,6 +568,9 @@ contains
              !$omp end parallel do
              dest = dest + nsamples * sampling_factor
         end do
+
+        call system_clock(count2, count_rate, count_max)
+        write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
 
         if (npixels_per_sample > size(pmatrix,1)) then
             status = 1
@@ -586,25 +598,32 @@ contains
         integer, intent(out)               :: status
         integer*8 :: nsamples, destination
         integer   :: nobs, iobs
+        integer   :: count1, count2, count_rate, count_max
+
+        write(*,'(a)', advance='no') 'Info: Reading timeline... '
+        call system_clock(count1, count_rate, count_max)
 
         status   = 1
-        nobs     = size(obs%info)
-        nsamples = sum(obs%info%nsamples)
+        nobs     = obs%nslices
+        nsamples = obs%nsamples_tot
 
         ! check that the total number of samples in the observations is equal
         ! to the number of samples in the signal and mask arrays
         if (nsamples /= size(signal,1) .or. nsamples /= size(mask,1)) then
-            write (ERROR_UNIT,'(a)') 'READ: invalid dimensions.'
+            write (ERROR_UNIT,'(a)') 'Error: read: invalid dimensions.'
             return
         end if
 
         ! loop over the PACS observations
         destination = 1
         do iobs = 1, nobs
-            call this%read_one(obs%info(iobs), destination, signal, mask, status)
+            call this%read_one(obs%slice(iobs), destination, signal, mask, status)
             if (status /= 0) return
-            destination = destination + obs%info(iobs)%nsamples
+            destination = destination + obs%slice(iobs)%nsamples
         end do
+
+        call system_clock(count2, count_rate, count_max)
+        write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
 
     end subroutine read
 
@@ -614,12 +633,13 @@ contains
 
     subroutine read_one(this, obs, destination, signal, mask, status)
 
-        class(pacsinstrument), intent(in) :: this
-        class(pacsobsinfo), intent(in)    :: obs
-        integer*8, intent(in)             :: destination
-        real*8, intent(inout)             :: signal(:,:)
-        logical*1, intent(inout)          :: mask  (:,:)
-        integer, intent(out)              :: status
+        class(pacsinstrument), intent(in)   :: this
+!!$        class(observationslice), intent(in) :: obs
+        class(pacsobservationslice), intent(in) :: obs
+        integer*8, intent(in)               :: destination
+        real*8, intent(inout)               :: signal(:,:)
+        logical*1, intent(inout)            :: mask  (:,:)
+        integer, intent(out)                :: status
 
         integer*8              :: p, q
         integer                :: idetector, unit, length
@@ -665,7 +685,7 @@ contains
 
         if (.not. mask_found) then
             write (*,'(a)') 'Info: mask Master is not found.'
-            return
+            go to 100
         end if
 
         call ft_open_image(trim(obs%filename) // '[Master]', unit, 3, imageshape, status)
@@ -707,13 +727,15 @@ contains
 
         end do
 
-        ! propagate the array mask into the timeline mask
-        do isample = 1, obs%nsamples
-            if (obs%maskarray(isample)%invalid_master) mask(destination+isample-1,:) = .true.
+        call ft_close(unit, status)
+        if (status /= 0) return
+
+    100 do isample = 1, obs%nsamples
+            if (obs%p(isample)%invalid) mask(destination+isample-1,:) = .true.
         end do
+        return
 
     999 call ft_close(unit, status_close)
-        if (status == 0) status = status_close
 
     end subroutine read_one
 
@@ -722,19 +744,21 @@ contains
 
 
     subroutine read_oldstyle(this, obs, dest, signal, mask, status)
-        class(pacsinstrument), intent(in) :: this
-        class(pacsobsinfo), intent(in)    :: obs
-        integer*8, intent(in)          :: dest
-        real*8, intent(inout)          :: signal(:,:)
-        logical*1, intent(inout)       :: mask(:,:)
-        integer, intent(out)           :: status
-        integer*8                      :: p, q
-        integer                        :: idetector, unit, status_close
-        integer, allocatable           :: imageshape(:)
+
+        class(pacsinstrument), intent(in)   :: this
+!!$        class(observationslice), intent(in) :: obs
+        class(pacsobservationslice), intent(in) :: obs
+        integer*8, intent(in)               :: dest
+        real*8, intent(inout)               :: signal(:,:)
+        logical*1, intent(inout)            :: mask(:,:)
+        integer, intent(out)                :: status
+
+        integer*8            :: p, q
+        integer              :: idetector, unit, status_close
+        integer, allocatable :: imageshape(:)
 
         ! handle signal
-        call ft_open_image(trim(obs%filename) // '_Signal.fits', unit, 3,     &
-                           imageshape, status)
+        call ft_open_image(trim(obs%filename) // '_Signal.fits', unit, 3, imageshape, status)
         if (status /= 0) return
 
         do idetector = 1, size(signal,2)
@@ -750,8 +774,7 @@ contains
         if (status /= 0) return
 
         ! handle mask
-        call ft_open_image(trim(obs%filename) // '_Mask.fits', unit, 3,       &
-                           imageshape, status)
+        call ft_open_image(trim(obs%filename) // '_Mask.fits', unit, 3, imageshape, status)
         if (status /= 0) return
 
         do idetector = 1, size(mask,2)
