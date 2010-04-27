@@ -1,18 +1,34 @@
 module module_sort
 
+    use module_math, only : NaN, neq_real
     implicit none
     private
 
+    public :: histogram
+    public :: reorder
     public :: qsortgi
     public :: qsorti
     public :: qsortid
+    public :: uniq
 
     integer, pointer, private :: array_int(:)
     real*8,  pointer, private :: array_double(:)
 
+    interface histogram
+        module procedure histogram_int
+    end interface histogram
+
+    interface reorder
+        module procedure reorder_double
+    end interface reorder
+
     interface qsorti
         module procedure qsorti_int, qsorti_double
     end interface qsorti
+
+    interface uniq
+        module procedure uniq_double
+    end interface uniq
 
 contains
 
@@ -410,6 +426,100 @@ contains
         end if
 
     end function compare_double
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine uniq_double(array, inindex, outindex, precision)
+
+        real*8, intent(in)  :: array(:)
+        integer, intent(in) :: inindex(size(array))
+        integer, intent(out), allocatable :: outindex(:)
+        integer, intent(in) :: precision
+
+        integer :: index(size(array)), nuniqs, n, i
+        real*8  :: val
+
+        n = size(array)
+        if (n == 0) then
+            allocate (outindex(0))
+            return
+        end if
+
+        nuniqs = 1
+        index(1) = inindex(1)
+        val = array(inindex(1))
+        do i = 2, n
+            if (neq_real(array(inindex(i)), val, precision)) then
+                val = array(inindex(i))
+                nuniqs = nuniqs + 1
+                index(nuniqs) = inindex(i)
+            end if
+        end do
+        
+        allocate (outindex(nuniqs))
+        outindex = index(1:nuniqs)
+
+    end subroutine uniq_double
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine reorder_double(array, index, nuniqs, table, precision)
+
+        real*8, intent(in)               :: array(:)
+        integer, intent(out)             :: index(size(array))
+        integer, intent(out)             :: nuniqs
+        real*8, intent(out), allocatable :: table(:)
+        integer, intent(in)              :: precision
+
+        integer :: isort(size(array)), ndata, i
+        real*8  :: val, tmptable(size(array))
+
+        ndata = size(array)
+        if (ndata == 0) then
+            nuniqs = 0
+            return
+        end if
+
+        call qsorti(array, isort)
+
+        nuniqs = 0
+        val = NaN
+        do i = 1, ndata
+            if (neq_real(array(isort(i)), val, precision)) then
+                val = array(isort(i))
+                nuniqs = nuniqs + 1
+                tmptable(nuniqs) = val
+            end if
+            index(isort(i)) = nuniqs
+        end do
+
+        allocate (table(nuniqs))
+        table = tmptable(:nuniqs)
+        
+    end subroutine reorder_double
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    function histogram_int(array, nbins) result(histogram)
+
+        integer, intent(in) :: array(:)
+        integer, intent(in) :: nbins
+        integer             :: histogram(nbins)
+
+        integer             :: i
+
+        histogram = 0
+        do i = 1, size(array)
+            histogram(array(i)) = histogram(array(i)) + 1
+        end do
+        
+    end function histogram_int
 
 
 end module module_sort
