@@ -794,7 +794,6 @@ subroutine deglitch_l2b_std(pmatrix, nx, ny, data, mask, nsigma, npixels_per_sam
     real*8, intent(in)                :: nsigma
     integer, intent(in)               :: npixels_per_sample, nsamples, ndetectors
 
-print *, 'deglitch mask', count(mask)
     call deglitch_l2b(pmatrix, nx, ny, data, mask, nsigma, .false.)
 
 end subroutine deglitch_l2b_std
@@ -806,7 +805,7 @@ end subroutine deglitch_l2b_std
 subroutine deglitch_l2b_mad(pmatrix, nx, ny, data, mask, nsigma, npixels_per_sample, nsamples, ndetectors)
 
     use module_pointingmatrix, only : pointingelement
-    use module_deglitching, only : deglitch_l2b
+    use module_deglitching,    only : deglitch_l2b
     implicit none
 
     !f2py integer*8, intent(in) :: pmatrix(npixels_per_sample*nsamples*ndetectors)
@@ -825,10 +824,68 @@ subroutine deglitch_l2b_mad(pmatrix, nx, ny, data, mask, nsigma, npixels_per_sam
     real*8, intent(in)                :: nsigma
     integer, intent(in)               :: npixels_per_sample, nsamples, ndetectors
 
-print *, 'deglitch mask', count(mask)
     call deglitch_l2b(pmatrix, nx, ny, data, mask, nsigma, .true.)
 
 end subroutine deglitch_l2b_mad
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine filter_median(data, length, nsamples, nsamplestot, nslices, ndetectors, status)
+
+    use iso_fortran_env,     only : ERROR_UNIT
+    use module_preprocessor, only : median_filtering_nocopy
+    implicit none
+
+    !f2py intent(in)   :: data
+    !f2py intent(in)   :: length
+    !f2py intent(in)   :: nsamples
+    !f2py intent(hide) :: nsamplestot=shape(data,0)
+    !f2py intent(hide) :: nslices=size(nsamples)
+    !f2py intent(hide) :: ndetectors=shape(data,1)
+    !f2py intent(out)  :: status
+
+    real*8, intent(inout) :: data(nsamplestot,ndetectors)
+    integer, intent(in)   :: length
+    integer, intent(in)   :: nsamples(nslices)
+    integer, intent(in)   :: nsamplestot
+    integer, intent(in)   :: nslices
+    integer, intent(in)   :: ndetectors
+    integer, intent(out)  :: status
+
+    integer :: islice, idetector, start
+
+    if (sum(nsamples) /= nsamplestot) then
+        status = 1
+        write (ERROR_UNIT,'(a)') 'ERROR: The total number of samples is not the sum of the size of the slices.'
+        return
+    end if
+
+    if (length <= 0) then
+        status = 1
+        write (ERROR_UNIT,'(a)') 'ERROR: The filter length must not be negative.'
+        return
+    end if
+
+print *, 'tod shape:', shape(data)
+print *, 'length:', length
+
+    status = 0
+    start = 0
+    do islice = 1, nslices
+
+        !!$omp parallel do
+        do idetector = 1, ndetectors
+            call median_filtering_nocopy(data(start+1:start+nsamples(islice),idetector), length)
+        end do
+        !!$omp end parallel do
+
+        start = start + nsamples(islice)
+
+    end do
+
+end subroutine filter_median
 
 
 !-----------------------------------------------------------------------------------------------------------------------------------
@@ -985,7 +1042,6 @@ subroutine masking(input, ninputs, mask, nmasks, status)
     integer, intent(in)   :: ninputs, nmasks
     integer, intent(out)  :: status
 
-print *, 'masking mask', count(mask)
     if (ninputs /= nmasks) then
         write (ERROR_UNIT,'(a,2(i0,a))') "The data array has a size incompatible with the mask ('", ninputs, "' instead of '",     &
               nmasks, "')."

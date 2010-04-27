@@ -1151,6 +1151,23 @@ def deglitch_l2mad(tod, projection, nsigma=5.):
 #-------------------------------------------------------------------------------
 
 
+def filter_median(tod, length=10, nsamples=None):
+    """
+    Median filtering, O(1) in window length
+    """
+    if nsamples is None:
+        nsamples = tod.shape[-1]
+    nsamples = numpy.array(nsamples, 'int')
+    filtered = tod.copy()
+    status = tmf.filter_median(filtered.T, length, nsamples)
+    if status != 0:
+        raise RuntimeError()
+    return filtered
+
+ 
+#-------------------------------------------------------------------------------
+
+
 def str2fitsheader(string):
     """
     Convert a string into a pyfits.Header object

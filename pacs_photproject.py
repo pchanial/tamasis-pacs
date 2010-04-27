@@ -63,8 +63,8 @@ bad_detector_mask = None
 # uncomment the following lines to make a map with fewer detectors
 # 1 means bad detector
 #
-bad_detector_mask = numpy.ones([32,64], dtype='int8')
-bad_detector_mask[0,0] = 0
+#bad_detector_mask = numpy.ones([32,64], dtype='int8')
+#bad_detector_mask[0,0] = 0
 
 # Set up the PACS observation(s)
 pacs = PacsObservation(filename=filename,
@@ -88,12 +88,11 @@ tod = pacs.get_tod(do_flatfielding=options.do_flatfielding, do_subtraction_mean=
 
 # Deglitch
 if options.deglitching != 'none':
-    nbads = numpy.sum(tod.mask != 0)
+    nbads = numpy.sum(tod.mask % 2)
     if options.deglitching == 'l2std':
         deglitch_l2std(tod, projection, nsigma=options.nsigma)
     else:
         deglitch_l2mad(tod, projection, nsigma=options.nsigma)
-    print 'Number of glitches detected:', numpy.sum(tod.mask) - nbads
 
 # Backproject the timeline and divide it by the weight
 print 'Computing the map...'

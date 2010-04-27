@@ -1,6 +1,7 @@
 module module_preprocessor
 
     use module_math, only : sum_kahan
+    use module_sort, only : histogram, reorder
     implicit none
     private
 
@@ -10,6 +11,7 @@ module module_preprocessor
     public :: multiply_vectordim2
     public :: divide_vectordim2
     public :: apply_mask
+    public :: median_filtering_nocopy
 
 
 contains
@@ -121,6 +123,7 @@ contains
 
     ! set to zero masked values
     subroutine apply_mask(data, mask)
+
         real*8, intent(inout) :: data(:,:)
         logical*1, intent(in) :: mask(:,:)
 
@@ -131,6 +134,171 @@ contains
         !$omp end parallel workshare
 
     end subroutine apply_mask
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    ! median filtering in O(1) for the window length
+    ! the samples inside the window form an histogram which is updated as the window slides.
+    subroutine median_filtering_nocopy(data, length)
+
+        real*8, intent(inout) :: data(:)
+        integer, intent(in)   :: length
+
+        integer :: nbins, ndata, order(size(data)), i, old, new, half_minus, half_plus, ibin, irank
+        integer, allocatable :: hist(:)
+        real*8, allocatable  :: table(:)
+        logical :: even
+
+        ndata = size(data)
+
+        call reorder(data, order, nbins, table, 12)
+        
+        allocate (hist(nbins))
+        half_minus = min((length-1) / 2, ndata-1)
+        half_plus  = min(length / 2, ndata-1)
+        hist = histogram(order(1:1+half_plus), nbins)
+        even = mod(1 + half_plus, 2) == 0
+
+        call median_filtering_find_rank(hist, 1+half_plus, ibin, irank)
+
+        data(1) = data(1) - table(ibin)
+        do i = 2, ndata
+
+
+            ! there are missing values on the left hand side, we'll add them one by one until we reach a sample of size 'length' 
+            if (i <= half_minus + 1) then
+
+                new = order(i+half_plus)
+                hist(new) = hist(new) + 1
+
+                if (new >= ibin) then
+                    if (even) then
+                        irank = irank + 1
+                        if (irank > hist(ibin)) then
+                            call median_filtering_next(hist, ibin, irank)
+                        end if
+                    end if
+                else if (.not. even) then
+                    irank = irank - 1
+                    if (irank == 0) then
+                        call median_filtering_previous(hist, ibin, irank)
+                    end if
+                end if
+                even = .not. even
+
+            ! there are missing values on the right hand side, we'll subtract them one by one until we reach the end
+            else if (i > ndata - half_plus) then
+                
+                old = order(i-half_minus - 1)
+                hist(old) = hist(old) - 1
+
+                if (old >= ibin) then
+                    if (.not. even) then
+                        irank = irank - 1
+                        if (irank == 0) then
+                            call median_filtering_previous(hist, ibin, irank)
+                        end if
+                    end if
+                else if (even) then
+                    irank = irank + 1
+                    if (irank > hist(ibin)) then
+                        call median_filtering_next(hist, ibin, irank)
+                    end if
+                end if
+                even = .not. even
+               
+            ! the full sample of size 'length' is available
+            else
+
+                old = order(i - half_minus - 1)
+                new = order(i + half_plus)
+                hist(old) = hist(old) - 1
+                hist(new) = hist(new) + 1
+
+                if (new > ibin .and. old < ibin) then ! (1)
+                    irank = irank + 1
+                    if (irank > hist(ibin)) then
+                        call median_filtering_next(hist, ibin, irank)
+                    end if
+                else if (new < ibin .and. old > ibin) then ! (2)
+                    irank = irank - 1
+                    if (irank == 0) then
+                        call median_filtering_previous(hist, ibin, irank)
+                    end if
+                else if (new == ibin .and. old < ibin) then ! (3)
+                    irank = irank + 1
+                else if (new < ibin .and. old == ibin) then ! (4)
+                    irank = irank - 1
+                    if (irank == 0) then
+                        call median_filtering_previous(hist, ibin, irank)
+                    end if
+                else if (new > ibin .and. old == ibin .and. irank > hist(ibin)) then ! (5)
+                    call median_filtering_next(hist, ibin, irank)
+                end if
+
+            end if
+
+            data(i) = data(i) - table(ibin)
+
+        end do
+
+    end subroutine median_filtering_nocopy
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine median_filtering_find_rank(hist, length, ibin, irank)
+        
+        integer, intent(in)  :: hist(:), length
+        integer, intent(out) :: ibin, irank
+
+        integer :: nbins
+
+        nbins = size(hist)
+        irank = (length + 1) / 2
+        do ibin=1, nbins
+            if (irank - hist(ibin) <= 0) exit
+            irank = irank - hist(ibin)
+        end do
+        
+    end subroutine median_filtering_find_rank
+        
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine median_filtering_previous(hist, ibin, irank)
+        
+        integer, intent(in)    :: hist(:)
+        integer, intent(inout) :: ibin, irank
+        
+        do
+            ibin = ibin - 1
+            irank = hist(ibin)
+            if (irank /= 0) exit
+        end do
+
+    end subroutine median_filtering_previous
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine median_filtering_next(hist, ibin, irank)
+        
+        integer, intent(in)    :: hist(:)
+        integer, intent(inout) :: ibin, irank
+        
+        do
+            ibin = ibin + 1
+            if (hist(ibin) /= 0) exit
+        end do
+        irank = 1
+
+    end subroutine median_filtering_next
 
 
 end module module_preprocessor

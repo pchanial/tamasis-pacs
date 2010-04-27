@@ -75,8 +75,9 @@ module_optionparser = module_string
 module_pacsinstrument = module_fitstools module_math module_pacsobservation module_pointingmatrix module_projection module_wcs 
 module_pacsobservation = module_fitstools module_math module_observation module_precision module_string
 module_pointingmatrix = module_math module_precision module_projection
-module_preprocessor = module_math
+module_preprocessor = module_math module_sort
 module_projection = module_precision module_sort module_stack
+module_sort = module_math
 module_wcs = module_fitstools module_math module_string module_wcslib
 
 # define executable dependencies
@@ -93,9 +94,10 @@ test_pacsinstrument = module_pacsinstrument module_pacsobservation
 test_pacsobservation = module_pacsinstrument  module_pacsobservation module_string
 test_pacspointing = module_math module_pacsobservation module_precision
 test_pointingmatrix = module_pointingmatrix
+test_preprocessor = module_fitstools module_math module_preprocessor
 test_projection = module_projection module_sort
 test_read_config = module_instrument
-test_sort = module_sort
+test_sort = module_fitstools module_math module_sort
 test_stack = module_stack
 test_string = module_string
 test_module_string = module_string
