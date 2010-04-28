@@ -11,11 +11,10 @@ pacs = PacsObservation(filename=[datadir+'1342184598_blue_PreparedFrames.fits',
                                  datadir+'1342184599_blue_PreparedFrames.fits'],
                        resolution=3.2,
                        fine_sampling_factor=1,
-                       npixels_per_sample=5, 
                        keep_bad_detectors=False)
 
 telescope    = Identity('Telescope PSF')
-projection   = Projection(pacs)
+projection   = Projection(pacs, npixels_per_sample=5)
 multiplexing = CompressionAverage(1, 'Multiplexing')
 crosstalk    = Identity('Crosstalk')
 compression  = CompressionAverage(4)

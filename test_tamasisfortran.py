@@ -5,7 +5,7 @@
 
 import tamasisfortran as tmmf
 import numpy as np
-
+exit()
 print
 print 'Input: file'
 print '-----------'

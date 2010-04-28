@@ -79,8 +79,7 @@ obs = PacsObservation(filename=filename,
                       resolution=options.resolution,
                       fine_sampling_factor=1,
                       bad_detector_mask = bad_detector_mask,
-                      keep_bad_detectors=False,
-                      npixels_per_sample=options.npixels_per_sample)
+                      keep_bad_detectors=False)
 
 # Get map dimensions
 nx = obs.header['naxis1']
@@ -88,7 +87,7 @@ ny = obs.header['naxis2']
 
 # Set up the acquisition model. finer_sampling is set to False because
 # photproject does not attempt to sample better than what is transmitted
-projection = Projection(obs, finer_sampling=False)
+projection = Projection(obs, finer_sampling=False, npixels_per_sample=options.npixels_per_sample)
 
 # Read the timeline
 tod = obs.get_tod(do_flatfielding=options.do_flatfielding, do_subtraction_mean=options.filtering == 'none')

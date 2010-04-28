@@ -10,13 +10,12 @@ hyper = 1e1
 pacs = PacsObservation(filename='tests/frames_blue.fits',
                        resolution=3.2,
                        fine_sampling_factor=1,
-                       npixels_per_sample=6, 
                        keep_bad_detectors=False)
 
 tod = pacs.get_tod()
 
 telescope    = Identity('Telescope PSF')
-projection   = Projection(pacs, finer_sampling=False)
+projection   = Projection(pacs, finer_sampling=False, npixels_per_sample=6)
 multiplexing = CompressionAverage(pacs.fine_sampling_factor, 'Multiplexing')
 crosstalk    = Identity('Crosstalk')
 compression  = CompressionAverage(pacs.compression_factor)
