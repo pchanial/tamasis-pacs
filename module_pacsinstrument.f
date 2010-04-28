@@ -589,18 +589,26 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine read(this, obs, signal, mask, status)
+    subroutine read(this, obs, signal, mask, status, verbose)
 
         class(pacsinstrument), intent(in)  :: this
         class(pacsobservation), intent(in) :: obs
         real(p), intent(out)               :: signal(:,:)
         logical(1), intent(out)            :: mask(:,:)
         integer, intent(out)               :: status
+        logical, intent(in), optional      :: verbose
+
         integer*8 :: nsamples, destination
         integer   :: nobs, iobs
         integer   :: count1, count2, count_rate, count_max
+        logical   :: verbose_
 
-        write(*,'(a)', advance='no') 'Info: Reading timeline... '
+        verbose_ = .false.
+        if (present(verbose)) verbose_ = verbose
+
+        if (verbose_) then
+            write(*,'(a)', advance='no') 'Info: Reading timeline... '
+        end if
         call system_clock(count1, count_rate, count_max)
 
         status   = 1
@@ -623,7 +631,9 @@ contains
         end do
 
         call system_clock(count2, count_rate, count_max)
-        write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
+        if (verbose_) then
+            write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
+        end if
 
     end subroutine read
 

@@ -92,6 +92,9 @@ class AcquisitionModel(object):
         if reusein: self._output_direct = data
         return data, shapein
 
+    # allocate memory for the output of the direct operation.
+    # **options should not depend on the input array, since it might only be used for the first call and it would not be
+    # propagated during the next calls
     def _validate_output_direct(self, cls, shapeout, **options):
         if shapeout is None:
             raise ValueError('The shape of the output of '+self.__class__.__name__+' is not known.')
@@ -103,6 +106,8 @@ class AcquisitionModel(object):
         else:
             self._output_direct = cls.empty(shapeout, dtype=numpy.float64, **options)
 
+    # allocate memory for the output of the transpose operation.
+    # **options should not depend on the input array
     def _validate_output_transpose(self, cls, shapein, **options):
         if shapein is None:
             raise ValueError('The shape of the input of '+self.__class__.__name__+' is not known.')
@@ -245,6 +250,7 @@ class PacsMultiplexing(AcquisitionModel):
     def direct(self, signal, reusein=False, copyout=True):
         signal, shapeout = self._validate_input_direct(Tod, signal, reusein)
         self._validate_output_direct(Tod, shapeout)
+        self._output_direct.nsamples = tuple(numpy.divide(signal.nsamples, self.fine_sampling_factor))
         tmf.pacs_multiplexing_direct(signal.T, self._output_direct.T, self.fine_sampling_factor, self.ij)
         if not copyout: return self._output_direct
         return self._output_direct.copy('a')
@@ -252,6 +258,7 @@ class PacsMultiplexing(AcquisitionModel):
     def transpose(self, signal, reusein=False, copyout=True):
         signal, shapein = self._validate_input_transpose(Tod, signal, reusein)
         self._validate_output_transpose(Tod, shapein)
+        self._output_transpose.nsamples = tuple(numpy.multiply(signal.nsamples, self.fine_sampling_factor))
         tmf.pacs_multiplexing_transpose(signal.T, self._output_transpose.T, self.fine_sampling_factor, self.ij)
         if not copyout: return self._output_transpose
         return self._output_transpose.copy('a')
@@ -295,6 +302,7 @@ class Compression(AcquisitionModel):
             return signal
         signal, shapeout = self._validate_input_direct(Tod, signal, reusein)
         self._validate_output_direct(Tod, shapeout)
+        self._output_direct.nsamples = tuple(numpy.divide(signal.nsamples, self.compression_factor))
         self._compression_direct(signal, self._output_direct, self.compression_factor)
         if not copyout: return self._output_direct
         return self._output_direct.copy('a')
@@ -305,6 +313,7 @@ class Compression(AcquisitionModel):
             return compressed
         compressed, shapein = self._validate_input_transpose(Tod, compressed, reusein)
         self._validate_output_transpose(Tod, shapein)
+        self._output_transpose.nsamples = tuple(numpy.multiply(compressed.nsamples, self.compression_factor))
         self._compression_transpose(compressed, self._output_transpose, self.compression_factor)
         if not copyout: return self._output_transpose
         return self._output_transpose.copy('a')
@@ -678,7 +687,7 @@ class PacsObservation(_Pacs):
         self.channel = channel
         self.nobservations = nfilenames
         self.npixels_per_sample = npixels_per_sample
-        self.nsamples = nsamples
+        self.nsamples = tuple(nsamples)
         self.nfinesamples = numpy.sum(nsamples * compression_factor) * fine_sampling_factor
         self.ndetectors = ndetectors
         self.bad_detector_mask = numpy.ascontiguousarray(bad_detector_mask)
@@ -699,7 +708,7 @@ class PacsObservation(_Pacs):
         signal, mask, status = tmf.pacs_timeline(filename_, self.nobservations, numpy.sum(self.nsamples), self.ndetectors, self.keep_bad_detectors, numpy.asfortranarray(self.bad_detector_mask), do_flatfielding, do_subtraction_mean)
         if status != 0: raise RuntimeError()
         
-        return Tod(signal.T, mask=mask.T)
+        return Tod(signal.T, mask=mask.T, nsamples=self.nsamples)
 
     def get_pointing_matrix(self, finer_sampling=True):
         nsamples = self.nfinesamples if finer_sampling else numpy.sum(self.nsamples)
@@ -777,7 +786,7 @@ class PacsSimulation(_Pacs):
         else:
             mask = None
 
-        return Tod(signal, mask=mask)
+        return Tod(signal, mask=mask, nsamples=self.nsamples)
 
     
 
@@ -972,7 +981,7 @@ class Map(FitsArray):
 
 class Tod(FitsArray):
 
-    def __new__(cls, data, dtype=None, order='C', header=None, mask=None, copy=False):
+    def __new__(cls, data, dtype=None, order='C', header=None, mask=None, nsamples=None, copy=False):
         result = FitsArray(data, dtype=dtype, order=order, copy=copy, header=header)
         if not isinstance(data, Tod):
             result = result.view(cls)
@@ -981,29 +990,41 @@ class Tod(FitsArray):
         if mask is not None:
             mask = numpy.array(mask, dtype='int8', copy=copy, order=order)
         result.mask = mask
+        if nsamples is None:
+            if isinstance(data, Tod):
+                result.nsamples = data.nsamples
+            else:
+                result.nsamples = (data.shape[-1],)
+        else:
+            if numpy.sum(nsamples) != data.shape[-1]:
+                raise ValueError('The sum of the slice sizes is not equal to the number of samples in the input argument).')
+            result.nsamples = tuple(nsamples)
+        
         return result
 
     def __array_finalize__(self, obj):
         FitsArray.__array_finalize__(self, obj)
         if obj is None: return
         self.mask = getattr(obj, 'mask', None)
+        self.nsamples = getattr(obj, 'nsamples', None)
 
     def __array_wrap__(self, obj, context=None):
         result = FitsArray.__array_wrap__(self, obj, context=context).view(type(self))
         result.mask = self.mask
+        result.nsamples = self.nsamples
         return result
 
     @staticmethod
-    def empty(shape, dtype='float64', order='C', header=None, mask=None):
-        return Tod(FitsArray.empty(shape, dtype, order, header), mask=mask, copy=False)
+    def empty(shape, dtype='float64', order='C', header=None, mask=None, nsamples=None):
+        return Tod(FitsArray.empty(shape, dtype, order, header), mask=mask, nsamples=nsamples, copy=False)
 
     @staticmethod
-    def ones(shape, dtype='float64', order='C', header=None, mask=None):
-        return Tod(FitsArray.ones(shape, dtype, order, header), mask=mask, copy=False)
+    def ones(shape, dtype='float64', order='C', header=None, mask=None, nsamples=None):
+        return Tod(FitsArray.ones(shape, dtype, order, header), mask=mask, nsamples=nsamples, copy=False)
 
     @staticmethod
-    def zeros(shape, dtype='float64', order='C', header=None, mask=None):
-        return Tod(FitsArray.zeros(shape, dtype, order, header), mask=mask, copy=False)
+    def zeros(shape, dtype='float64', order='C', header=None, mask=None, nsamples=None):
+        return Tod(FitsArray.zeros(shape, dtype, order, header), mask=mask, nsamples=nsamples, copy=False)
     
     def copy(self, order='C'):
         return Tod(self, order=order, copy=True)
@@ -1025,6 +1046,20 @@ class Tod(FitsArray):
             pyplottitle(title)
         colorbar()
         draw()
+
+    def __str__(self):
+        nslices = len(self.nsamples)
+        output = 'Tod ['+str(self.shape[-2])+' detector'
+        if self.shape[-2] > 1:
+            output += 's'
+        strsamples = ','.join((str(self.nsamples[i]) for i in range(nslices)))
+        if nslices > 1:
+            output += ', (' + strsamples + ') samples in ' + str(nslices) + ' slices'
+        else:
+            output += ', ' + strsamples + ' sample'
+            if self.shape[-1] > 1:
+                output += 's'
+        return output + ']'
 
 
 
@@ -1151,15 +1186,12 @@ def deglitch_l2mad(tod, projection, nsigma=5.):
 #-------------------------------------------------------------------------------
 
 
-def filter_median(tod, length=10, nsamples=None):
+def filter_median(tod, length=10):
     """
     Median filtering, O(1) in window length
     """
-    if nsamples is None:
-        nsamples = tod.shape[-1]
-    nsamples = numpy.array(nsamples, 'int')
     filtered = tod.copy()
-    status = tmf.filter_median(filtered.T, length, nsamples)
+    status = tmf.filter_median(filtered.T, length, tod.nsamples)
     if status != 0:
         raise RuntimeError()
     return filtered

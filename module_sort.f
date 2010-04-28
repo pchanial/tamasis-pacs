@@ -11,8 +11,9 @@ module module_sort
     public :: qsortid
     public :: uniq
 
-    integer, pointer, private :: array_int(:)
-    real*8,  pointer, private :: array_double(:)
+    integer, pointer, private :: array_int(:) => null()
+    real*8,  pointer, private :: array_double(:) => null()
+    !$omp threadprivate(array_int, array_double)
 
     interface histogram
         module procedure histogram_int
@@ -368,7 +369,7 @@ contains
         integer, intent(out) :: index(size(array))
 
         array_int => array
-        call qsortgi(size(array_int), compare_int, index)
+        call qsortgi(size(array), compare_int, index)
         array_int => null()
 
     end subroutine qsorti_int
@@ -403,7 +404,7 @@ contains
         integer, intent(out) :: index(size(array))
 
         array_double => array
-        call qsortgi(size(array_double), compare_double, index)
+        call qsortgi(size(array), compare_double, index)
         array_double => null()
 
     end subroutine qsorti_double
@@ -468,7 +469,7 @@ contains
 
 
     subroutine reorder_double(array, index, nuniqs, table, precision)
-
+use iso_fortran_env, only : OUTPUT_UNIT
         real*8, intent(in)               :: array(:)
         integer, intent(out)             :: index(size(array))
         integer, intent(out)             :: nuniqs

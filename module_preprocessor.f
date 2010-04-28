@@ -13,6 +13,9 @@ module module_preprocessor
     public :: apply_mask
     public :: median_filtering_nocopy
 
+    interface median_filtering_nocopy
+        module procedure median_filtering_nocopy_1d_1d, median_filtering_nocopy_1d_2d
+    end interface median_filtering_nocopy
 
 contains
 
@@ -141,7 +144,7 @@ contains
 
     ! median filtering in O(1) for the window length
     ! the samples inside the window form an histogram which is updated as the window slides.
-    subroutine median_filtering_nocopy(data, length)
+    subroutine median_filtering_nocopy_1d_1d(data, length)
 
         real*8, intent(inout) :: data(:)
         integer, intent(in)   :: length
@@ -244,7 +247,26 @@ contains
 
         end do
 
-    end subroutine median_filtering_nocopy
+    end subroutine median_filtering_nocopy_1d_1d
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine median_filtering_nocopy_1d_2d(data, length)
+
+        real*8, intent(inout) :: data(:,:)
+        integer, intent(in)   :: length
+
+        integer               :: i
+
+        !$omp parallel do
+        do i = 1, size(data, 2)
+            call median_filtering_nocopy(data(:,i), length)
+        end do
+        !$omp end parallel do
+
+    end subroutine median_filtering_nocopy_1d_2d
 
 
     !-------------------------------------------------------------------------------------------------------------------------------

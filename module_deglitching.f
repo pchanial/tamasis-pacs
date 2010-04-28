@@ -13,7 +13,7 @@ module module_deglitching
 contains
 
 
-    subroutine deglitch_l2b(pmatrix, nx, ny, timeline, mask, nsigma, use_mad)
+    subroutine deglitch_l2b(pmatrix, nx, ny, timeline, mask, nsigma, use_mad, verbose)
 
         type(pointingelement), intent(in) :: pmatrix(:,:,:)
         integer, intent(in)               :: nx, ny
@@ -21,25 +21,31 @@ contains
         logical(kind=1), intent(inout)    :: mask(:,:)
         real(kind=p), intent(in)          :: nsigma
         logical, intent(in)               :: use_mad
+        logical, intent(in), optional     :: verbose
 
-        integer, parameter                :: MIN_SAMPLE_SIZE = 5
-        integer         :: npixels_per_sample, npixels_per_frame
-        integer         :: ndetectors, ntimes
-        integer         :: hitmap(0:nx*ny-1)
-        integer         :: roi(2,2,size(timeline,1))
-        integer         :: i, j, ipixel, itime, idetector, isample, imap, iminimap, iv
-        integer         :: xmin, xmax, ymin, ymax
-        integer         :: nv, nhits_max
-        real(kind=p)    :: mv, stddev
+        integer, parameter        :: MIN_SAMPLE_SIZE = 5
+        integer                   :: npixels_per_sample, npixels_per_frame
+        integer                   :: ndetectors, ntimes
+        integer                   :: hitmap(0:nx*ny-1)
+        integer                   :: roi(2,2,size(timeline,1))
+        integer                   :: i, j, ipixel, itime, idetector, isample, imap, iminimap, iv
+        integer                   :: xmin, xmax, ymin, ymax
+        integer                   :: nv, nhits_max
+        real(kind=p)              :: mv, stddev
         real(kind=p), allocatable :: map(:,:)
         real(kind=p), allocatable :: arrv(:)
         integer, allocatable      :: arrt(:)
         logical, allocatable      :: isglitch(:)
         integer                   :: count1, count2, count_rate, count_max
         integer*8                 :: nbads
+        logical                   :: verbose_
         
-        
-        write (*,'(a,$)') 'Info: Deglitching (' // strternary(use_mad, 'mad','std') // ')...'
+        verbose_ = .false.
+        if (present(verbose)) verbose_ = verbose
+        if (verbose_) then
+            write (*,'(a,$)') 'Info: Deglitching (' // strternary(use_mad, 'mad','std') // ')...'
+        end if
+
         nbads = count(mask)
         call system_clock(count1, count_rate, count_max)
 
@@ -147,7 +153,9 @@ contains
 
         deallocate (map)
         call system_clock(count2, count_rate, count_max)
-        write (*,'(f6.2,a,i0,a)') real(count2-count1)/count_rate, 's (number of flagged samples: ', count(mask)-nbads, ')'
+        if (verbose_) then
+            write (*,'(f6.2,a,i0,a)') real(count2-count1)/count_rate, 's (number of flagged samples: ', count(mask)-nbads, ')'
+        end if
 
     end subroutine deglitch_l2b
 

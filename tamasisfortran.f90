@@ -7,6 +7,7 @@ subroutine pacs_info_channel(filename, nfilenames, channel, status)
     use module_pacsobservation, only : pacsobservation, maskarray
     implicit none
 
+    !f2py threadsafe
     !f2py intent(in)   filename
     !f2py intent(in)   nfilenames
     !f2py intent(out)  channel
@@ -52,6 +53,7 @@ subroutine pacs_info(filename, nfilenames, fine_sampling_factor, keep_bad_detect
     use module_pacsobservation, only : pacsobservation, maskarray
     implicit none
 
+    !f2py threadsafe
     !f2py intent(in)   filename
     !f2py intent(in)   nfilenames
     !f2py intent(in)   fine_sampling_factor
@@ -133,6 +135,7 @@ subroutine pacs_map_header(filename, nfilenames, finer_sampling, fine_sampling_f
     use module_pacsobservation, only : pacsobservation, maskarray
     implicit none
 
+    !f2py threadsafe
     !f2py intent(in)   filename
     !f2py intent(in)   nfilenames
     !f2py intent(in)   finer_sampling
@@ -262,7 +265,7 @@ subroutine pacs_timeline(filename, nfilenames, nsamples, ndetectors, keep_bad_de
     if (status /= 0) go to 999
 
     ! read timeline
-    call pacs%read(obs, signal, mask, status)
+    call pacs%read(obs, signal, mask, status, verbose=.true.)
     if (status /= 0) go to 999
 
     ! flat fielding
@@ -746,6 +749,7 @@ subroutine backprojection_weighted(pmatrix, data, mask, map1d, npixels_per_sampl
     use module_pointingmatrix, only : bpw => backprojection_weighted, pointingelement
     implicit none
 
+    !f2py threadsafe
     !f2py integer*8,intent(in):: pmatrix(npixels_per_sample*nsamples*ndetectors)
     !f2py intent(in)          :: data
     !f2py intent(in)          :: mask
@@ -778,6 +782,7 @@ subroutine deglitch_l2b_std(pmatrix, nx, ny, data, mask, nsigma, npixels_per_sam
     use module_deglitching, only : deglitch_l2b
     implicit none
 
+    !f2py threadsafe
     !f2py integer*8, intent(in) :: pmatrix(npixels_per_sample*nsamples*ndetectors)
     !f2py intent(in)    :: nx, ny
     !f2py intent(in)    :: data
@@ -794,7 +799,7 @@ subroutine deglitch_l2b_std(pmatrix, nx, ny, data, mask, nsigma, npixels_per_sam
     real*8, intent(in)                :: nsigma
     integer, intent(in)               :: npixels_per_sample, nsamples, ndetectors
 
-    call deglitch_l2b(pmatrix, nx, ny, data, mask, nsigma, .false.)
+    call deglitch_l2b(pmatrix, nx, ny, data, mask, nsigma, .false., verbose=.true.)
 
 end subroutine deglitch_l2b_std
 
@@ -808,6 +813,7 @@ subroutine deglitch_l2b_mad(pmatrix, nx, ny, data, mask, nsigma, npixels_per_sam
     use module_deglitching,    only : deglitch_l2b
     implicit none
 
+    !f2py threadsafe
     !f2py integer*8, intent(in) :: pmatrix(npixels_per_sample*nsamples*ndetectors)
     !f2py intent(in)    :: nx, ny
     !f2py intent(in)    :: data
@@ -824,7 +830,7 @@ subroutine deglitch_l2b_mad(pmatrix, nx, ny, data, mask, nsigma, npixels_per_sam
     real*8, intent(in)                :: nsigma
     integer, intent(in)               :: npixels_per_sample, nsamples, ndetectors
 
-    call deglitch_l2b(pmatrix, nx, ny, data, mask, nsigma, .true.)
+    call deglitch_l2b(pmatrix, nx, ny, data, mask, nsigma, .true., verbose=.true.)
 
 end subroutine deglitch_l2b_mad
 
@@ -834,10 +840,11 @@ end subroutine deglitch_l2b_mad
 
 subroutine filter_median(data, length, nsamples, nsamplestot, nslices, ndetectors, status)
 
-    use iso_fortran_env,     only : ERROR_UNIT
+    use iso_fortran_env,     only : ERROR_UNIT, OUTPUT_UNIT
     use module_preprocessor, only : median_filtering_nocopy
     implicit none
 
+    !f2py threadsafe
     !f2py intent(in)   :: data
     !f2py intent(in)   :: length
     !f2py intent(in)   :: nsamples
@@ -855,6 +862,7 @@ subroutine filter_median(data, length, nsamples, nsamplestot, nslices, ndetector
     integer, intent(out)  :: status
 
     integer :: islice, idetector, start
+    integer :: count1, count2, count_rate, count_max
 
     if (sum(nsamples) /= nsamplestot) then
         status = 1
@@ -868,22 +876,17 @@ subroutine filter_median(data, length, nsamples, nsamplestot, nslices, ndetector
         return
     end if
 
-print *, 'tod shape:', shape(data)
-print *, 'length:', length
-
     status = 0
-    start = 0
+
+    write (OUTPUT_UNIT,'(a,i0,a)', advance='no') 'Median filtering (length=', length, ')... '
+    call system_clock(count1, count_rate, count_max)
+    start = 1
     do islice = 1, nslices
-
-        !!$omp parallel do
-        do idetector = 1, ndetectors
-            call median_filtering_nocopy(data(start+1:start+nsamples(islice),idetector), length)
-        end do
-        !!$omp end parallel do
-
+        call median_filtering_nocopy(data(start:start+nsamples(islice)-1,:), length)
         start = start + nsamples(islice)
-
     end do
+    call system_clock(count2, count_rate, count_max)
+    write (OUTPUT_UNIT,'(f7.2,a)') real(count2-count1)/count_rate, 's'
 
 end subroutine filter_median
 

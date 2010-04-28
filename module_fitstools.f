@@ -1488,9 +1488,6 @@ contains
         !  Check if status is OK (no error); if so, simply return
         if (status == 0) return
 
-        ! flush the output unit
-        flush(OUTPUT_UNIT)
-
         ! file not found
         if (status == 104 .and. present(filename)) then
             write (ERROR_UNIT,'(a)') "ERROR: Failure to open or find file '" // trim(filename) // "'."

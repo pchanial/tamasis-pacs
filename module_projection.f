@@ -17,7 +17,7 @@ module module_projection
 
     real*8, private          :: pivot_(2)
     real*8, pointer, private :: array_point(:,:)
-
+    !$omp threadprivate(pivot_, array_point)
 
 contains
 

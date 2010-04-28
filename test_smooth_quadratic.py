@@ -1,8 +1,10 @@
-from   matplotlib.pyplot import clim, figure, plot, show
+#!/usr/bin/env python2.6
+from   matplotlib.pyplot import clim, figure, plot, show, ioff
 from   tamasis import *
 import os
 
 do_plot = True
+ioff()
 
 datadir = os.getenv('PACS_DATA')+'/transpScan/'
 pacs = PacsObservation(filename=[datadir+'1342184598_blue_PreparedFrames.fits',
@@ -39,6 +41,8 @@ if do_plot:
 
 tod40Hz -= drift
 
+tod40Hz = filter_median(tod40Hz, 10000)
+
 mask_before = tod40Hz.mask.copy('a')
 
 # second level deglitching
@@ -61,6 +65,7 @@ if do_plot:
 
 # compressed TOD
 tod = compression.direct(tod40Hz).copy()
+print tod
 
 # naive map
 map_naive = naive_mapper(tod, model)
