@@ -91,8 +91,8 @@ contains
         !$omp do
         do imap = 0, nx*ny-1
 
-            i = mod(imap, nx)
-            j = imap / nx
+            i = mod(imap, nx) + 1
+            j = imap / nx + 1
 
             if (hitmap(imap) < MIN_SAMPLE_SIZE) cycle
 
