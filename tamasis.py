@@ -1199,7 +1199,7 @@ def filter_median(tod, length=10):
     Median filtering, O(1) in window length
     """
     filtered = tod.copy()
-    status = tmf.filter_median(filtered.T, length, tod.nsamples)
+    status = tmf.filter_median(filtered.T, length, numpy.array(tod.nsamples))
     if status != 0:
         raise RuntimeError()
     return filtered
