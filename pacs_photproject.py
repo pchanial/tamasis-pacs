@@ -107,7 +107,7 @@ if options.deglitching != 'none':
 print 'Computing the map...'
 mymap = Map.zeros((ny,nx), header=obs.header)
 tmf.backprojection_weighted(projection.pmatrix, tod.T, tod.mask.T, 
-                            mymap.T, obs.npixels_per_sample)
+                            mymap.T, projection.npixels_per_sample)
 
 # Write resulting map as a FITS file
 print 'Writing the map...'
