@@ -304,9 +304,15 @@ contains
         this%mask => mask
 
         if (this%transparent_mode) then
-            this%mask(1:16,1:16) = .true.
-            this%mask(1:16,33:)  = .true.
-            this%mask(17:,:)     = .true.
+            if (this%channel /= 'r') then
+                this%mask(1:16,1:16) = .true.
+                this%mask(1:16,33:)  = .true.
+                this%mask(17:,:)     = .true.
+            else
+                this%mask(1:8,1:8) = .true.
+                this%mask(1:8,17:) = .true.
+                this%mask(9:,:)    = .true.
+            end if
         end if
         this%ndetectors = size(this%mask)
         if (.not. this%keep_bad_detectors) then
