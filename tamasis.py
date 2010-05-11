@@ -2,7 +2,7 @@ import tamasisfortran as tmf
 import numpy
 import scipy.sparse.linalg    
 
-__version_info__ = (0, 8, 0)
+__version_info__ = (0, 8, 1)
 __version__ = '.'.join((str(i) for i in __version_info__))
 
 #-------------------------------------------------------------------------------
@@ -272,7 +272,7 @@ class PacsMultiplexing(AcquisitionModel):
     def _validate_shape_direct(self, shapein):
         if shapein is None:
             return None
-        super(PacsMultiplexing, self)._validate_shape_direct(shapein)
+        #super(PacsMultiplexing, self)._validate_shape_direct(shapein)
         if shapein[1] % self.fine_sampling_factor != 0:
             raise ValidationError('The input timeline size ('+str(shapein[1])+') is not an integer times the fine sampling factor ('+str(self.fine_sampling_factor)+').')
         shapeout = list(shapein)
@@ -327,7 +327,7 @@ class Compression(AcquisitionModel):
     def _validate_shape_direct(self, shapein):
         if shapein is None:
             return None
-        super(Compression, self)._validate_shape_direct(shapein)
+        #super(Compression, self)._validate_shape_direct(shapein)
         if shapein[1] % self.compression_factor != 0:
             raise ValidationError('The input timeline size ('+str(shapein[1])+') is not an integer times the compression factor ('+str(self.compression_factor)+').')
         shapeout = list(shapein)
@@ -529,7 +529,6 @@ class Reshaping(AcquisitionModel):
         output = array.reshape(self.shapein)
         if copyout: return output.copy('a')
         return output
-
 
 
 #-------------------------------------------------------------------------------
@@ -1048,8 +1047,8 @@ class Tod(FitsArray):
                aspect='auto', 
                interpolation='nearest', 
                origin='lower')
-        xlabel('Detector number')
-        ylabel("Signal")
+        xlabel("Signal")
+        ylabel('Detector number')
         if title is not None:
             pyplottitle(title)
         colorbar()
@@ -1174,7 +1173,9 @@ def deglitch_l2std(tod, projection, nsigma=5.):
     nx = projection.header['naxis1']
     ny = projection.header['naxis2']
     npixels_per_sample = projection.npixels_per_sample
-    tmf.deglitch_l2b_std(projection.pmatrix, nx, ny, tod.T, tod.mask.T, nsigma, npixels_per_sample)
+    mask = tod.mask.copy()
+    tmf.deglitch_l2b_std(projection.pmatrix, nx, ny, tod.T, mask.T, nsigma, npixels_per_sample)
+    return mask
 
  
 #-------------------------------------------------------------------------------
@@ -1188,7 +1189,9 @@ def deglitch_l2mad(tod, projection, nsigma=5.):
     nx = projection.header['naxis1']
     ny = projection.header['naxis2']
     npixels_per_sample = projection.npixels_per_sample
-    tmf.deglitch_l2b_mad(projection.pmatrix, nx, ny, tod.T, tod.mask.T, nsigma, npixels_per_sample)
+    mask = tod.mask.copy()
+    tmf.deglitch_l2b_mad(projection.pmatrix, nx, ny, tod.T, mask.T, nsigma, npixels_per_sample)
+    return mask
 
  
 #-------------------------------------------------------------------------------

@@ -99,9 +99,9 @@ if options.filtering == 'median':
 if options.deglitching != 'none':
     nbads = numpy.sum(tod.mask % 2)
     if options.deglitching == 'l2std':
-        deglitch_l2std(tod, projection, nsigma=options.nsigma)
+        tod.mask = deglitch_l2std(tod, projection, nsigma=options.nsigma)
     else:
-        deglitch_l2mad(tod, projection, nsigma=options.nsigma)
+        tod.mask = deglitch_l2mad(tod, projection, nsigma=options.nsigma)
 
 # Backproject the timeline and divide it by the weight
 print 'Computing the map...'

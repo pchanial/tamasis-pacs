@@ -45,7 +45,7 @@ tod40Hz = filter_median(tod40Hz, 10000)
 mask_before = tod40Hz.mask.copy('a')
 
 # second level deglitching
-deglitch_l2mad(tod40Hz, projection)
+tod40Hz.mask = deglitch_l2mad(tod40Hz, projection)
 
 if do_plot:
     figure()
