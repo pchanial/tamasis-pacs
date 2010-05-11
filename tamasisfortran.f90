@@ -46,14 +46,17 @@ end subroutine pacs_info_channel
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine pacs_info(filename, nfilenames, fine_sampling_factor, keep_bad_detectors, use_bad_detector_mask, bad_detector_mask,     &
-                     nrows, ncolumns, ndetectors, output_mask, transparent_mode, compression_factor, nsamples, status)
+subroutine pacs_info(tamasis_dir, filename, nfilenames, fine_sampling_factor, keep_bad_detectors, use_bad_detector_mask,           &
+                     bad_detector_mask, nrows, ncolumns, ndetectors, output_mask, transparent_mode, compression_factor, nsamples,  &
+                     status)
 
-    use module_pacsinstrument, only : pacsinstrument
+    use module_pacsinstrument,  only : pacsinstrument
     use module_pacsobservation, only : pacsobservation, maskarray
+    use module_tamasis,         only : init_tamasis
     implicit none
 
     !f2py threadsafe
+    !f2py intent(in)   tamasis_dir
     !f2py intent(in)   filename
     !f2py intent(in)   nfilenames
     !f2py intent(in)   fine_sampling_factor
@@ -69,6 +72,7 @@ subroutine pacs_info(filename, nfilenames, fine_sampling_factor, keep_bad_detect
     !f2py intent(out)  nsamples
     !f2py intent(out)  status
 
+    character(len=*), intent(in) :: tamasis_dir
     character(len=*), intent(in) :: filename
     integer, intent(in)          :: nfilenames
     integer, intent(in)          :: fine_sampling_factor
@@ -89,7 +93,9 @@ subroutine pacs_info(filename, nfilenames, fine_sampling_factor, keep_bad_detect
     type(maskarray)                     :: maskarray_policy
     integer                             :: iobs
 
-    
+    ! initialise tamasis
+    call init_tamasis(tamasis_dir)
+
     ! split input filename
     if (mod(len(filename), nfilenames) /= 0) then
         stop 'PACS_INFO: Invalid filename length.'
@@ -128,14 +134,16 @@ end subroutine pacs_info
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine pacs_map_header(filename, nfilenames, finer_sampling, fine_sampling_factor, keep_bad_detectors, use_bad_detector_mask,  &
-                           bad_detector_mask, nrows, ncolumns, resolution, header, status)
+subroutine pacs_map_header(tamasis_dir, filename, nfilenames, finer_sampling, fine_sampling_factor, keep_bad_detectors,            &
+                           use_bad_detector_mask, bad_detector_mask, nrows, ncolumns, resolution, header, status)
 
     use module_pacsinstrument,  only : pacsinstrument
     use module_pacsobservation, only : pacsobservation, maskarray
+    use module_tamasis,         only : init_tamasis
     implicit none
 
     !f2py threadsafe
+    !f2py intent(in)   tamasis_dir
     !f2py intent(in)   filename
     !f2py intent(in)   nfilenames
     !f2py intent(in)   finer_sampling
@@ -149,6 +157,7 @@ subroutine pacs_map_header(filename, nfilenames, finer_sampling, fine_sampling_f
     !f2py intent(out)  header
     !f2py intent(out)  status
 
+    character(len=*), intent(in) :: tamasis_dir
     character(len=*), intent(in) :: filename
     integer, intent(in)          :: nfilenames
     logical, intent(in)          :: finer_sampling
@@ -167,6 +176,9 @@ subroutine pacs_map_header(filename, nfilenames, finer_sampling, fine_sampling_f
     type(maskarray)                     :: maskarray_policy
     integer                             :: iobs
     
+    ! initialise tamasis
+    call init_tamasis(tamasis_dir)
+
     ! split input filename
     if (mod(len(filename), nfilenames) /= 0) then
         stop 'PACS_INFO: Invalid filename length.'
@@ -201,16 +213,18 @@ end subroutine pacs_map_header
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine pacs_timeline(filename, nfilenames, nsamples, ndetectors, keep_bad_detectors, bad_detector_mask, nrow, ncol,            &
-                         do_flatfielding, do_subtraction_mean, signal, mask, status)
+subroutine pacs_timeline(tamasis_dir, filename, nfilenames, nsamples, ndetectors, keep_bad_detectors, bad_detector_mask, nrow,     &
+                         ncol, do_flatfielding, do_subtraction_mean, signal, mask, status)
 
     use iso_fortran_env,        only : ERROR_UNIT
     use module_pacsinstrument,  only : pacsinstrument
     use module_pacsobservation, only : pacsobservation, maskarray
     use module_preprocessor,    only : divide_vectordim2, subtract_meandim1
+    use module_tamasis,         only : init_tamasis
     implicit none
 
     !f2py threadsafe
+    !f2py intent(in)   :: tamasis_dir
     !f2py intent(in)   :: filename
     !f2py intent(in)   :: nfilenames
     !f2py intent(in)   :: nsamples
@@ -225,6 +239,7 @@ subroutine pacs_timeline(filename, nfilenames, nsamples, ndetectors, keep_bad_de
     !f2py intent(out)  :: mask
     !f2py intent(out)  :: status
 
+    character(len=*), intent(in) :: tamasis_dir
     character(len=*), intent(in) :: filename
     integer, intent(in)          :: nfilenames
     integer, intent(in)          :: nsamples
@@ -242,6 +257,9 @@ subroutine pacs_timeline(filename, nfilenames, nsamples, ndetectors, keep_bad_de
     class(pacsinstrument), allocatable  :: pacs
     type(maskarray)                     :: maskarray_policy
     integer                             :: iobs, destination
+
+    ! initialise tamasis
+    call init_tamasis(tamasis_dir)
 
     ! split input filename
     if (mod(len(filename), nfilenames) /= 0) then
@@ -290,17 +308,20 @@ end subroutine pacs_timeline
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine pacs_pointing_matrix_filename(filename, nfilenames, finer_sampling, fine_sampling_factor, npixels_per_sample, nsamples, &
-                                         ndetectors, keep_bad_detectors, bad_detector_mask, nrow, ncol, header, pmatrix, status)
+subroutine pacs_pointing_matrix_filename(tamasis_dir, filename, nfilenames, finer_sampling, fine_sampling_factor,                  &
+                                         npixels_per_sample, nsamples, ndetectors, keep_bad_detectors, bad_detector_mask, nrow,    &
+                                         ncol, header, pmatrix, status)
 
     use iso_fortran_env,        only : ERROR_UNIT
     use module_fitstools,       only : ft_read_parameter
     use module_pacsinstrument,  only : pacsinstrument
     use module_pacsobservation, only : pacsobservation, maskarray
     use module_pointingmatrix,  only : pointingelement
+    use module_tamasis,         only : init_tamasis
     implicit none
 
     !f2py threadsafe
+    !f2py intent(in)   :: tamasis_dir
     !f2py intent(in)   :: filename
     !f2py intent(in)   :: nfilenames
     !f2py intent(in)   :: finer_sampling
@@ -316,6 +337,7 @@ subroutine pacs_pointing_matrix_filename(filename, nfilenames, finer_sampling, f
     !f2py integer*8, intent(inout) :: pmatrix(npixels_per_sample*nsamples*ndetectors)
     !f2py intent(out)  :: status
 
+    character(len=*), intent(in) :: tamasis_dir
     character(len=*), intent(in) :: filename
     integer, intent(in)          :: nfilenames
     logical, intent(in)          :: finer_sampling
@@ -335,6 +357,9 @@ subroutine pacs_pointing_matrix_filename(filename, nfilenames, finer_sampling, f
     class(pacsinstrument), allocatable  :: pacs
     type(maskarray)                     :: maskarray_policy
     integer                             :: iobs, nx, ny, count, nsamples_expected
+
+    ! initialise tamasis
+    call init_tamasis(tamasis_dir)
 
     ! split input filename
     if (mod(len(filename), nfilenames) /= 0) then

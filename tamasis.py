@@ -1,9 +1,11 @@
 import tamasisfortran as tmf
 import numpy
+import os
 import scipy.sparse.linalg    
 
 __version_info__ = (0, 8, 1)
 __version__ = '.'.join((str(i) for i in __version_info__))
+__install_dir__ = os.path.dirname(__file__)
 
 #-------------------------------------------------------------------------------
 #
@@ -531,6 +533,7 @@ class Reshaping(AcquisitionModel):
         return output
 
 
+
 #-------------------------------------------------------------------------------
 #
 # PACS observations & simulations
@@ -677,13 +680,13 @@ class PacsObservation(_Pacs):
                 bad_detector_mask = numpy.zeros((32,64), dtype='int8')
 
         # retrieve information from the observations
-        ndetectors, bad_detector_mask, transparent_mode, compression_factor, nsamples, status = tmf.pacs_info(filename_, nfilenames, fine_sampling_factor, keep_bad_detectors, use_mask, numpy.asfortranarray(bad_detector_mask))
+        ndetectors, bad_detector_mask, transparent_mode, compression_factor, nsamples, status = tmf.pacs_info(__install_dir__, filename_, nfilenames, fine_sampling_factor, keep_bad_detectors, use_mask, numpy.asfortranarray(bad_detector_mask))
         if status != 0: raise RuntimeError()
 
         if resolution is None:
             resolution = 3.
         if header is None:
-            hstr, status = tmf.pacs_map_header(filename_, nfilenames, True, fine_sampling_factor, keep_bad_detectors, use_mask, bad_detector_mask, resolution)
+            hstr, status = tmf.pacs_map_header(__install_dir__, filename_, nfilenames, True, fine_sampling_factor, keep_bad_detectors, use_mask, bad_detector_mask, resolution)
             if status != 0: raise RuntimeError()
             header = str2fitsheader(hstr)
 
@@ -710,7 +713,7 @@ class PacsObservation(_Pacs):
         Returns the signal and mask timelines.
         """
         filename_, nfilenames = self._files2tmf(self.filename)
-        signal, mask, status = tmf.pacs_timeline(filename_, self.nobservations, numpy.sum(self.nsamples), self.ndetectors, self.keep_bad_detectors, numpy.asfortranarray(self.bad_detector_mask), do_flatfielding, do_subtraction_mean)
+        signal, mask, status = tmf.pacs_timeline(__install_dir__, filename_, self.nobservations, numpy.sum(self.nsamples), self.ndetectors, self.keep_bad_detectors, numpy.asfortranarray(self.bad_detector_mask), do_flatfielding, do_subtraction_mean)
         if status != 0: raise RuntimeError()
         
         return Tod(signal.T, mask=mask.T, nsamples=self.nsamples)
@@ -721,7 +724,7 @@ class PacsObservation(_Pacs):
         print 'Info: Allocating '+str(sizeofpmatrix/2.**17)+' MiB for the pointing matrix.'
         pmatrix = numpy.zeros(sizeofpmatrix, dtype=numpy.int64)
         filename_, nfilenames = self._files2tmf(self.filename)
-        status = tmf.pacs_pointing_matrix_filename(filename_, self.nobservations, finer_sampling, self.fine_sampling_factor, npixels_per_sample, nsamples, self.ndetectors, self.keep_bad_detectors, numpy.asfortranarray(self.bad_detector_mask), str(self.header).replace('\n', ''), pmatrix)
+        status = tmf.pacs_pointing_matrix_filename(__install_dir__, filename_, self.nobservations, finer_sampling, self.fine_sampling_factor, npixels_per_sample, nsamples, self.ndetectors, self.keep_bad_detectors, numpy.asfortranarray(self.bad_detector_mask), str(self.header).replace('\n', ''), pmatrix)
         if status != 0: raise RuntimeError()
         return pmatrix
 
@@ -1236,3 +1239,4 @@ def any_neq(a,b, precision):
     if numpy.any(mask != numpy.isnan(b)):
         return True
     return numpy.any((abs(a-b) > 10.**(-precision) * abs(a))[numpy.isnan(a).__neg__()])
+

@@ -8,6 +8,7 @@ module module_pacsinstrument
     use module_precision,       only : p
     use module_projection,      only : convex_hull
     use module_string,          only : strinteger
+    use module_tamasis,         only : get_tamasis_path, tamasis_path_len
     use module_wcs,             only : init_astrometry, ad2xy_gnomonic, ad2xy_gnomonic_vect
     implicit none
     private
@@ -24,8 +25,6 @@ module module_pacsinstrument
     integer, parameter :: shape_red (2) = [16, 32]
     integer, parameter :: distortion_degree = 3
     real*8,  parameter :: sampling = 0.025d0
-
-    integer :: tamasis_dir_len ! length of the path to the tamasis installation directory
 
     type pacsinstrument
  
@@ -178,11 +177,6 @@ contains
         real*8, allocatable         :: tmp3(:,:,:)
         character(len=100)          :: value
 
-        ! might be moved elsewhere
-        call get_environment_variable('TAMASIS_DIR', value, length=tamasis_dir_len)
-        if (tamasis_dir_len == 0) tamasis_dir_len = len('/home/pchanial/work/tamasis')
-
-
         ! read bad pixel mask
 
         call ft_read_extension(get_calfile(filename_bpm) // '[blue]', tmplogical, status)
@@ -253,14 +247,10 @@ contains
 
 
     function get_calfile(filename)
-        character(len=*), intent(in)                   :: filename
-        character(len=tamasis_dir_len+6+len(filename)) :: get_calfile
-        integer                                        :: length
+        character(len=*), intent(in)                     :: filename
+        character(len=tamasis_path_len+10+len(filename)) :: get_calfile
 
-        ! Environment variables are not visible in photran...
-        call get_environment_variable('TAMASIS_DIR', get_calfile, length)
-        if (length == 0) get_calfile(1:tamasis_dir_len) = '/home/pchanial/work/tamasis'
-        get_calfile(tamasis_dir_len+1:) = '/data/' // filename
+        get_calfile = get_tamasis_path() // 'pacs/data/' // filename
 
     end function get_calfile
 

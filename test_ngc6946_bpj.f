@@ -9,6 +9,7 @@ program test_ngc6946_bpj
     use module_preprocessor,    only : subtract_meandim1, divide_vectordim2
     use module_projection,      only : surface_convex_polygon
     use module_string,          only : strinteger
+    use module_tamasis,         only : init_tamasis
     use module_wcs,             only : init_astrometry, ad2xy_gnomonic
     use omp_lib
     implicit none
@@ -34,6 +35,9 @@ program test_ngc6946_bpj
     type(pointingelement), allocatable  :: pmatrix(:,:,:)
 
     call system_clock(count0, count_rate, count_max)
+
+    ! initialise tamasis
+    call init_tamasis
 
     ! initialise observation
     allocate(obs)

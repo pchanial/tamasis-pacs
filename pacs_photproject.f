@@ -9,6 +9,7 @@ program pacs_photproject
     use module_pointingmatrix,  only : backprojection_weighted, pointingelement
     use module_preprocessor,    only : divide_vectordim2, median_filtering_nocopy, subtract_meandim1
     use module_string,          only : strlowcase
+    use module_tamasis,         only : init_tamasis
     implicit none
 
     class(pacsinstrument), allocatable :: pacs
@@ -71,6 +72,9 @@ program pacs_photproject
     end if
     
     write (OUTPUT_UNIT,*)
+
+    ! initialise tamasis
+    call init_tamasis
 
     ! initialise observations
     nobs = parser%get_argument_count()

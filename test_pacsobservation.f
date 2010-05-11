@@ -3,6 +3,7 @@ program test_pacsobservation
     use module_pacsinstrument,  only : pacsinstrument
     use module_pacsobservation, only : pacsobservation, maskarray
     use module_string,          only : strsection
+    use module_tamasis,         only : init_tamasis, get_tamasis_path
     implicit none
 
     class(pacsobservation), allocatable :: obs
@@ -15,6 +16,10 @@ program test_pacsobservation
     logical*1, allocatable :: mask(:,:)
     integer*8              :: first, last
     logical*1              :: mask_ref(360), mask_frame(360)
+
+    ! initialise tamasis
+    call init_tamasis
+    write (*,*) 'INSTALL: %'//get_tamasis_path()//'%'
 
     ! valid calls
     allocate(obs)

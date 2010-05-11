@@ -5,6 +5,7 @@ program test_pacsinstrument
     use module_pacsinstrument
     use module_pacsobservation, only : pacsobservation, maskarray
     use module_string,          only : strreal
+    use module_tamasis,         only : init_tamasis
     use module_wcs,             only : init_astrometry, ad2xy_gnomonic
     implicit none
 
@@ -22,6 +23,9 @@ program test_pacsinstrument
 
     real*8, allocatable    :: a_vect(:), d_vect(:), ad_vect(:,:)
     integer                :: n
+
+    ! initialise tamasis
+    call init_tamasis
 
     ! initialise observation
     allocate(obs)
