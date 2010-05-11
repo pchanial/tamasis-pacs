@@ -2,6 +2,7 @@
 # Author: P. Chanial
 
 
+#set up default compiler
 ifeq "$(origin FC)" "default"
     ifneq ($(shell which ifort),)
         FC=ifort
@@ -26,13 +27,7 @@ else
 endif
 
 ifeq ($(PROF_GEN),1)
-    FFLAGS_DEBUG += -prof_gen -prof_dir/home/pchanial/profiles
     DEBUG = 1
-endif
-
-ifeq ($(PROF_USE),1)
-    FFLAGS_RELEASE += -prof_use -prof_dir/home/pchanial/profiles
-    DEBUG = 0
 endif
 
 ifeq ($(DEBUG),1)
@@ -133,6 +128,7 @@ $(EXECS):%:$$(sort $$(call finddeps,$$*))
 tamasisfortran.so: tamasisfortran.f90 $(MODULES:.f=.o)
 	unset LDFLAGS ; \
 	f2py --fcompiler=${FCOMPILER} --f90exec=$(FC) --f90flags="$(FFLAGS)" -DF2PY_REPORT_ON_ARRAY_COPY=1 -c $^ -m tamasisfortran $(LDFLAGS)
+# /opt/core-3.1-amd64/ifc/11.1/lib/intel64/libiomp5.a /opt/core-3.1-amd64/ifc/11.1/lib/intel64/libifport.a /opt/core-3.1-amd64/ifc/11.1/lib/intel64/libifcore.a /opt/core-3.1-amd64/ifc/11.1/lib/intel64/libimf.a /opt/core-3.1-amd64/ifc/11.1/lib/intel64/libsvml.a
 
 clean:
 	rm -f *.o *.mod *.so *~ $(EXECS)
