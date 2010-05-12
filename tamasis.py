@@ -1,11 +1,15 @@
-import tamasisfortran as tmf
+import fftw3
+import matplotlib.pyplot as pyplot
 import numpy
 import os
+import pyfits
 import scipy.sparse.linalg    
+import tamasisfortran as tmf
 
-__version_info__ = (0, 8, 1)
+__version_info__ = (0, 9, 0)
 __version__ = '.'.join((str(i) for i in __version_info__))
 __install_dir__ = os.path.dirname(__file__)
+__verbose__ = False
 
 #-------------------------------------------------------------------------------
 #
@@ -37,15 +41,25 @@ class AcquisitionModel(object):
         self.description = description
 
     #abstractmethod
-    def direct(self, data, reusein=False, copyout=True):
+    def direct(self, data, reusein=False, reuseout=False):
+        import inspect
         for i, model in enumerate(self):
-            data = model.direct(data, reusein=reusein or i != 0, copyout=copyout and i==len(self)-1)
+            reusein_  = reusein  or i != 0
+            reuseout_ = reuseout or i != len(self)-1
+            if 'reuseout' not in inspect.getargspec(model.direct)[0]:
+                reusein_ = reusein_  and reuseout_
+            data = model.direct(data, reusein=reusein_, reuseout=reuseout_)
         return data
 
     #abstractmethod
-    def transpose(self, data, reusein=False, copyout=True):
+    def transpose(self, data, reusein=False, reuseout=False):
+        import inspect
         for i, model in enumerate(reversed(self)):
-            data = model.transpose(data, reusein=reusein or i != 0, copyout=copyout and i==len(self)-1)
+            reusein_  = reusein  or i != 0
+            reuseout_ = reuseout or i != len(self)-1
+            if 'reuseout' not in inspect.getargspec(model.transpose)[0]:
+                reusein_ = reusein_  and reuseout_
+            data = model.transpose(data, reusein=reusein_, reuseout=reuseout_)
         return data
 
     def __validate_chain_direct(self, shapein):
@@ -61,6 +75,12 @@ class AcquisitionModel(object):
     def _validate_chain(self):
         self.__validate_chain_direct(None)
         self.__validate_chain_transpose(None)
+
+    def _validate_shape(self, shapein):
+        if shapein is None or self.shapein is None:
+            return
+        if shapein != self.shapein:
+            raise ValidationError('The input of '+self.__class__.__name__+' has incompatible shape '+str(shapein)+' instead of '+str(self.shapein)+'.')
 
     def _validate_shape_direct(self, shapein):
         if shapein is None or self.shapein is None:
@@ -82,6 +102,12 @@ class AcquisitionModel(object):
             raise ValidationError('The input of '+self.__class__.__name__+' transpose has incompatible shape '+str(shapeout)+' instead of '+str(self.shapeout)+'.')
         return self.shapein
 
+    def _validate_input(self, cls, data):
+        if not isinstance(data, cls):
+            raise TypeError("The input of '"+self.__class__.__name__+"' has an invalid type '"+data.__class__.__name__+"' instead of '"+cls.__name__+"'.")
+        self._validate_shape(data.shape)
+        
+
     def _validate_input_direct(self, cls, data, reusein):
         if not isinstance(data, cls):
             raise TypeError("The input of '"+self.__class__.__name__+"' has an invalid type '"+data.__class__.__name__+"' instead of '"+cls.__name__+"'.")
@@ -96,6 +122,14 @@ class AcquisitionModel(object):
         if reusein: self._output_direct = data
         return data, shapein
 
+    # allocate memory for the output of the acquisition models which do not cache their inputs or outputs
+    # These are the models for which the direct and transpose routines have keywords reusein and reuseout
+    def _validate_output(self, array, reusein):
+        if reusein:
+            return array
+        if __verbose__: print 'Info: Allocating '+str(numpy.product(array.shape)/2.**17)+' MiB in '+self.__class__.__name__+'.'
+        return array.copy('a')
+
     # allocate memory for the output of the direct operation.
     # **options should not depend on the input array, since it might only be used for the first call and it would not be
     # propagated during the next calls
@@ -104,7 +138,7 @@ class AcquisitionModel(object):
             raise ValueError('The shape of the output of '+self.__class__.__name__+' is not known.')
         if self._output_direct is not None and shapeout == self._output_direct.shape:
             return
-        print 'Info: Allocating '+str(numpy.product(shapeout)/2.**17)+' MiB for the output of '+self.__class__.__name__
+        if __verbose__: print 'Info: Allocating '+str(numpy.product(shapeout)/2.**17)+' MiB for the output of '+self.__class__.__name__+'.'
         if cls == numpy.ndarray:
             self._output_direct = numpy.empty(shapeout, dtype=numpy.float64, **options)
         else:
@@ -117,7 +151,7 @@ class AcquisitionModel(object):
             raise ValueError('The shape of the input of '+self.__class__.__name__+' is not known.')
         if self._output_transpose is not None and shapein == self._output_transpose.shape:
             return
-        print 'Info: Allocating '+str(numpy.product(shapein)/2.**17)+' MiB for the output of the transpose of '+self.__class__.__name__
+        if __verbose__: print 'Info: Allocating '+str(numpy.product(shapein)/2.**17)+' MiB for the output of '+self.__class__.__name__+'^T.'
         if cls == numpy.ndarray:
             self._output_transpose = numpy.empty(shapein, dtype=numpy.float64, **options)
         else:
@@ -222,20 +256,22 @@ class Projection(AcquisitionModel):
         self.shapein = tuple([self.header['naxis'+str(i+1)] for i in reversed(range(self.header['naxis']))])
         self.shapeout = (observation.ndetectors, observation.nfinesamples if finer_sampling else numpy.sum(observation.nsamples)) 
 
-    def direct(self, map2d, reusein=False, copyout=True):
+    def direct(self, map2d, reusein=False, reuseout=False):
         map2d, shapeout = self._validate_input_direct(Map, map2d, reusein)
         self._validate_output_direct(Tod, shapeout)
         map2d.header = self.header
         tmf.pointing_matrix_direct(self.pmatrix, map2d.T, self._output_direct.T, self.npixels_per_sample)
-        if not copyout: return self._output_direct
-        return self._output_direct.copy('a')
+        output = self._output_direct
+        if not reuseout: self._output_direct = None
+        return output
 
-    def transpose(self, signal, reusein=False, copyout=True):
+    def transpose(self, signal, reusein=False, reuseout=False):
         signal, shapein = self._validate_input_transpose(Tod, signal, reusein)
         self._validate_output_transpose(Map, shapein, header=self.header)
         tmf.pointing_matrix_transpose(self.pmatrix, signal.T, self._output_transpose.T,  self.npixels_per_sample)
-        if not copyout: return self._output_transpose
-        return self._output_transpose.copy('a')
+        output = self._output_transpose
+        if not reuseout: self._output_transpose = None
+        return output
 
     def __str__(self):
         return super(Projection, self).__str__()
@@ -255,21 +291,23 @@ class PacsMultiplexing(AcquisitionModel):
         self.fine_sampling_factor = pacs.fine_sampling_factor
         self.ij = pacs.ij
 
-    def direct(self, signal, reusein=False, copyout=True):
+    def direct(self, signal, reusein=False, reuseout=False):
         signal, shapeout = self._validate_input_direct(Tod, signal, reusein)
         self._validate_output_direct(Tod, shapeout)
         self._output_direct.nsamples = tuple(numpy.divide(signal.nsamples, self.fine_sampling_factor))
         tmf.pacs_multiplexing_direct(signal.T, self._output_direct.T, self.fine_sampling_factor, self.ij)
-        if not copyout: return self._output_direct
-        return self._output_direct.copy('a')
+        output = self._output_direct
+        if not reuseout: self._output_direct = None
+        return output
 
-    def transpose(self, signal, reusein=False, copyout=True):
+    def transpose(self, signal, reusein=False, reuseout=False):
         signal, shapein = self._validate_input_transpose(Tod, signal, reusein)
         self._validate_output_transpose(Tod, shapein)
         self._output_transpose.nsamples = tuple(numpy.multiply(signal.nsamples, self.fine_sampling_factor))
         tmf.pacs_multiplexing_transpose(signal.T, self._output_transpose.T, self.fine_sampling_factor, self.ij)
-        if not copyout: return self._output_transpose
-        return self._output_transpose.copy('a')
+        output = self._output_transpose
+        if not reuseout: self._output_transpose = None
+        return output
 
     def _validate_shape_direct(self, shapein):
         if shapein is None:
@@ -304,32 +342,34 @@ class Compression(AcquisitionModel):
         self._compression_transpose = compression_transpose
         self.compression_factor = compression_factor
 
-    def direct(self, signal, reusein=False, copyout=True):
+    def direct(self, signal, reusein=False, reuseout=False):
         if self.compression_factor == 1:
-            if copyout: return signal.copy('a')
+            if not reusein: return signal.copy('a')
             return signal
         signal, shapeout = self._validate_input_direct(Tod, signal, reusein)
         self._validate_output_direct(Tod, shapeout)
         self._output_direct.nsamples = tuple(numpy.divide(signal.nsamples, self.compression_factor))
         self._compression_direct(signal, self._output_direct, self.compression_factor)
-        if not copyout: return self._output_direct
-        return self._output_direct.copy('a')
+        output = self._output_direct
+        if not reuseout: self._output_direct = None
+        return output
 
-    def transpose(self, compressed, reusein=False, copyout=True):
+    def transpose(self, compressed, reusein=False, reuseout=False):
         if self.compression_factor == 1:
-            if copyout: return compressed.copy('a')
+            if not reusein: return compressed.copy('a')
             return compressed
         compressed, shapein = self._validate_input_transpose(Tod, compressed, reusein)
         self._validate_output_transpose(Tod, shapein)
         self._output_transpose.nsamples = tuple(numpy.multiply(compressed.nsamples, self.compression_factor))
         self._compression_transpose(compressed, self._output_transpose, self.compression_factor)
-        if not copyout: return self._output_transpose
-        return self._output_transpose.copy('a')
+        output = self._output_transpose
+        if not reuseout: self._output_transpose = None
+        return output
 
     def _validate_shape_direct(self, shapein):
         if shapein is None:
             return None
-        #super(Compression, self)._validate_shape_direct(shapein)
+        super(Compression, self)._validate_shape_direct(shapein)
         if shapein[1] % self.compression_factor != 0:
             raise ValidationError('The input timeline size ('+str(shapein[1])+') is not an integer times the compression factor ('+str(self.compression_factor)+').')
         shapeout = list(shapein)
@@ -389,15 +429,13 @@ class Identity(AcquisitionModel):
     def __init__(self, description=None):
         AcquisitionModel.__init__(self, description)
 
-    def direct(self, signal, reusein=False, copyout=True):
-        self._validate_input_direct(numpy.ndarray, signal, False)
-        if copyout: return signal.copy('a')
-        return signal
+    def direct(self, signal, reusein=False, **kw):
+        self._validate_input(numpy.ndarray, signal)
+        return self._validate_output(signal, reusein)
 
-    def transpose(self, signal, reusein=False, copyout=True):
-        self._validate_input_transpose(numpy.ndarray, signal, False)
-        if copyout: return signal.copy('a')
-        return signal
+    def transpose(self, signal, reusein=False, **kw):
+        self._validate_input(numpy.ndarray, signal)
+        return self._validate_output(signal, reusein)
         
 
 #-------------------------------------------------------------------------------
@@ -419,15 +457,15 @@ class Masking(AcquisitionModel):
             self.shapein = mask.shape
             self.shapeout = mask.shape
 
-    def direct(self, signal, reusein=False, copyout=True):
-        self._validate_input_direct(numpy.ndarray, signal, False)
-        if copyout: signal = signal.copy('a')
-        status = tmf.masking(signal.T, self.mask.T)
+    def direct(self, signal, reusein=False, **kw):
+        self._validate_input(numpy.ndarray, signal)
+        output = self._validate_output(signal, reusein)
+        status = tmf.masking(output.T, self.mask.T)
         if status != 0: raise RuntimeError()
-        return signal
+        return output
 
-    def transpose(self, signal, reusein=False, copyout=True):
-        return self.direct(signal, reusein=reusein, copyout=copyout)
+    def transpose(self, signal, reusein=False, **kw):
+        return self.direct(signal, reusein=reusein)
    
     @property
     def mask(self):
@@ -462,19 +500,21 @@ class Packing(AcquisitionModel):
         self.shapein  = tuple(self.mask.shape)
         self.shapeout = (numpy.sum(self.mask == 0),)
 
-    def direct(self, unpacked, reusein=False, copyout=True):
+    def direct(self, unpacked, reusein=False, reuseout=False):
         unpacked, shapeout = self._validate_input_direct(Map, unpacked, reusein)
         self._validate_output_direct(numpy.ndarray, shapeout)
         tmf.unpack_transpose(unpacked.T, self.mask.T, self._output_direct.T)
-        if copyout: return self._output_direct.copy('a')
-        return self._output_direct
+        output = self._output_direct
+        if not reuseout: self._output_direct = None
+        return output
 
-    def transpose(self, packed, reusein=False, copyout=True):
+    def transpose(self, packed, reusein=False, reuseout=False):
         packed, shapein = self._validate_input_transpose(Map, packed, reusein)
         self._validate_output_transpose(numpy.ndarray, shapein)
         tmf.unpack_direct(packed.T, self.mask.T, self._output_transpose.T, self.field)
-        if copyout: return self._output_transpose.copy('a')
-        return self._output_transpose
+        output = self._output_transpose
+        if not reuseout: self._output_transpose = None
+        return output
 
 
 #-------------------------------------------------------------------------------
@@ -492,19 +532,21 @@ class Unpacking(AcquisitionModel):
         self.shapein  = (numpy.sum(self.mask == 0),)
         self.shapeout = tuple(self.mask.shape)
 
-    def direct(self, packed, reusein=False, copyout=True):
+    def direct(self, packed, reusein=False, reuseout=False):
         packed, shapeout = self._validate_input_direct(numpy.ndarray, packed, reusein)
         self._validate_output_direct(Map, shapeout)
         tmf.unpack_direct(packed.T, self.mask.T, self._output_direct.T, self.field)
-        if copyout: return self._output_direct.copy('a')
-        return self._output_direct
+        output = self._output_direct
+        if not reuseout: self._output_direct = None
+        return output
 
-    def transpose(self, unpacked, reusein=False, copyout=True):
+    def transpose(self, unpacked, reusein=False, reuseout=False):
         unpacked, shapein = self._validate_input_transpose(Map, unpacked, reusein)
         self._validate_output_transpose(numpy.ndarray, shapein)
         tmf.unpack_transpose(unpacked.T, self.mask.T, self._output_transpose.T)
-        if copyout: return self._output_transpose.copy('a')
-        return self._output_transpose
+        output = self._output_transpose
+        if not reuseout: self._output_transpose = None
+        return output
 
 
 #-------------------------------------------------------------------------------
@@ -517,20 +559,22 @@ class Reshaping(AcquisitionModel):
     """
     def __init__(self, shapein, shapeout, description=None):
         AcquisitionModel.__init__(self, description)
-        self.shapein  = shapein
-        self.shapeout = shapeout
+        if numpy.product(shapein) != numpy.product(shapeout):
+            raise ValueError('The number of elements of the input and output of the Reshaping operator are incompatible.')
+        self.shapein  = tuple(numpy.array(shapein, ndmin=1))
+        self.shapeout = tuple(numpy.array(shapeout, ndmin=1))
 
-    def direct(self, array, reusein=False, copyout=True):
+    def direct(self, array, reusein=False, **kw):
         self._validate_input_direct(numpy.ndarray, array, False)
-        output = array.reshape(self.shapeout)
-        if copyout: return output.copy('a')
+        output = self._validate_output(array, reusein)
+        output = smart_reshape(output, self.shapeout)
         return output
 
-    def transpose(self, array, reusein=False, copyout=True):
+    def transpose(self, array, reusein=False, **kw):
         self._validate_input_transpose(numpy.ndarray, array, False)
-        output = array.reshape(self.shapein)
-        if copyout: return output.copy('a')
-        return output
+        output = self._validate_output(array, reusein)
+        return smart_reshape(output, self.shapein)
+
 
 
 
@@ -561,7 +605,6 @@ class _Pacs():
 
         from os import getenv
         from os.path import join
-        from pyfits import fitsopen
 
         if array.lower() not in ('blue', 'green', 'red'):
             raise ValueError("The input array is not 'blue', 'green' nor 'red'.")
@@ -607,7 +650,7 @@ class _Pacs():
         
         if bad_detector_mask is None:
             bad_detector_maskFile = join(getenv('TAMASIS_DIR'),'data','PCalPhotometer_BadPixelMask_FM_v3.fits')
-            bad_detector_mask = numpy.array(fitsopen(bad_detector_maskFile)[self.array].data, dtype='int8')
+            bad_detector_mask = numpy.array(pyfits.fitsopen(bad_detector_maskFile)[self.array].data, dtype='int8')
         else:
             array_shapes = {'blue':(32,64), 'green':(32,64), 'red':(16,32)}
             if bad_detector_mask.shape != array_shapes[self.array]:
@@ -649,8 +692,6 @@ class PacsObservation(_Pacs):
     Author: P. Chanial
     """
     def __init__(self, filename, header=None, resolution=None, fine_sampling_factor=1, bad_detector_mask=None, keep_bad_detectors=False):
-
-        import pyfits
 
         if header is not None and resolution is not None:
             raise ValueError('It is not possible to specify a FITS header and an image resolution.')
@@ -808,7 +849,6 @@ class PacsSimulation(_Pacs):
 class MadMap1Observation(object):
     """Class for the handling of an observation in the MADMAP1 format"""
     def __init__(self, todfile, invnttfile, mapmaskfile, convert, ndetectors):
-        import pyfits
         import re
         self.npixels_per_sample, self.nfinesamples, status = tmf.read_madmap1_info(todfile, convert, ndetectors)
         if (status != 0): raise RuntimeError()
@@ -903,7 +943,6 @@ class FitsArray(numpy.ndarray):
 
     @header.setter
     def header(self, header):
-        import pyfits
         if header is not None and not isinstance(header, pyfits.Header):
             raise TypeError('Incorrect type for the input header ('+str(type(header))+').') 
         self._header = header
@@ -917,11 +956,10 @@ class FitsArray(numpy.ndarray):
         If the same file already exist it overwrites it.
         It should correspond to the input required by the PACS simulator
         """
-        from pyfits import PrimaryHDU
         from os.path import isfile
         from os import remove
    
-        hdu = PrimaryHDU(self.T if self.flags.f_contiguous else self, self.header)
+        hdu = pyfits.PrimaryHDU(self.T if self.flags.f_contiguous else self, self.header)
         try:
             remove(filename)
         except OSError:
@@ -968,22 +1006,20 @@ class Map(FitsArray):
 
     def imshow(self, num=None, axis=True, title=None):
         """A simple graphical display function for the Map class"""
-        from matplotlib.pyplot import gray, figure, imshow, colorbar, \
-            draw, show, xlabel, ylabel, title as pyplottitle
 
-        #gray()
-        figure(num=num)
+        #pyplot.gray()
+        pyplot.figure(num=num)
 
         # HACK around bug in imshow !!!
-        imshow(self.T if self.flags.f_contiguous else self, 
+        pyplot.imshow(self.T if self.flags.f_contiguous else self, 
                interpolation='nearest', 
                origin='lower')
-        xlabel('Right Ascension')
-        ylabel("Declination")
+        pyplot.xlabel('Right Ascension')
+        pyplot.ylabel("Declination")
         if title is not None:
-            pyplottitle(title)
-        colorbar()
-        draw()
+            pyplot.title(title)
+        pyplot.colorbar()
+        pyplot.draw()
 
 
 #-------------------------------------------------------------------------------
@@ -1041,21 +1077,18 @@ class Tod(FitsArray):
 
     def imshow(self, num=None, axis=True, title=None):
         """A simple graphical display function for the Map class"""
-        from matplotlib.pyplot import gray, figure, imshow, colorbar, \
-            draw, show, xlabel, ylabel, title as pyplottitle
-
-        gray()
-        figure(num=num)
-        imshow(self, 
-               aspect='auto', 
-               interpolation='nearest', 
-               origin='lower')
-        xlabel("Signal")
-        ylabel('Detector number')
+        pyplot.gray()
+        pyplot.figure(num=num)
+        pyplot.imshow(self, 
+                      aspect='auto', 
+                      interpolation='nearest', 
+                      origin='lower')
+        pyplot.xlabel("Signal")
+        pyplot.ylabel('Detector number')
         if title is not None:
-            pyplottitle(title)
-        colorbar()
-        draw()
+            pyplot.title(title)
+        pyplot.colorbar()
+        pyplot.draw()
 
     def __str__(self):
         nslices = len(self.nsamples)
@@ -1088,7 +1121,8 @@ class LeastSquareMatvec(object):
             self.unpacking = unpacking
         self.model = model * unpacking
     def __call__(self, xvec):
-        xout = self.model.transpose(self.model.direct(Map(xvec, copy=False), copyout=False))
+        xvec = Map(xvec, copy=False)
+        xout = self.model.transpose(self.model.direct(xvec, reusein=False, reuseout=True), reusein=True, reuseout=False)
         return xout
 
 class PcgCallback():
@@ -1099,7 +1133,7 @@ class PcgCallback():
         self.count += 1
 
 class RegularizedLeastSquareMatvec(LeastSquareMatvec):
-    def __init__(self, model, unpacking, hyper):
+    def __init__(self, model, unpacking=None, hyper=1.):
         LeastSquareMatvec.__init__(self, model, unpacking)
         # to enforce 2d hyper
         if numpy.size(hyper) == 1:
@@ -1111,14 +1145,14 @@ class RegularizedLeastSquareMatvec(LeastSquareMatvec):
     def __call__(self, xvec):
         # likelihood
         xout = super(RegularizedLeastSquareMatvec, self).__call__(xvec)
-        x = self.unpacking.direct(Map(xvec, copy=False), copyout=False)
+        x = self.unpacking.direct(Map(xvec, copy=False))
         # add prior component
         for i in xrange(len(self.hyper)):
             dTd = Map(self.prior_transpose[i](self.prior_direct[i](x)), copy=False)
             dTd *= self.hyper[i]
-            xout += self.unpacking.transpose(dTd, copyout=False)
+            xout += self.unpacking.transpose(dTd, reusein=True, reuseout=True)
         return xout
-
+     
 # Priors
 class Smooth():
     """Define smoothness priors along specific axis"""
@@ -1158,7 +1192,7 @@ def naive_mapper(tod, model, weights=False):
     mymap = model.transpose(tod)
     unity = tod.copy()
     unity[:] = 1.
-    map_weights = model.transpose(unity)
+    map_weights = model.transpose(unity, reusein=True)
     mymap /= map_weights
     if weights:
         return mymap, map_weights
@@ -1219,7 +1253,6 @@ def str2fitsheader(string):
     Convert a string into a pyfits.Header object
     All cards are extracted from the input string until the END keyword is reached.
     """
-    import pyfits
     header = pyfits.Header()
     cards = header.ascardlist()
     iline = 0
@@ -1239,4 +1272,17 @@ def any_neq(a,b, precision):
     if numpy.any(mask != numpy.isnan(b)):
         return True
     return numpy.any((abs(a-b) > 10.**(-precision) * abs(a))[numpy.isnan(a).__neg__()])
+
+
+#-------------------------------------------------------------------------------
+
+
+def smart_reshape(array, shape):
+    curr = array
+    while True:
+        if curr.shape == shape:
+            return curr
+        if curr.base is None or curr.base.dtype != array.dtype or curr.base.__class__ != array.__class__:
+            return curr.reshape(shape)
+        curr = curr.base
 

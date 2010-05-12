@@ -5,8 +5,6 @@ import scipy
 from scipy.sparse import dia_matrix
 from scipy.sparse.linalg import LinearOperator, cgs
 
-hyper = 1e1
-
 pacs = PacsObservation(filename='tests/frames_blue.fits',
                        resolution=3.2,
                        fine_sampling_factor=1,
@@ -31,26 +29,18 @@ map_naive.mask = map_mask
 backmap = model.transpose(tod)
 backmap.mask = map_mask
 
-# iterative map, restricting oneself to observed map pixels
-unpacking = Unpacking(map_mask)
-
-shape = 2*(numpy.sum(map_mask == False),)
-matvec = RegularizedLeastSquareMatvec(model, unpacking, hyper)
-operator = LinearOperator(matvec=matvec, dtype=numpy.float64, shape=shape)
-b  = unpacking.transpose(backmap)
-x0 = unpacking.transpose(map_naive)
-M  = dia_matrix((unpacking.transpose(1./weights), 0), shape=shape)
-solution, nit = cgs(operator, b, x0=x0, M=M, tol=1.e-4, maxiter=200, callback=PcgCallback())
-map_iter1 = unpacking.direct(Map(solution))
-
 # iterative map, taking all map pixels
-unpacking = Masking(map_mask) * Reshaping(numpy.product(map_naive.shape), map_naive.shape)
+reshaping = Reshaping(numpy.product(map_naive.shape), map_naive.shape)
 
 shape = 2*(map_naive.size,)
-matvec = RegularizedLeastSquareMatvec(model, unpacking, hyper)
+matvec = RegularizedLeastSquareMatvec(model, reshaping, hyper=1e1)
 operator = LinearOperator(matvec=matvec, dtype=numpy.float64, shape=shape)
-b  = unpacking.transpose(backmap)
-x0 = unpacking.transpose(map_naive)
-M  = dia_matrix((unpacking.transpose(1./weights), 0), shape=shape)
-solution, nit = cgs(operator, b, x0=x0, M=M, tol=1.e-4, maxiter=200, callback=PcgCallback())
-map_iter2 = unpacking.direct(Map(solution))
+b  = reshaping.transpose(backmap)
+x0 = reshaping.transpose(map_naive)
+x0[numpy.isnan(x0)] = 0.
+#m = reshaping.transpose(1./weights)
+#m[numpy.isfinite(m) == False] = 1.
+#m = numpy.maximum(m,1.)
+#M = dia_matrix((m, 0), shape=shape)
+solution, nit = cgs(operator, b, x0=x0, tol=1.e-4, maxiter=200, callback=PcgCallback())
+map_iter = Map(reshaping.direct(solution))
