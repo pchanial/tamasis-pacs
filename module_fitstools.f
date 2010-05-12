@@ -888,7 +888,7 @@ contains
             ! move to the specified HDU
             call ftmahd(unit, hdu, hdutype, status)
             if (status == 0 .and. hdutype /= CFITSIO_IMAGE_HDU) then
-                write (ERROR_UNIT,'(a,i0,a)') "HDU type is not an image: ", hdutype, "."
+                write (ERROR_UNIT,'(a,i0,a)') "FT_OPEN_IMAGE: HDU type is not an image: ", hdutype, " in file '" // filename // "'."
                 status = 1
                 go to 999
             endif
@@ -908,7 +908,8 @@ contains
 
         !  Check that it found the NAXISn keywords.
         if (nfound /= imagerank) then
-            write (ERROR_UNIT, '(a)') 'FT_OPEN_IMAGE: Incompatible NAXISn keywords.'
+            write (ERROR_UNIT, '(a,2(i0,a))') "FT_OPEN_IMAGE: Incompatible NAXIS value '", nfound, "' instead of '", imagerank,    &
+                  "' in file '" // filename // "'."
             status = 1
             go to 999
         end if
