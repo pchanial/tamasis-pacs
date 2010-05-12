@@ -576,6 +576,64 @@ class Reshaping(AcquisitionModel):
         return smart_reshape(output, self.shapein)
 
 
+#-------------------------------------------------------------------------------
+
+
+class Fft(AcquisitionModel):
+    """
+    Performs real fft
+    """
+    def __init__(self, nsamples, description=None):
+        AcquisitionModel.__init__(self, description)
+        self.nsamples = tuple(numpy.array(nsamples, ndmin=1))
+        self.tarray = []
+        self.farray = []
+        self.forward_plan = []
+        self.backward_plan = []
+        for n in self.nsamples:
+            tarray = numpy.empty(n, dtype='double')
+            farray = numpy.empty(n, dtype='double')
+            self.tarray.append(tarray)
+            self.farray.append(farray)
+            self.forward_plan.append(fftw3.Plan(tarray, farray, direction='forward', flags=['measure'], realtypes=['halfcomplex r2c']))
+            self.backward_plan.append(fftw3.Plan(farray, tarray, direction='backward', flags=['measure'], realtypes=['halfcomplex c2r']))
+
+    def direct(self, array, reusein=False, **kw):
+        self._validate_input(numpy.ndarray, array)
+        output = self._validate_output(array, reusein)
+        output = smart_reshape(output, (numpy.product(array.shape[:-1]), array.shape[-1]))
+        dest = 0
+        for iobs, n in enumerate(self.nsamples):
+            for i in range(output.shape[0]):
+                self.tarray[iobs][:] = output[i,dest:dest+n]
+                fftw3.execute(self.forward_plan[iobs])
+                output[i,dest:dest+n] = self.farray[iobs]
+            dest += n
+        output = smart_reshape(output, array.shape)
+        return output
+
+    def transpose(self, array, reusein=False, **kw):
+        self._validate_input(numpy.ndarray, array)
+        output = self._validate_output(array, reusein)
+        output = smart_reshape(output, (numpy.product(array.shape[:-1]), array.shape[-1]))
+        dest = 0
+        for iobs, n in enumerate(self.nsamples):
+            for i in range(output.shape[0]):
+                self.farray[iobs][:] = output[i,dest:dest+n]
+                fftw3.execute(self.backward_plan[iobs])
+                output[i,dest:dest+n] = self.tarray[iobs]
+            output[:,dest:dest+n] /= n
+            dest += n
+        output = smart_reshape(output, array.shape)
+        return output
+
+    def _validate_shape(self, shapein):
+        if shapein is None:
+            return None
+        if shapein[-1] != numpy.sum(self.nsamples):
+            raise ValidationError("Invalid FFT size '"+str(array.shape[-1])+"' instead of '"+self.n+"'.")
+        return shapein
+
 
 
 #-------------------------------------------------------------------------------
