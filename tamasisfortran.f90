@@ -621,6 +621,31 @@ end subroutine pointing_matrix_transpose
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
+subroutine pointing_matrix_ptp(pmatrix, ptp, npixels_per_sample, nsamples, ndetectors, npixels)
+
+    use module_pointingmatrix
+    implicit none
+
+    !f2py threadsafe
+    !f2py integer*8, dimension(npixels_per_sample*nsamples*ndetectors), intent(inout) :: pmatrix
+    !f2py intent(out) :: ptp
+    !f2py intent(in)  :: npixels_per_sample
+    !f2py intent(in)  :: nsamples
+    !f2py intent(in)  :: ndetectors
+    !f2py intent(in)  :: npixels
+
+    type(pointingelement), intent(inout) :: pmatrix(npixels_per_sample, nsamples, ndetectors)
+    real*8, intent(out)                  :: ptp(npixels, npixels)
+    integer, intent(in)                  :: npixels_per_sample, nsamples, ndetectors, npixels
+
+    call pmatrix_ptp(pmatrix, ptp)
+
+end subroutine pointing_matrix_ptp
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
 subroutine pacs_multiplexing_direct(signal, multiplexed, fine_sampling_factor, ij, nsamples, ndetectors)
 
     use module_pacsinstrument, only : multiplexing_direct

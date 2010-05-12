@@ -1,14 +1,15 @@
 module module_pointingmatrix
 
-    use module_math,            only : NaN, nint_down, nint_up
-    use module_projection,      only : intersection_polygon_unity_square
-    use module_precision,       only : p, sp
+    use module_math,       only : NaN, nint_down, nint_up
+    use module_projection, only : intersection_polygon_unity_square
+    use module_precision,  only : p, sp
     implicit none
     private
 
     public :: pointingelement
     public :: pmatrix_direct
     public :: pmatrix_transpose
+    public :: pmatrix_ptp
     public :: xy2roi
     public :: roi2pmatrix
     public :: backprojection_weighted
@@ -77,6 +78,43 @@ contains
         !$omp end parallel do
 
     end subroutine pmatrix_transpose
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+   
+   
+    subroutine pmatrix_ptp(pmatrix, ptp)
+        type(pointingelement), intent(in) :: pmatrix(:,:,:)
+        real(kind=p), intent(out)         :: ptp(0:,0:)
+        integer                           :: idetector, isample
+        integer                           :: ipixel, jpixel, i, j
+        integer                           :: npixels, nsamples, ndetectors
+        real(kind(pmatrix%weight))        :: pi, pj
+       
+        npixels    = size(pmatrix, 1)
+        nsamples   = size(pmatrix, 2)
+        ndetectors = size(pmatrix, 3)
+       
+        ptp = 0
+        !$omp parallel do reduction(+:ptp) private(idetector, isample, ipixel, jpixel, i, j, pi, pj)
+        do idetector = 1, ndetectors
+            do isample = 1, nsamples
+                do ipixel = 1, npixels
+                    if (pmatrix(ipixel,isample,idetector)%pixel == -1) exit
+                    i  = pmatrix(ipixel,isample,idetector)%pixel
+                    pi = pmatrix(ipixel,isample,idetector)%weight
+                    do jpixel = 1, npixels
+                        if (pmatrix(jpixel,isample,idetector)%pixel == -1) exit
+                        j  = pmatrix(jpixel,isample,idetector)%pixel
+                        pj = pmatrix(jpixel,isample,idetector)%weight
+                        ptp(i,j) = ptp(i,j) + pi * pj
+                    end do
+                end do
+            end do
+        end do
+        !$omp end parallel do
+
+    end subroutine pmatrix_ptp
 
 
     !-------------------------------------------------------------------------------------------------------------------------------

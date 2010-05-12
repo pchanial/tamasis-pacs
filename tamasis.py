@@ -273,6 +273,12 @@ class Projection(AcquisitionModel):
         if not reuseout: self._output_transpose = None
         return output
 
+    def get_ptp(self):
+        nsamples = self.shapeout[1]
+        ndetectors = self.shapeout[0]
+        npixels = numpy.product(self.shapein)
+        return tmf.pointing_matrix_ptp(self.pmatrix, self.npixels_per_sample, nsamples, ndetectors, npixels).T
+
     def __str__(self):
         return super(Projection, self).__str__()
 
