@@ -92,8 +92,37 @@ if numpy.any(mask.direct(b) != c):
 if numpy.any(mask.transpose(b) != c):
     raise TestFailure('mask 3d transpose')
 
-c = mask.direct(b, copyout=False)
+c = mask.direct(b, reusein=True)
 if id(b) != id(c):
     raise TestFailure('mask no copy')
+
+
+#-----
+# Fft
+#-----
+
+n = 100
+fft = Fft(n)
+a = numpy.random.random(n)+1
+b = fft.transpose(fft.direct(a))
+if any_neq(a, b, 14):
+    raise TestFailure('fft1')
+
+a = numpy.random.random((3,n))+1
+b = fft.transpose(fft.direct(a))
+if any_neq(a, b, 14):
+    raise TestFailure('fft2')
+
+tod = Tod(numpy.random.random((10,1000))+1)
+fft = Fft(tod.nsamples)
+tod2 = fft.transpose(fft.direct(tod))
+if any_neq(tod, tod2,14):
+    raise TestFailure('fft3')
+
+tod = Tod(numpy.random.random((10,1000))+1, nsamples=(100,300,5,1000-100-300-5))
+fft = Fft(tod.nsamples)
+tod2 = fft.transpose(fft.direct(tod))
+if any_neq(tod, tod2,14):
+    raise TestFailure('fft4')
 
 print 'OK.'

@@ -163,10 +163,11 @@ contains
         class(pacsinstrument), intent(inout) :: this
         integer, intent(out)                 :: status
 
+        ! these calibration files are taken from HCSS 4.0.70
         character(len=*), parameter :: filename_saa = 'PCalPhotometer_SubArrayArray_FM_v5.fits'
-        character(len=*), parameter :: filename_ai  = 'PCalPhotometer_ArrayInstrument_FM_v4.fits'
-        character(len=*), parameter :: filename_bpm = 'PCalPhotometer_BadPixelMask_FM_v3.fits'
-        character(len=*), parameter :: filename_ff  = 'PCalPhotometer_FlatField_FM_v1.fits'
+        character(len=*), parameter :: filename_ai  = 'PCalPhotometer_ArrayInstrument_FM_v5.fits'
+        character(len=*), parameter :: filename_bpm = 'PCalPhotometer_BadPixelMask_FM_v5.fits'
+        character(len=*), parameter :: filename_ff  = 'PCalPhotometer_FlatField_FM_v3.fits'
 
         integer,          parameter :: hdu_blue(4) = [8, 12, 16, 20]
         integer,          parameter :: hdu_red (4) = [6, 10, 14, 18]
@@ -175,7 +176,6 @@ contains
         logical*1, allocatable      :: tmplogical(:,:)
         real*8, allocatable         :: tmp2(:,:)
         real*8, allocatable         :: tmp3(:,:,:)
-        character(len=100)          :: value
 
         ! read bad pixel mask
 
@@ -194,10 +194,10 @@ contains
 
         ! read flat fields
 
-        call ft_read_extension(get_calfile(filename_ff) // '+5',  tmp2, status)
+        call ft_read_extension(get_calfile(filename_ff) // '+12',  tmp2, status)
         if (status /= 0) return
         this%flatfield_blue = transpose(tmp2)
-        call ft_read_extension(get_calfile(filename_ff) // '+8', tmp2, status)
+        call ft_read_extension(get_calfile(filename_ff) // '+7', tmp2, status)
         if (status /= 0) return
         this%flatfield_green = transpose(tmp2)
         call ft_read_extension(get_calfile(filename_ff) // '+2',   tmp2, status)
@@ -532,6 +532,7 @@ contains
 
         npixels_per_sample = 0
         dest = 0
+        out = .false.
 
         ! loop over the observations
         do islice = 1, obs%nslices
@@ -546,7 +547,6 @@ contains
                sampling_factor = 1
             end if
 
-            out = .false.
             !$omp parallel do default(shared) firstprivate(chop_old)   &
             !$omp private(itime, ra, dec, pa, chop, coords, coords_yz, roi) &
             !$omp reduction(max : npixels_per_sample) reduction(.or. : out)

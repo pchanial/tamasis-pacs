@@ -40,7 +40,7 @@ program test_pacsinstrument
     allocate(time(obs%nsamples_tot))
     time = obs%slice(1)%p%time
 
-    if (pacs%ndetectors /= 1998) stop 'FAILED: ndetectors'
+    if (pacs%ndetectors /= 1997) stop 'FAILED: ndetectors'
     if (size(time) /= 360) stop 'FAILED: nsamples'
     if (any(shape(pacs%corners_uv) /= [2,4*pacs%ndetectors])) stop 'FAILED: shape corners_uv'
 
