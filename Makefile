@@ -14,13 +14,13 @@ endif
 ifeq "$(FC)" "gfortran"
     FFLAGS_DEBUG = -g -fbacktrace -Warray-temporaries -O0 -fcheck=all -ffree-form -fopenmp -Wall -fPIC -cpp -DGFORTRAN
     FFLAGS_RELEASE = -fbacktrace -O3 -ffree-form -fopenmp -Wall -fPIC -cpp -DGFORTRAN
-    LDFLAGS = -lgomp $(shell pkg-config --libs cfitsio) $(shell pkg-config --libs wcslib)
+    LDFLAGS = -lgomp $(shell pkg-config --libs cfitsio) $(shell pkg-config --libs wcslib) $(shell pkg-config --libs fftw3)
     FCOMPILER=gnu95
 else ifeq ($(FC),ifort)
     FFLAGS_DEBUG = -debug -fpp -O0 -static -fPIC -free -openmp -ftz -traceback -DIFORT -check all -ftrapuv
     FFLAGS_RELEASE = -fpp -fast -fPIC -free -openmp -ftz -DIFORT
     # for static linking: use -static -static-intel
-    LDFLAGS = -liomp5 $(shell pkg-config --libs cfitsio) $(shell pkg-config --libs wcslib)
+    LDFLAGS = -liomp5 $(shell pkg-config --libs cfitsio) $(shell pkg-config --libs wcslib) $(shell pkg-config --libs fftw3)
     FCOMPILER = intelem
 else
     $(error Unsupported compiler '$(FC)'.)
@@ -44,7 +44,7 @@ ifeq ($(PROF_USE),1)
     FFLAGS += -prof_use -prof_dir/home/pchanial/profiles
 endif
 
-INCLUDES = wcslib-4.4.4-Fortran90
+INCLUDES = -Iwcslib-4.4.4-Fortran90 -Iinclude
 
 MODULES = $(wildcard module_*.f)
 SOURCES = $(wildcard test_*.f) pacs_photproject.f
@@ -116,7 +116,7 @@ all : $(EXECS) tamasisfortran.so
 	fi
 
 %.o : %.f
-	$(FC) $(FFLAGS) -I$(INCLUDES) -c -o $@ $<
+	$(FC) $(FFLAGS) $(INCLUDES) -c -o $@ $<
 
 %: %.o
 	$(FC) -o $@ $^ $(LDFLAGS)
