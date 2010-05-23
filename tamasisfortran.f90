@@ -888,7 +888,7 @@ end subroutine deglitch_l2b_mad
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine filter_median(data, length, nsamples, nsamplestot, nslices, ndetectors, status)
+subroutine filter_median(data, length, nsamples, nsamples_tot, nslices, ndetectors, status)
 
     use iso_fortran_env,     only : ERROR_UNIT, OUTPUT_UNIT
     use module_preprocessor, only : median_filtering_nocopy
@@ -898,23 +898,23 @@ subroutine filter_median(data, length, nsamples, nsamplestot, nslices, ndetector
     !f2py intent(in)   :: data
     !f2py intent(in)   :: length
     !f2py intent(in)   :: nsamples
-    !f2py intent(hide) :: nsamplestot=shape(data,0)
+    !f2py intent(hide) :: nsamples_tot=shape(data,0)
     !f2py intent(hide) :: nslices=size(nsamples)
     !f2py intent(hide) :: ndetectors=shape(data,1)
     !f2py intent(out)  :: status
 
-    real*8, intent(inout) :: data(nsamplestot,ndetectors)
+    real*8, intent(inout) :: data(nsamples_tot,ndetectors)
     integer, intent(in)   :: length
     integer, intent(in)   :: nsamples(nslices)
-    integer, intent(in)   :: nsamplestot
+    integer, intent(in)   :: nsamples_tot
     integer, intent(in)   :: nslices
     integer, intent(in)   :: ndetectors
     integer, intent(out)  :: status
 
-    integer :: islice, idetector, start
+    integer :: islice, start
     integer :: count1, count2, count_rate, count_max
 
-    if (sum(nsamples) /= nsamplestot) then
+    if (sum(nsamples) /= nsamples_tot) then
         status = 1
         write (ERROR_UNIT,'(a)') 'ERROR: The total number of samples is not the sum of the size of the slices.'
         return
@@ -1009,6 +1009,52 @@ subroutine read_madmap1(todfile, invnttfile, convert, npixels_per_sample, nsampl
     call read_tod(todfile, convert, filter%first, filter%last, tod, pmatrix, status)
 
 end subroutine read_madmap1
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine get_sqrt_invntt_madmap1(filename, convert, nslices, nsamples, nsamples_tot, ndetectors, tod_filter, status)
+
+    !f2py threadsafe
+    !f2py intent(in)   :: filename
+    !f2py intent(in)   :: convert
+    !f2py intent(hide) :: nslices = size(nsamples)
+    !f2py intent(in)   :: nsamples
+    !f2py intent(in)   :: nsamples_tot
+    !f2py intent(in)   :: ndetectors
+    !f2py intent(out)  :: tod(nsamples_tot,ndetectors)
+    !f2py intent(out)  :: status
+
+    use module_filtering, only : create_filter_uncorrelated, filterset
+    use module_madcap,    only : read_filter
+    implicit none
+
+    character(len=*), intent(in) :: filename
+    character(len=*), intent(in) :: convert
+    integer, intent(in)          :: nslices
+    integer, intent(in)          :: nsamples(nslices)
+    integer, intent(in)          :: nsamples_tot
+    integer, intent(in)          :: ndetectors
+    real*8, intent(out)          :: tod_filter(nsamples_tot,ndetectors)
+    integer, intent(out)         :: status
+
+    type(filterset)              :: filter
+integer :: i
+
+    call read_filter(filename, convert, ndetectors, filter, status)
+    if (status /= 0) return
+
+    call create_filter_uncorrelated(filter, nsamples, nsamples_tot, tod_filter, status)
+    if (status /= 0) return
+
+do i=1,size(tod_filter,1)
+print *, 'TOD_FILTER:', i, tod_filter(i,1), sqrt(tod_filter(i,1))
+end do
+
+    tod_filter = sqrt(tod_filter)
+
+end subroutine get_sqrt_invntt_madmap1
 
 
 !-----------------------------------------------------------------------------------------------------------------------------------

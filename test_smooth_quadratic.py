@@ -56,7 +56,7 @@ if do_plot:
 
 masking   = Masking(tod40Hz.mask)
 model40Hz = masking * projection
-map_naive40Hz = naive_mapper(tod40Hz, model40Hz)
+map_naive40Hz = mapper_naive(tod40Hz, model40Hz)
 
 if do_plot:
     map_naive40Hz.imshow()
@@ -67,5 +67,5 @@ tod = compression.direct(tod40Hz).copy()
 print tod
 
 # naive map
-map_naive = naive_mapper(tod, model)
+map_naive = mapper_naive(tod, model)
 

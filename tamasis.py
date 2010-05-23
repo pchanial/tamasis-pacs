@@ -11,6 +11,7 @@ __version__ = '.'.join((str(i) for i in __version_info__))
 __install_dir__ = os.path.dirname(__file__)
 __verbose__ = False
 
+
 #-------------------------------------------------------------------------------
 #
 # Acquisition models
@@ -375,7 +376,6 @@ class Compression(AcquisitionModel):
     def _validate_shape_direct(self, shapein):
         if shapein is None:
             return None
-        super(Compression, self)._validate_shape_direct(shapein)
         if shapein[1] % self.compression_factor != 0:
             raise ValidationError('The input timeline size ('+str(shapein[1])+') is not an integer times the compression factor ('+str(self.compression_factor)+').')
         shapeout = list(shapein)
@@ -385,7 +385,6 @@ class Compression(AcquisitionModel):
     def _validate_shape_transpose(self, shapeout):
         if shapeout is None:
             return
-        super(Compression, self)._validate_shape_transpose(shapeout)
         shapein = list(shapeout)
         shapein[1] *= self.compression_factor
         return tuple(shapein)
@@ -515,8 +514,8 @@ class Packing(AcquisitionModel):
         return output
 
     def transpose(self, packed, reusein=False, reuseout=False):
-        packed, shapein = self._validate_input_transpose(Map, packed, reusein)
-        self._validate_output_transpose(numpy.ndarray, shapein)
+        packed, shapein = self._validate_input_transpose(numpy.ndarray, packed, reusein)
+        self._validate_output_transpose(Map, shapein)
         tmf.unpack_direct(packed.T, self.mask.T, self._output_transpose.T, self.field)
         output = self._output_transpose
         if not reuseout: self._output_transpose = None
@@ -585,6 +584,93 @@ class Reshaping(AcquisitionModel):
 #-------------------------------------------------------------------------------
 
 
+class Padding(AcquisitionModel):
+    "Pads before and after a Tod."
+    def __init__(self, left=0, right=0, value=0., description=None):
+        AcquisitionModel.__init__(self, description)
+        left = numpy.ndarray(left, ndmin=1)
+        right = numpy.ndarray(right, ndmin=1)
+        if numpy.any(left < 0):
+            raise ValueError('Left padding is not positive.')
+        if numpy.any(right < 0):
+            raise ValueError('Right padding is not positive.')
+        if numpy.rank(left) != 1 or numpy.rank(right) != 1:
+            raise ValueError('Padding must be scalar or a vector.')
+        if left.size  == 1 and right.size > 1: left  = left.resize(right.shape)
+        if right.size == 1 and left.size  > 1: right = right.resize(left.shape)
+        self.left  = tuple(left)
+        self.right = tuple(right)
+        self.value = value
+    
+    def direct(self, array, reusein=False, reuseout=False):
+        array, shapeout = self._validate_input_direct(Tod, array, reusein)
+        self._validate_output_direct(Tod, shapeout)
+        self._output_direct.nsamples = array.nsamples + self.left + self.right
+        dest = 0
+        dest_padded = 0
+        for islice in range(len(array.nsamples)):
+            left = self.left[islice if len(self.left) > 1 else 0]
+            self._output_direct[...,dest_padded:dest_padded+left] = self.value
+            self._output_direct[...,dest_padded+left:dest_padded+left+array.shape[-1]] = array[dest:dest+array.nsamples[islice]]
+            self._output_direct[...,dest_padded+left+array.shape[-1]:] = self.value
+            dest += array.nsamples[islice]
+            dest_padded += _output_direct.nsamples[islice]
+        output = self._output_direct
+        if not reuseout: self._output_direct = None
+        return output
+    
+    def transpose(self, array, reusein=False, reuseout=False):
+        array, shapeout = self._validate_input_transpose(Tod, array, reusein)
+        self._validate_output_transpose(Tod, shapeout)
+        self._output_transpose.nsamples = array.nsamples - self.left - self.right
+        dest = 0
+        for islice in range(len(array.nsamples)):
+            left  = self.left [islice if len(self.left)  > 1 else 0]
+            right = self.right[islice if len(self.right) > 1 else 0]
+            self._output_transpose[...,dest:dest+self._output_transpose.nsamples[islice]] = 
+                array[...,self.left:array.shape[-1]-self.right]
+            dest += array.nsamples[islice]
+        output = self._output_transpose
+        if not reuseout: self._output_transpose = None
+        return output
+
+    def _validate_input_direct(self, cls, data, reusein):
+        data, shapeout = super(Padding, self)._validate_input_direct(cls, data, reusein)
+        if len(self.left) != 1 and len(self.left) != len(data.nsamples):
+            raise ValueError("The input Tod has a number of slices '" + str(len(data.nsamples)) +
+                             "' incompatible with the specified padding.")
+        return data, shapeout
+        
+    def _validate_input_transpose(self, cls, data, reusein):
+        data, shapein = super(Padding, self)._validate_input_transpose(cls, data, reusein)
+        if len(self.left) != 1 and len(self.left) != len(data.nsamples):
+            raise ValueError("The input Tod has a number of slices '" + str(len(data.nsamples)) +
+                             "' incompatible with the specified padding.")
+        return data, shapein
+        
+
+    def _validate_shape_direct(self, shapein):
+        if shapein is None:
+            return None
+        shapeout = list(shapein)
+        npads = self.left + self.right
+        # problem here: the number of padding is npads times the number of slices, but the number of slices is not accessible here.
+        shapeout[-1] += npads
+        return tuple(shapeout)
+        
+    def _validate_shape_transpose(self, shapeout):
+        if shapeout is None:
+            return None
+        shapein = list(shapeout)
+        shapein[-1] -= self.left + self.right
+        return tuple(shapein)
+        
+        
+
+
+#-------------------------------------------------------------------------------
+
+
 class Fft(AcquisitionModel):
     """
     Performs real fft
@@ -639,6 +725,33 @@ class Fft(AcquisitionModel):
         if shapein[-1] != numpy.sum(self.nsamples):
             raise ValidationError("Invalid FFT size '"+str(array.shape[-1])+"' instead of '"+self.n+"'.")
         return shapein
+
+
+#-------------------------------------------------------------------------------
+
+
+class SqrtInvNtt(AcquisitionModel):
+
+    def __init__(self, observation, filename, convert='native', description=None):
+        AcquisitionModel.__init__(self, description)
+        nslices = len(observation.nsamples)
+        nsamples = numpy.array(observation.nsamples)
+        nsamples_tot = numpy.sum(nsamples)
+        ndetectors = observation.ndetectors
+        tod_filter, status = tmf.get_sqrt_invntt_madmap1(filename, convert, nsamples, nsamples_tot, ndetectors)
+        if status != 0: raise RuntimeError()
+        self.data = Tod(tod_filter.T, copy=False)
+        self.shapein  = (ndetectors, nsamples_tot)
+        self.shapeout = self.shapein
+        
+    def direct(self, data, reusein=False, **kw):
+        self._validate_input(numpy.ndarray, data)
+        output = self._validate_output(data, reusein)
+        output *= self.data
+        return output
+
+    def transpose(self, data, reusein=False, **kw):
+        return self.direct(data, reusein=reusein)
 
 
 
@@ -1155,15 +1268,18 @@ class Tod(FitsArray):
         pyplot.draw()
 
     def __str__(self):
+        output = 'Tod ['
+        if numpy.rank(self) > 1:
+            output += str(self.shape[-2])+' detector'
+            if self.shape[-2] > 1:
+                output += 's'
+            output += ', '
         nslices = len(self.nsamples)
-        output = 'Tod ['+str(self.shape[-2])+' detector'
-        if self.shape[-2] > 1:
-            output += 's'
         strsamples = ','.join((str(self.nsamples[i]) for i in range(nslices)))
         if nslices > 1:
-            output += ', (' + strsamples + ') samples in ' + str(nslices) + ' slices'
+            output += '(' + strsamples + ') samples in ' + str(nslices) + ' slices'
         else:
-            output += ', ' + strsamples + ' sample'
+            output += strsamples + ' sample'
             if self.shape[-1] > 1:
                 output += 's'
         return output + ']'
@@ -1179,10 +1295,10 @@ class Tod(FitsArray):
 
 class LeastSquareMatvec(object):
     def __init__(self, model, unpacking=None):
+        #cgs solves for vectors, so we need to reshape them into something (a map) that the model can handle
         if unpacking is None:
-            self.unpacking = Reshaping(numpy.product(model.shapein), model.shapein)
-        else:
-            self.unpacking = unpacking
+            unpacking = Reshaping(numpy.product(model.shapein), model.shapein)
+        self.unpacking = unpacking
         self.model = model * unpacking
     def __call__(self, xvec):
         xvec = Map(xvec, copy=False)
@@ -1249,7 +1365,7 @@ def diffT(arr, axis=-1):
 #-------------------------------------------------------------------------------
 
 
-def naive_mapper(tod, model, weights=False):
+def mapper_naive(tod, model, weights=False):
     """
     Returns a naive map, i.e.: model.transpose(tod) / model.transpose(1)
     """
@@ -1261,6 +1377,36 @@ def naive_mapper(tod, model, weights=False):
     if weights:
         return mymap, map_weights
     return mymap
+
+
+#-------------------------------------------------------------------------------
+
+
+def mapper_ls(tod, model):
+    pass
+
+ 
+
+
+#-------------------------------------------------------------------------------
+
+
+def mapper_rls(tod, model, rhs):
+
+    from scipy.sparse import dia_matrix
+    from scipy.sparse.linalg import LinearOperator, cgs
+
+    matvec = RegularizedLeastSquareMatvec(model, hyper=1e1)
+    shape = 2*(numpy.product(model.shapein),)
+    operator = LinearOperator(matvec=matvec, dtype=numpy.float64, shape=shape)
+
+    if rhs is None:
+        rhs = model.transpose(tod)
+    rhs = matvec.unpacking.transpose(rhs)
+    x0 = matvec.unpacking.transpose(mapper_naive(tod, model))
+    x0[numpy.isnan(x0)] = 0.
+    solution, nit = cgs(operator, rhs, x0=x0, tol=1.e-4, maxiter=200, callback=PcgCallback())
+    return Map(matvec.unpacking.direct(solution))
 
  
 #-------------------------------------------------------------------------------

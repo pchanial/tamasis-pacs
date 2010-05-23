@@ -23,7 +23,7 @@ model = masking_tod * crosstalk * multiplexing * projection * telescope
 print model
 
 # naive map * masking_map
-map_naive, weights = naive_mapper(tod, model, weights=True)
+map_naive, weights = mapper_naive(tod, model, weights=True)
 map_mask = weights == 0
 map_naive.mask = map_mask
 backmap = model.transpose(tod)

@@ -12,7 +12,7 @@ program test_madcap
     character(len=*), parameter :: todfile = 'tests/madmap1/todSpirePsw_be'
     character(len=*), parameter :: invnttfile2 = 'tests/madmap1/invnttSpirePsw_be'
     type(filterset)             :: filter_le, filter_be, filter
-    integer                     :: status, nsamples, ndetectors, npixels_per_sample, i, j, nx, ny, imap
+    integer                     :: status, nsamples, ndetectors, npixels_per_sample, nx, ny
     real(p), allocatable        :: tod(:,:)
     type(pointingelement), allocatable :: pmatrix(:,:,:)
     real(p), allocatable        :: coverage(:,:), map1d(:), map(:,:), map_ref(:,:)

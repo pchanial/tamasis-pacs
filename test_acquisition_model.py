@@ -3,6 +3,22 @@ from tamasis import *
 
 class TestFailure(Exception): pass
 
+#--------------------
+# CompressionAverage
+#--------------------
+tod = Tod(numpy.ndarray((2,15)), nsamples=(10,5))
+tod[0,:] = [1,1,1,1,1,3,3,3,3,3,4,4,4,4,4]
+tod[1,:] = [1,2,1.,0.5,0.5,5,0,0,0,0,1,2,1,2,1.5]
+compression = CompressionAverage(5)
+tod2 = compression.direct(tod)
+if tod2.shape != (2,3): raise TestFailure('compAvg1')
+if tuple(tod2.ravel()) != (1.,3.,4.,1.,1.,1.5): raise TestFailure('compAvg2')
+if tod2.nsamples != (2,1): raise TestFailure('compAvg3')
+tod3 = compression.transpose(tod2)
+if tod3.shape != (2,15): raise TestFailure('compAvg1t')
+if tuple(tod3[0,:]) != (0.2,0.2,0.2,0.2,0.2,0.6,0.6,0.6,0.6,0.6,0.8,0.8,0.8,0.8,0.8): raise TestFailure('compAvg2t')
+if tod3.nsamples != (10,5): raise TestFailure('compAvg3t')
+
 #---------
 # Masking
 #---------
@@ -97,6 +113,23 @@ if id(b) != id(c):
     raise TestFailure('mask no copy')
 
 
+#---------
+# Padding
+#---------
+
+left  = 1
+right = 20
+padding = Padding(left=1,right=20)
+tod = Tod(numpy.ndarray((10,15)))
+tod2 = padding.direct(tod)
+if tod2.shape != (10,36):          raise TestFailure('padding shape1')
+if numpy.any(tod2[:,0:1] != 0):    raise TestFailure('padding left')
+if numpy.any(tod2[:,1:16] != tod): raise TestFailure('padding middle')
+if numpy.any(tod2[:,16:] != 0):    raise TestFailure('padding right')
+tod3 = padding.transpose(tod2)
+if tod3.shape != tod.shape: raise TestFailure('padding shape2')
+
+
 #-----
 # Fft
 #-----
@@ -105,24 +138,20 @@ n = 100
 fft = Fft(n)
 a = numpy.random.random(n)+1
 b = fft.transpose(fft.direct(a))
-if any_neq(a, b, 14):
-    raise TestFailure('fft1')
+if any_neq(a, b, 14): raise TestFailure('fft1')
 
 a = numpy.random.random((3,n))+1
 b = fft.transpose(fft.direct(a))
-if any_neq(a, b, 14):
-    raise TestFailure('fft2')
+if any_neq(a, b, 14): raise TestFailure('fft2')
 
 tod = Tod(numpy.random.random((10,1000))+1)
 fft = Fft(tod.nsamples)
 tod2 = fft.transpose(fft.direct(tod))
-if any_neq(tod, tod2,14):
-    raise TestFailure('fft3')
+if any_neq(tod, tod2,14): raise TestFailure('fft3')
 
 tod = Tod(numpy.random.random((10,1000))+1, nsamples=(100,300,5,1000-100-300-5))
 fft = Fft(tod.nsamples)
 tod2 = fft.transpose(fft.direct(tod))
-if any_neq(tod, tod2,14):
-    raise TestFailure('fft4')
+if any_neq(tod, tod2,14): raise TestFailure('fft4')
 
 print 'OK.'
