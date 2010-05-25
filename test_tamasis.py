@@ -1,7 +1,7 @@
 from tamasis import *
 import numpy
 
-pacs = PacsObservation(filename='tests/frames_blue.fits',
+pacs = PacsObservation(filename=tamasis_dir+'tests/frames_blue.fits',
                        resolution=3.2,
                        fine_sampling_factor=1, 
                        keep_bad_detectors=False)

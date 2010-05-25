@@ -1,11 +1,11 @@
 from   tamasis import *
 import pyfits
 
-observation = MadMap1Observation('tests/madmap1/todSpirePsw_be', 'tests/madmap1/invnttSpirePsw_be', 
-                                 'tests/madmap1/madmapSpirePsw.fits[coverage]', 'big_endian', 135, missing_value=numpy.nan)
+observation = MadMap1Observation(tamasis_dir+'tests/madmap1/todSpirePsw_be', tamasis_dir+'tests/madmap1/invnttSpirePsw_be', 
+                                 tamasis_dir+'tests/madmap1/madmapSpirePsw.fits[coverage]', 'big_endian', 135, missing_value=numpy.nan)
 
 tod = observation.get_tod()
-sqrtInvNtt = SqrtInvNtt(observation, 'tests/madmap1/invnttSpirePsw_be', convert='big_endian')
+sqrtInvNtt = SqrtInvNtt(observation, tamasis_dir+'tests/madmap1/invnttSpirePsw_be', convert='big_endian')
 
 fft = Fft(tod.nsamples)
 #padding = Padding(left = sqrtInvNtt.ncorrelations, right = 1024 - tod.shape[-1] - sqrtInvNtt.ncorrelations)
@@ -15,7 +15,7 @@ packing = Packing(observation.mapmask)
 model = projection * packing
 
 map_naive = mapper_naive(tod, model)
-map_ref = pyfits.fitsopen('tests/madmap1/naivemapSpirePsw.fits')['image'].data
+map_ref = pyfits.fitsopen(tamasis_dir+'tests/madmap1/naivemapSpirePsw.fits')['image'].data
 if any_neq(map_naive,map_ref,15): print 'FAILED: mapper_naive madcap 1'
 
 map_naive_1d = mapper_naive(tod, projection)

@@ -19,7 +19,6 @@ program test_pacsobservation
 
     ! initialise tamasis
     call init_tamasis
-    write (*,*) 'INSTALL: %'//get_tamasis_path()//'%'
 
     ! valid calls
     allocate(obs)

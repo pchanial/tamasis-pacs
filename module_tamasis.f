@@ -25,6 +25,13 @@ contains
         integer                      :: length
         
         length = len(path)
+
+        if (length == 0) then
+            tamasis_path = './'
+            tamasis_path_len = 2
+            return
+        end if
+
         if (path(length:length) == '/') length = length - 1
 
         if (length >= len(tamasis_path)) then

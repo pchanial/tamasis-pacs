@@ -5,7 +5,7 @@ import scipy
 from scipy.sparse import dia_matrix
 from scipy.sparse.linalg import LinearOperator, cgs
 
-pacs = PacsObservation(filename='tests/frames_blue.fits',
+pacs = PacsObservation(filename=tamasis_dir+'tests/frames_blue.fits',
                        resolution=3.2)
 
 tod = pacs.get_tod()
