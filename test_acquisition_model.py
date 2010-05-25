@@ -6,6 +6,7 @@ class TestFailure(Exception): pass
 #--------------------
 # CompressionAverage
 #--------------------
+
 tod = Tod(numpy.ndarray((2,15)), nsamples=(10,5))
 tod[0,:] = [1,1,1,1,1,3,3,3,3,3,4,4,4,4,4]
 tod[1,:] = [1,2,1.,0.5,0.5,5,0,0,0,0,1,2,1,2,1.5]
@@ -18,6 +19,12 @@ tod3 = compression.transpose(tod2)
 if tod3.shape != (2,15): raise TestFailure('compAvg1t')
 if tuple(tod3[0,:]) != (0.2,0.2,0.2,0.2,0.2,0.6,0.6,0.6,0.6,0.6,0.8,0.8,0.8,0.8,0.8): raise TestFailure('compAvg2t')
 if tod3.nsamples != (10,5): raise TestFailure('compAvg3t')
+
+tod = Tod(numpy.ndarray((2,15)), nsamples=(11,4))
+try:
+    tod2 = compression.direct(tod)
+except ValidationError:
+    pass
 
 #---------
 # Masking
@@ -117,17 +124,31 @@ if id(b) != id(c):
 # Padding
 #---------
 
-left  = 1
-right = 20
 padding = Padding(left=1,right=20)
 tod = Tod(numpy.ndarray((10,15)))
 tod2 = padding.direct(tod)
-if tod2.shape != (10,36):          raise TestFailure('padding shape1')
-if numpy.any(tod2[:,0:1] != 0):    raise TestFailure('padding left')
-if numpy.any(tod2[:,1:16] != tod): raise TestFailure('padding middle')
-if numpy.any(tod2[:,16:] != 0):    raise TestFailure('padding right')
+if tod2.shape != (10,36):          raise TestFailure('padding shapea')
+if any_neq(tod2[:,0:1], 0, 15):    raise TestFailure('padding left')
+if any_neq(tod2[:,1:16], tod, 15): raise TestFailure('padding middle')
+if any_neq(tod2[:,16:], 0, 15):    raise TestFailure('padding right')
 tod3 = padding.transpose(tod2)
-if tod3.shape != tod.shape: raise TestFailure('padding shape2')
+if tod3.shape != tod.shape: raise TestFailure('padding shapeb')
+if any_neq(tod3,tod,15): raise TestFailure('padding end')
+
+padding = Padding(left=1,right=(4,20))
+tod = Tod.ones((10,(12,3)))
+tod2 = padding.direct(tod)
+if tod2.shape != (10,41):          raise TestFailure('padding shapea')
+if tod2.nsamples != (17,24):       raise TestFailure('padding nsamples')
+if any_neq(tod2[:,0:1], 0, 15):    raise TestFailure('padding left2')
+if any_neq(tod2[:,1:13], tod[:,0:12], 15): raise TestFailure('padding middle2')
+if any_neq(tod2[:,13:17], 0, 15):  raise TestFailure('padding right2')
+if any_neq(tod2[:,17:18], 0, 15):  raise TestFailure('padding left2')
+if any_neq(tod2[:,18:21], tod[:,12:], 15): raise TestFailure('padding middle2')
+if any_neq(tod2[:,21:], 0, 15):    raise TestFailure('padding right2')
+tod3 = padding.transpose(tod2)
+if tod3.shape != tod.shape: raise TestFailure('padding shapeb')
+if any_neq(tod3,tod,15): raise TestFailure('padding end')
 
 
 #-----

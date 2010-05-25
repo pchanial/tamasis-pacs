@@ -16,7 +16,7 @@ module module_filtering
         integer                :: nslices
         integer                :: bandwidth
         integer*8, allocatable :: first(:), last(:)
-        real(p), allocatable   :: data(:,:,:) ! (filter, detector, slice)
+        real(p), allocatable   :: data(:,:,:) ! (filter values, detector, slice)
     end type filterset
 
 contains
@@ -64,14 +64,13 @@ contains
 
             do idetector = 1, ndetectors
 
-                in(1) = filter%data(1,idetector,islicefilter)
-                in(2:filter%ncorrelations+1) = filter%data(:,idetector,islicefilter)
+                in(1:filter%ncorrelations+1) = filter%data(:,idetector,islicefilter)
                 in(filter%ncorrelations+2:nsamples(islice)-filter%ncorrelations) = 0
-                in(nsamples(islice)-filter%ncorrelations+1:) = filter%data(2::-1,idetector,islicefilter)
+                in(nsamples(islice)-filter%ncorrelations+1:nsamples(islice)) = &
+                     filter%data(filter%ncorrelations+1:2:-1,idetector,islicefilter)
 
                 call dfftw_execute_r2r(plan, in, out)
 
-                out(nsamples(islice)/2+1:nsamples(islice)) = out(2:nsamples(islice)-nsamples(islice)/2+1:-1)
                 tod(dest:dest+nsamples(islice)-1,idetector) = out
 
             end do

@@ -944,27 +944,104 @@ end subroutine filter_median
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine read_madmap1_info(todfile, convert, ndetectors, npixels_per_sample, nsamples, status)
+subroutine read_madmap1_nslices(invnttfile, ndetectors, nslices, status)
 
-    use module_madcap, only : read_tod_header
+    use module_madcap, only : get_nfilters
+    implicit none
+
+    !f2py threadsafe
+    !f2py intent(in)  :: invnttfile
+    !f2py intent(in)  :: ndetectors
+    !f2py intent(out) :: nslices
+    !f2py intent(out) :: status
+
+    character(len=*), intent(in) :: invnttfile
+    integer, intent(in)          :: ndetectors
+    integer, intent(out)         :: nslices
+    integer, intent(out)         :: status
+
+    integer                      :: nfilterfiles
+
+    nfilterfiles = get_nfilters(invnttfile, ndetectors, status)
+    if (status /= 0) return
+    nslices = nfilterfiles / ndetectors
+
+end subroutine read_madmap1_nslices
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine read_madmap1_info(todfile, invnttfile, convert, ndetectors, nslices, npixels_per_sample, nsamples, status)
+
+    use iso_fortran_env, only : ERROR_UNIT
+    use module_madcap, only   : read_filter_headers, read_tod_header
+    use module_string, only   : strinteger
     implicit none
 
     !f2py threadsafe
     !f2py intent(in)  :: todfile
+    !f2py intent(in)  :: invnttfile
     !f2py intent(in)  :: convert
     !f2py intent(in)  :: ndetectors
+    !f2py intent(in)  :: nslices
     !f2py intent(out) :: npixels_per_sample
     !f2py intent(out) :: nsamples
     !f2py intent(out) :: status
 
     character(len=*), intent(in) :: todfile
+    character(len=*), intent(in) :: invnttfile
     character(len=*), intent(in) :: convert
     integer, intent(in)          :: ndetectors
+    integer, intent(in)          :: nslices
     integer, intent(out)         :: npixels_per_sample
-    integer*8, intent(out)       :: nsamples
+    integer, intent(out)         :: nsamples(nslices)
     integer, intent(out)         :: status
 
-    call read_tod_header(todfile, convert, ndetectors, nsamples, npixels_per_sample, status)
+    integer*8, allocatable       :: first(:), last(:)
+    integer, allocatable         :: ncorrelations(:)
+    integer                      :: idetector, ifilter, islice
+    integer*8                    :: nsamples_tot
+
+    call read_tod_header(todfile, convert, ndetectors, nsamples_tot, npixels_per_sample, status)
+    if (status /= 0) return
+
+    call read_filter_headers(invnttfile, convert, ndetectors, first, last, ncorrelations, status)
+    if (status /= 0) return
+
+    ! check number of correlations
+    if (any(ncorrelations /= ncorrelations(1))) then
+        status = 1
+        write (ERROR_UNIT,'(a)') 'Error: Filter files do not have the same correlation length.'
+        return
+    end if
+
+    ! check number of samples per slice
+    do islice=1, nslices
+        
+        nsamples(islice) = last((islice-1)*ndetectors+1) - first((islice-1)*ndetectors+1) + 1
+        
+        do idetector = 1, ndetectors
+            
+            ifilter = (islice-1)*ndetectors + idetector
+            if (last(ifilter) - first(ifilter) + 1 /= nsamples(islice)) then
+                write (ERROR_UNIT,'(a)') "Error: Filter '" // invnttfile // '.' // strinteger(ifilter-1)// "' does not apply to th&
+                     &e same number of samples than filter '" // invnttfile // '.' // strinteger((islice-1)*ndetectors) // "'."
+                status = 1
+                return
+            end if
+            
+        end do
+
+    end do
+
+    ! check number of samples
+    if (nsamples_tot /= sum(nsamples)) then
+        status = 1
+        write (ERROR_UNIT,'(a,2(i0,a))') "Error: Invalid number of samples in tod ('", nsamples_tot, "' instead of '",    &
+             sum(nsamples), "')."
+        return
+    end if
 
 end subroutine read_madmap1_info
 
@@ -1014,7 +1091,8 @@ end subroutine read_madmap1
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine get_sqrt_invntt_madmap1(filename, convert, nslices, nsamples, nsamples_tot, ndetectors, tod_filter, status)
+subroutine get_invntt_madmap1(filename, convert, nslices, nsamples, nsamples_tot, ndetectors, tod_filter, ncorrelations,      &
+                                   status)
 
     !f2py threadsafe
     !f2py intent(in)   :: filename
@@ -1024,6 +1102,7 @@ subroutine get_sqrt_invntt_madmap1(filename, convert, nslices, nsamples, nsample
     !f2py intent(in)   :: nsamples_tot
     !f2py intent(in)   :: ndetectors
     !f2py intent(out)  :: tod(nsamples_tot,ndetectors)
+    !f2py intent(out)  :: ncorrelations
     !f2py intent(out)  :: status
 
     use module_filtering, only : create_filter_uncorrelated, filterset
@@ -1037,6 +1116,56 @@ subroutine get_sqrt_invntt_madmap1(filename, convert, nslices, nsamples, nsample
     integer, intent(in)          :: nsamples_tot
     integer, intent(in)          :: ndetectors
     real*8, intent(out)          :: tod_filter(nsamples_tot,ndetectors)
+    integer, intent(out)         :: ncorrelations
+    integer, intent(out)         :: status
+
+    type(filterset)              :: filter
+!!$integer :: i
+
+    call read_filter(filename, convert, ndetectors, filter, status)
+    if (status /= 0) return
+
+    ncorrelations = filter%ncorrelations
+
+    call create_filter_uncorrelated(filter, nsamples, nsamples_tot, tod_filter, status)
+    if (status /= 0) return
+!!$
+!!$do i=1,size(tod_filter,1)
+!!$print *, 'TOD_FILTER:', i, tod_filter(i,1), sqrt(tod_filter(i,1))
+!!$end do
+
+end subroutine get_invntt_madmap1
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine get_sqrt_invntt_madmap1(filename, convert, nslices, nsamples, nsamples_tot, ndetectors, tod_filter, ncorrelations,      &
+                                   status)
+
+    !f2py threadsafe
+    !f2py intent(in)   :: filename
+    !f2py intent(in)   :: convert
+    !f2py intent(hide) :: nslices = size(nsamples)
+    !f2py intent(in)   :: nsamples
+    !f2py intent(in)   :: nsamples_tot
+    !f2py intent(in)   :: ndetectors
+    !f2py intent(out)  :: tod(nsamples_tot,ndetectors)
+    !f2py intent(out)  :: ncorrelations
+    !f2py intent(out)  :: status
+
+    use module_filtering, only : create_filter_uncorrelated, filterset
+    use module_madcap,    only : read_filter
+    implicit none
+
+    character(len=*), intent(in) :: filename
+    character(len=*), intent(in) :: convert
+    integer, intent(in)          :: nslices
+    integer, intent(in)          :: nsamples(nslices)
+    integer, intent(in)          :: nsamples_tot
+    integer, intent(in)          :: ndetectors
+    real*8, intent(out)          :: tod_filter(nsamples_tot,ndetectors)
+    integer, intent(out)         :: ncorrelations
     integer, intent(out)         :: status
 
     type(filterset)              :: filter
@@ -1044,6 +1173,8 @@ integer :: i
 
     call read_filter(filename, convert, ndetectors, filter, status)
     if (status /= 0) return
+
+    ncorrelations = filter%ncorrelations
 
     call create_filter_uncorrelated(filter, nsamples, nsamples_tot, tod_filter, status)
     if (status /= 0) return

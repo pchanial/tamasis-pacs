@@ -1,4 +1,8 @@
-import fftw3
+try:
+    import fftw3
+except:
+    print 'Warning: Library PyFFTW3 is not installed.'
+
 import matplotlib.pyplot as pyplot
 import numpy
 import os
@@ -6,7 +10,7 @@ import pyfits
 import scipy.sparse.linalg    
 import tamasisfortran as tmf
 
-__version_info__ = (0, 9, 0)
+__version_info__ = (1, 0, 0)
 __version__ = '.'.join((str(i) for i in __version_info__))
 __install_dir__ = os.path.dirname(__file__)
 __verbose__ = False
@@ -80,7 +84,7 @@ class AcquisitionModel(object):
     def _validate_shape(self, shapein):
         if shapein is None or self.shapein is None:
             return
-        if shapein != self.shapein:
+        if self._flatten_sliced_shape(shapein) != self._flatten_sliced_shape(self.shapein):
             raise ValidationError('The input of '+self.__class__.__name__+' has incompatible shape '+str(shapein)+' instead of '+str(self.shapein)+'.')
 
     def _validate_shape_direct(self, shapein):
@@ -89,7 +93,7 @@ class AcquisitionModel(object):
                return self.shapeout
             else:
                return shapein
-        if shapein != self.shapein:
+        if self._flatten_sliced_shape(shapein) != self._flatten_sliced_shape(self.shapein):
             raise ValidationError('The input of '+self.__class__.__name__+' has incompatible shape '+str(shapein)+' instead of '+str(self.shapein)+'.')
         return self.shapeout
 
@@ -99,27 +103,26 @@ class AcquisitionModel(object):
                 return self.shapein
             else:
                 return shapeout
-        if shapeout != self.shapeout:
+        if self._flatten_sliced_shape(shapeout) != self._flatten_sliced_shape(self.shapeout):
             raise ValidationError('The input of '+self.__class__.__name__+' transpose has incompatible shape '+str(shapeout)+' instead of '+str(self.shapeout)+'.')
         return self.shapein
 
     def _validate_input(self, cls, data):
         if not isinstance(data, cls):
             raise TypeError("The input of '"+self.__class__.__name__+"' has an invalid type '"+data.__class__.__name__+"' instead of '"+cls.__name__+"'.")
-        self._validate_shape(data.shape)
-        
+        self._validate_shape(self._get_sliced_shape(data))
 
     def _validate_input_direct(self, cls, data, reusein):
         if not isinstance(data, cls):
             raise TypeError("The input of '"+self.__class__.__name__+"' has an invalid type '"+data.__class__.__name__+"' instead of '"+cls.__name__+"'.")
-        shapeout = self._validate_shape_direct(data.shape)
+        shapeout = self._validate_shape_direct(self._get_sliced_shape(data))
         if reusein: self._output_transpose = data
         return data, shapeout
 
     def _validate_input_transpose(self, cls, data, reusein):
         if not isinstance(data, cls):
             raise TypeError("The input of the transpose of '"+self.__class__.__name__+"' has an invalid type '"+data.__class__.__name__+"' instead of '"+cls.__name__+"'.")
-        shapein = self._validate_shape_transpose(data.shape)
+        shapein = self._validate_shape_transpose(self._get_sliced_shape(data))
         if reusein: self._output_direct = data
         return data, shapein
 
@@ -137,32 +140,76 @@ class AcquisitionModel(object):
     def _validate_output_direct(self, cls, shapeout, **options):
         if shapeout is None:
             raise ValueError('The shape of the output of '+self.__class__.__name__+' is not known.')
-        if self._output_direct is not None and shapeout == self._output_direct.shape:
+        shapeout_flat = self._flatten_sliced_shape(shapeout)
+        if self._output_direct is not None and shapeout_flat == self._output_direct.shape:
             return
-        if __verbose__: print 'Info: Allocating '+str(numpy.product(shapeout)/2.**17)+' MiB for the output of '+self.__class__.__name__+'.'
+        if __verbose__: print 'Info: Allocating '+str(numpy.product(shapeout_flat)/2.**17)+' MiB for the output of '+self.__class__.__name__+'.'
         if cls == numpy.ndarray:
             self._output_direct = numpy.empty(shapeout, dtype=numpy.float64, **options)
         else:
-            self._output_direct = cls.empty(shapeout, dtype=numpy.float64, **options)
+            self._output_direct = cls.empty(shapeout_flat, dtype=numpy.float64, **options)
 
     # allocate memory for the output of the transpose operation.
     # **options should not depend on the input array
     def _validate_output_transpose(self, cls, shapein, **options):
         if shapein is None:
             raise ValueError('The shape of the input of '+self.__class__.__name__+' is not known.')
-        if self._output_transpose is not None and shapein == self._output_transpose.shape:
+        shapein_flat = self._flatten_sliced_shape(shapein)
+        if self._output_transpose is not None and shapein_flat == self._output_transpose.shape:
             return
-        if __verbose__: print 'Info: Allocating '+str(numpy.product(shapein)/2.**17)+' MiB for the output of '+self.__class__.__name__+'^T.'
+        if __verbose__: print 'Info: Allocating '+str(numpy.product(shapein_flat)/2.**17)+' MiB for the output of '+self.__class__.__name__+'^T.'
         if cls == numpy.ndarray:
             self._output_transpose = numpy.empty(shapein, dtype=numpy.float64, **options)
         else:
-            self._output_transpose = cls.empty(shapein, dtype=numpy.float64, **options)
+            self._output_transpose = cls.empty(shapein_flat, dtype=numpy.float64, **options)
 
     shapein           = None   # input is unconstrained
     shapeout          = None   # output is unconstrained
     _output_direct    = None   # stores the input of the transpose model. Its memory allocation is re-used as the output of the direct model
     _output_transpose = None   # stores the input of the direct model. Its memory allocation is re-used as the output of the transpose model
     blocks            = []     # components are ordered as in the direct order
+
+    @staticmethod
+    def _flatten_sliced_shape(shape):
+        if shape is None: return shape
+        if not isinstance(shape, tuple) and not isinstance(shape, list) and not isinstance(shape, numpy.ndarray):
+            return (int(shape),)
+        return tuple(map(numpy.sum, shape))
+
+    @staticmethod
+    def _combine_sliced_shape(shape, nsamples):
+        if numpy.rank(shape) == 0:
+            shape = [ shape ]
+        else:
+            shape = list(shape)
+        if numpy.rank(nsamples) == 0:
+            nsamples = int(nsamples)
+        elif numpy.rank(nsamples) != 1:
+            raise ValueError('The input nsamples is neither a scalar nor a vector.')
+        else:
+            if isinstance(nsamples, numpy.ndarray) and nsamples.size == 1 or len(nsamples) == 1:
+                nsamples = nsamples[0]
+            else:
+                nsamples = tuple(nsamples)
+        shape.append(nsamples)
+        return tuple(shape)
+
+    @staticmethod
+    def _get_sliced_shape(data):
+        if isinstance(data, Tod):
+            return AcquisitionModel._combine_sliced_shape(data.shape[0:-1], data.nsamples)
+        return data.shape
+
+    @staticmethod
+    def _smart_reshape(array, shape):
+        curr = array
+        shape = AcquisitionModel._flatten_sliced_shape(shape)
+        while True:
+            if curr.shape == shape:
+                return curr
+            if curr.base is None or curr.base.dtype != array.dtype or curr.base.__class__ != array.__class__:
+                return curr.reshape(shape)
+            curr = curr.base
 
     def __mul__(self, other):
         newmodel = AcquisitionModel(None)
@@ -245,17 +292,20 @@ class Projection(AcquisitionModel):
         - get_pointing_matrix()
     Author: P. Chanial
     """
-    def __init__(self, observation, description=None, finer_sampling=True, npixels_per_sample=None):
+    def __init__(self, observation, description=None, finer_sampling=True, npixels_per_sample=None, header=None):
         AcquisitionModel.__init__(self, description)
         if npixels_per_sample is None:
             npixels_per_sample = getattr(observation, 'npixels_per_sample', None)
             if npixels_per_sample is None:
                 raise ValueError('The option npixels_per_sample has not been specified.')
         self.npixels_per_sample = npixels_per_sample
-        self.header = observation.header
+        if header is None:
+            header = observation.header
+        self.header = header
         self.pmatrix = observation.get_pointing_matrix(self.npixels_per_sample, finer_sampling=finer_sampling)
         self.shapein = tuple([self.header['naxis'+str(i+1)] for i in reversed(range(self.header['naxis']))])
-        self.shapeout = (observation.ndetectors, observation.nfinesamples if finer_sampling else numpy.sum(observation.nsamples)) 
+        nsamples = observation.nfinesamples if finer_sampling else observation.nsamples
+        self.shapeout = self._combine_sliced_shape(observation.ndetectors, nsamples) 
 
     def direct(self, map2d, reusein=False, reuseout=False):
         map2d, shapeout = self._validate_input_direct(Map, map2d, reusein)
@@ -275,8 +325,8 @@ class Projection(AcquisitionModel):
         return output
 
     def get_ptp(self):
-        nsamples = self.shapeout[1]
         ndetectors = self.shapeout[0]
+        nsamples = numpy.sum(self.shapeout[1])
         npixels = numpy.product(self.shapein)
         return tmf.pointing_matrix_ptp(self.pmatrix, self.npixels_per_sample, nsamples, ndetectors, npixels).T
 
@@ -376,18 +426,14 @@ class Compression(AcquisitionModel):
     def _validate_shape_direct(self, shapein):
         if shapein is None:
             return None
-        if shapein[1] % self.compression_factor != 0:
-            raise ValidationError('The input timeline size ('+str(shapein[1])+') is not an integer times the compression factor ('+str(self.compression_factor)+').')
-        shapeout = list(shapein)
-        shapeout[1] /= self.compression_factor
-        return tuple(shapeout)
+        if numpy.any(numpy.array(shapein[-1]) % self.compression_factor != 0):
+            raise ValidationError('The input timeline size ('+str(shapein[-1])+') is not an integer times the compression factor ('+str(self.compression_factor)+').')
+        return self._combine_sliced_shape(shapein[0:-1], numpy.array(shapein[-1]) / self.compression_factor)
 
     def _validate_shape_transpose(self, shapeout):
         if shapeout is None:
             return
-        shapein = list(shapeout)
-        shapein[1] *= self.compression_factor
-        return tuple(shapein)
+        return self._combine_sliced_shape(shapeout[0:-1], numpy.array(shapeout[-1]) * self.compression_factor)
 
     def __str__(self):
         return super(Compression, self).__str__()+' (x'+str(self.compression_factor)+')'
@@ -498,7 +544,7 @@ class Packing(AcquisitionModel):
     Convert 2d map into 1d map, under the control of a mask (true means observed)
     Author: P. Chanial
     """
-    def __init__(self, mask, field=numpy.nan, description=None):
+    def __init__(self, mask, field=0., description=None):
         AcquisitionModel.__init__(self, description)
         self.mask = numpy.array(mask, dtype='int8', copy=False)
         self.field = field
@@ -564,21 +610,21 @@ class Reshaping(AcquisitionModel):
     """
     def __init__(self, shapein, shapeout, description=None):
         AcquisitionModel.__init__(self, description)
-        if numpy.product(shapein) != numpy.product(shapeout):
+        self.shapein  = self._flatten_sliced_shape(shapein)
+        self.shapeout = self._flatten_sliced_shape(shapeout)
+        if numpy.product(self.shapein) != numpy.product(self.shapeout):
             raise ValueError('The number of elements of the input and output of the Reshaping operator are incompatible.')
-        self.shapein  = tuple(numpy.array(shapein, ndmin=1))
-        self.shapeout = tuple(numpy.array(shapeout, ndmin=1))
 
     def direct(self, array, reusein=False, **kw):
         self._validate_input_direct(numpy.ndarray, array, False)
         output = self._validate_output(array, reusein)
-        output = smart_reshape(output, self.shapeout)
+        output = self._smart_reshape(output, self.shapeout)
         return output
 
     def transpose(self, array, reusein=False, **kw):
         self._validate_input_transpose(numpy.ndarray, array, False)
         output = self._validate_output(array, reusein)
-        return smart_reshape(output, self.shapein)
+        return self._smart_reshape(output, self.shapein)
 
 
 #-------------------------------------------------------------------------------
@@ -588,16 +634,14 @@ class Padding(AcquisitionModel):
     "Pads before and after a Tod."
     def __init__(self, left=0, right=0, value=0., description=None):
         AcquisitionModel.__init__(self, description)
-        left = numpy.ndarray(left, ndmin=1)
-        right = numpy.ndarray(right, ndmin=1)
+        left = numpy.array(left, ndmin=1)
+        right = numpy.array(right, ndmin=1)
         if numpy.any(left < 0):
             raise ValueError('Left padding is not positive.')
         if numpy.any(right < 0):
             raise ValueError('Right padding is not positive.')
         if numpy.rank(left) != 1 or numpy.rank(right) != 1:
             raise ValueError('Padding must be scalar or a vector.')
-        if left.size  == 1 and right.size > 1: left  = left.resize(right.shape)
-        if right.size == 1 and left.size  > 1: right = right.resize(left.shape)
         self.left  = tuple(left)
         self.right = tuple(right)
         self.value = value
@@ -605,16 +649,17 @@ class Padding(AcquisitionModel):
     def direct(self, array, reusein=False, reuseout=False):
         array, shapeout = self._validate_input_direct(Tod, array, reusein)
         self._validate_output_direct(Tod, shapeout)
-        self._output_direct.nsamples = array.nsamples + self.left + self.right
+        self._output_direct.nsamples = tuple(numpy.array(array.nsamples) + self.left + self.right)
         dest = 0
         dest_padded = 0
         for islice in range(len(array.nsamples)):
+            nsamples = array.nsamples[islice]
             left = self.left[islice if len(self.left) > 1 else 0]
             self._output_direct[...,dest_padded:dest_padded+left] = self.value
-            self._output_direct[...,dest_padded+left:dest_padded+left+array.shape[-1]] = array[dest:dest+array.nsamples[islice]]
-            self._output_direct[...,dest_padded+left+array.shape[-1]:] = self.value
-            dest += array.nsamples[islice]
-            dest_padded += _output_direct.nsamples[islice]
+            self._output_direct[...,dest_padded+left:dest_padded+left+nsamples] = array[...,dest:dest+nsamples]
+            self._output_direct[...,dest_padded+left+nsamples:] = self.value
+            dest += nsamples
+            dest_padded += self._output_direct.nsamples[islice]
         output = self._output_direct
         if not reuseout: self._output_direct = None
         return output
@@ -622,14 +667,15 @@ class Padding(AcquisitionModel):
     def transpose(self, array, reusein=False, reuseout=False):
         array, shapeout = self._validate_input_transpose(Tod, array, reusein)
         self._validate_output_transpose(Tod, shapeout)
-        self._output_transpose.nsamples = array.nsamples - self.left - self.right
+        self._output_transpose.nsamples = tuple(numpy.array(array.nsamples) - self.left - self.right)
         dest = 0
+        dest_padded = 0
         for islice in range(len(array.nsamples)):
+            nsamples = self._output_transpose.nsamples[islice]
             left  = self.left [islice if len(self.left)  > 1 else 0]
-            right = self.right[islice if len(self.right) > 1 else 0]
-            self._output_transpose[...,dest:dest+self._output_transpose.nsamples[islice]] = 
-                array[...,self.left:array.shape[-1]-self.right]
-            dest += array.nsamples[islice]
+            self._output_transpose[...,dest:dest+nsamples] = array[...,dest_padded+left:dest_padded+left+nsamples]
+            dest += nsamples
+            dest_padded += array.nsamples[islice]
         output = self._output_transpose
         if not reuseout: self._output_transpose = None
         return output
@@ -646,25 +692,17 @@ class Padding(AcquisitionModel):
         if len(self.left) != 1 and len(self.left) != len(data.nsamples):
             raise ValueError("The input Tod has a number of slices '" + str(len(data.nsamples)) +
                              "' incompatible with the specified padding.")
-        return data, shapein
-        
+        return data, shapein        
 
     def _validate_shape_direct(self, shapein):
         if shapein is None:
             return None
-        shapeout = list(shapein)
-        npads = self.left + self.right
-        # problem here: the number of padding is npads times the number of slices, but the number of slices is not accessible here.
-        shapeout[-1] += npads
-        return tuple(shapeout)
+        return self._combine_sliced_shape(shapein[0:-1], numpy.array(shapein[-1]) + self.left + self.right)
         
     def _validate_shape_transpose(self, shapeout):
         if shapeout is None:
             return None
-        shapein = list(shapeout)
-        shapein[-1] -= self.left + self.right
-        return tuple(shapein)
-        
+        return self._combine_sliced_shape(shapeout[0:-1], numpy.array(shapeout[-1]) - self.left - self.right)
         
 
 
@@ -693,7 +731,7 @@ class Fft(AcquisitionModel):
     def direct(self, array, reusein=False, **kw):
         self._validate_input(numpy.ndarray, array)
         output = self._validate_output(array, reusein)
-        output = smart_reshape(output, (numpy.product(array.shape[:-1]), array.shape[-1]))
+        output = self._smart_reshape(output, (numpy.product(array.shape[:-1]), array.shape[-1]))
         dest = 0
         for iobs, n in enumerate(self.nsamples):
             for i in range(output.shape[0]):
@@ -701,13 +739,13 @@ class Fft(AcquisitionModel):
                 fftw3.execute(self.forward_plan[iobs])
                 output[i,dest:dest+n] = self.farray[iobs]
             dest += n
-        output = smart_reshape(output, array.shape)
+        output = self._smart_reshape(output, array.shape)
         return output
 
     def transpose(self, array, reusein=False, **kw):
         self._validate_input(numpy.ndarray, array)
         output = self._validate_output(array, reusein)
-        output = smart_reshape(output, (numpy.product(array.shape[:-1]), array.shape[-1]))
+        output = self._smart_reshape(output, (numpy.product(array.shape[:-1]), array.shape[-1]))
         dest = 0
         for iobs, n in enumerate(self.nsamples):
             for i in range(output.shape[0]):
@@ -716,15 +754,48 @@ class Fft(AcquisitionModel):
                 output[i,dest:dest+n] = self.tarray[iobs]
             output[:,dest:dest+n] /= n
             dest += n
-        output = smart_reshape(output, array.shape)
+        output = self._smart_reshape(output, array.shape)
         return output
 
     def _validate_shape(self, shapein):
         if shapein is None:
             return None
-        if shapein[-1] != numpy.sum(self.nsamples):
-            raise ValidationError("Invalid FFT size '"+str(array.shape[-1])+"' instead of '"+self.n+"'.")
+        nsamples = shapein[-1]
+        if not isinstance(nsamples, tuple) and not isinstance(nsamples, list) and not isinstance(nsamples, numpy.ndarray):
+            nsamples = (int(nsamples), )
+        else:
+            nsamples = tuple(nsamples)
+        if nsamples != self.nsamples:
+            raise ValidationError("Invalid FFT size '"+str(nsamples)+"' instead of '"+str(self.nsamples)+"'.")
         return shapein
+
+
+#-------------------------------------------------------------------------------
+
+
+class InvNtt(AcquisitionModel):
+
+    def __init__(self, shape, filename, convert='native', description=None):
+        AcquisitionModel.__init__(self, description)
+        ndetectors = shape[0]
+        nsamples = numpy.array(shape[1], ndmin=1, dtype='int32')
+        nsamples_tot = numpy.sum(nsamples)
+        tod_filter, ncorrelations, status = tmf.get_invntt_madmap1(filename, convert, nsamples, nsamples_tot, ndetectors)
+        if status != 0: raise RuntimeError()
+        self.data = Tod(tod_filter.T, copy=False)
+        self.ncorrelations = ncorrelations
+        self.shapein  = shape
+        self.shapeout = shape
+        
+    def direct(self, data, reusein=False, **kw):
+        return data
+
+    def transpose(self, data, reusein=False, **kw):
+        self._validate_input(Tod, data)
+        output = self._validate_output(data, reusein)
+        output *= self.data
+        return output
+
 
 
 #-------------------------------------------------------------------------------
@@ -738,9 +809,10 @@ class SqrtInvNtt(AcquisitionModel):
         nsamples = numpy.array(observation.nsamples)
         nsamples_tot = numpy.sum(nsamples)
         ndetectors = observation.ndetectors
-        tod_filter, status = tmf.get_sqrt_invntt_madmap1(filename, convert, nsamples, nsamples_tot, ndetectors)
+        tod_filter, ncorrelations, status = tmf.get_sqrt_invntt_madmap1(filename, convert, nsamples, nsamples_tot, ndetectors)
         if status != 0: raise RuntimeError()
         self.data = Tod(tod_filter.T, copy=False)
+        self.ncorrelations = ncorrelations
         self.shapein  = (ndetectors, nsamples_tot)
         self.shapeout = self.shapein
         
@@ -785,6 +857,8 @@ class _Pacs():
 
         if array.lower() not in ('blue', 'green', 'red'):
             raise ValueError("The input array is not 'blue', 'green' nor 'red'.")
+        self.shapein  = tuple(numpy.array(self._flatten_sliced_shape(shapein), ndmin=1))
+        self.shapeout = tuple(numpy.array(self._flatten_sliced_shape(shapeout), ndmin=1))
 
         if observing_mode is not None:
             observing_mode = observing_mode.lower()
@@ -914,7 +988,7 @@ class PacsObservation(_Pacs):
         self.nobservations = nfilenames
         self.npixels_per_sample = npixels_per_sample
         self.nsamples = tuple(nsamples)
-        self.nfinesamples = numpy.sum(nsamples * compression_factor) * fine_sampling_factor
+        self.nfinesamples = tuple(nsamples * compression_factor * fine_sampling_factor)
         self.ndetectors = ndetectors
         self.bad_detector_mask = numpy.ascontiguousarray(bad_detector_mask)
         self.keep_bad_detectors = keep_bad_detectors
@@ -937,7 +1011,7 @@ class PacsObservation(_Pacs):
         return Tod(signal.T, mask=mask.T, nsamples=self.nsamples)
 
     def get_pointing_matrix(self, npixels_per_sample, finer_sampling=True):
-        nsamples = self.nfinesamples if finer_sampling else numpy.sum(self.nsamples)
+        nsamples = numpy.sum(self.nfinesamples if finer_sampling else self.nsamples)
         sizeofpmatrix = npixels_per_sample * nsamples * self.ndetectors
         print 'Info: Allocating '+str(sizeofpmatrix/2.**17)+' MiB for the pointing matrix.'
         pmatrix = numpy.zeros(sizeofpmatrix, dtype=numpy.int64)
@@ -1025,23 +1099,37 @@ class PacsSimulation(_Pacs):
 
 class MadMap1Observation(object):
     """Class for the handling of an observation in the MADMAP1 format"""
-    def __init__(self, todfile, invnttfile, mapmaskfile, convert, ndetectors):
+    def __init__(self, todfile, invnttfile, mapmaskfile, convert, ndetectors, missing_value=None):
         import re
-        self.npixels_per_sample, self.nfinesamples, status = tmf.read_madmap1_info(todfile, convert, ndetectors)
+        nslices, status = tmf.read_madmap1_nslices(invnttfile, ndetectors)
+        if (status != 0): raise RuntimeError()
+        self.npixels_per_sample, nsamples, status = tmf.read_madmap1_info(todfile, invnttfile, convert, ndetectors, nslices)
         if (status != 0): raise RuntimeError()
 
         self.todfile = todfile
         self.invnttfile = invnttfile
         m=re.search(r'(?P<filename>.*)\[(?P<extname>\w+)\]$', mapmaskfile)
         if m is None:
-            raise ValueError('Invalid filename of the map mask.')
-        filename = m.group('filename')
-        extname  = m.group('extname')
-        coverage = pyfits.fitsopen(filename)[extname].data
-        self.mapmask = numpy.array(numpy.isnan(coverage), dtype='int8')
+            mask = pyfits.fitsopen(mapmaskfile)[0].data
+        else:
+            filename = m.group('filename')
+            extname  = m.group('extname')
+            mask = pyfits.fitsopen(filename)[extname].data
+        if mask is None:
+            raise IOError('HDU '+mapmaskfile+' has no data.')
+        self.mapmask = numpy.zeros(mask.shape, dtype='int8')
+        if missing_value is None:
+            self.mapmask[mask != 0] = 1
+        elif numpy.isnan(missing_value):
+            self.mapmask[numpy.isnan(mask)] = 1
+        elif numpy.isinf(missing_value):
+            self.mapmask[numpy.isinf(mask)] = 1
+        else:
+            self.mapmask[mask == missing_value] = 1
         self.convert = convert
         self.ndetectors = ndetectors
-        self.nsamples = (self.nfinesamples,)
+        self.nsamples = tuple(nsamples)
+        self.nfinesamples = tuple(nsamples)
         header = pyfits.Header()
         header.update('simple', True)
         header.update('bitpix', -64)
@@ -1054,7 +1142,7 @@ class MadMap1Observation(object):
         if npixels_per_sample != self.npixels_per_sample:
             raise ValueError('The npixels_per_sample value is incompatible with the MADMAP1 file.')
         tod = Tod.zeros((self.ndetectors,self.nfinesamples))
-        sizeofpmatrix = npixels_per_sample * self.nfinesamples * self.ndetectors
+        sizeofpmatrix = npixels_per_sample * numpy.sum(self.nfinesamples) * self.ndetectors
         print 'Info: Allocating '+str(sizeofpmatrix/2.**17)+' MiB for the pointing matrix.'
         pmatrix = numpy.zeros(sizeofpmatrix, dtype=numpy.int64)
         status = tmf.read_madmap1(self.todfile, self.invnttfile, self.convert, npixels_per_sample, tod.T, pmatrix)
@@ -1063,7 +1151,7 @@ class MadMap1Observation(object):
 
     def get_tod(self):
         tod = Tod.zeros((self.ndetectors,self.nfinesamples))
-        sizeofpmatrix = self.npixels_per_sample * self.nfinesamples * self.ndetectors
+        sizeofpmatrix = self.npixels_per_sample * numpy.sum(self.nfinesamples) * self.ndetectors
         pmatrix = numpy.zeros(sizeofpmatrix, dtype=numpy.int64)
         status = tmf.read_madmap1(self.todfile, self.invnttfile, self.convert, self.npixels_per_sample, tod.T, pmatrix)
         if (status != 0): raise RuntimeError()
@@ -1219,9 +1307,7 @@ class Tod(FitsArray):
             else:
                 result.nsamples = (data.shape[-1],)
         else:
-            if numpy.sum(nsamples) != data.shape[-1]:
-                raise ValueError('The sum of the slice sizes is not equal to the number of samples in the input argument).')
-            result.nsamples = tuple(nsamples)
+            junk, result.nsamples = Tod._validate_shape(data.shape, nsamples)
         
         return result
 
@@ -1239,14 +1325,17 @@ class Tod(FitsArray):
 
     @staticmethod
     def empty(shape, dtype='float64', order='C', header=None, mask=None, nsamples=None):
+        shape, nsamples = Tod._validate_shape(shape, nsamples)
         return Tod(FitsArray.empty(shape, dtype, order, header), mask=mask, nsamples=nsamples, copy=False)
 
     @staticmethod
     def ones(shape, dtype='float64', order='C', header=None, mask=None, nsamples=None):
+        shape, nsamples = Tod._validate_shape(shape, nsamples)
         return Tod(FitsArray.ones(shape, dtype, order, header), mask=mask, nsamples=nsamples, copy=False)
 
     @staticmethod
     def zeros(shape, dtype='float64', order='C', header=None, mask=None, nsamples=None):
+        shape, nsamples = Tod._validate_shape(shape, nsamples)
         return Tod(FitsArray.zeros(shape, dtype, order, header), mask=mask, nsamples=nsamples, copy=False)
     
     def copy(self, order='C'):
@@ -1284,6 +1373,20 @@ class Tod(FitsArray):
                 output += 's'
         return output + ']'
 
+    @staticmethod
+    def _validate_shape(shape, nsamples):
+        if not isinstance(shape[-1], tuple) and not isinstance(shape[-1], list) and not isinstance(shape[-1], numpy.ndarray):
+            if nsamples is not None and shape[-1] != numpy.sum(nsamples):
+                raise ValueError("The total number of samples '"+str(shape[-1])+"' is not equal to the number of samples specified by the keyword nsamples '"+str(nsamples)+"="+str(numpy.sum(nsamples))+"'.")
+            if nsamples is None:
+                nsamples = (shape[-1],)
+            return tuple(shape), tuple(nsamples)
+        if nsamples is not None and tuple(shape[-1]) != tuple(nsamples):
+            raise ValueError("The slices specified by the shape '"+str(shape)+"' are not compatible with these specified by the keyword nsamples '"+str(nsamples)+"'.")
+        shape_ = list(shape[0:-1])
+        shape_.append(numpy.sum(shape[-1]))
+        return tuple(shape_), tuple(shape[-1])
+
 
 
 #-------------------------------------------------------------------------------
@@ -1310,6 +1413,7 @@ class PcgCallback():
         self.count = 1
     def __call__(self, x):
         print 'PCG Iteration '+str(self.count)
+        #if numpy.any(numpy.isnan(x)): print '... NaN in there.'
         self.count += 1
 
 class RegularizedLeastSquareMatvec(LeastSquareMatvec):
@@ -1382,30 +1486,39 @@ def mapper_naive(tod, model, weights=False):
 #-------------------------------------------------------------------------------
 
 
-def mapper_ls(tod, model):
-    pass
-
- 
-
-
-#-------------------------------------------------------------------------------
-
-
-def mapper_rls(tod, model, rhs):
-
+def mapper_ls(tod, model, noise=Identity(), tol=1.e-6, maxiter=300):
     from scipy.sparse import dia_matrix
     from scipy.sparse.linalg import LinearOperator, cgs
 
-    matvec = RegularizedLeastSquareMatvec(model, hyper=1e1)
+    matvec = LeastSquareMatvec(noise * model)
     shape = 2*(numpy.product(model.shapein),)
     operator = LinearOperator(matvec=matvec, dtype=numpy.float64, shape=shape)
 
-    if rhs is None:
-        rhs = model.transpose(tod)
-    rhs = matvec.unpacking.transpose(rhs)
+    rhs = matvec.unpacking.transpose(model.transpose(noise.transpose(noise.direct(tod))))
     x0 = matvec.unpacking.transpose(mapper_naive(tod, model))
     x0[numpy.isnan(x0)] = 0.
-    solution, nit = cgs(operator, rhs, x0=x0, tol=1.e-4, maxiter=200, callback=PcgCallback())
+    solution, nit = cgs(operator, rhs, x0=x0, tol=tol, maxiter=maxiter, callback=PcgCallback())
+    return Map(matvec.unpacking.direct(solution))
+
+ 
+#-------------------------------------------------------------------------------
+
+
+def mapper_rls(tod, model, noise=Identity(), hyper=1e1, tol=1.e-6, maxiter=300):
+    #from scipy.sparse import dia_matrix
+    from scipy.sparse.linalg import LinearOperator, cgs
+
+    if numpy.any(numpy.isnan(tod)) or numpy.any(numpy.isinf(tod)): raise ValueError('Input Tod contains not finite values.')
+
+    matvec = RegularizedLeastSquareMatvec(noise * model, hyper=hyper)
+    shape = 2*(numpy.product(model.shapein),)
+    operator = LinearOperator(matvec=matvec, dtype=numpy.float64, shape=shape)
+
+    rhs = matvec.unpacking.transpose(model.transpose(noise.transpose(noise.direct(tod))))
+    if numpy.any(numpy.isnan(rhs)) or numpy.any(numpy.isinf(rhs)): raise ValueError('RHS contains not finite values.')
+    x0 = matvec.unpacking.transpose(mapper_naive(tod, model))
+    x0[numpy.isnan(x0)] = 0.
+    solution, nit = cgs(operator, rhs, x0=x0, tol=tol, maxiter=maxiter, callback=PcgCallback())
     return Map(matvec.unpacking.direct(solution))
 
  
@@ -1482,17 +1595,3 @@ def any_neq(a,b, precision):
     if numpy.any(mask != numpy.isnan(b)):
         return True
     return numpy.any((abs(a-b) > 10.**(-precision) * abs(a))[numpy.isnan(a).__neg__()])
-
-
-#-------------------------------------------------------------------------------
-
-
-def smart_reshape(array, shape):
-    curr = array
-    while True:
-        if curr.shape == shape:
-            return curr
-        if curr.base is None or curr.base.dtype != array.dtype or curr.base.__class__ != array.__class__:
-            return curr.reshape(shape)
-        curr = curr.base
-

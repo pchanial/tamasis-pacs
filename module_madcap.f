@@ -8,7 +8,9 @@ module module_madcap
     implicit none
     private
 
+    public :: get_nfilters
     public :: read_filter
+    public :: read_filter_headers
     public :: read_tod
     public :: read_tod_header
 
@@ -392,28 +394,23 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine read_filter_headers(filename, convert, ndetectors, first, last, ncorrelations, status)
+    function get_nfilters(filename, ndetectors, status) result (nfiles)
 
-        character(len=*), intent(in)        :: filename
-        character(len=*), intent(in)        :: convert
-        integer, intent(in)                 :: ndetectors
-        integer*8, allocatable, intent(out) :: first(:), last(:)
-        integer, allocatable, intent(out)   :: ncorrelations(:)
-        integer, intent(out)                :: status
+        character(len=*), intent(in) :: filename
+        integer, intent(in)          :: ndetectors
+        integer, intent(out)         :: status
+        integer                      :: nfiles
 
-        logical                             :: exist
-        integer                             :: nfiles, ifile
+        logical                      :: exist
 
         status = 1
 
         ! determine the number of filter files
         nfiles = 0
         do
-
             inquire (file=filename // '.' // strinteger(nfiles), exist=exist)
             if (.not. exist) exit
             nfiles = nfiles + 1
-
         end do
 
         ! some checks
@@ -423,13 +420,35 @@ contains
         end if
 
         if (mod(nfiles, ndetectors) /= 0) then
-           write (ERROR_UNIT,'(a,2(i0,a))') "Error: In file '" // filename // "', the number of filters '", nfiles, "' is not an in&
-                 &teger time the number of detectors '", ndetectors, "'."
+           write (ERROR_UNIT,'(a,2(i0,a))') "Error: The number of filters '", nfiles, "' named '" // filename // "' is not an integ&
+                 &er time the number of detectors '", ndetectors, "'."
            return
         end if
 
+        status = 0
+
+    end function get_nfilters
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine read_filter_headers(filename, convert, ndetectors, first, last, ncorrelations, status)
+
+        character(len=*), intent(in)        :: filename
+        character(len=*), intent(in)        :: convert
+        integer, intent(in)                 :: ndetectors
+        integer*8, allocatable, intent(out) :: first(:), last(:)
+        integer, allocatable, intent(out)   :: ncorrelations(:)
+        integer, intent(out)                :: status
+
+        integer                             :: nfiles, ifile
+
+        nfiles = get_nfilters(filename, ndetectors, status)
+        if (status /= 0) return
+
         allocate (first(nfiles))
-        allocate (last(nfiles))
+        allocate (last (nfiles))
         allocate (ncorrelations(nfiles))
 
         ! loop over the filters
@@ -438,9 +457,7 @@ contains
                  ncorrelations(ifile), status)
             if (status /= 0) return
         end do
-        
-        status = 0
-        
+                
     end subroutine read_filter_headers
 
 
@@ -465,6 +482,7 @@ contains
 
         ! set number of correlations and bandwidth
         if (any(ncorrelations /= ncorrelations(1))) then
+            status = 1
             write (ERROR_UNIT,'(a)') 'Error: Filter files do not have the same correlation length.'
             return
         end if        
@@ -479,7 +497,7 @@ contains
 
         allocate(filter%first(filter%nslices))
         allocate(filter%last (filter%nslices))
-        allocate(filter%data (filter%ncorrelations,filter%ndetectors,filter%nslices))
+        allocate(filter%data (filter%ncorrelations+1,filter%ndetectors,filter%nslices))
         isample = 1
 
         do islice=1, filter%nslices

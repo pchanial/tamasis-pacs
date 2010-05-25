@@ -44,3 +44,5 @@ x0[numpy.isnan(x0)] = 0.
 #M = dia_matrix((m, 0), shape=shape)
 solution, nit = cgs(operator, b, x0=x0, tol=1.e-4, maxiter=200, callback=PcgCallback())
 map_iter = Map(reshaping.direct(solution))
+
+map_rls = mapper_rls(tod, model)
