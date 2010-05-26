@@ -978,6 +978,14 @@ class PacsObservation(_Pacs):
          
         #_Pacs.__init__(self, channel, npixels, nsamples, ndetectors_per_sample, fine_sampling_factor, compression_factor, bad_detector_mask, keep_bad_detectors)
 
+    def get_map_header(self, resolution=None, finer_sampling=True):
+        if resolution is None:
+            resolution = self.default_resolution
+        filename_, nfilenames = self._files2tmf(self.filename)
+        header, status = tmf.pacs_map_header(tamasis_dir, filename_, nfilenames, finer_sampling, self.fine_sampling_factor, self.keep_bad_detectors, self.user_mask, self.bad_detector_mask, resolution)
+        if status != 0: raise RuntimeError()
+        return header
+    
     def get_tod(self, do_flatfielding=True, do_subtraction_mean=True):
         """
         Returns the signal and mask timelines.
@@ -992,14 +1000,12 @@ class PacsObservation(_Pacs):
         nsamples = numpy.sum(self.nfinesamples if finer_sampling else self.nsamples)
         if npixels_per_sample is None:
             npixels_per_sample = self.default_npixels_per_sample
-        filename_, nfilenames = self._files2tmf(self.filename)
         if header is None:
-            if resolution is None:
-                resolution = self.default_resolution
-            header, status = tmf.pacs_map_header(tamasis_dir, filename_, nfilenames, finer_sampling, self.fine_sampling_factor, self.keep_bad_detectors, self.user_mask, self.bad_detector_mask, resolution)
-            if status != 0: raise RuntimeError()
+            header = self.get_map_header(resolution, finer_sampling)
         if isinstance(header, str):
             header = str2fitsheader(header)
+
+        filename_, nfilenames = self._files2tmf(self.filename)
         sizeofpmatrix = npixels_per_sample * nsamples * self.ndetectors
         print 'Info: Allocating '+str(sizeofpmatrix/2.**17)+' MiB for the pointing matrix.'
         pmatrix = numpy.zeros(sizeofpmatrix, dtype=numpy.int64)
@@ -1262,6 +1268,53 @@ class Map(FitsArray):
 
     def copy(self, order='C'):
         return Map(self, order=order, copy=True)
+
+    @staticmethod
+    def create_header(naxis, crval=(0.,0.), crpix=None, ctype=('RA---TAN','DEC--TAN'), cunit='deg', cdelt=None, cd=None):
+
+        if numpy.isscalar(naxis):
+            naxis = (naxis, naxis)
+        if len(naxis) != 2:
+            raise ValueError("Invalid dimension '"+str(len(naxis))+"' instead of 2.")
+        if len(crval) != 2:
+            raise ValueError('CRVAL does not have two elements.')
+        if crpix is None:
+            crpix = numpy.array(naxis) / 2 + 1
+        if len(crpix) != 2:
+            raise ValueError('CRPIX does not have two elements.')
+        if len(ctype) != 2:
+            raise ValueError('CTYPE does not have two elements.')
+        if numpy.isscalar(cunit):
+            cunit = (cunit, cunit)
+        if cd is not None:
+            raise NotImplemented('CD keyword is not implemented.')
+        if cdelt is None:
+            cdelt = 1./3600.
+        if numpy.isscalar(cdelt):
+            cdelt = (-cdelt, cdelt)
+
+        header = pyfits.Header()
+        header.update('simple', True)
+        header.update('bitpix', -64)
+        header.update('extend', True)
+        header.update('naxis', 2)
+        header.update('naxis1', naxis[0])
+        header.update('naxis2', naxis[1])
+        header.update('crval1', crval[0])
+        header.update('crval2', crval[1])
+        header.update('crpix1', crpix[0])
+        header.update('crpix2', crpix[1])
+        header.update('ctype1', ctype[0])
+        header.update('ctype2', ctype[1])
+        header.update('cunit1', cunit[0])
+        header.update('cunit2', cunit[1])
+        header.update('cdelt1', cdelt[0])
+        header.update('cdelt2', cdelt[1])
+        header.update('cd1_1', 1.)
+        header.update('cd2_1', 0.)
+        header.update('cd1_2', 0.)
+        header.update('cd2_2', 1.)
+        return header
 
     def imshow(self, num=None, axis=True, title=None):
         """A simple graphical display function for the Map class"""
