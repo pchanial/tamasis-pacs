@@ -49,7 +49,7 @@ program test_ngc6946_bpj
 
     ! initialise pacs instrument
     allocate(pacs)
-    call pacs%init(obs%channel, obs%observing_mode == 'Transparent', 1, .false., status)
+    call pacs%init(obs%channel, obs%observing_mode == 'Transparent', 1, .false., .false., status)
     if (status /= 0) stop 'FAILED: pacsinstrument%init'
 
     ! get header map

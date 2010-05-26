@@ -74,7 +74,7 @@ program test_pacsobservation
     if (status /= 0) stop 'FAILED: init_pacsobservation loop'
 
     allocate(pacs)
-    call pacs%init(obs%channel, obs%observing_mode == 'Transparent', 1, .false., status)
+    call pacs%init(obs%channel, obs%observing_mode == 'Transparent', 1, .false., .false., status)
     if (status /= 0 .or. pacs%channel /= 'b' .or. pacs%transparent_mode) stop 'FAILED: pacs%init'
 
     ! get a detector that has been hit by a glitch
