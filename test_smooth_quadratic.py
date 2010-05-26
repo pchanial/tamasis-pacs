@@ -9,12 +9,11 @@ ioff()
 datadir = os.getenv('PACS_DATA')+'/transpScan/'
 pacs = PacsObservation(filename=[datadir+'1342184598_blue_PreparedFrames.fits[6065:]',
                                  datadir+'1342184599_blue_PreparedFrames.fits[6066:]'],
-                       resolution=3.2,
                        fine_sampling_factor=1,
                        keep_bad_detectors=False)
 
 telescope    = Identity('Telescope PSF')
-projection   = Projection(pacs, npixels_per_sample=5)
+projection   = Projection(pacs, resolution=3.2, npixels_per_sample=5)
 multiplexing = CompressionAverage(1, 'Multiplexing')
 crosstalk    = Identity('Crosstalk')
 compression  = CompressionAverage(4)

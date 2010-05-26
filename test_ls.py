@@ -5,9 +5,7 @@ import scipy
 from scipy.sparse import dia_matrix
 from scipy.sparse.linalg import LinearOperator, cgs
 
-pacs = PacsObservation(filename=tamasis_dir+'tests/frames_blue.fits',
-                       resolution=3.2)
-
+pacs = PacsObservation(tamasis_dir+'tests/frames_blue.fits')
 tod = pacs.get_tod()
 
 telescope    = Identity('Telescope PSF')

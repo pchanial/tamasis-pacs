@@ -282,25 +282,20 @@ class Projection(AcquisitionModel):
     """
     This class handles the direct and transpose operations by the pointing matrix
     The input observation has the following required attributes/methods: 
-        - header
-        - npixels_per_sample
         - nfinesamples
         - nsamples
         - ndetectors
         - get_pointing_matrix()
+    The instance has the following specific attributes:
+        - header: the FITS header of the map
+        - pmatrix: opaque representation of the pointing matrix
+        - npixels_per_sample: maximum number of sky map pixels that can be intercepted by a detector
     Author: P. Chanial
     """
-    def __init__(self, observation, description=None, finer_sampling=True, npixels_per_sample=None, header=None):
+    def __init__(self, observation, header=None, resolution=None, npixels_per_sample=None, finer_sampling=True, description=None):
         AcquisitionModel.__init__(self, description)
-        if npixels_per_sample is None:
-            npixels_per_sample = getattr(observation, 'npixels_per_sample', None)
-            if npixels_per_sample is None:
-                raise ValueError('The option npixels_per_sample has not been specified.')
-        self.npixels_per_sample = npixels_per_sample
-        if header is None:
-            header = observation.header
-        self.header = header
-        self.pmatrix = observation.get_pointing_matrix(self.npixels_per_sample, finer_sampling=finer_sampling)
+        self.pmatrix, self.header, self.npixels_per_sample = \
+            observation.get_pointing_matrix(header, resolution, npixels_per_sample, finer_sampling=finer_sampling)
         self.shapein = tuple([self.header['naxis'+str(i+1)] for i in reversed(range(self.header['naxis']))])
         nsamples = observation.nfinesamples if finer_sampling else observation.nsamples
         self.shapeout = self._combine_sliced_shape(observation.ndetectors, nsamples) 
@@ -778,7 +773,7 @@ class InvNtt(AcquisitionModel):
         ndetectors = shape[0]
         nsamples = numpy.array(shape[1], ndmin=1, dtype='int32')
         nsamples_tot = numpy.sum(nsamples)
-        tod_filter, ncorrelations, status = tmf.get_invntt_madmap1(filename, convert, nsamples, nsamples_tot, ndetectors)
+        tod_filter, ncorrelations, status = tmf.invntt_madmap1(filename, convert, nsamples, nsamples_tot, ndetectors)
         if status != 0: raise RuntimeError()
         self.data = Tod(tod_filter.T, copy=False)
         self.ncorrelations = ncorrelations
@@ -807,7 +802,7 @@ class SqrtInvNtt(AcquisitionModel):
         nsamples = numpy.array(observation.nsamples)
         nsamples_tot = numpy.sum(nsamples)
         ndetectors = observation.ndetectors
-        tod_filter, ncorrelations, status = tmf.get_sqrt_invntt_madmap1(filename, convert, nsamples, nsamples_tot, ndetectors)
+        tod_filter, ncorrelations, status = tmf.sqrt_invntt_madmap1(filename, convert, nsamples, nsamples_tot, ndetectors)
         if status != 0: raise RuntimeError()
         self.data = Tod(tod_filter.T, copy=False)
         self.ncorrelations = ncorrelations
@@ -932,29 +927,21 @@ class PacsObservation(_Pacs):
     It contains the following attributes:
     - filename           : name of the file name, including the array colour, but excluding 
                            the type. Example: '1342184520_blue'.
-    - header             : pyfits header of the sky map
-    - resolution         : resolution of the sky map, in arcsec
     - npixels_per_sample : number of sky pixels which intersect a PACS detector
     - keep_bad_detectors : if set to True, force the processing to include all pixels
     - bad_detector_mask  : (nx,ny) mask of uint8 values (0 or 1). 1 means dead pixel.
     - ij(2,ndetectors)   : the row and column number (starting from 0) of the detectors
     Author: P. Chanial
     """
-    def __init__(self, filename, header=None, resolution=None, fine_sampling_factor=1, bad_detector_mask=None, keep_bad_detectors=False):
-
-        if header is not None and resolution is not None:
-            raise ValueError('It is not possible to specify a FITS header and an image resolution.')
+    def __init__(self, filename, fine_sampling_factor=1, bad_detector_mask=None, keep_bad_detectors=False):
 
         filename_, nfilenames = self._files2tmf(filename)
 
         channel, status = tmf.pacs_info_channel(filename_, nfilenames)
-        if status != 0: raise RuntimeError()
+        if status != 0: raise RuntimeError()        
 
-        # suggested npixels_per_sample
-        npixels_per_sample = 11 if channel == 'r' else 5
-
-        use_mask = bad_detector_mask is not None
-        if use_mask:
+        user_mask = bad_detector_mask is not None
+        if user_mask:
             if channel == 'r':
                 if bad_detector_mask.shape != (16,32):
                     raise ValueError('Invalid shape of the input red bad detector mask: '+str(bad_detector_mask.shape)+'.')
@@ -970,31 +957,24 @@ class PacsObservation(_Pacs):
                 bad_detector_mask = numpy.zeros((32,64), dtype='int8')
 
         # retrieve information from the observations
-        ndetectors, bad_detector_mask, transparent_mode, compression_factor, nsamples, status = tmf.pacs_info(tamasis_dir, filename_, nfilenames, fine_sampling_factor, keep_bad_detectors, use_mask, numpy.asfortranarray(bad_detector_mask))
+        ndetectors, bad_detector_mask, transparent_mode, compression_factor, nsamples, status = tmf.pacs_info(tamasis_dir, filename_, nfilenames, fine_sampling_factor, keep_bad_detectors, user_mask, numpy.asfortranarray(bad_detector_mask))
         if status != 0: raise RuntimeError()
-
-        if resolution is None:
-            resolution = 3.
-        if header is None:
-            hstr, status = tmf.pacs_map_header(tamasis_dir, filename_, nfilenames, True, fine_sampling_factor, keep_bad_detectors, use_mask, bad_detector_mask, resolution)
-            if status != 0: raise RuntimeError()
-            header = str2fitsheader(hstr)
 
         self.filename = filename
         
         self.channel = channel
+        self.default_npixels_per_sample = 11 if channel == 'r' else 6
+        self.default_resolution = 6. if channel == 'r' else 3.
         self.nobservations = nfilenames
-        self.npixels_per_sample = npixels_per_sample
         self.nsamples = tuple(nsamples)
         self.nfinesamples = tuple(nsamples * compression_factor * fine_sampling_factor)
         self.ndetectors = ndetectors
         self.bad_detector_mask = numpy.ascontiguousarray(bad_detector_mask)
         self.keep_bad_detectors = keep_bad_detectors
+        self.user_mask = user_mask
         self.fine_sampling_factor = fine_sampling_factor
         self.transparent_mode = transparent_mode
         self.compression_factor = compression_factor
-        self.header = header
-
          
         #_Pacs.__init__(self, channel, npixels, nsamples, ndetectors_per_sample, fine_sampling_factor, compression_factor, bad_detector_mask, keep_bad_detectors)
 
@@ -1008,15 +988,26 @@ class PacsObservation(_Pacs):
         
         return Tod(signal.T, mask=mask.T, nsamples=self.nsamples)
 
-    def get_pointing_matrix(self, npixels_per_sample, finer_sampling=True):
+    def get_pointing_matrix(self, header, resolution, npixels_per_sample, finer_sampling=True):
         nsamples = numpy.sum(self.nfinesamples if finer_sampling else self.nsamples)
+        if npixels_per_sample is None:
+            npixels_per_sample = self.default_npixels_per_sample
+        filename_, nfilenames = self._files2tmf(self.filename)
+        if header is None:
+            if resolution is None:
+                resolution = self.default_resolution
+            header, status = tmf.pacs_map_header(tamasis_dir, filename_, nfilenames, finer_sampling, self.fine_sampling_factor, self.keep_bad_detectors, self.user_mask, self.bad_detector_mask, resolution)
+            if status != 0: raise RuntimeError()
+        if isinstance(header, str):
+            header = str2fitsheader(header)
         sizeofpmatrix = npixels_per_sample * nsamples * self.ndetectors
         print 'Info: Allocating '+str(sizeofpmatrix/2.**17)+' MiB for the pointing matrix.'
         pmatrix = numpy.zeros(sizeofpmatrix, dtype=numpy.int64)
-        filename_, nfilenames = self._files2tmf(self.filename)
-        status = tmf.pacs_pointing_matrix_filename(tamasis_dir, filename_, self.nobservations, finer_sampling, self.fine_sampling_factor, npixels_per_sample, nsamples, self.ndetectors, self.keep_bad_detectors, numpy.asfortranarray(self.bad_detector_mask), str(self.header).replace('\n', ''), pmatrix)
+            
+        status = tmf.pacs_pointing_matrix_filename(tamasis_dir, filename_, self.nobservations, finer_sampling, self.fine_sampling_factor, npixels_per_sample, nsamples, self.ndetectors, self.keep_bad_detectors, numpy.asfortranarray(self.bad_detector_mask), str(header).replace('\n', ''), pmatrix)
         if status != 0: raise RuntimeError()
-        return pmatrix
+
+        return pmatrix, header, npixels_per_sample
 
     @staticmethod
     def _files2tmf(filename):
@@ -1128,32 +1119,37 @@ class MadMap1Observation(object):
         self.ndetectors = ndetectors
         self.nsamples = tuple(nsamples)
         self.nfinesamples = tuple(nsamples)
+
+    def get_pointing_matrix(self, header, resolution, npixels_per_sample, finer_sampling=False):
+        if npixels_per_sample is not None and npixels_per_sample != self.npixels_per_sample:
+            raise ValueError('The npixels_per_sample value is incompatible with the MADMAP1 file.')
+        if header is not None:
+            raise ValueError('The map header cannot be specified for MADmap1 observations.')
+        if resolution is not None:
+            raise ValueError('The map resolution cannot be specified for MADmap1 observations.')
         header = pyfits.Header()
         header.update('simple', True)
         header.update('bitpix', -64)
         header.update('extend', True)
         header.update('naxis', 1)
         header.update('naxis1', numpy.sum(self.mapmask == 0))
-        self.header = header
 
-    def get_pointing_matrix(self, npixels_per_sample, finer_sampling=False):
-        if npixels_per_sample != self.npixels_per_sample:
-            raise ValueError('The npixels_per_sample value is incompatible with the MADMAP1 file.')
-        tod = Tod.zeros((self.ndetectors,self.nfinesamples))
-        sizeofpmatrix = npixels_per_sample * numpy.sum(self.nfinesamples) * self.ndetectors
+        tod = Tod.zeros((self.ndetectors,self.nsamples))
+        sizeofpmatrix = self.npixels_per_sample * numpy.sum(self.nsamples) * self.ndetectors
         print 'Info: Allocating '+str(sizeofpmatrix/2.**17)+' MiB for the pointing matrix.'
         pmatrix = numpy.zeros(sizeofpmatrix, dtype=numpy.int64)
-        status = tmf.read_madmap1(self.todfile, self.invnttfile, self.convert, npixels_per_sample, tod.T, pmatrix)
+        status = tmf.read_madmap1(self.todfile, self.invnttfile, self.convert, self.npixels_per_sample, tod.T, pmatrix)
         if (status != 0): raise RuntimeError()
-        return pmatrix
+        return pmatrix, header, self.npixels_per_sample
 
     def get_tod(self):
-        tod = Tod.zeros((self.ndetectors,self.nfinesamples))
-        sizeofpmatrix = self.npixels_per_sample * numpy.sum(self.nfinesamples) * self.ndetectors
+        tod = Tod.zeros((self.ndetectors,self.nsamples))
+        sizeofpmatrix = self.npixels_per_sample * numpy.sum(self.nsamples) * self.ndetectors
         pmatrix = numpy.zeros(sizeofpmatrix, dtype=numpy.int64)
         status = tmf.read_madmap1(self.todfile, self.invnttfile, self.convert, self.npixels_per_sample, tod.T, pmatrix)
         if (status != 0): raise RuntimeError()
         return tod
+
 
 
 #-------------------------------------------------------------------------------
