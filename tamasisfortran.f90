@@ -1091,7 +1091,7 @@ end subroutine read_madmap1
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine get_invntt_madmap1(filename, convert, nslices, nsamples, nsamples_tot, ndetectors, tod_filter, ncorrelations,      &
+subroutine invntt_madmap1(filename, convert, nslices, nsamples, nsamples_tot, ndetectors, tod_filter, ncorrelations,      &
                                    status)
 
     !f2py threadsafe
@@ -1120,7 +1120,6 @@ subroutine get_invntt_madmap1(filename, convert, nslices, nsamples, nsamples_tot
     integer, intent(out)         :: status
 
     type(filterset)              :: filter
-!!$integer :: i
 
     call read_filter(filename, convert, ndetectors, filter, status)
     if (status /= 0) return
@@ -1129,18 +1128,14 @@ subroutine get_invntt_madmap1(filename, convert, nslices, nsamples, nsamples_tot
 
     call create_filter_uncorrelated(filter, nsamples, nsamples_tot, tod_filter, status)
     if (status /= 0) return
-!!$
-!!$do i=1,size(tod_filter,1)
-!!$print *, 'TOD_FILTER:', i, tod_filter(i,1), sqrt(tod_filter(i,1))
-!!$end do
 
-end subroutine get_invntt_madmap1
+end subroutine invntt_madmap1
 
 
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine get_sqrt_invntt_madmap1(filename, convert, nslices, nsamples, nsamples_tot, ndetectors, tod_filter, ncorrelations,      &
+subroutine sqrt_invntt_madmap1(filename, convert, nslices, nsamples, nsamples_tot, ndetectors, tod_filter, ncorrelations,      &
                                    status)
 
     !f2py threadsafe
@@ -1154,6 +1149,7 @@ subroutine get_sqrt_invntt_madmap1(filename, convert, nslices, nsamples, nsample
     !f2py intent(out)  :: ncorrelations
     !f2py intent(out)  :: status
 
+    use iso_fortran_env,  only : OUTPUT_UNIT
     use module_filtering, only : create_filter_uncorrelated, filterset
     use module_madcap,    only : read_filter
     implicit none
@@ -1169,7 +1165,6 @@ subroutine get_sqrt_invntt_madmap1(filename, convert, nslices, nsamples, nsample
     integer, intent(out)         :: status
 
     type(filterset)              :: filter
-integer :: i
 
     call read_filter(filename, convert, ndetectors, filter, status)
     if (status /= 0) return
@@ -1179,13 +1174,13 @@ integer :: i
     call create_filter_uncorrelated(filter, nsamples, nsamples_tot, tod_filter, status)
     if (status /= 0) return
 
-do i=1,size(tod_filter,1)
-print *, 'TOD_FILTER:', i, tod_filter(i,1), sqrt(tod_filter(i,1))
-end do
+    if (any(tod_filter < 0)) then
+        write (OUTPUT_UNIT,'(a)') 'SQRT_INVNTT_MADMAP1: some values are negative.'
+    end if
 
     tod_filter = sqrt(tod_filter)
 
-end subroutine get_sqrt_invntt_madmap1
+end subroutine sqrt_invntt_madmap1
 
 
 !-----------------------------------------------------------------------------------------------------------------------------------
