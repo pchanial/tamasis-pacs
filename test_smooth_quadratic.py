@@ -24,11 +24,8 @@ model = compression * crosstalk * multiplexing * projection * telescope
 tod40Hz = pacs.get_tod()
 
 # remove drift
-x = numpy.arange(tod40Hz.shape[1])
-slope = scipy.polyfit(x, tod40Hz.T, deg=6)
-drift = tod40Hz.copy()
-for i in xrange(tod40Hz.shape[0]):
-    drift[i,:] = scipy.polyval(slope[:,i], x)
+tod40Hz_filtered = filter_polynomial(tod40Hz, 6)
+drift = tod40Hz - tod40Hz_filtered
 
 idetector=5
 if do_plot:
@@ -37,7 +34,7 @@ if do_plot:
     plot(drift[idetector,:],'r')
     show()
 
-tod40Hz -= drift
+tod40Hz = tod40Hz_filtered
 
 tod40Hz = filter_median(tod40Hz, 10000)
 

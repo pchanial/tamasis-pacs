@@ -982,7 +982,7 @@ class PacsObservation(_Pacs):
         if resolution is None:
             resolution = self.default_resolution
         filename_, nfilenames = self._files2tmf(self.filename)
-        header, status = tmf.pacs_map_header(tamasis_dir, filename_, nfilenames, finer_sampling, self.fine_sampling_factor, self.keep_bad_detectors, self.user_mask, self.bad_detector_mask, resolution)
+        header, status = tmf.pacs_map_header(tamasis_dir, filename_, nfilenames, finer_sampling, self.fine_sampling_factor, self.keep_bad_detectors, self.user_mask, self.bad_detector_mask, self.mask_bad_line, resolution)
         if status != 0: raise RuntimeError()
         return header
     
@@ -1319,13 +1319,15 @@ class Map(FitsArray):
     def imshow(self, num=None, axis=True, title=None):
         """A simple graphical display function for the Map class"""
 
-        #pyplot.gray()
-        pyplot.figure(num=num)
+        mean   = numpy.mean(self[numpy.isfinite(self)])
+        stddev = numpy.std(self[numpy.isfinite(self)])
+        minval = mean - 2*stddev
+        maxval = mean + 5*stddev
 
+        pyplot.figure(num=num)
         # HACK around bug in imshow !!!
-        pyplot.imshow(self.T if self.flags.f_contiguous else self, 
-               interpolation='nearest', 
-               origin='lower')
+        pyplot.imshow(self.T if self.flags.f_contiguous else self, interpolation='nearest')
+        pyplot.clim(minval, maxval)
         pyplot.xlabel('Right Ascension')
         pyplot.ylabel("Declination")
         if title is not None:
@@ -1389,13 +1391,16 @@ class Tod(FitsArray):
         return Tod(self, order=order, copy=True)
 
     def imshow(self, num=None, axis=True, title=None):
-        """A simple graphical display function for the Map class"""
-        pyplot.gray()
+        """A simple graphical display function for the Tod class"""
+
+        mean   = numpy.mean(self[numpy.isfinite(self)])
+        stddev = numpy.std(self[numpy.isfinite(self)])
+        minval = mean - 2*stddev
+        maxval = mean + 5*stddev
+
         pyplot.figure(num=num)
-        pyplot.imshow(self, 
-                      aspect='auto', 
-                      interpolation='nearest', 
-                      origin='lower')
+        pyplot.imshow(self.T if self.flags.f_contiguous else self, aspect='auto', interpolation='nearest')
+        pyplot.clim(minval, maxval)
         pyplot.xlabel("Signal")
         pyplot.ylabel('Detector number')
         if title is not None:
@@ -1615,6 +1620,28 @@ def filter_median(tod, length=10):
     return filtered
 
  
+#-------------------------------------------------------------------------------
+
+
+def filter_polynomial(tod, degree):
+    """
+    Filter by subtracting a fitted polynomial of arbitrary degree.
+    """
+    filtered = tod.copy()
+    dest = 0
+    for islice in range(len(tod.nsamples)):
+        nsamples = tod.nsamples[islice]
+        x = numpy.arange(nsamples)
+        slope = scipy.polyfit(x, tod[:,dest:dest+nsamples].T, deg=degree)
+
+        for idetector in range(tod.shape[0]):
+            filtered[idetector,dest:dest+nsamples] -= scipy.polyval(slope[:,idetector], x)
+        
+        dest = dest + nsamples
+
+    return filtered
+
+
 #-------------------------------------------------------------------------------
 
 
