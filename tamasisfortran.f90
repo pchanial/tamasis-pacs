@@ -47,8 +47,8 @@ end subroutine pacs_info_channel
 
 
 subroutine pacs_info(tamasis_dir, filename, nfilenames, fine_sampling_factor, keep_bad_detectors, use_bad_detector_mask,           &
-                     bad_detector_mask, nrows, ncolumns, ndetectors, output_mask, transparent_mode, compression_factor, nsamples,  &
-                     status)
+                     bad_detector_mask, nrows, ncolumns, mask_bad_line, ndetectors, output_mask, transparent_mode,                 &
+                     compression_factor, nsamples, status)
 
     use module_pacsinstrument,  only : pacsinstrument
     use module_pacsobservation, only : pacsobservation, maskarray
@@ -65,6 +65,7 @@ subroutine pacs_info(tamasis_dir, filename, nfilenames, fine_sampling_factor, ke
     !f2py intent(in)   bad_detector_mask
     !f2py intent(hide) nrows = shape(bad_detector_mask,0)
     !f2py intent(hide) ncolumns = shape(bad_detector_mask,1)
+    !f2py intent(in)   mask_bad_line
     !f2py intent(out)  ndetectors
     !f2py intent(out)  output_mask
     !f2py intent(out)  transparent_mode
@@ -80,6 +81,7 @@ subroutine pacs_info(tamasis_dir, filename, nfilenames, fine_sampling_factor, ke
     logical, intent(in)          :: use_bad_detector_mask
     logical*1, intent(in)        :: bad_detector_mask(nrows,ncolumns)
     integer, intent(in)          :: nrows, ncolumns
+    logical, intent(in)          :: mask_bad_line
     integer, intent(out)         :: ndetectors
     logical*1, intent(out)       :: output_mask(nrows,ncolumns)
     logical, intent(out)         :: transparent_mode
@@ -117,9 +119,10 @@ subroutine pacs_info(tamasis_dir, filename, nfilenames, fine_sampling_factor, ke
     transparent_mode = obs%slice(1)%observing_mode == 'Transparent'
     allocate(pacs)
     if (use_bad_detector_mask) then
-        call pacs%init(obs%channel, transparent_mode, fine_sampling_factor, keep_bad_detectors, status, bad_detector_mask)
+        call pacs%init(obs%channel, transparent_mode, fine_sampling_factor, keep_bad_detectors, mask_bad_line, status,             &
+             bad_detector_mask)
     else
-        call pacs%init(obs%channel, transparent_mode, fine_sampling_factor, keep_bad_detectors, status)
+        call pacs%init(obs%channel, transparent_mode, fine_sampling_factor, keep_bad_detectors, mask_bad_line, status)
     end if
     if (status /= 0) return
 
@@ -135,7 +138,7 @@ end subroutine pacs_info
 
 
 subroutine pacs_map_header(tamasis_dir, filename, nfilenames, finer_sampling, fine_sampling_factor, keep_bad_detectors,            &
-                           use_bad_detector_mask, bad_detector_mask, nrows, ncolumns, resolution, header, status)
+                           use_bad_detector_mask, bad_detector_mask, nrows, ncolumns, mask_bad_line, resolution, header, status)
 
     use module_pacsinstrument,  only : pacsinstrument
     use module_pacsobservation, only : pacsobservation, maskarray
@@ -153,6 +156,7 @@ subroutine pacs_map_header(tamasis_dir, filename, nfilenames, finer_sampling, fi
     !f2py intent(in)   bad_detector_mask
     !f2py intent(hide) nrows = shape(bad_detector_mask,0)
     !f2py intent(hide) ncolumns = shape(bad_detector_mask,1)
+    !f2py intent(in)   mask_bad_line
     !f2py intent(in)   resolution
     !f2py intent(out)  header
     !f2py intent(out)  status
@@ -166,6 +170,7 @@ subroutine pacs_map_header(tamasis_dir, filename, nfilenames, finer_sampling, fi
     logical, intent(in)          :: use_bad_detector_mask
     logical*1, intent(in)        :: bad_detector_mask(nrows,ncolumns)
     integer, intent(in)          :: nrows, ncolumns
+    logical, intent(in)          :: mask_bad_line
     real*8, intent(in)           :: resolution
     character(len=2880), intent(out) :: header
     integer, intent(out)             :: status
@@ -196,10 +201,11 @@ subroutine pacs_map_header(tamasis_dir, filename, nfilenames, finer_sampling, fi
 
     allocate(pacs)
     if (use_bad_detector_mask) then
-        call pacs%init(obs%channel, obs%slice(1)%observing_mode == 'Transparent', fine_sampling_factor, keep_bad_detectors, status,&
-             bad_detector_mask)
+        call pacs%init(obs%channel, obs%slice(1)%observing_mode == 'Transparent', fine_sampling_factor, keep_bad_detectors,        &
+             mask_bad_line, status, bad_detector_mask)
     else
-        call pacs%init(obs%channel, obs%slice(1)%observing_mode == 'Transparent', fine_sampling_factor, keep_bad_detectors,status)
+        call pacs%init(obs%channel, obs%slice(1)%observing_mode == 'Transparent', fine_sampling_factor, keep_bad_detectors,        &
+             mask_bad_line, status)
     end if
     if (status /= 0) go to 999
     
@@ -214,7 +220,7 @@ end subroutine pacs_map_header
 
 
 subroutine pacs_timeline(tamasis_dir, filename, nfilenames, nsamples, ndetectors, keep_bad_detectors, bad_detector_mask, nrow,     &
-                         ncol, do_flatfielding, do_subtraction_mean, signal, mask, status)
+                         ncol, mask_bad_line, do_flatfielding, do_subtraction_mean, signal, mask, status)
 
     use iso_fortran_env,        only : ERROR_UNIT
     use module_pacsinstrument,  only : pacsinstrument
@@ -233,6 +239,7 @@ subroutine pacs_timeline(tamasis_dir, filename, nfilenames, nsamples, ndetectors
     !f2py intent(in)   :: bad_detector_mask
     !f2py intent(hide) :: nrow = shape(bad_detector_mask,0)
     !f2py intent(hide) :: ncol = shape(bad_detector_mask,1)
+    !f2py intent(in)   :: mask_bad_line
     !f2py intent(in)   :: do_flatfielding
     !f2py intent(in)   :: do_subtraction_mean
     !f2py intent(out)  :: signal
@@ -247,6 +254,7 @@ subroutine pacs_timeline(tamasis_dir, filename, nfilenames, nsamples, ndetectors
     logical, intent(in)          :: keep_bad_detectors
     logical*1, intent(in)        :: bad_detector_mask(nrow,ncol)
     integer, intent(in)          :: nrow, ncol
+    logical, intent(in)          :: mask_bad_line
     logical, intent(in)          :: do_flatfielding, do_subtraction_mean
     real*8, intent(out)          :: signal(nsamples, ndetectors)
     logical*1, intent(out)       :: mask(nsamples, ndetectors)
@@ -279,7 +287,8 @@ subroutine pacs_timeline(tamasis_dir, filename, nfilenames, nsamples, ndetectors
 
     ! initialise pacs instrument
     allocate(pacs)
-    call pacs%init(obs%channel, obs%observing_mode == 'Transparent', 1, keep_bad_detectors, status, bad_detector_mask)
+    call pacs%init(obs%channel, obs%observing_mode == 'Transparent', 1, keep_bad_detectors, mask_bad_line, status,                 &
+         bad_detector_mask)
     if (status /= 0) go to 999
 
     ! read timeline
@@ -310,7 +319,7 @@ end subroutine pacs_timeline
 
 subroutine pacs_pointing_matrix_filename(tamasis_dir, filename, nfilenames, finer_sampling, fine_sampling_factor,                  &
                                          npixels_per_sample, nsamples, ndetectors, keep_bad_detectors, bad_detector_mask, nrow,    &
-                                         ncol, header, pmatrix, status)
+                                         ncol, mask_bad_line, header, pmatrix, status)
 
     use iso_fortran_env,        only : ERROR_UNIT
     use module_fitstools,       only : ft_read_parameter
@@ -333,6 +342,7 @@ subroutine pacs_pointing_matrix_filename(tamasis_dir, filename, nfilenames, fine
     !f2py intent(in)   :: bad_detector_mask
     !f2py intent(hide) :: nrow = shape(bad_detector_mask,0)
     !f2py intent(hide) :: ncol = shape(bad_detector_mask,1)
+    !f2py intent(in)   :: mask_bad_line
     !f2py intent(in)   :: header
     !f2py integer*8, intent(inout) :: pmatrix(npixels_per_sample*nsamples*ndetectors)
     !f2py intent(out)  :: status
@@ -348,6 +358,7 @@ subroutine pacs_pointing_matrix_filename(tamasis_dir, filename, nfilenames, fine
     logical, intent(in)          :: keep_bad_detectors
     logical*1, intent(in)        :: bad_detector_mask(nrow,ncol)
     integer, intent(in)          :: nrow, ncol
+    logical, intent(in)          :: mask_bad_line
     character(len=*), intent(in) :: header
     type(pointingelement), intent(inout) :: pmatrix(npixels_per_sample,nsamples,ndetectors)
     integer, intent(out)         :: status
@@ -379,8 +390,8 @@ subroutine pacs_pointing_matrix_filename(tamasis_dir, filename, nfilenames, fine
 
     ! initialise pacs instrument
     allocate(pacs)
-    call pacs%init(obs%channel, obs%slice(1)%observing_mode == 'Transparent', fine_sampling_factor, keep_bad_detectors, status,    &
-                   bad_detector_mask)
+    call pacs%init(obs%channel, obs%slice(1)%observing_mode == 'Transparent', fine_sampling_factor, keep_bad_detectors,            &
+                   mask_bad_line, status, bad_detector_mask)
     if (status /= 0) return
 
     ! check number of detectors

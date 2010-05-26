@@ -43,6 +43,7 @@ module module_pacsinstrument
         character            :: channel
         logical              :: transparent_mode
         logical              :: keep_bad_detectors
+        logical              :: mask_bad_line
 
         logical*1, pointer   :: mask(:,:)
         integer, allocatable :: ij(:,:)
@@ -87,12 +88,14 @@ module module_pacsinstrument
 contains
 
 
-    subroutine init(this, channel, transparent_mode, fine_sampling_factor, keep_bad_detectors, status, bad_detector_mask)
+    subroutine init(this, channel, transparent_mode, fine_sampling_factor, keep_bad_detectors, mask_bad_line, status,              &
+                    bad_detector_mask)
         class(pacsinstrument), intent(inout) :: this
         character, intent(in)                :: channel
         logical, intent(in)                  :: transparent_mode
         integer, intent(in)                  :: fine_sampling_factor
         logical, intent(in)                  :: keep_bad_detectors
+        logical, intent(in)                  :: mask_bad_line
         integer, intent(out)                 :: status
         logical*1, intent(in), optional      :: bad_detector_mask(:,:)
 
@@ -115,6 +118,7 @@ contains
         this%fine_sampling_factor = fine_sampling_factor
         this%transparent_mode     = transparent_mode
         this%keep_bad_detectors   = keep_bad_detectors
+        this%mask_bad_line        = mask_bad_line
 
         call this%read_calibration_files(status)
         if (status /= 0) return
@@ -293,6 +297,7 @@ contains
         allocate(this%mask(this%nrows, this%ncolumns))
         this%mask => mask
 
+        ! mask detectors rejected in transparent mode
         if (this%transparent_mode) then
             if (this%channel /= 'r') then
                 this%mask(1:16,1:16) = .true.
@@ -304,6 +309,13 @@ contains
                 this%mask(9:,:)    = .true.
             end if
         end if
+
+        ! mask erratic line
+        if (this%mask_bad_line .and. this%channel /= 'r') then
+            this%mask(12,17:32) = .true.
+        end if
+
+        ! get the number of detectors
         this%ndetectors = size(this%mask)
         if (.not. this%keep_bad_detectors) then
             this%ndetectors = this%ndetectors - count(this%mask)
