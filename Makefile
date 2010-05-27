@@ -2,7 +2,7 @@
 # Author: P. Chanial
 
 
-#set up default compiler
+# set up default compiler
 ifeq "$(origin FC)" "default"
     ifneq ($(shell which ifort),)
         FC=ifort
@@ -11,6 +11,7 @@ ifeq "$(origin FC)" "default"
     endif
 endif
 
+# set up compiler flags
 ifeq "$(FC)" "gfortran"
     FFLAGS_DEBUG = -g -fbacktrace -Warray-temporaries -O0 -fcheck=all -ffree-form -fopenmp -Wall -fPIC -cpp -DGFORTRAN
     FFLAGS_RELEASE = -fbacktrace -O3 -ffree-form -fopenmp -Wall -fPIC -cpp -DGFORTRAN
@@ -44,7 +45,7 @@ ifeq ($(PROF_USE),1)
     FFLAGS += -prof_use -prof_dir/home/pchanial/profiles
 endif
 
-INCLUDES = -Iwcslib-4.4.4-Fortran90 -Iinclude
+INCLUDES = -Iinclude -Iinclude/wcslib-4.4.4-Fortran90
 
 MODULES = $(wildcard module_*.f)
 SOURCES = $(wildcard test_*.f) pacs_photproject.f
