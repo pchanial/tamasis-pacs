@@ -1004,6 +1004,7 @@ class PacsObservation(_Pacs):
             header = self.get_map_header(resolution, finer_sampling)
         if isinstance(header, str):
             header = str2fitsheader(header)
+        header.update('beamarea', 6.4**2 if self.channel == 'r' else 3.2**2, 'Beam area in arcsec^2')
 
         filename_, nfilenames = self._files2tmf(self.filename)
         sizeofpmatrix = npixels_per_sample * nsamples * self.ndetectors
@@ -1521,11 +1522,16 @@ def diffT(arr, axis=-1):
 #-------------------------------------------------------------------------------
 
 
-def mapper_naive(tod, model, weights=False):
+def mapper_naive(tod, model, weights=False, beam_area=None):
     """
     Returns a naive map, i.e.: model.transpose(tod) / model.transpose(1)
     """
     mymap = model.transpose(tod)
+    if beam_area is None and mymap.header is not None and mymap.header.has_key('beamarea'):
+        beam_area = mymap.header['beamarea']
+    if beam_area is not None:
+        mymap /= beam_area
+    
     unity = tod.copy()
     unity[:] = 1.
     map_weights = model.transpose(unity, reusein=True)
