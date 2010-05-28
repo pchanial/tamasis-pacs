@@ -11,7 +11,7 @@ module module_wcs
 
     type, public :: astrometry
         integer :: naxis(2)
-        real*8  :: cdelt(2), crpix(2), crval(2), cd(2,2)
+        real*8  :: crpix(2), crval(2), cd(2,2)
         character(len=8) :: ctype(2), cunit(2)
     end type astrometry
 
@@ -39,12 +39,11 @@ contains
 
         type(astrometry)              :: myastr
         integer                       :: count
-        integer                       :: has_cd, has_cdelt
-        real*8                        :: crota2
+        integer                       :: has_cd
+        real*8                        :: crota2, cdelt1, cdelt2
         character(len=70)             :: buffer
 
         has_cd = 0
-        has_cdelt = 0
 
         call ft_read_parameter(header, 'naxis1', myastr%naxis(1), count, must_exist=.true., status=status)
         if (status /= 0) return
@@ -63,14 +62,6 @@ contains
 
         call ft_read_parameter(header, 'crval2', myastr%crval(2), count, must_exist=.true., status=status)
         if (status /= 0) return
-
-        call ft_read_parameter(header, 'cdelt1', myastr%cdelt(1), count, must_exist=.true., status=status)
-        if (status /= 0) return
-        if (count /= 0) has_cdelt = has_cdelt + 1
-
-        call ft_read_parameter(header, 'cdelt2', myastr%cdelt(2), count, must_exist=.true., status=status)
-        if (status /= 0) return
-        if (count /= 0) has_cdelt = has_cdelt + 1
 
         call ft_read_parameter(header, 'cd1_1', myastr%cd(1,1), count, must_exist=.false., status=status)
         if (status /= 0) return
@@ -114,29 +105,32 @@ contains
         end if
 
         if (has_cd == 0) then
-            call ft_read_parameter(header, 'crota2', crota2, count, must_exist=.false., status=status)
+            call ft_read_parameter(header, 'cdelt1', cdelt1, count, must_exist=.false., status=status)
             if (status /= 0) return
             if (count == 0) then
-                write (ERROR_UNIT,'(a)') 'Header has no definition for the CD matrix'
+                write (ERROR_UNIT,'(a)') 'Astrometry definition cannot be extracted from header.'
                 status = 1
                 return
             end if
+            call ft_read_parameter(header, 'cdelt2', cdelt2, count, must_exist=.false., status=status)
+            if (status /= 0) return
+            if (count == 0) then
+                write (ERROR_UNIT,'(a)') 'Astrometry definition cannot be extracted from header.'
+                status = 1
+                return
+            end if
+            call ft_read_parameter(header, 'crota2', crota2, count, must_exist=.false., status=status)
+            if (status /= 0) return
+            if (count == 0) then
+                crota2 = 0.
+            end if
             
             crota2 = crota2 * DEG2RAD
-            myastr%cd(1,1) =  cos(crota2)
-            myastr%cd(2,1) = -sin(crota2)
-            myastr%cd(1,2) =  sin(crota2)
-            myastr%cd(2,2) =  cos(crota2)
-        end if
+            myastr%cd(1,1) =  cos(crota2) * cdelt1
+            myastr%cd(2,1) = -sin(crota2) * cdelt1
+            myastr%cd(1,2) =  sin(crota2) * cdelt2
+            myastr%cd(2,2) =  cos(crota2) * cdelt2
 
-        if (has_cdelt /=0 .and. has_cdelt /= 2) then
-            write (ERROR_UNIT,'(a)') 'Header has incomplete CDELTi.'
-            status = 1
-            return
-        end if
-
-        if (has_cdelt == 0) then
-            myastr%cdelt = 1.d0
         end if
 
         if (myastr%ctype(1) == 'RA---TAN' .and. myastr%ctype(2) == 'DEC--TAN') then
@@ -169,7 +163,6 @@ contains
         end do
 
         write (*,*) 'NAXIS: ', strinteger(naxis), ' (', strinteger(astr%naxis(1)), ',', strinteger(astr%naxis(2)),')'
-        write (*,*) 'CDELT: ', astr%cdelt
         write (*,*) 'CRPIX: ', astr%crpix
         write (*,*) 'CRVAL: ', astr%crval
         write (*,*) 'CD   : ', astr%cd(1,:)
@@ -257,14 +250,10 @@ contains
         type(astrometry), intent(in) :: astr
 
         real*8 :: cdinv(2,2), crpix(2)
-        real*8 :: cd(2,2)
         common /rotation/ cdinv,crpix
 
-        cd(1,:) = astr%cd(1,:) * astr%cdelt(1)
-        cd(2,:) = astr%cd(2,:) * astr%cdelt(2)
-
-        cdinv = reshape([cd(2,2), -cd(2,1), -cd(1,2), cd(1,1)], [2,2]) / &
-                (cd(1,1)*cd(2,2) - cd(2,1)*cd(1,2))
+        cdinv = reshape([astr%cd(2,2), -astr%cd(2,1), -astr%cd(1,2), astr%cd(1,1)], [2,2]) / &
+                (astr%cd(1,1)*astr%cd(2,2) - astr%cd(2,1)*astr%cd(1,2))
         crpix = astr%crpix
 
     end subroutine init_rotation
