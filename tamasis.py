@@ -67,19 +67,31 @@ class AcquisitionModel(object):
             data = model.transpose(data, reusein=reusein_, reuseout=reuseout_)
         return data
 
-    def __validate_chain_direct(self, shapein):
-        self.shapeout = shapein
-        for model in self:
-            self.shapeout = model._validate_shape_direct(self.shapeout)
-
-    def __validate_chain_transpose(self, shapeout):
-        self.shapein = shapeout
+    @property
+    def shapein(self):
+        if len(self) == 0:
+            return self._shapein
+        shapein = None
         for model in reversed(self):
-            self.shapein = model._validate_shape_transpose(self.shapein)
+            shapein = model._validate_shape_transpose(shapein)
+        return shapein
 
-    def _validate_chain(self):
-        self.__validate_chain_direct(None)
-        self.__validate_chain_transpose(None)
+    @shapein.setter
+    def shapein(self, shape):
+        self._shapein = shape
+
+    @property
+    def shapeout(self):
+        if len(self) == 0:
+            return self._shapeout
+        shapeout = None
+        for model in self:
+            shapeout = model._validate_shape_direct(shapeout)
+        return shapeout
+
+    @shapeout.setter
+    def shapeout(self, shape):
+        self._shapeout = shape
 
     def _validate_shape(self, shapein):
         if shapein is None or self.shapein is None:
@@ -163,8 +175,8 @@ class AcquisitionModel(object):
         else:
             self._output_transpose = cls.empty(shapein_flat, dtype=numpy.float64, **options)
 
-    shapein           = None   # input is unconstrained
-    shapeout          = None   # output is unconstrained
+    _shapein          = None   # input is unconstrained
+    _shapeout         = None   # output is unconstrained
     _output_direct    = None   # stores the input of the transpose model. Its memory allocation is re-used as the output of the direct model
     _output_transpose = None   # stores the input of the direct model. Its memory allocation is re-used as the output of the transpose model
     blocks            = []     # components are ordered as in the direct order
@@ -218,7 +230,9 @@ class AcquisitionModel(object):
             newmodel.blocks.append(block)
         for block in self:
             newmodel.blocks.append(block)
-        newmodel._validate_chain()
+        # shape validation
+        shapein = self.shapein
+        shapeout = self.shapeout
         return newmodel
 
     def __getitem__(self, index):
