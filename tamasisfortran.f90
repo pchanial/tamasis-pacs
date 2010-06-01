@@ -46,9 +46,9 @@ end subroutine pacs_info_channel
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine pacs_info(tamasis_dir, filename, nfilenames, fine_sampling_factor, keep_bad_detectors, use_bad_detector_mask,           &
-                     bad_detector_mask, nrows, ncolumns, mask_bad_line, ndetectors, output_mask, transparent_mode,                 &
-                     compression_factor, nsamples, status)
+subroutine pacs_info(tamasis_dir, filename, nfilenames, fine_sampling_factor, keep_bad_detectors, bad_detector_mask,               &
+                     nrows, ncolumns, mask_bad_line, ndetectors, output_mask, transparent_mode, compression_factor, nsamples,      &
+                     unit, detector_area, flatfield_detector, flatfield_optical, status)
 
     use module_pacsinstrument,  only : pacsinstrument
     use module_pacsobservation, only : pacsobservation, maskarray
@@ -61,7 +61,6 @@ subroutine pacs_info(tamasis_dir, filename, nfilenames, fine_sampling_factor, ke
     !f2py intent(in)   nfilenames
     !f2py intent(in)   fine_sampling_factor
     !f2py intent(in)   keep_bad_detectors
-    !f2py intent(in)   use_bad_detector_mask
     !f2py intent(in)   bad_detector_mask
     !f2py intent(hide) nrows = shape(bad_detector_mask,0)
     !f2py intent(hide) ncolumns = shape(bad_detector_mask,1)
@@ -71,23 +70,30 @@ subroutine pacs_info(tamasis_dir, filename, nfilenames, fine_sampling_factor, ke
     !f2py intent(out)  transparent_mode
     !f2py intent(out)  compression_factor
     !f2py intent(out)  nsamples
+    !f2py intent(out)  unit
+    !f2py intent(out)  detector_area
+    !f2py intent(out)  flatfield_detector
+    !f2py intent(out)  flatfield_optical
     !f2py intent(out)  status
 
-    character(len=*), intent(in) :: tamasis_dir
-    character(len=*), intent(in) :: filename
-    integer, intent(in)          :: nfilenames
-    integer, intent(in)          :: fine_sampling_factor
-    logical, intent(in)          :: keep_bad_detectors
-    logical, intent(in)          :: use_bad_detector_mask
-    logical*1, intent(in)        :: bad_detector_mask(nrows,ncolumns)
-    integer, intent(in)          :: nrows, ncolumns
-    logical, intent(in)          :: mask_bad_line
-    integer, intent(out)         :: ndetectors
-    logical*1, intent(out)       :: output_mask(nrows,ncolumns)
-    logical, intent(out)         :: transparent_mode
-    integer, intent(out)         :: compression_factor(nfilenames)
-    integer, intent(out)         :: nsamples(nfilenames)
-    integer, intent(out)         :: status
+    character(len=*), intent(in)   :: tamasis_dir
+    character(len=*), intent(in)   :: filename
+    integer, intent(in)            :: nfilenames
+    integer, intent(in)            :: fine_sampling_factor
+    logical, intent(in)            :: keep_bad_detectors
+    logical*1, intent(in)          :: bad_detector_mask(nrows,ncolumns)
+    integer, intent(in)            :: nrows, ncolumns
+    logical, intent(in)            :: mask_bad_line
+    integer, intent(out)           :: ndetectors
+    logical*1, intent(out)         :: output_mask(nrows,ncolumns)
+    logical, intent(out)           :: transparent_mode
+    integer, intent(out)           :: compression_factor(nfilenames)
+    integer, intent(out)           :: nsamples(nfilenames)
+    character(len=70), intent(out) :: unit
+    real*8, intent(out)            :: detector_area(nrows,ncolumns)
+    real*8, intent(out)            :: flatfield_detector(nrows,ncolumns)
+    real*8, intent(out)            :: flatfield_optical(nrows,ncolumns)
+    integer, intent(out)           :: status
 
     character(len=len(filename)/nfilenames), allocatable :: filename_(:)
     class(pacsobservation), allocatable :: obs
@@ -118,7 +124,7 @@ subroutine pacs_info(tamasis_dir, filename, nfilenames, fine_sampling_factor, ke
 
     transparent_mode = obs%slice(1)%observing_mode == 'Transparent'
     allocate(pacs)
-    if (use_bad_detector_mask) then
+    if (count(.not. bad_detector_mask) /= 0) then
         call pacs%init(obs%channel, transparent_mode, fine_sampling_factor, keep_bad_detectors, mask_bad_line, status,             &
              bad_detector_mask)
     else
@@ -130,6 +136,10 @@ subroutine pacs_info(tamasis_dir, filename, nfilenames, fine_sampling_factor, ke
     output_mask = pacs%mask
     compression_factor = obs%slice%compression_factor
     nsamples = obs%slice%nsamples
+    unit = obs%unit
+    detector_area = pacs%detector_area
+    flatfield_detector = pacs%flatfield_detector
+    flatfield_optical = pacs%flatfield_optical
 
 end subroutine pacs_info
 
@@ -138,7 +148,7 @@ end subroutine pacs_info
 
 
 subroutine pacs_map_header(tamasis_dir, filename, nfilenames, finer_sampling, fine_sampling_factor, keep_bad_detectors,            &
-                           use_bad_detector_mask, bad_detector_mask, nrows, ncolumns, mask_bad_line, resolution, header, status)
+                           bad_detector_mask, nrows, ncolumns, mask_bad_line, resolution, header, status)
 
     use module_pacsinstrument,  only : pacsinstrument
     use module_pacsobservation, only : pacsobservation, maskarray
@@ -152,7 +162,6 @@ subroutine pacs_map_header(tamasis_dir, filename, nfilenames, finer_sampling, fi
     !f2py intent(in)   finer_sampling
     !f2py intent(in)   fine_sampling_factor
     !f2py intent(in)   keep_bad_detectors
-    !f2py intent(in)   use_bad_detector_mask
     !f2py intent(in)   bad_detector_mask
     !f2py intent(hide) nrows = shape(bad_detector_mask,0)
     !f2py intent(hide) ncolumns = shape(bad_detector_mask,1)
@@ -167,7 +176,6 @@ subroutine pacs_map_header(tamasis_dir, filename, nfilenames, finer_sampling, fi
     logical, intent(in)          :: finer_sampling
     integer, intent(in)          :: fine_sampling_factor
     logical, intent(in)          :: keep_bad_detectors
-    logical, intent(in)          :: use_bad_detector_mask
     logical*1, intent(in)        :: bad_detector_mask(nrows,ncolumns)
     integer, intent(in)          :: nrows, ncolumns
     logical, intent(in)          :: mask_bad_line
@@ -200,13 +208,8 @@ subroutine pacs_map_header(tamasis_dir, filename, nfilenames, finer_sampling, fi
     if (status /= 0) go to 999
 
     allocate(pacs)
-    if (use_bad_detector_mask) then
-        call pacs%init(obs%channel, obs%slice(1)%observing_mode == 'Transparent', fine_sampling_factor, keep_bad_detectors,        &
-             mask_bad_line, status, bad_detector_mask)
-    else
-        call pacs%init(obs%channel, obs%slice(1)%observing_mode == 'Transparent', fine_sampling_factor, keep_bad_detectors,        &
-             mask_bad_line, status)
-    end if
+    call pacs%init(obs%channel, obs%slice(1)%observing_mode == 'Transparent', fine_sampling_factor, keep_bad_detectors,        &
+         mask_bad_line, status, bad_detector_mask)
     if (status /= 0) go to 999
     
     call pacs%compute_map_header(obs, finer_sampling, resolution, header, status)
@@ -297,7 +300,7 @@ subroutine pacs_timeline(tamasis_dir, filename, nfilenames, nsamples, ndetectors
 
     ! flat fielding
     if (do_flatfielding) then
-        call divide_vectordim2(signal, pacs%flatfield)
+        call divide_vectordim2(signal, pack(pacs%flatfield_detector, .not. bad_detector_mask))
     end if
     
     ! subtract the mean of each detector timeline
@@ -805,7 +808,7 @@ end subroutine downsampling_transpose
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine backprojection_weighted(pmatrix, data, mask, map1d, npixels_per_sample, nsamples, ndetectors, npixels)
+subroutine backprojection_weighted(pmatrix, data, mask, map1d, weights1d, npixels_per_sample, nsamples, ndetectors, npixels)
 
     use module_pointingmatrix, only : bpw => backprojection_weighted, pointingelement
     implicit none
@@ -824,12 +827,13 @@ subroutine backprojection_weighted(pmatrix, data, mask, map1d, npixels_per_sampl
     real*8, intent(in)                :: data(nsamples,ndetectors)
     logical*1, intent(in)             :: mask(nsamples,ndetectors)
     real*8, intent(inout)             :: map1d(npixels)
+    real*8, intent(inout)             :: weights1d(npixels)
     integer, intent(in)               :: npixels_per_sample
     integer, intent(in)               :: nsamples
     integer, intent(in)               :: ndetectors
     integer, intent(in)               :: npixels
 
-    call bpw(pmatrix, data, mask, map1d)
+    call bpw(pmatrix, data, mask, map1d, weights1d)
 
 end subroutine backprojection_weighted
 

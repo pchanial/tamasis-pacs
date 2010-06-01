@@ -7,8 +7,10 @@ import matplotlib.pyplot as pyplot
 import numpy
 import os
 import pyfits
+import re
 import scipy.sparse.linalg    
 import tamasisfortran as tmf
+from   unit import Quantity, UnitError
 
 __version_info__ = (1, 0, 0)
 __version__ = '.'.join((str(i) for i in __version_info__))
@@ -286,6 +288,7 @@ class Projection(AcquisitionModel):
         - nsamples
         - ndetectors
         - get_pointing_matrix()
+        - unit
     The instance has the following specific attributes:
         - header: the FITS header of the map
         - pmatrix: opaque representation of the pointing matrix
@@ -294,25 +297,28 @@ class Projection(AcquisitionModel):
     """
     def __init__(self, observation, header=None, resolution=None, npixels_per_sample=None, finer_sampling=True, description=None):
         AcquisitionModel.__init__(self, description)
-        self.pmatrix, self.header, self.npixels_per_sample = \
+        self._pmatrix, self.header, ndetectors, nsamples, self.npixels_per_sample = \
             observation.get_pointing_matrix(header, resolution, npixels_per_sample, finer_sampling=finer_sampling)
         self.shapein = tuple([self.header['naxis'+str(i+1)] for i in reversed(range(self.header['naxis']))])
-        nsamples = observation.nfinesamples if finer_sampling else observation.nsamples
-        self.shapeout = self._combine_sliced_shape(observation.ndetectors, nsamples) 
+        self.pmatrix = self._pmatrix.view(dtype=[('weight', 'f4'), ('pixel', 'i4')])
+        self.pmatrix.resize((observation.ndetectors, nsamples, self.npixels_per_sample))
+        self.shapeout = self._combine_sliced_shape(observation.ndetectors, nsamples)
 
     def direct(self, map2d, reusein=False, reuseout=False):
         map2d, shapeout = self._validate_input_direct(Map, map2d, reusein)
         self._validate_output_direct(Tod, shapeout)
-        map2d.header = self.header
-        tmf.pointing_matrix_direct(self.pmatrix, map2d.T, self._output_direct.T, self.npixels_per_sample)
+        self._output_direct._unit = map2d._unit
+        tmf.pointing_matrix_direct(self._pmatrix, map2d.T, self._output_direct.T, self.npixels_per_sample)
         output = self._output_direct
         if not reuseout: self._output_direct = None
         return output
 
     def transpose(self, signal, reusein=False, reuseout=False):
         signal, shapein = self._validate_input_transpose(Tod, signal, reusein)
-        self._validate_output_transpose(Map, shapein, header=self.header)
-        tmf.pointing_matrix_transpose(self.pmatrix, signal.T, self._output_transpose.T,  self.npixels_per_sample)
+        self._validate_output_transpose(Map, shapein)
+        self._output_transpose.header = self.header
+        self._output_transpose._unit = signal._unit
+        tmf.pointing_matrix_transpose(self._pmatrix, signal.T, self._output_transpose.T,  self.npixels_per_sample)
         output = self._output_transpose
         if not reuseout: self._output_transpose = None
         return output
@@ -321,7 +327,7 @@ class Projection(AcquisitionModel):
         ndetectors = self.shapeout[0]
         nsamples = numpy.sum(self.shapeout[1])
         npixels = numpy.product(self.shapein)
-        return tmf.pointing_matrix_ptp(self.pmatrix, self.npixels_per_sample, nsamples, ndetectors, npixels).T
+        return tmf.pointing_matrix_ptp(self._pmatrix, self.npixels_per_sample, nsamples, ndetectors, npixels).T
 
     def __str__(self):
         return super(Projection, self).__str__()
@@ -938,30 +944,26 @@ class PacsObservation(_Pacs):
         filename_, nfilenames = self._files2tmf(filename)
 
         channel, status = tmf.pacs_info_channel(filename_, nfilenames)
-        if status != 0: raise RuntimeError()        
+        if status != 0: raise RuntimeError() 
 
-        user_mask = bad_detector_mask is not None
-        if user_mask:
-            if channel == 'r':
-                if bad_detector_mask.shape != (16,32):
-                    raise ValueError('Invalid shape of the input red bad detector mask: '+str(bad_detector_mask.shape)+'.')
-            else:
-                if bad_detector_mask.shape != (32,64):
-                    raise ValueError('Invalid shape of the input blue bad detector mask: '+str(bad_detector_mask.shape)+'.')
+        nrows, ncolumns = (16,32) if channel == 'r' else (32,64)
+
+        if bad_detector_mask is not None:
+            if bad_detector_mask.shape != (nrows, ncolumns):
+                raise ValueError('Invalid shape of the input '+('red' if channel == 'r' else 'blue')+' bad detector mask: '+str(bad_detector_mask.shape)+'.')
             bad_detector_mask = numpy.array(bad_detector_mask, dtype='int8', copy=False)
 
         else:
-            if channel == 'r':
-                bad_detector_mask = numpy.zeros((16,32), dtype='int8')
-            else:
-                bad_detector_mask = numpy.zeros((32,64), dtype='int8')
+            bad_detector_mask = numpy.ones((nrows,ncolumns), dtype='int8')
 
         # retrieve information from the observations
-        ndetectors, bad_detector_mask, transparent_mode, compression_factor, nsamples, status = tmf.pacs_info(tamasis_dir, filename_, nfilenames, fine_sampling_factor, keep_bad_detectors, user_mask, numpy.asfortranarray(bad_detector_mask), mask_bad_line)
+        ndetectors, bad_detector_mask, transparent_mode, compression_factor, nsamples, unit, detector_area, dflat, oflat, status = tmf.pacs_info(tamasis_dir, filename_, nfilenames, fine_sampling_factor, keep_bad_detectors, numpy.asfortranarray(bad_detector_mask), mask_bad_line)
         if status != 0: raise RuntimeError()
 
         self.filename = filename
         self.channel = channel
+        self.nrows = nrows
+        self.ncolumns = ncolumns
         self.default_npixels_per_sample = 11 if channel == 'r' else 6
         self.default_resolution = 6. if channel == 'r' else 3.
         self.nobservations = nfilenames
@@ -970,11 +972,17 @@ class PacsObservation(_Pacs):
         self.ndetectors = ndetectors
         self.bad_detector_mask = numpy.ascontiguousarray(bad_detector_mask)
         self.keep_bad_detectors = keep_bad_detectors
-        self.user_mask = user_mask
         self.mask_bad_line = mask_bad_line
         self.fine_sampling_factor = fine_sampling_factor
         self.transparent_mode = transparent_mode
         self.compression_factor = compression_factor
+        self.unit = unit.strip()+' / detector'
+        self.detector_area = Map(detector_area, unit='arcsec^2/detector')
+        self.flatfield = {
+            'total'   : Map(dflat*oflat),
+            'detector': Map(numpy.ascontiguousarray(dflat)),
+            'optical' : Map(numpy.ascontiguousarray(oflat))
+            }
          
         #_Pacs.__init__(self, channel, npixels, nsamples, ndetectors_per_sample, fine_sampling_factor, compression_factor, bad_detector_mask, keep_bad_detectors)
 
@@ -982,11 +990,12 @@ class PacsObservation(_Pacs):
         if resolution is None:
             resolution = self.default_resolution
         filename_, nfilenames = self._files2tmf(self.filename)
-        header, status = tmf.pacs_map_header(tamasis_dir, filename_, nfilenames, finer_sampling, self.fine_sampling_factor, self.keep_bad_detectors, self.user_mask, self.bad_detector_mask, self.mask_bad_line, resolution)
+        header, status = tmf.pacs_map_header(tamasis_dir, filename_, nfilenames, finer_sampling, self.fine_sampling_factor, self.keep_bad_detectors, numpy.asfortranarray(self.bad_detector_mask), self.mask_bad_line, resolution)
         if status != 0: raise RuntimeError()
+        header = str2fitsheader(header)
         return header
     
-    def get_tod(self, do_flatfielding=True, do_subtraction_mean=True):
+    def get_tod(self, unit=None, do_flatfielding=True, do_subtraction_mean=True):
         """
         Returns the signal and mask timelines.
         """
@@ -994,7 +1003,24 @@ class PacsObservation(_Pacs):
         signal, mask, status = tmf.pacs_timeline(tamasis_dir, filename_, self.nobservations, numpy.sum(self.nsamples), self.ndetectors, self.keep_bad_detectors, numpy.asfortranarray(self.bad_detector_mask), self.mask_bad_line, do_flatfielding, do_subtraction_mean)
         if status != 0: raise RuntimeError()
         
-        return Tod(signal.T, mask=mask.T, nsamples=self.nsamples)
+        tod = Tod(signal.T, mask.T, nsamples=self.nsamples, unit=self.unit)
+
+        # the flux calibration has been done by using HCSS photproject and assuming that the central detectors had a size of 3.2x3.2
+        # squared arcseconds. To be consistent with detector sharp edge model, we need to adjust the Tod.
+        if tod.unit == 'Jy / detector':
+            tod *= numpy.mean(self.detector_area[15:18,31:33])/3.2**2
+
+        if unit is None:
+            return tod
+
+        newunit = Quantity(1., unit)
+        newunit_si = newunit.unit_si._unit
+        if 'sr' in newunit_si and newunit_si['sr'] == -1:
+            area = self.detector_area[self.bad_detector_mask != True].reshape((self.ndetectors,1))
+            tod /= area
+            
+        tod.unit = newunit._unit
+        return tod
 
     def get_pointing_matrix(self, header, resolution, npixels_per_sample, finer_sampling=True):
         nsamples = numpy.sum(self.nfinesamples if finer_sampling else self.nsamples)
@@ -1002,9 +1028,8 @@ class PacsObservation(_Pacs):
             npixels_per_sample = self.default_npixels_per_sample
         if header is None:
             header = self.get_map_header(resolution, finer_sampling)
-        if isinstance(header, str):
+        elif isinstance(header, str):
             header = str2fitsheader(header)
-        header.update('beamarea', 6.4**2 if self.channel == 'r' else 3.2**2, 'Beam area in arcsec^2')
 
         filename_, nfilenames = self._files2tmf(self.filename)
         sizeofpmatrix = npixels_per_sample * nsamples * self.ndetectors
@@ -1014,11 +1039,11 @@ class PacsObservation(_Pacs):
         status = tmf.pacs_pointing_matrix_filename(tamasis_dir, filename_, self.nobservations, finer_sampling, self.fine_sampling_factor, npixels_per_sample, nsamples, self.ndetectors, self.keep_bad_detectors, numpy.asfortranarray(self.bad_detector_mask), self.mask_bad_line, str(header).replace('\n', ''), pmatrix)
         if status != 0: raise RuntimeError()
 
-        return pmatrix, header, npixels_per_sample
+        return pmatrix, header, self.ndetectors, nsamples, npixels_per_sample
 
     @staticmethod
     def _files2tmf(filename):
-        if type(filename).__name__ == 'str':
+        if isinstance(filename, str):
             return filename, 1
 
         nfilenames = len(filename)
@@ -1147,7 +1172,7 @@ class MadMap1Observation(object):
         pmatrix = numpy.zeros(sizeofpmatrix, dtype=numpy.int64)
         status = tmf.read_madmap1(self.todfile, self.invnttfile, self.convert, self.npixels_per_sample, tod.T, pmatrix)
         if (status != 0): raise RuntimeError()
-        return pmatrix, header, self.npixels_per_sample
+        return pmatrix, header, self.ndetectors, numpy.sum(self.nsamples), self.npixels_per_sample
 
     def get_tod(self):
         tod = Tod.zeros((self.ndetectors,self.nsamples))
@@ -1167,11 +1192,11 @@ class MadMap1Observation(object):
 
 
 
-class FitsArray(numpy.ndarray):
+class FitsArray(Quantity):
 
-    def __new__(cls, data, dtype=None, order='C', header=None, copy=True):
+    def __new__(cls, data, header=None, unit=None, dtype=None, order='C', copy=True):
         from copy import copy as cp
-        result = numpy.array(data, dtype=dtype, order=order, copy=copy, subok=True)
+        result = Quantity(data, unit, dtype=dtype, order=order, copy=copy)
         if not isinstance(result, FitsArray):
             result = result.view(cls)
         if header is not None:
@@ -1183,25 +1208,26 @@ class FitsArray(numpy.ndarray):
         return result
 
     def __array_finalize__(self, obj):
+        Quantity.__array_finalize__(self, obj)
         if obj is None: return
         self._header = getattr(obj, '_header', None)
 
     def __array_wrap__(self, obj, context=None):
-        result = numpy.ndarray.__array_wrap__(self, obj, context).view(type(self))
+        result = Quantity.__array_wrap__(self, obj, context).view(type(self))
         result._header = self._header
         return result
 
     @staticmethod
-    def empty(shape, dtype='float64', order='C', header=None):
-        return FitsArray(numpy.empty(shape, dtype, order), header=header, copy=False)
+    def empty(shape, header=None, unit=None, dtype=None, order=None):
+        return FitsArray(numpy.empty(shape, dtype, order), header, unit, copy=False)
 
     @staticmethod
-    def ones(shape, dtype='float64', order='C', header=None):
-        return FitsArray(numpy.ones(shape, dtype, order), header=header, copy=False)
+    def ones(shape, header=None, unit=None, dtype=None, order=None):
+        return FitsArray(numpy.ones(shape, dtype, order), header, unit, copy=False)
 
     @staticmethod
-    def zeros(shape, dtype='float64', order='C', header=None):
-        return FitsArray(numpy.zeros(shape, dtype, order), header=header, copy=False)
+    def zeros(shape, header=None, unit=None, dtype=None, order=None):
+        return FitsArray(numpy.zeros(shape, dtype, order), header, unit, copy=False)
 
     @property
     def header(self):
@@ -1220,12 +1246,20 @@ class FitsArray(numpy.ndarray):
         """Save a FitsArray instance to a fits file given a filename
         
         If the same file already exist it overwrites it.
-        It should correspond to the input required by the PACS simulator
         """
         from os.path import isfile
         from os import remove
    
-        hdu = pyfits.PrimaryHDU(self.T if self.flags.f_contiguous else self, self.header)
+        if self.header is None:
+            header = FitsArray.create_header(self.shape)
+        else:
+            header = self.header
+        
+        unit = self.unit
+        if unit != '':
+            header.update('BUNIT', unit)
+
+        hdu = pyfits.PrimaryHDU(self.T if self.flags.f_contiguous else self, header)
         try:
             remove(filename)
         except OSError:
@@ -1235,14 +1269,29 @@ class FitsArray(numpy.ndarray):
         except IOError:
             pass
 
+    @staticmethod
+    def create_header(shape):
+        if numpy.isscalar(shape):
+            shape = (shape,)
+        else:
+            shape = tuple(shape)
+        naxis = len(shape)
+        header = pyfits.Header()
+        header.update('simple', True)
+        header.update('bitpix', -64)
+        header.update('extend', True)
+        header.update('naxis', naxis)
+        for dim in range(naxis):
+            header.update('naxis'+str(dim+1), shape[naxis-dim-1])
+        return header
 
 #-------------------------------------------------------------------------------
 
 
 class Map(FitsArray):
 
-    def __new__(cls, data, dtype=None, order='C', header=None, copy=True):
-        result = FitsArray(data, dtype=dtype, order=order, copy=copy, header=header)
+    def __new__(cls, data, header=None, unit=None, dtype=None, order='C', copy=True):
+        result = FitsArray(data, header, unit, dtype, order, copy)
         if not isinstance(data,Map): result = result.view(cls)
         return result
 
@@ -1256,16 +1305,16 @@ class Map(FitsArray):
         return result
 
     @staticmethod
-    def empty(shape, dtype='float64', order='C', header=None):
-        return Map(FitsArray.empty(shape, dtype, order, header), copy=False)
+    def empty(shape, header=None, unit=None, dtype=None, order=None):
+        return Map(numpy.empty(shape, dtype, order), header, unit, copy=False)
 
     @staticmethod
-    def ones(shape, dtype='float64', order='C', header=None):
-        return Map(FitsArray.ones(shape, dtype, order, header), copy=False)
+    def ones(shape, header=None, unit=None, dtype=None, order=None):
+        return Map(numpy.ones(shape, dtype, order), header, unit, copy=False)
 
     @staticmethod
-    def zeros(shape, dtype='float64', order='C', header=None):
-        return Map(FitsArray.zeros(shape, dtype, order, header), copy=False)
+    def zeros(shape, header=None, unit=None, dtype=None, order=None):
+        return Map(numpy.zeros(shape, dtype, order), header, unit, copy=False)
 
     def copy(self, order='C'):
         return Map(self, order=order, copy=True)
@@ -1275,8 +1324,24 @@ class Map(FitsArray):
 
         if numpy.isscalar(naxis):
             naxis = (naxis, naxis)
+        else:
+            naxis = tuple(naxis)
+
         if len(naxis) != 2:
             raise ValueError("Invalid dimension '"+str(len(naxis))+"' instead of 2.")
+
+        header = super(Map, self).create_header(naxis)
+
+        if cd is not None:
+            if cd.shape != (2,2):
+                raise ValueError('The CD matrix is not a 2x2 matrix.')
+        else:
+            if cdelt is None:
+                return header
+            if numpy.isscalar(cdelt):
+                cdelt = (-cdelt, cdelt)
+            cd = numpy.array(((cdelt[0], 0), (0,cdelt[1])))
+
         if len(crval) != 2:
             raise ValueError('CRVAL does not have two elements.')
         if crpix is None:
@@ -1287,50 +1352,37 @@ class Map(FitsArray):
             raise ValueError('CTYPE does not have two elements.')
         if numpy.isscalar(cunit):
             cunit = (cunit, cunit)
-        if cd is not None:
-            raise NotImplemented('CD keyword is not implemented.')
-        if cdelt is None:
-            cdelt = 1./3600.
-        if numpy.isscalar(cdelt):
-            cdelt = (-cdelt, cdelt)
 
-        header = pyfits.Header()
-        header.update('simple', True)
-        header.update('bitpix', -64)
-        header.update('extend', True)
-        header.update('naxis', 2)
-        header.update('naxis1', naxis[0])
-        header.update('naxis2', naxis[1])
         header.update('crval1', crval[0])
         header.update('crval2', crval[1])
         header.update('crpix1', crpix[0])
         header.update('crpix2', crpix[1])
+        header.update('cd1_1', cd[0,0])
+        header.update('cd2_1', cd[1,0])
+        header.update('cd1_2', cd[0,1])
+        header.update('cd2_2', cd[1,1])
         header.update('ctype1', ctype[0])
         header.update('ctype2', ctype[1])
         header.update('cunit1', cunit[0])
         header.update('cunit2', cunit[1])
-        header.update('cdelt1', cdelt[0])
-        header.update('cdelt2', cdelt[1])
-        header.update('cd1_1', 1.)
-        header.update('cd2_1', 0.)
-        header.update('cd1_2', 0.)
-        header.update('cd2_2', 1.)
         return header
 
     def imshow(self, num=None, axis=True, title=None):
         """A simple graphical display function for the Map class"""
 
-        mean   = numpy.mean(self[numpy.isfinite(self)])
-        stddev = numpy.std(self[numpy.isfinite(self)])
-        minval = mean - 2*stddev
-        maxval = mean + 5*stddev
+        finite = self[numpy.isfinite(self)]
+        mean   = numpy.mean(finite)
+        stddev = numpy.std(finite)
+        minval = max(mean - 2*stddev, numpy.min(finite))
+        maxval = min(mean + 5*stddev, numpy.max(finite))
 
         pyplot.figure(num=num)
         # HACK around bug in imshow !!!
         pyplot.imshow(self.T if self.flags.f_contiguous else self, interpolation='nearest')
         pyplot.clim(minval, maxval)
-        pyplot.xlabel('Right Ascension')
-        pyplot.ylabel("Declination")
+        if self.header is not None and self.header.has_key('CRPIX1'):
+            pyplot.xlabel('Right Ascension')
+            pyplot.ylabel("Declination")
         if title is not None:
             pyplot.title(title)
         pyplot.colorbar()
@@ -1342,8 +1394,8 @@ class Map(FitsArray):
 
 class Tod(FitsArray):
 
-    def __new__(cls, data, dtype=None, order='C', header=None, mask=None, nsamples=None, copy=False):
-        result = FitsArray(data, dtype=dtype, order=order, copy=copy, header=header)
+    def __new__(cls, data, mask=None, nsamples=None, header=None, unit=None, dtype=None, order='C', copy=False):
+        result = FitsArray(data, header, unit, dtype, order, copy)
         if not isinstance(data, Tod):
             result = result.view(cls)
         if mask is None and isinstance(data, Tod):
@@ -1374,19 +1426,19 @@ class Tod(FitsArray):
         return result
 
     @staticmethod
-    def empty(shape, dtype='float64', order='C', header=None, mask=None, nsamples=None):
+    def empty(shape, mask=None, nsamples=None, header=None, unit=None, dtype=None, order=None):
         shape, nsamples = Tod._validate_shape(shape, nsamples)
-        return Tod(FitsArray.empty(shape, dtype, order, header), mask=mask, nsamples=nsamples, copy=False)
+        return Tod(numpy.empty(shape, dtype, order), mask, nsamples, header, unit, copy=False)
 
     @staticmethod
-    def ones(shape, dtype='float64', order='C', header=None, mask=None, nsamples=None):
+    def ones(shape, mask=None, nsamples=None, header=None, unit=None, dtype=None, order=None):
         shape, nsamples = Tod._validate_shape(shape, nsamples)
-        return Tod(FitsArray.ones(shape, dtype, order, header), mask=mask, nsamples=nsamples, copy=False)
+        return Tod(numpy.ones(shape, dtype, order), mask, nsamples, header, unit, copy=False)
 
     @staticmethod
-    def zeros(shape, dtype='float64', order='C', header=None, mask=None, nsamples=None):
+    def zeros(shape, mask=None, nsamples=None, header=None, unit=None, dtype=None, order=None):
         shape, nsamples = Tod._validate_shape(shape, nsamples)
-        return Tod(FitsArray.zeros(shape, dtype, order, header), mask=mask, nsamples=nsamples, copy=False)
+        return Tod(numpy.zeros(shape, dtype, order), mask, nsamples, header, unit, copy=False)
     
     def copy(self, order='C'):
         return Tod(self, order=order, copy=True)
@@ -1416,14 +1468,13 @@ class Tod(FitsArray):
             if self.shape[-2] > 1:
                 output += 's'
             output += ', '
+        output += str(self.shape[-1]) + ' sample'
+        if self.shape[-1] > 1:
+            output += 's'
         nslices = len(self.nsamples)
-        strsamples = ','.join((str(self.nsamples[i]) for i in range(nslices)))
         if nslices > 1:
-            output += '(' + strsamples + ') samples in ' + str(nslices) + ' slices'
-        else:
-            output += strsamples + ' sample'
-            if self.shape[-1] > 1:
-                output += 's'
+            strsamples = ','.join((str(self.nsamples[i]) for i in range(nslices)))
+            output += ' in ' + str(nslices) + ' slices ('+strsamples+')'
         return output + ']'
 
     @staticmethod
@@ -1522,22 +1573,34 @@ def diffT(arr, axis=-1):
 #-------------------------------------------------------------------------------
 
 
-def mapper_naive(tod, model, weights=False, beam_area=None):
+def mapper_naive(tod, model, unit=None):
     """
     Returns a naive map, i.e.: model.transpose(tod) / model.transpose(1)
     """
-    mymap = model.transpose(tod)
-    if beam_area is None and mymap.header is not None and mymap.header.has_key('beamarea'):
-        beam_area = mymap.header['beamarea']
-    if beam_area is not None:
-        mymap /= beam_area
-    
+    mymap = model.transpose(tod)    
     unity = tod.copy()
     unity[:] = 1.
+    unity.unit = ''
     map_weights = model.transpose(unity, reusein=True)
     mymap /= map_weights
-    if weights:
-        return mymap, map_weights
+    mymap.coverage = map_weights
+    
+    if unit is None:
+        return mymap
+
+    newunit = Quantity(1., unit)
+    newunit_si = newunit.unit_si._unit
+    if 'pixel' in newunit_si and newunit_si['pixel'] == -1:
+        h = mymap.header
+        try:
+            cd = numpy.array([ [h['cd1_1'],h['cd1_2']], [h['cd2_1'],h['cd2_2']] ])
+        except:
+            raise KeyError('The pixel size cannot be determined from the map header: The CD matrix is missing.')
+        pixel_area = Quantity(abs(numpy.linalg.det(cd)), 'deg^2/pixel')
+        mymap *= pixel_area
+        
+    mymap.unit = newunit._unit
+        
     return mymap
 
 
@@ -1592,7 +1655,7 @@ def deglitch_l2std(tod, projection, nsigma=5.):
     ny = projection.header['naxis2']
     npixels_per_sample = projection.npixels_per_sample
     mask = tod.mask.copy()
-    tmf.deglitch_l2b_std(projection.pmatrix, nx, ny, tod.T, mask.T, nsigma, npixels_per_sample)
+    tmf.deglitch_l2b_std(projection._pmatrix, nx, ny, tod.T, mask.T, nsigma, npixels_per_sample)
     return mask
 
  
@@ -1608,7 +1671,7 @@ def deglitch_l2mad(tod, projection, nsigma=5.):
     ny = projection.header['naxis2']
     npixels_per_sample = projection.npixels_per_sample
     mask = tod.mask.copy()
-    tmf.deglitch_l2b_mad(projection.pmatrix, nx, ny, tod.T, mask.T, nsigma, npixels_per_sample)
+    tmf.deglitch_l2b_mad(projection._pmatrix, nx, ny, tod.T, mask.T, nsigma, npixels_per_sample)
     return mask
 
  

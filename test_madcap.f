@@ -15,7 +15,7 @@ program test_madcap
     integer                     :: status, nsamples, ndetectors, npixels_per_sample, nx, ny
     real(p), allocatable        :: tod(:,:)
     type(pointingelement), allocatable :: pmatrix(:,:,:)
-    real(p), allocatable        :: coverage(:,:), map1d(:), map(:,:), map_ref(:,:)
+    real(p), allocatable        :: coverage(:,:), map1d(:), weight1d(:), map(:,:), map_ref(:,:)
 
     call read_filter(invnttfile1 // 'le', 'little_endian', 2, filter_le, status)
     if (status /= 0) stop 'FAILED: read_filter little_endian'
@@ -57,15 +57,15 @@ program test_madcap
 #endif
 
     allocate (map(nx, ny))
-    allocate (map1d(0:maxval(pmatrix%pixel)))
+    allocate (map1d(0:maxval(pmatrix%pixel)), weight1d(0:maxval(pmatrix%pixel)))
 
-    call backprojection_weighted(pmatrix, tod, map=map1d)
+    call backprojection_weighted(pmatrix, tod, map=map1d, weight=weight1d)
     
     map = unpack(map1d, coverage == coverage, NaN)
 
     if (any(neq_real(map, map_ref, 15))) stop 'FAILED: map_ref'
 
-    deallocate (tod, pmatrix, map_ref, coverage, map, map1d)
+    deallocate (tod, pmatrix, map_ref, coverage, map, map1d, weight1d)
 
     stop 'OK.'
 

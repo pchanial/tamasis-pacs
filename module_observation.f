@@ -54,7 +54,8 @@ public :: pacsobservation
         integer*8          :: first, last, nsamples
         character(len=256) :: filename
         character          :: channel
-        character(len=80)  :: observing_mode
+        character(len=70)  :: observing_mode
+        character(len=70)  :: unit
         integer            :: compression_factor
         real(dp)           :: delta
         type(pointing), allocatable :: p(:)
@@ -67,6 +68,7 @@ public :: pacsobservation
         procedure :: set_compression_mode
         procedure :: set_observing_mode
         procedure :: set_pointing
+        procedure :: set_unit
         procedure :: validate_pointing
         procedure :: set_pointing_oldstyle
 
@@ -76,7 +78,8 @@ public :: pacsobservation
         integer           :: nslices
         integer           :: nsamples_tot
         character         :: channel
-        character(len=80) :: observing_mode
+        character(len=70) :: observing_mode
+        character(len=70) :: unit
         type(maskarray)   :: maskarray_policy
         type(pacsobservationslice), allocatable :: slice(:)
     contains
@@ -427,7 +430,7 @@ contains
         integer, intent(out)                       :: status
 
         integer           :: unit, ikey, length, status_close
-        character(len=72) :: algorithm, keyword, comment
+        character(len=70) :: algorithm, keyword, comment
 
         this%compression_factor = 0
 
@@ -482,7 +485,7 @@ contains
         class(pacsobservationslice), intent(inout) :: this
         integer, intent(out)                       :: status
         integer           :: unit, ikey, length, status_close
-        character(len=72) :: compression, keyword, comment
+        character(len=70) :: compression, keyword, comment
 
         this%observing_mode = 'Unknown'
 
@@ -643,20 +646,19 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine set_pointing(this, status, verbose)
+    subroutine set_pointing(this, status)
 
         class(pacsobservationslice), intent(inout) :: this
         integer, intent(out)                       :: status
-        logical, intent(in)                        :: verbose
 
         real(dp), allocatable  :: buffer(:)
         integer*8, allocatable :: timeus(:)
-        integer                :: nsamples, isample, first, last, njumps, status_close
+        integer                :: nsamples, first, last, status_close
         integer                :: length, unit
         
         length = len_trim(this%filename)
         if (this%filename(length-4:length) /= '.fits') then
-            call this%set_pointing_oldstyle(status, verbose)
+            call this%set_pointing_oldstyle(status)
             return
         end if
         
@@ -712,15 +714,14 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine set_pointing_oldstyle(this, status, verbose)
+    subroutine set_pointing_oldstyle(this, status)
 
         class(pacsobservationslice), intent(inout) :: this
         integer, intent(out)                       :: status
-        logical, intent(in)                        :: verbose
 
         real(dp), allocatable  :: buffer(:)
         integer*8, allocatable :: timeus(:)
-        integer                :: nsamples, isample, first, last, njumps, status_close
+        integer                :: first, last
         
         if (this%nsamples <= 1) then
             status = 1
@@ -760,6 +761,32 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
+    subroutine set_unit(this, status)
+
+        class(pacsobservationslice), intent(inout) :: this
+        integer, intent(out)                       :: status
+
+        character(len=70) :: comment
+        integer           :: length, unit
+
+        this%unit = ''
+        length = len_trim(this%filename)
+        if (this%filename(length-4:length) /= '.fits') then
+            return
+        end if
+
+        call ft_open(trim(this%filename) // '[Signal]', unit, status)
+        if (status /= 0) return
+
+        call ftgkys(unit, 'QTTY____', this%unit, comment, status)
+        status = 0
+        this%unit = trim(this%unit)
+
+    end subroutine set_unit
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
     subroutine validate_pointing(this, maskarray_policy, status, verbose)
 
         class(pacsobservationslice), intent(inout) :: this
@@ -767,10 +794,8 @@ contains
         integer, intent(out)                       :: status
         logical, intent(in)                        :: verbose
 
-        real(dp), allocatable  :: buffer(:)
-        integer*8, allocatable :: timeus(:)
         integer                :: isample, njumps
-        integer                :: length, unit, compression_factor
+        integer                :: compression_factor
         real(dp), allocatable  :: delta(:)
         real(dp)               :: delta_max
 
@@ -849,7 +874,7 @@ contains
         integer, intent(out)                  :: status
         logical, intent(in), optional         :: verbose
         integer*8                             :: first, last
-        integer                               :: iobs
+        integer                               :: islice
         logical                               :: verbose_
 
         ! parameter checking
@@ -872,34 +897,37 @@ contains
         this%maskarray_policy = maskarray_policy        
         
         if (allocated(this%slice)) then
-            do iobs = 1, size(this%slice)
-                if (allocated(this%slice(iobs)%p)) deallocate (this%slice(iobs)%p)
+            do islice = 1, this%nslices
+                if (allocated(this%slice(islice)%p)) deallocate (this%slice(islice)%p)
             end do
             deallocate(this%slice)
         end if
         allocate(this%slice(this%nslices))
 
-        do iobs = 1, this%nslices
+        do islice = 1, this%nslices
 
-            call this%slice(iobs)%set_filename(filename(iobs), first, last, status)
+            call this%slice(islice)%set_filename(filename(islice), first, last, status)
             if (status /= 0) return
 
-            call this%slice(iobs)%set_valid_slice(first, last, this%maskarray_policy, status)
+            call this%slice(islice)%set_valid_slice(first, last, this%maskarray_policy, status)
             if (status /= 0) return
 
-            call this%slice(iobs)%set_channel(status)
+            call this%slice(islice)%set_channel(status)
             if (status /= 0) return
                 
-            call this%slice(iobs)%set_compression_mode(status)
+            call this%slice(islice)%set_compression_mode(status)
             if (status /= 0) return
         
-            call this%slice(iobs)%set_observing_mode(status)
+            call this%slice(islice)%set_observing_mode(status)
             if (status /= 0) return
 
-            call this%slice(iobs)%set_pointing(status, verbose_)
+            call this%slice(islice)%set_unit(status)
+            if (status /= 0) return
+
+            call this%slice(islice)%set_pointing(status)
             if (status /= 0) return
                 
-            call this%slice(iobs)%validate_pointing(this%maskarray_policy, status, verbose_)
+            call this%slice(islice)%validate_pointing(this%maskarray_policy, status, verbose_)
             if (status /= 0) return
 
         end do
@@ -919,6 +947,38 @@ contains
             status = 1
             write (ERROR_UNIT,'(a)') 'ERROR: Observations do not have the same observing mode.'
             return
+        end if
+
+        ! make sure the unit is the same for all observations
+        this%unit = ''
+        do islice = 1, this%nslices
+            if (this%slice(islice)%unit /= '') then
+                this%unit = this%slice(islice)%unit
+                exit
+            end if
+        end do
+
+        if (this%unit == '') then
+            if (verbose_) then
+                write (OUTPUT_UNIT,'(a)') "Warning: Observation has no unit defined. Assuming 'Jy'."
+            end if
+            this%unit = 'Jy'
+            this%slice%unit = 'Jy'
+        else
+            do islice = 1, this%nslices
+                if (this%slice(islice)%unit == '' .and. status == 0) then
+                    if (verbose_) then
+                        write (OUTPUT_UNIT,'(a,i0,a)') 'Warning: Observation ', islice, " has no units. Assuming '" //             &
+                              trim(this%unit) // "'."
+                    end if
+                    this%slice(islice)%unit = this%unit
+                else if (this%slice(islice)%unit /= this%unit) then
+                    write (ERROR_UNIT,'(a,i0,a)') 'Error: Observation ', islice, " has a unit '" // this%slice(islice)%unit // "' i&
+                          &ncompatible with '" // this%unit // "'."
+                    status = 1
+                end if
+            end do
+            if (status /= 0) return
         end if
 
         this%nsamples_tot = sum(this%slice%nsamples)
@@ -1003,22 +1063,22 @@ contains
 
         class(pacsobservation), intent(in) :: this
 
-        integer :: iobs, nrejected, nsamples
+        integer :: islice, nrejected, nsamples
 
         write (*,*)
 
-        do iobs = 1, this%nslices
+        do islice = 1, this%nslices
 
-            nsamples = this%slice(iobs)%nsamples
+            nsamples = this%slice(islice)%nsamples
 
             ! observation number & file name
-            write (OUTPUT_UNIT,'(a)') 'Info: Observation' // strternary(this%nslices>1, ' ' // strinteger(iobs), '') // ': ' //    &
-                trim(this%slice(iobs)%filename)
-            write (OUTPUT_UNIT,'(a)') '      Section: [' // strsection(this%slice(iobs)%first,this%slice(iobs)%last) // ']'
+            write (OUTPUT_UNIT,'(a)') 'Info: Observation' // strternary(this%nslices>1, ' ' // strinteger(islice), '') // ': ' //  &
+                trim(this%slice(islice)%filename)
+            write (OUTPUT_UNIT,'(a)') '      Section: [' // strsection(this%slice(islice)%first,this%slice(islice)%last) // ']'
             
             ! channel
             write (OUTPUT_UNIT,'(a,$)') "      Channel: "
-            select case (this%slice(iobs)%channel)
+            select case (this%slice(islice)%channel)
                 case ('b')
                     write (OUTPUT_UNIT,'(a)') 'Blue'
                 case ('g')
@@ -1033,18 +1093,23 @@ contains
             write (OUTPUT_UNIT,'(a)') '      Observing mode: ' // trim(this%observing_mode)
 
             ! compression factor
-            write (OUTPUT_UNIT,'(a,i0)') '      Compression factor: ', this%slice(iobs)%compression_factor
+            write (OUTPUT_UNIT,'(a,i0)') '      Compression factor: ', this%slice(islice)%compression_factor
+
+            ! compression factor
+            if (this%unit /= 'Jy') then
+                write (OUTPUT_UNIT,'(a)') '      Unit: ' // this%slice(islice)%unit
+            end if
 
             ! print maskarray information
             if (this%maskarray_policy%off_target) then
-                nrejected = count(this%slice(iobs)%p%off_target)
+                nrejected = count(this%slice(islice)%p%off_target)
                 if (nrejected > 0) then
                     write (OUTPUT_UNIT,'(a,2(i0,a))') "      Mask 'off target': Rejecting ", nrejected, ' / ', nsamples, '.'
                 end if
             end if
 
             if (this%maskarray_policy%wrong_time) then
-                nrejected = count(this%slice(iobs)%p%wrong_time)
+                nrejected = count(this%slice(islice)%p%wrong_time)
                 if (nrejected > 0) then
                     write (OUTPUT_UNIT,'(a,2(i0,a))') "      Mask 'wrong time': Rejecting ", nrejected, ' / ', nsamples, '.'
                 end if

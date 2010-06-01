@@ -992,15 +992,15 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_create_header(naxis1, naxis2, cdelt1, cdelt2, crota2, crval1, crval2, crpix1, crpix2, header)
+    subroutine ft_create_header(naxis1, naxis2, cd, crval1, crval2, crpix1, crpix2, header)
 
         integer, intent(in) :: naxis1, naxis2
-        real*8, intent(in)  :: cdelt1, cdelt2, crval1, crval2, crpix1, crpix2, crota2
+        real*8, intent(in)  :: cd(2,2), crval1, crval2, crpix1, crpix2
         character(len=2880), intent(out) :: header
 
-        character(len=*), parameter   :: format_dbl = "(a8,'= ',f20.15)"
-        character(len=*), parameter   :: format_int = "(a8,'= ',i20)"
-        character(len=*), parameter   :: format_str = "(a8,'= ',a20)"
+        character(len=*), parameter :: format_dbl = "(a8,'= ',f20.15)"
+        character(len=*), parameter :: format_int = "(a8,'= ',i20)"
+        character(len=*), parameter :: format_str = "(a8,'= ',a20)"
 
         header = ' '
         header(0*80+1:1*80) = 'SIMPLE  =                    T / Fits standard'
@@ -1008,18 +1008,19 @@ contains
         header(2*80+1:3*80) = 'NAXIS   =                    2'
         write (header( 3*80+1: 4*80),format_int) 'NAXIS1  ', naxis1
         write (header( 4*80+1: 5*80),format_int) 'NAXIS2  ', naxis2
-        write (header( 5*80+1: 6*80),format_dbl) 'CDELT1  ', cdelt1
-        write (header( 6*80+1: 7*80),format_dbl) 'CDELT2  ', cdelt2
-        write (header( 7*80+1: 8*80),format_dbl) 'CROTA2  ', crota2
-        write (header( 8*80+1: 9*80),format_dbl) 'CRVAL1  ', crval1
-        write (header( 9*80+1:10*80),format_dbl) 'CRVAL2  ', crval2
-        write (header(10*80+1:11*80),format_dbl) 'CRPIX1  ', crpix1
-        write (header(11*80+1:12*80),format_dbl) 'CRPIX2  ', crpix2
-        write (header(12*80+1:13*80),format_str) 'CTYPE1  ', "'RA---TAN'"
-        write (header(13*80+1:14*80),format_str) 'CTYPE2  ', "'DEC--TAN'"
-        write (header(14*80+1:15*80),format_str) 'CUNIT1  ', "'deg'"
-        write (header(15*80+1:16*80),format_str) 'CUNIT2  ', "'deg'"
-        header(16*80+1:16*80+3) = 'END'
+        write (header( 5*80+1: 6*80),format_dbl) 'CRVAL1  ', crval1
+        write (header( 7*80+1: 8*80),format_dbl) 'CRVAL2  ', crval2
+        write (header( 6*80+1: 7*80),format_dbl) 'CRPIX1  ', crpix1
+        write (header( 8*80+1: 9*80),format_dbl) 'CRPIX2  ', crpix2
+        write (header( 9*80+1:10*80),format_dbl) 'CD1_1   ', cd(1,1)
+        write (header(10*80+1:11*80),format_dbl) 'CD2_1   ', cd(2,1)
+        write (header(11*80+1:12*80),format_dbl) 'CD1_2   ', cd(1,2)
+        write (header(12*80+1:13*80),format_dbl) 'CD2_2   ', cd(2,2)
+        write (header(13*80+1:14*80),format_str) 'CTYPE1  ', "'RA---TAN'"
+        write (header(14*80+1:15*80),format_str) 'CTYPE2  ', "'DEC--TAN'"
+        write (header(15*80+1:16*80),format_str) 'CUNIT1  ', "'deg'"
+        write (header(16*80+1:17*80),format_str) 'CUNIT2  ', "'deg'"
+        header(17*80+1:18*80+3) = 'END'
 
     end subroutine ft_create_header
 

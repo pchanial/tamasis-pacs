@@ -19,7 +19,7 @@ program pacs_photproject
     class(optionparser), allocatable   :: parser
     real*8, allocatable                :: signal(:,:)
     logical*1, allocatable             :: mask(:,:)
-    real*8, allocatable                :: map1d(:)
+    real*8, allocatable                :: map1d(:), weight1d(:)
     character(len=2048), allocatable   :: infile(:)
     character(len=2048)                :: outfile, headerfile
     character(len=2880)                :: header
@@ -122,7 +122,7 @@ program pacs_photproject
     call ft_read_parameter(header, 'naxis2', ny, count2, status=status)
     if (status /= 0 .or. count2 == 0) go to 999
 
-    allocate(map1d(0:nx*ny-1))
+    allocate(map1d(0:nx*ny-1), weight1d(0:nx*ny-1))
 
     ! compute the projector
     allocate (pmatrix(npixels_per_sample,nsamples,pacs%ndetectors))
@@ -138,7 +138,7 @@ program pacs_photproject
     ! remove flat field
     if (do_flatfield) then
         write (OUTPUT_UNIT,'(a)') 'Flat-fielding... '
-        call divide_vectordim2(signal, pacs%flatfield)
+        call divide_vectordim2(signal, pack(pacs%flatfield_detector, pacs%mask))
     end if
 
     ! filtering
@@ -187,7 +187,7 @@ program pacs_photproject
     ! back project the timeline
     write(OUTPUT_UNIT,'(a)', advance='no') 'Computing the map... '
     call system_clock(count1, count_rate, count_max)
-    call backprojection_weighted(pmatrix, signal, mask, map1d, 0.d0)
+    call backprojection_weighted(pmatrix, signal, mask, map1d, weight1d, 0.d0)
     call system_clock(count2, count_rate, count_max)
     write(OUTPUT_UNIT,'(f6.2,a)') real(count2-count1)/count_rate, 's'
 

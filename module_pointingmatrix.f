@@ -120,13 +120,13 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine backprojection_weighted(pmatrix, timeline, mask, map, threshold)
+    subroutine backprojection_weighted(pmatrix, timeline, mask, map, weight, threshold)
         type(pointingelement), intent(in)     :: pmatrix(:,:,:)
         real(kind=p), intent(in)              :: timeline(:,:)
         real(kind=p), intent(out)             :: map(0:)
+        real(kind=p), intent(out)             :: weight(0:)
         logical(kind=1), intent(in), optional :: mask(:,:)
         real(kind=p), intent(in), optional    :: threshold
-        real(kind=p)                          :: weight(0:ubound(map,1))
         integer                               :: npixels, nsamples, ndetectors
         integer                               :: ipixel, isample, idetector,imap
         real(kind=p)                          :: threshold_

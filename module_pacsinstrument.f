@@ -2,11 +2,11 @@ module module_pacsinstrument
 
     use iso_fortran_env,        only : ERROR_UNIT, OUTPUT_UNIT
     use module_fitstools,       only : ft_close, ft_create_header, ft_open_image, ft_read_extension, ft_read_slice,ft_test_extension
-    use module_math,            only : DEG2RAD, pInf, mInf, NaN, nint_down, nint_up
+    use module_math,            only : DEG2RAD, pInf, mInf, NaN, mean, nint_down, nint_up
     use module_pacsobservation, only : pacsobservationslice, pacsobservation
     use module_pointingmatrix,  only : pointingelement, xy2roi, roi2pmatrix
     use module_precision,       only : p
-    use module_projection,      only : convex_hull
+    use module_projection,      only : convex_hull, surface_convex_polygon
     use module_string,          only : strinteger
     use module_tamasis,         only : get_tamasis_path, tamasis_path_len
     use module_wcs,             only : init_astrometry, ad2xy_gnomonic, ad2xy_gnomonic_vect
@@ -49,7 +49,10 @@ module module_pacsinstrument
         integer, allocatable :: ij(:,:)
         integer, allocatable :: pq(:,:)
 
-        real*8, allocatable  :: flatfield(:)
+        real*8, allocatable  :: flatfield_total(:,:)
+        real*8, allocatable  :: flatfield_detector(:,:)
+        real*8, allocatable  :: flatfield_optical(:,:)
+        real*8, allocatable  :: detector_area(:,:)
 
         real*8               :: corners_uv_blue(ndims, nvertices, shape_blue(1), shape_blue(2))
         real*8               :: corners_uv_red (ndims, nvertices, shape_red (1), shape_red (2))
@@ -281,15 +284,17 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
+    ! a flatten array of detector values is travelled through columns and then through rows
     subroutine filter_detectors_array(this, mask, uv, distortion, flatfield)
 
-        class(pacsinstrument), intent(inout)    :: this
-        logical*1, intent(in), target :: mask(:,:)
-        real*8, intent(in)            :: uv(:,:,:,:)
-        real*8, intent(in)            :: distortion(:,:,:,:)
-        real*8, intent(in)            :: flatfield(:,:)
+        class(pacsinstrument), intent(inout) :: this
+        logical*1, intent(in), target        :: mask(:,:)
+        real*8, intent(in)                   :: uv(:,:,:,:)
+        real*8, intent(in)                   :: distortion(:,:,:,:)
+        real*8, intent(in)                   :: flatfield(:,:)
 
-        integer                       :: idetector, p, q
+        integer   :: idetector, p, q
+        real*8    :: center(2,2)
 
         this%nrows    = size(mask, 1)
         this%ncolumns = size(mask, 2)
@@ -321,27 +326,41 @@ contains
             this%ndetectors = this%ndetectors - count(this%mask)
         end if
 
-        allocate(this%ij(ndims, this%ndetectors))
-        allocate(this%pq(ndims, this%ndetectors))
-        allocate(this%corners_uv(ndims, nvertices * this%ndetectors))
-        allocate(this%corners_yz(ndims, nvertices * this%ndetectors))
-        allocate(this%flatfield(this%ndetectors))
+        allocate (this%ij(ndims, this%ndetectors))
+        allocate (this%pq(ndims, this%ndetectors))
+        allocate (this%corners_uv(ndims, nvertices * this%ndetectors))
+        allocate (this%corners_yz(ndims, nvertices * this%ndetectors))
+        allocate (this%flatfield_total(this%nrows, this%ncolumns))
+        allocate (this%flatfield_detector(this%nrows, this%ncolumns))
+        allocate (this%flatfield_optical(this%nrows, this%ncolumns))
+        allocate (this%detector_area(this%nrows, this%ncolumns))
         this%distortion_yz = distortion
 
         idetector = 1
 
-        do p = 0, this%nrows - 1
-            do q = 0, this%ncolumns - 1
-                if (this%mask(p+1,q+1) .and. .not.this%keep_bad_detectors) cycle
-                this%pq(1, idetector) = p
-                this%pq(2, idetector) = q
-                this%ij(1, idetector) = mod(p, 16)
-                this%ij(2, idetector) = mod(q, 16)
-                this%corners_uv(:,nvertices * (idetector-1)+1:nvertices*idetector) = uv(:,:,p+1,q+1)
-                this%flatfield(idetector) = flatfield(p+1,q+1)
+        do p = 1, this%nrows
+            do q = 1, this%ncolumns
+                this%detector_area(p,q) = abs(surface_convex_polygon(this%uv2yz(uv(:,:,p,q), distortion, 0.d0))) * 3600.d0**2
+                if (this%mask(p,q) .and. .not.this%keep_bad_detectors) cycle
+                this%pq(1, idetector) = p-1
+                this%pq(2, idetector) = q-1
+                this%ij(1, idetector) = mod(p-1, 16)
+                this%ij(2, idetector) = mod(q-1, 16)
+                this%corners_uv(:,nvertices * (idetector-1)+1:nvertices*idetector) = uv(:,:,p,q)
                 idetector = idetector + 1
             end do
         end do
+        
+        center = this%detector_area(this%nrows/2:this%nrows/2+1,this%ncolumns/2:this%ncolumns/2)
+        this%flatfield_optical = this%detector_area / mean(reshape(center,[4]))
+        this%flatfield_total = flatfield
+        this%flatfield_detector = this%flatfield_total / this%flatfield_optical
+
+        where (this%mask)
+            this%flatfield_total    = NaN
+            this%flatfield_detector = NaN
+            this%flatfield_optical  = NaN
+        end where
 
     end subroutine filter_detectors_array
 
@@ -439,7 +458,7 @@ contains
 
         call obs%compute_center(ra0, dec0)
 
-        call ft_create_header(0, 0, -resolution/3600.d0, resolution/3600.d0, 0.d0, ra0, dec0, 1.d0, 1.d0, header)
+        call ft_create_header(0, 0, [[-resolution/3600.d0, 0.d0], [0.d0, resolution/3600.d0]], ra0, dec0, 1.d0, 1.d0, header)
 
         call init_astrometry(header, status=status)
         if (status /= 0) return
@@ -455,7 +474,8 @@ contains
         ny = iymax-iymin+1
 
         ! move the reference pixel (not the reference value!)
-        call ft_create_header(nx, ny, -resolution/3600.d0, resolution/3600.d0, 0.d0, ra0, dec0, -ixmin+2.d0, -iymin+2.d0, header)
+        call ft_create_header(nx, ny, [[-resolution/3600.d0, 0.d0], [0.d0, resolution/3600.d0]], ra0, dec0, -ixmin+2.d0,           &
+             -iymin+2.d0, header)
 
     end subroutine compute_map_header
 
@@ -899,11 +919,14 @@ contains
 
         class(pacsinstrument), intent(inout) :: this
 
-        deallocate(this%ij)
-        deallocate(this%pq)
-        deallocate(this%flatfield)
-        deallocate(this%corners_uv)
-        deallocate(this%corners_yz)
+        deallocate (this%ij)
+        deallocate (this%pq)
+        deallocate (this%flatfield_total)
+        deallocate (this%flatfield_detector)
+        deallocate (this%flatfield_optical)
+        deallocate (this%detector_area)
+        deallocate (this%corners_uv)
+        deallocate (this%corners_yz)
 
     end subroutine destroy
 
