@@ -990,8 +990,8 @@ end subroutine read_madmap1_nslices
 subroutine read_madmap1_info(todfile, invnttfile, convert, ndetectors, nslices, npixels_per_sample, nsamples, status)
 
     use iso_fortran_env, only : ERROR_UNIT
-    use module_madcap, only   : read_filter_headers, read_tod_header
-    use module_string, only   : strinteger
+    use module_madcap,   only : read_filter_headers, read_tod_header
+    use module_string,   only : strinteger
     implicit none
 
     !f2py threadsafe
