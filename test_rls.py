@@ -46,3 +46,13 @@ solution, nit = cgs(operator, b, x0=x0, tol=1.e-4, maxiter=200, callback=PcgCall
 map_iter = Map(reshaping.direct(solution))
 
 map_rls = mapper_rls(tod, model)
+
+dX = DiscreteDifference(axis=1)
+dY = DiscreteDifference(axis=0)
+C = model.T * model + 1.e1 * (dX.T * dX + dY.T * dY)
+operator = C.aslinearoperator()
+b = operator.unpacking.T(backmap)
+x0 = operator.unpacking.T(map_naive)
+x0[numpy.where(numpy.isfinite(x0) == False)] = 0
+solution, nit = cgs(operator, b, x0=x0, tol=1.e-4, maxiter=200, callback=PcgCallback())
+map_iter2 = Map(operator.unpacking(solution))

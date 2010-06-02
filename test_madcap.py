@@ -10,7 +10,7 @@ sqrtInvNtt = SqrtInvNtt(observation, tamasis_dir+'tests/madmap1/invnttSpirePsw_b
 fft = Fft(tod.nsamples)
 #padding = Padding(left = sqrtInvNtt.ncorrelations, right = 1024 - tod.shape[-1] - sqrtInvNtt.ncorrelations)
 projection = Projection(observation)
-packing = Packing(observation.mapmask, field=numpy.nan)
+packing = Unpacking(observation.mapmask, field=numpy.nan).T
 
 model = projection * packing
 
