@@ -1194,6 +1194,11 @@ subroutine sqrt_invntt_madmap1(filename, convert, nslices, nsamples, nsamples_to
     end if
 
     tod_filter = sqrt(tod_filter)
+    
+    ! set NaN values to zero
+    where (tod_filter /= tod_filter)
+        tod_filter = 0
+    end where
 
 end subroutine sqrt_invntt_madmap1
 
