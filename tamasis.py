@@ -482,7 +482,7 @@ class Projection(AcquisitionModel):
             observation.get_pointing_matrix(header, resolution, npixels_per_sample, finer_sampling=finer_sampling)
         self.shapein = tuple([self.header['naxis'+str(i+1)] for i in reversed(range(self.header['naxis']))])
         self.pmatrix = self._pmatrix.view(dtype=[('weight', 'f4'), ('pixel', 'i4')])
-        self.pmatrix.resize((observation.ndetectors, nsamples, self.npixels_per_sample))
+        self.pmatrix.resize((observation.ndetectors, numpy.sum(nsamples), self.npixels_per_sample))
         self.shapeout = self._combine_sliced_shape(observation.ndetectors, nsamples)
 
     def direct(self, map2d, reusein=False, reuseout=False):
@@ -1173,7 +1173,7 @@ class PacsObservation(_Pacs):
         return tod
 
     def get_pointing_matrix(self, header, resolution, npixels_per_sample, finer_sampling=True):
-        nsamples = numpy.sum(self.nfinesamples if finer_sampling else self.nsamples)
+        nsamples = self.nfinesamples if finer_sampling else self.nsamples
         if npixels_per_sample is None:
             npixels_per_sample = self.default_npixels_per_sample
         if header is None:
@@ -1182,11 +1182,11 @@ class PacsObservation(_Pacs):
             header = str2fitsheader(header)
 
         filename_, nfilenames = self._files2tmf(self.filename)
-        sizeofpmatrix = npixels_per_sample * nsamples * self.ndetectors
+        sizeofpmatrix = npixels_per_sample * numpy.sum(nsamples) * self.ndetectors
         print 'Info: Allocating '+str(sizeofpmatrix/2.**17)+' MiB for the pointing matrix.'
         pmatrix = numpy.zeros(sizeofpmatrix, dtype=numpy.int64)
            
-        status = tmf.pacs_pointing_matrix_filename(tamasis_dir, filename_, self.nobservations, finer_sampling, self.fine_sampling_factor, npixels_per_sample, nsamples, self.ndetectors, self.keep_bad_detectors, numpy.asfortranarray(self.bad_detector_mask), self.mask_bad_line, str(header).replace('\n', ''), pmatrix)
+        status = tmf.pacs_pointing_matrix_filename(tamasis_dir, filename_, self.nobservations, finer_sampling, self.fine_sampling_factor, npixels_per_sample, numpy.sum(nsamples), self.ndetectors, self.keep_bad_detectors, numpy.asfortranarray(self.bad_detector_mask), self.mask_bad_line, str(header).replace('\n', ''), pmatrix)
         if status != 0: raise RuntimeError()
 
         return pmatrix, header, self.ndetectors, nsamples, npixels_per_sample
@@ -1322,7 +1322,7 @@ class MadMap1Observation(object):
         pmatrix = numpy.zeros(sizeofpmatrix, dtype=numpy.int64)
         status = tmf.read_madmap1(self.todfile, self.invnttfile, self.convert, self.npixels_per_sample, tod.T, pmatrix)
         if (status != 0): raise RuntimeError()
-        return pmatrix, header, self.ndetectors, numpy.sum(self.nsamples), self.npixels_per_sample
+        return pmatrix, header, self.ndetectors, self.nsamples, self.npixels_per_sample
 
     def get_tod(self):
         tod = Tod.zeros((self.ndetectors,self.nsamples))
