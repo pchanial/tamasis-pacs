@@ -103,6 +103,7 @@ def divide_unit(unit1, unit2):
         
 class Quantity(numpy.ndarray):
 
+    __slots__ = ('_unit',)
     def __new__(cls, data, unit=None, dtype=numpy.float64, order='C', copy=True):
         from copy import copy as cp
         result = numpy.array(data, dtype=dtype, order=order, copy=copy, subok=True)
@@ -123,6 +124,7 @@ class Quantity(numpy.ndarray):
         self._unit = getattr(obj, '_unit', {})
 
     def __array_wrap__(self, obj, context=None):
+
         result = numpy.ndarray.__array_wrap__(self, obj, context).view(type(self))
 
         if context is None:
