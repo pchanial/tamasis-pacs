@@ -442,11 +442,11 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine compute_map_header(this, obs, finer_sampling, resolution, header, status)
+    subroutine compute_map_header(this, obs, oversampling, resolution, header, status)
 
         class(pacsinstrument), intent(in)  :: this
         class(pacsobservation), intent(in) :: obs
-        logical, intent(in)                :: finer_sampling
+        logical, intent(in)                :: oversampling
         real*8, intent(in)                 :: resolution
         character(len=2880), intent(out)   :: header
         integer, intent(out)               :: status
@@ -463,7 +463,7 @@ contains
         call init_astrometry(header, status=status)
         if (status /= 0) return
 
-        call this%find_minmax(obs, finer_sampling, xmin, xmax, ymin, ymax)
+        call this%find_minmax(obs, oversampling, xmin, xmax, ymin, ymax)
 
         ixmin = nint(xmin)
         ixmax = nint(xmax)
@@ -484,10 +484,10 @@ contains
 
 
     ! find minimum and maximum pixel coordinates in maps
-    subroutine find_minmax(this, obs, finer_sampling, xmin, xmax, ymin, ymax)
+    subroutine find_minmax(this, obs, oversampling, xmin, xmax, ymin, ymax)
         class(pacsinstrument), intent(in)  :: this
         class(pacsobservation), intent(in) :: obs
-        logical, intent(in)                :: finer_sampling
+        logical, intent(in)                :: oversampling
         real*8, intent(out)                :: xmin, xmax, ymin, ymax
         real*8               :: ra, dec, pa, chop
         real*8, allocatable  :: hull_uv(:,:), hull(:,:)
@@ -508,7 +508,7 @@ contains
         do islice = 1, obs%nslices
 
             ! check if it is required to interpolate pointing positions
-            if (finer_sampling) then
+            if (oversampling) then
                sampling_factor = this%fine_sampling_factor * obs%slice(islice)%compression_factor
             else
                sampling_factor = 1
@@ -540,10 +540,10 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine compute_projection_sharp_edges(this, obs, finer_sampling, header, nx, ny, pmatrix, status)
+    subroutine compute_projection_sharp_edges(this, obs, oversampling, header, nx, ny, pmatrix, status)
         class(pacsinstrument), intent(in)  :: this
         class(pacsobservation), intent(in) :: obs
-        logical, intent(in)                :: finer_sampling
+        logical, intent(in)                :: oversampling
         character(len=*), intent(in)       :: header
         integer, intent(in)                :: nx, ny
         type(pointingelement), intent(out) :: pmatrix(:,:,:)
@@ -573,7 +573,7 @@ contains
             chop_old = pInf
 
             ! check if it is required to interpolate pointing positions
-            if (finer_sampling) then
+            if (oversampling) then
                sampling_factor = this%fine_sampling_factor * obs%slice(islice)%compression_factor
             else
                sampling_factor = 1

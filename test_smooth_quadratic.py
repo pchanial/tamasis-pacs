@@ -1,7 +1,8 @@
 #!/usr/bin/env python2.6
 from   matplotlib.pyplot import clim, figure, plot, show, ioff
-from   tamasis import *
+import numpy
 import os
+from   tamasis import *
 
 do_plot = True
 ioff()

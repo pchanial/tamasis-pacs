@@ -1,5 +1,6 @@
-from tamasis import *
 import numpy
+import pyfits
+from   tamasis import *
 
 class TestFailure(Exception): pass
 
@@ -10,7 +11,7 @@ obs = PacsObservation(filename=tamasis_dir+'tests/frames_blue.fits',
 tod = obs.get_tod()
 
 telescope    = Identity('Telescope PSF')
-projection   = Projection(obs, resolution=3.2, finer_sampling=False, npixels_per_sample=6)
+projection   = Projection(obs, resolution=3.2, oversampling=False, npixels_per_sample=6)
 multiplexing = CompressionAverage(obs.fine_sampling_factor, 'Multiplexing')
 crosstalk    = Identity('Crosstalk')
 compression  = CompressionAverage(obs.compression_factor)
@@ -30,7 +31,7 @@ header = projection.header
 header2 = header.copy()
 header2['NAXIS1'] += 500
 header2['CRPIX1'] += 250
-projection2 = Projection(obs, header=header2, finer_sampling=False)
+projection2 = Projection(obs, header=header2, oversampling=False)
 map_naive2 = mapper_naive(tod, projection2)
 map_naive3 = map_naive2[:,250:header['NAXIS1']+250]
 if any_neq(map_naive, map_naive3, 7): raise TestFailure('mapper_naive, with custom header')

@@ -40,7 +40,7 @@ class AcquisitionModel(object):
     combination of several submodels describing various parts of the instrumental chain:
          M = M3 * M2 * M1 ...
     Two methods are provided to the user:
-         y = M.direct(x)s
+         y = M.direct(x)
          x = M.transpose(y)
     they return M.x (submodels are applied in right-to-left order) and transpose(M).y.
     Author: P. Chanial
@@ -81,7 +81,7 @@ class AcquisitionModel(object):
             return self._shapein
         shapein = None
         for model in reversed(self):
-            shapein = model._validate_shape_transpose(shapein)
+            shapein = model.validate_shapeout(shapein)
         return shapein
 
     @shapein.setter
@@ -94,7 +94,7 @@ class AcquisitionModel(object):
             return self._shapeout
         shapeout = None
         for model in self:
-            shapeout = model._validate_shape_direct(shapeout)
+            shapeout = model.validate_shapein(shapeout)
         return shapeout
 
     @shapeout.setter
@@ -104,73 +104,78 @@ class AcquisitionModel(object):
     def aslinearoperator(self, shape=None, unpacking=None):
         if numpy.isscalar(shape):
             shape = (shape, shape)
-        shapein  = self._flatten_sliced_shape(self.shapein )
-        shapeout = self._flatten_sliced_shape(self.shapeout)
+        shapein  = _flatten_sliced_shape(self.shapein )
+        shapeout = _flatten_sliced_shape(self.shapeout)
         if shape is None:
             if (shapein is None or shapeout is None):
                 raise ValidationError('You must specify the shape of the linear operator: the Acquisition model is not constrained.')
-            shape = (shapein, shapeout)
+            shape = (shapeout, shapein)
         elif shapein is not None and shapein  != shape[1] or shapeout is not None and shapeout != shape[0]:
             raise ValidationError('The input shape is incompatible with the AcquisitionModel.')
 
         linopshape = (numpy.product(shape[0]), numpy.product(shape[1]))
         model = Reshaping(shape[0], linopshape[0]) * self * Reshaping(linopshape[1], shape[1])
-        operator = scipy.sparse.linalg.interface.LinearOperator(linopshape, matvec=model.direct, rmatvec=model.transpose, dtype='double')
-        operator.unpacking = Reshaping(linopshape[1], shape[1])
+        operator = scipy.sparse.linalg.interface.LinearOperator(linopshape, matvec=model.direct, rmatvec=model.transpose, dtype='float64')
+        operator.unpack = Reshaping(linopshape[1], shape[1])
         return operator
         
     def _validate_shape(self, shapein):
         if shapein is None or self.shapein is None:
             return
-        if self._flatten_sliced_shape(shapein) != self._flatten_sliced_shape(self.shapein):
+        if _flatten_sliced_shape(shapein) != _flatten_sliced_shape(self.shapein):
             raise ValidationError('The input of '+self.__class__.__name__+' has incompatible shape '+str(shapein)+' instead of '+str(self.shapein)+'.')
 
-    def _validate_shape_direct(self, shapein):
+    def validate_shapein(self, shapein):
         if shapein is None or self.shapein is None:
             if self.shapeout is not None:
                return self.shapeout
             else:
                return shapein
-        if self._flatten_sliced_shape(shapein) != self._flatten_sliced_shape(self.shapein):
+        if _flatten_sliced_shape(shapein) != _flatten_sliced_shape(self.shapein):
             raise ValidationError('The input of '+self.__class__.__name__+' has incompatible shape '+str(shapein)+' instead of '+str(self.shapein)+'.')
         return self.shapeout
 
-    def _validate_shape_transpose(self, shapeout):
+    def validate_shapeout(self, shapeout):
         if shapeout is None or self.shapeout is None:
             if self.shapein is not None:
                 return self.shapein
             else:
                 return shapeout
-        if self._flatten_sliced_shape(shapeout) != self._flatten_sliced_shape(self.shapeout):
+        if _flatten_sliced_shape(shapeout) != _flatten_sliced_shape(self.shapeout):
             raise ValidationError("The input of '"+self.__class__.__name__+".T' has incompatible shape "+str(shapeout)+' instead of '+str(self.shapeout)+'.')
         return self.shapein
 
     def _validate_input(self, cls, data):
+        if not isinstance(data, numpy.ndarray):
+            data = numpy.asarray(data)
+        if not my_issctype(data.dtype):
+            raise TypeError("The input of '"+self.__class__.__name__+"' has an non-numeric type '"+str(data.dtype)+"'.")
         if not isinstance(data, cls):
-            if issubclass(cls, data.__class__):
-                data = cls(data, copy=False)
-            else:
-                raise TypeError("The input of '"+self.__class__.__name__+"' has an invalid type '"+data.__class__.__name__+"' instead of '"+cls.__name__+"'.")
-        self._validate_shape(self._get_sliced_shape(data))
+            data = data.view(cls)
+
+        self._validate_shape(_validate_sliced_shape(data.shape, getattr(data, 'nsamples', None)))
         return data
 
     def _validate_input_direct(self, cls, data, reusein):
+        if not isinstance(data, numpy.ndarray):
+            data = numpy.asarray(data)
+        if not my_issctype(data.dtype):
+            raise TypeError("The input of '"+self.__class__.__name__+"' has an non-numeric type '"+str(data.dtype)+"'.")
         if not isinstance(data, cls):
-            if issubclass(cls, data.__class__):
-                data = cls(data, copy=False)
-            else:
-                raise TypeError("The input of '"+self.__class__.__name__+"' has an invalid type '"+data.__class__.__name__+"' instead of '"+cls.__name__+"'.")
-        shapeout = self._validate_shape_direct(self._get_sliced_shape(data))
+            data = data.view(cls)
+        shapeout = self.validate_shapein(_validate_sliced_shape(data.shape, getattr(data, 'nsamples', None)))
         if reusein: self._output_transpose = data
         return data, shapeout
 
     def _validate_input_transpose(self, cls, data, reusein):
+        if not isinstance(data, numpy.ndarray):
+            data = numpy.asarray(data)
+        if not my_issctype(data.dtype):
+            raise TypeError("The input of '"+self.__class__.__name__+".T' has an non-numeric type '"+str(data.dtype)+"'.")
         if not isinstance(data, cls):
-            if issubclass(cls, data.__class__):
-                data = cls(data, copy=False)
-            else:
-                raise TypeError("The input of '"+self.__class__.__name__+".T' has an invalid type '"+data.__class__.__name__+"' instead of '"+cls.__name__+"'.")
-        shapein = self._validate_shape_transpose(self._get_sliced_shape(data))
+            data = data.view(cls)
+                
+        shapein = self.validate_shapeout(_validate_sliced_shape(data.shape, getattr(data, 'nsamples', None)))
         if reusein: self._output_direct = data
         return data, shapein
 
@@ -188,7 +193,7 @@ class AcquisitionModel(object):
     def _validate_output_direct(self, cls, shapeout, reuseout, **options):
         if shapeout is None:
             raise ValueError('The shape of the output of '+self.__class__.__name__+' is not known.')
-        shapeout_flat = self._flatten_sliced_shape(shapeout)
+        shapeout_flat = _flatten_sliced_shape(shapeout)
         if self._output_direct is None or shapeout_flat != self._output_direct.shape:
             if __verbose__: print 'Info: Allocating '+str(numpy.product(shapeout_flat)/2.**17)+' MiB for the output of '+self.__class__.__name__+'.'
             if cls == numpy.ndarray:
@@ -205,7 +210,7 @@ class AcquisitionModel(object):
     def _validate_output_transpose(self, cls, shapein, reuseout, **options):
         if shapein is None:
             raise ValueError('The shape of the input of '+self.__class__.__name__+' is not known.')
-        shapein_flat = self._flatten_sliced_shape(shapein)
+        shapein_flat = _flatten_sliced_shape(shapein)
         if self._output_transpose is None or shapein_flat != self._output_transpose.shape:
             if __verbose__: print 'Info: Allocating '+str(numpy.product(shapein_flat)/2.**17)+' MiB for the output of '+self.__class__.__name__+'.T.'
             if cls == numpy.ndarray:
@@ -223,55 +228,13 @@ class AcquisitionModel(object):
     _output_transpose = None   # stores the input of the direct model. Its memory allocation is re-used as the output of the transpose model
     blocks            = []     # components are ordered as in the direct order
 
-    @staticmethod
-    def _flatten_sliced_shape(shape):
-        if shape is None: return shape
-        if not isinstance(shape, tuple) and not isinstance(shape, list) and not isinstance(shape, numpy.ndarray):
-            return (int(shape),)
-        return tuple(map(numpy.sum, shape))
-
-    @staticmethod
-    def _combine_sliced_shape(shape, nsamples):
-        if numpy.isscalar(shape):
-            shape = [ shape ]
-        else:
-            shape = list(shape) # list makes a shallow copy
-        if numpy.rank(nsamples) == 0:
-            nsamples = int(nsamples)
-        elif numpy.rank(nsamples) != 1:
-            raise ValueError('The input nsamples is neither a scalar nor a vector.')
-        else:
-            if isinstance(nsamples, numpy.ndarray) and nsamples.size == 1 or len(nsamples) == 1:
-                nsamples = nsamples[0]
-            else:
-                nsamples = tuple(nsamples)
-        shape.append(nsamples)
-        return tuple(shape)
-
-    @staticmethod
-    def _get_sliced_shape(data):
-        if isinstance(data, Tod):
-            return AcquisitionModel._combine_sliced_shape(data.shape[0:-1], data.nsamples)
-        return data.shape
-
-    @staticmethod
-    def _smart_reshape(array, shape):
-        curr = array
-        shape = AcquisitionModel._flatten_sliced_shape(shape)
-        while True:
-            if curr.shape == shape:
-                return curr
-            if curr.base is None or curr.base.dtype != array.dtype or curr.base.__class__ != array.__class__:
-                return curr.reshape(shape)
-            curr = curr.base
-
     def __mul__(self, other):
         if numpy.isscalar(other):
             other = Scalar(other)
         elif isinstance(other, numpy.ndarray):
             return self(other)
-        elif not isinstance(other, AcquisitionModel):
-            raise TypeError("It is not possible to compose an AcquisitionModel with '"+str(type(other))+"'.")
+        else:
+            other = asacquisitionmodel(other)
 
         newmodel = AcquisitionModel(None)
         newmodel.blocks = []
@@ -291,6 +254,15 @@ class AcquisitionModel(object):
 
     def __add__(self, other):
         return Addition(self, other)
+
+    def __radd__(self, other):
+        return Addition(other, self)
+
+    def __sub__(self, other):
+        return Subtraction(self, other)
+
+    def __rsub__(self, other):
+        return Subtraction(other, self)
 
     def __getitem__(self, index):
         if len(self) == 0:
@@ -373,6 +345,12 @@ class AcquisitionModelTranspose(AcquisitionModel):
     def shapeout(self):
         return self.model.shapein
 
+    def validate_shapein(self, shapein):
+        return self.model.validate_shapeout(shapein)
+
+    def validate_shapeout(self, shapeout):
+        return self.model.validate_shapein(shapeout)
+
 
 #-------------------------------------------------------------------------------
 
@@ -383,14 +361,33 @@ class Addition(AcquisitionModel):
     """
     def __init__(self, model1, model2, description=None):
         AcquisitionModel.__init__(self, description)
-        self.model1 = model1
-        self.model2 = model2
+        self.model1 = asacquisitionmodel(model1)
+        self.model2 = asacquisitionmodel(model2)
    
     def direct(self, data, reusein=False, reuseout=False):
         return self.model1(data, reusein=False, reuseout=reuseout) + self.model2(data, reusein=reusein, reuseout=reuseout)
 
     def transpose(self, data, reusein=False, reuseout=False):
         return self.model1.T(data, reusein=False, reuseout=reuseout) + self.model2.T(data, reusein=reusein, reuseout=reuseout)
+
+
+#-------------------------------------------------------------------------------
+
+
+class Subtraction(AcquisitionModel):
+    """
+    This class subtracts two AcquisitionModel.
+    """
+    def __init__(self, model1, model2, description=None):
+        AcquisitionModel.__init__(self, description)
+        self.model1 = asacquisitionmodel(model1)
+        self.model2 = asacquisitionmodel(model2)
+   
+    def direct(self, data, reusein=False, reuseout=False):
+        return self.model1(data, reusein=False, reuseout=reuseout) - self.model2(data, reusein=reusein, reuseout=reuseout)
+
+    def transpose(self, data, reusein=False, reuseout=False):
+        return self.model1.T(data, reusein=False, reuseout=reuseout) - self.model2.T(data, reusein=reusein, reuseout=reuseout)
 
     @property
     def shapein(self):
@@ -422,6 +419,28 @@ class Addition(AcquisitionModel):
 #-------------------------------------------------------------------------------
 
 
+class Diagonal(AcquisitionModel):
+    """Diagonal operator"""
+    def __init__(self, diagonal, nsamples=None, description=None):
+        AcquisitionModel.__init__(self, description)
+        self.diagonal = numpy.asarray(diagonal)
+        if not numpy.isscalar(self.diagonal):
+            shape = _validate_sliced_shape(diagonal.shape, nsamples)
+            self.shapein = shape
+            self.shapeout = shape
+
+    def direct(self, data, reusein=False, **kw):
+        data = self._validate_input(numpy.ndarray, data)
+        output = self._validate_output(data, reusein)
+        output *= self.diagonal
+        return output
+
+    transpose = direct
+
+
+#-------------------------------------------------------------------------------
+
+
 class DiscreteDifference(AcquisitionModel):
     """Calculate the nth order discrete difference along given axis."""
     def __init__(self, n=1, axis=0, description=None):
@@ -443,14 +462,14 @@ class DiscreteDifference(AcquisitionModel):
         out = numpy.concatenate((border, data, border), axis=self.axis)
         return - numpy.diff(out, axis=self.axis)
 
-    def _validate_shape_direct(self, shapein):
+    def validate_shapein(self, shapein):
         if shapein is None:
             return None
         shapeout = list(shapein)
         shapeout[self.axis] -= self.n
         return tuple(shapeout)
 
-    def _validate_shape_transpose(self, shapeout):
+    def validate_shapeout(self, shapeout):
         if shapeout is None:
             return None
         shapein = list(shapeout)
@@ -476,14 +495,14 @@ class Projection(AcquisitionModel):
         - npixels_per_sample: maximum number of sky map pixels that can be intercepted by a detector
     Author: P. Chanial
     """
-    def __init__(self, observation, header=None, resolution=None, npixels_per_sample=None, finer_sampling=True, description=None):
+    def __init__(self, observation, header=None, resolution=None, npixels_per_sample=None, oversampling=True, description=None):
         AcquisitionModel.__init__(self, description)
         self._pmatrix, self.header, ndetectors, nsamples, self.npixels_per_sample = \
-            observation.get_pointing_matrix(header, resolution, npixels_per_sample, finer_sampling=finer_sampling)
+            observation.get_pointing_matrix(header, resolution, npixels_per_sample, oversampling=oversampling)
         self.shapein = tuple([self.header['naxis'+str(i+1)] for i in reversed(range(self.header['naxis']))])
         self.pmatrix = self._pmatrix.view(dtype=[('weight', 'f4'), ('pixel', 'i4')])
         self.pmatrix.resize((observation.ndetectors, numpy.sum(nsamples), self.npixels_per_sample))
-        self.shapeout = self._combine_sliced_shape(observation.ndetectors, nsamples)
+        self.shapeout = (observation.ndetectors, nsamples)
 
     def direct(self, map2d, reusein=False, reuseout=False):
         map2d, shapeout = self._validate_input_direct(Map, map2d, reusein)
@@ -538,20 +557,19 @@ class PacsMultiplexing(AcquisitionModel):
         tmf.pacs_multiplexing_transpose(signal.T, output.T, self.fine_sampling_factor, self.ij)
         return output
 
-    def _validate_shape_direct(self, shapein):
+    def validate_shapein(self, shapein):
         if shapein is None:
             return None
-        #super(PacsMultiplexing, self)._validate_shape_direct(shapein)
         if shapein[1] % self.fine_sampling_factor != 0:
             raise ValidationError('The input timeline size ('+str(shapein[1])+') is not an integer times the fine sampling factor ('+str(self.fine_sampling_factor)+').')
         shapeout = list(shapein)
         shapeout[1] = shapeout[1] / self.fine_sampling_factor
         return tuple(shapeout)
 
-    def _validate_shape_transpose(self, shapeout):
+    def validate_shapeout(self, shapeout):
         if shapeout is None:
             return
-        super(PacsMultiplexing, self)._validate_shape_transpose(shapeout)
+        super(PacsMultiplexing, self).validate_shapeout(shapeout)
         shapein = list(shapeout)
         shapein[1] = shapein[1] * self.fine_sampling_factor
         return tuple(shapein)
@@ -591,17 +609,17 @@ class Compression(AcquisitionModel):
         self._compression_transpose(compressed, output, self.compression_factor)
         return output
 
-    def _validate_shape_direct(self, shapein):
+    def validate_shapein(self, shapein):
         if shapein is None:
             return None
         if numpy.any(numpy.array(shapein[-1]) % self.compression_factor != 0):
             raise ValidationError('The input timeline size ('+str(shapein[-1])+') is not an integer times the compression factor ('+str(self.compression_factor)+').')
-        return self._combine_sliced_shape(shapein[0:-1], numpy.array(shapein[-1]) / self.compression_factor)
+        return _combine_sliced_shape(shapein[0:-1], numpy.array(shapein[-1]) / self.compression_factor)
 
-    def _validate_shape_transpose(self, shapeout):
+    def validate_shapeout(self, shapeout):
         if shapeout is None:
             return
-        return self._combine_sliced_shape(shapeout[0:-1], numpy.array(shapeout[-1]) * self.compression_factor)
+        return _combine_sliced_shape(shapeout[0:-1], numpy.array(shapeout[-1]) * self.compression_factor)
 
     def __str__(self):
         return super(Compression, self).__str__()+' (x'+str(self.compression_factor)+')'
@@ -643,7 +661,6 @@ class DownSampling(Compression):
 class Identity(AcquisitionModel):
     """
     Do nothing class.
-    Author: P. Chanial
     """
     def __init__(self, description=None):
         AcquisitionModel.__init__(self, description)
@@ -652,31 +669,20 @@ class Identity(AcquisitionModel):
         data = self._validate_input(numpy.ndarray, data)
         return self._validate_output(data, reusein)
 
-    def transpose(self, data, reusein=False, **kw):
-        data = self._validate_input(numpy.ndarray, data)
-        return self._validate_output(data, reusein)
+    transpose = direct
        
 
 #-------------------------------------------------------------------------------
 
 
-class Scalar(AcquisitionModel):
+class Scalar(Diagonal):
     """
-    Do nothing class.
-    Author: P. Chanial
+    This class represents a scalar operator.
     """
     def __init__(self, value, description=None):
-        AcquisitionModel.__init__(self, description)
-        self.value = float(value)
-
-    def direct(self, data, reusein=False, **kw):
-        data = self._validate_input(numpy.ndarray, data)
-        output = self._validate_output(data, reusein)
-        output *= self.value
-        return output
-
-    def transpose(self, data, reusein=False, **kw):
-        return self.direct(data, reusein=reusein)
+        if not numpy.iscomplex(value):
+            value = float(value)
+        Diagonal.__init__(self, value, description)
        
 
 #-------------------------------------------------------------------------------
@@ -685,7 +691,6 @@ class Scalar(AcquisitionModel):
 class Masking(AcquisitionModel):
     """
     Apply a mask: where the mask is non-null or True, the input values are set to zero
-    Author: P. Chanial
     """
     def __init__(self, mask, description=None):
         AcquisitionModel.__init__(self, description)
@@ -701,12 +706,13 @@ class Masking(AcquisitionModel):
     def direct(self, data, reusein=False, **kw):
         data = self._validate_input(numpy.ndarray, data)
         output = self._validate_output(data, reusein)
+        if self.mask is None:
+            return output
         status = tmf.masking(output.T, self.mask.T)
         if status != 0: raise RuntimeError()
         return output
 
-    def transpose(self, data, reusein=False, **kw):
-        return self.direct(data, reusein=reusein)
+    transpose = direct
   
     @property
     def mask(self):
@@ -764,21 +770,20 @@ class Reshaping(AcquisitionModel):
     """
     def __init__(self, shapein, shapeout, description=None):
         AcquisitionModel.__init__(self, description)
-        self.shapein  = self._flatten_sliced_shape(shapein)
-        self.shapeout = self._flatten_sliced_shape(shapeout)
+        self.shapein  = _flatten_sliced_shape(shapein)
+        self.shapeout = _flatten_sliced_shape(shapeout)
         if numpy.product(self.shapein) != numpy.product(self.shapeout):
             raise ValueError('The number of elements of the input and output of the Reshaping operator are incompatible.')
 
     def direct(self, array, reusein=False, **kw):
         self._validate_input_direct(numpy.ndarray, array, False)
         output = self._validate_output(array, reusein)
-        output = self._smart_reshape(output, self.shapeout)
-        return output
+        return _smart_reshape(output, self.shapeout)
 
     def transpose(self, array, reusein=False, **kw):
         self._validate_input_transpose(numpy.ndarray, array, False)
         output = self._validate_output(array, reusein)
-        return self._smart_reshape(output, self.shapein)
+        return _smart_reshape(output, self.shapein)
 
 
 #-------------------------------------------------------------------------------
@@ -844,15 +849,15 @@ class Padding(AcquisitionModel):
                              "' incompatible with the specified padding.")
         return data, shapein       
 
-    def _validate_shape_direct(self, shapein):
+    def validate_shapein(self, shapein):
         if shapein is None:
             return None
-        return self._combine_sliced_shape(shapein[0:-1], numpy.array(shapein[-1]) + self.left + self.right)
+        return _combine_sliced_shape(shapein[0:-1], numpy.array(shapein[-1]) + self.left + self.right)
        
-    def _validate_shape_transpose(self, shapeout):
+    def validate_shapeout(self, shapeout):
         if shapeout is None:
             return None
-        return self._combine_sliced_shape(shapeout[0:-1], numpy.array(shapeout[-1]) - self.left - self.right)
+        return _combine_sliced_shape(shapeout[0:-1], numpy.array(shapeout[-1]) - self.left - self.right)
        
 
 #-------------------------------------------------------------------------------
@@ -860,7 +865,7 @@ class Padding(AcquisitionModel):
 
 class Fft(AcquisitionModel):
     """
-    Performs real fft
+    Performs real-to-half-complex fft
     """
     def __init__(self, nsamples, description=None):
         AcquisitionModel.__init__(self, description)
@@ -870,8 +875,8 @@ class Fft(AcquisitionModel):
         self.forward_plan = []
         self.backward_plan = []
         for n in self.nsamples:
-            tarray = numpy.empty(n, dtype='double')
-            farray = numpy.empty(n, dtype='double')
+            tarray = numpy.empty(n, dtype='float64')
+            farray = numpy.empty(n, dtype='float64')
             self.tarray.append(tarray)
             self.farray.append(farray)
             self.forward_plan.append(fftw3.Plan(tarray, farray, direction='forward', flags=['measure'], realtypes=['halfcomplex r2c']))
@@ -880,37 +885,38 @@ class Fft(AcquisitionModel):
     def direct(self, array, reusein=False, **kw):
         array = self._validate_input(numpy.ndarray, array)
         output = self._validate_output(array, reusein)
-        output = self._smart_reshape(output, (numpy.product(array.shape[:-1]), array.shape[-1]))
+        # cast to ndarray to speed up computation
+        output_ = output.view(numpy.ndarray)
+        output_ = _smart_reshape(output_, (numpy.product(array.shape[:-1]), array.shape[-1]))
         dest = 0
         for iobs, n in enumerate(self.nsamples):
-            for i in range(output.shape[0]):
-                self.tarray[iobs][:] = output[i,dest:dest+n]
+            for i in range(output_.shape[0]):
+                self.tarray[iobs][:] = output_[i,dest:dest+n]
                 fftw3.execute(self.forward_plan[iobs])
-                output[i,dest:dest+n] = self.farray[iobs]
+                output_[i,dest:dest+n] = self.farray[iobs]
             dest += n
-        output = self._smart_reshape(output, array.shape)
         return output
 
     def transpose(self, array, reusein=False, **kw):
         array = self._validate_input(numpy.ndarray, array)
         output = self._validate_output(array, reusein)
-        output = self._smart_reshape(output, (numpy.product(array.shape[:-1]), array.shape[-1]))
+        output_ = output.view(numpy.ndarray)
+        output_ = _smart_reshape(output_, (numpy.product(array.shape[:-1]), array.shape[-1]))
         dest = 0
         for iobs, n in enumerate(self.nsamples):
-            for i in range(output.shape[0]):
-                self.farray[iobs][:] = output[i,dest:dest+n]
+            for i in range(output_.shape[0]):
+                self.farray[iobs][:] = output_[i,dest:dest+n]
                 fftw3.execute(self.backward_plan[iobs])
-                output[i,dest:dest+n] = self.tarray[iobs]
-            output[:,dest:dest+n] /= n
+                output_[i,dest:dest+n] = self.tarray[iobs]
+            output_[:,dest:dest+n] /= n
             dest += n
-        output = self._smart_reshape(output, array.shape)
         return output
 
     def _validate_shape(self, shapein):
         if shapein is None:
             return None
         nsamples = shapein[-1]
-        if not isinstance(nsamples, tuple) and not isinstance(nsamples, list) and not isinstance(nsamples, numpy.ndarray):
+        if numpy.isscalar(nsamples):
             nsamples = (int(nsamples), )
         else:
             nsamples = tuple(nsamples)
@@ -922,29 +928,16 @@ class Fft(AcquisitionModel):
 #-------------------------------------------------------------------------------
 
 
-class InvNtt(AcquisitionModel):
+class InvNtt(Diagonal):
 
     def __init__(self, shape, filename, convert='native', description=None):
-        AcquisitionModel.__init__(self, description)
         ndetectors = shape[0]
         nsamples = numpy.array(shape[1], ndmin=1, dtype='int32')
         nsamples_tot = numpy.sum(nsamples)
         tod_filter, ncorrelations, status = tmf.invntt_madmap1(filename, convert, nsamples, nsamples_tot, ndetectors)
         if status != 0: raise RuntimeError()
-        self.data = Tod(tod_filter.T, copy=False)
+        Diagonal.__init__(self, tod_filter.T, nsamples, description)
         self.ncorrelations = ncorrelations
-        self.shapein  = shape
-        self.shapeout = shape
-       
-    def direct(self, data, reusein=False, **kw):
-        return data
-
-    def transpose(self, data, reusein=False, **kw):
-        data = self._validate_input(Tod, data)
-        output = self._validate_output(data, reusein)
-        output *= self.data
-        return output
-
 
 
 #-------------------------------------------------------------------------------
@@ -975,7 +968,24 @@ class SqrtInvNtt(AcquisitionModel):
         return self.direct(data, reusein=reusein)
 
 
+#-------------------------------------------------------------------------------
 
+
+def asacquisitionmodel(operator, shape=None, direct=None, transpose=None, description=None):
+    if isinstance(operator, AcquisitionModel):
+        return operator
+    if numpy.isscalar(operator):
+        return Scalar(operator)
+    if isinstance(operator, scipy.sparse.linalg.interface.LinearOperator):
+        model = AcquisitionModel(description)
+        model.direct = operator.matvec
+        model.transpose = operator.rmatvec
+        model.shapein = (operator.shape[1],)
+        model.shapeout = (operator.shape[0],)
+        return model
+    return asacquisitionmodel(scipy.sparse.linalg.aslinearoperator(operator))
+        
+        
 #-------------------------------------------------------------------------------
 #
 # PACS observations & simulations
@@ -1006,8 +1016,8 @@ class _Pacs():
 
         if array.lower() not in ('blue', 'green', 'red'):
             raise ValueError("The input array is not 'blue', 'green' nor 'red'.")
-        self.shapein  = tuple(numpy.array(self._flatten_sliced_shape(shapein), ndmin=1))
-        self.shapeout = tuple(numpy.array(self._flatten_sliced_shape(shapeout), ndmin=1))
+        self.shapein  = tuple(numpy.array(_flatten_sliced_shape(shapein), ndmin=1))
+        self.shapeout = tuple(numpy.array(_flatten_sliced_shape(shapeout), ndmin=1))
 
         if observing_mode is not None:
             observing_mode = observing_mode.lower()
@@ -1136,11 +1146,11 @@ class PacsObservation(_Pacs):
         
         #_Pacs.__init__(self, channel, npixels, nsamples, ndetectors_per_sample, fine_sampling_factor, compression_factor, bad_detector_mask, keep_bad_detectors)
 
-    def get_map_header(self, resolution=None, finer_sampling=True):
+    def get_map_header(self, resolution=None, oversampling=True):
         if resolution is None:
             resolution = self.default_resolution
         filename_, nfilenames = self._files2tmf(self.filename)
-        header, status = tmf.pacs_map_header(tamasis_dir, filename_, nfilenames, finer_sampling, self.fine_sampling_factor, self.keep_bad_detectors, numpy.asfortranarray(self.bad_detector_mask), self.mask_bad_line, resolution)
+        header, status = tmf.pacs_map_header(tamasis_dir, filename_, nfilenames, oversampling, self.fine_sampling_factor, self.keep_bad_detectors, numpy.asfortranarray(self.bad_detector_mask), self.mask_bad_line, resolution)
         if status != 0: raise RuntimeError()
         header = str2fitsheader(header)
         return header
@@ -1172,12 +1182,12 @@ class PacsObservation(_Pacs):
         tod.unit = newunit._unit
         return tod
 
-    def get_pointing_matrix(self, header, resolution, npixels_per_sample, finer_sampling=True):
-        nsamples = self.nfinesamples if finer_sampling else self.nsamples
+    def get_pointing_matrix(self, header, resolution, npixels_per_sample, oversampling=True):
+        nsamples = self.nfinesamples if oversampling else self.nsamples
         if npixels_per_sample is None:
             npixels_per_sample = self.default_npixels_per_sample
         if header is None:
-            header = self.get_map_header(resolution, finer_sampling)
+            header = self.get_map_header(resolution, oversampling)
         elif isinstance(header, str):
             header = str2fitsheader(header)
 
@@ -1186,7 +1196,7 @@ class PacsObservation(_Pacs):
         print 'Info: Allocating '+str(sizeofpmatrix/2.**17)+' MiB for the pointing matrix.'
         pmatrix = numpy.zeros(sizeofpmatrix, dtype=numpy.int64)
            
-        status = tmf.pacs_pointing_matrix_filename(tamasis_dir, filename_, self.nobservations, finer_sampling, self.fine_sampling_factor, npixels_per_sample, numpy.sum(nsamples), self.ndetectors, self.keep_bad_detectors, numpy.asfortranarray(self.bad_detector_mask), self.mask_bad_line, str(header).replace('\n', ''), pmatrix)
+        status = tmf.pacs_pointing_matrix_filename(tamasis_dir, filename_, self.nobservations, oversampling, self.fine_sampling_factor, npixels_per_sample, numpy.sum(nsamples), self.ndetectors, self.keep_bad_detectors, numpy.asfortranarray(self.bad_detector_mask), self.mask_bad_line, str(header).replace('\n', ''), pmatrix)
         if status != 0: raise RuntimeError()
 
         return pmatrix, header, self.ndetectors, nsamples, npixels_per_sample
@@ -1302,7 +1312,7 @@ class MadMap1Observation(object):
         self.nsamples = tuple(nsamples)
         self.nfinesamples = tuple(nsamples)
 
-    def get_pointing_matrix(self, header, resolution, npixels_per_sample, finer_sampling=False):
+    def get_pointing_matrix(self, header, resolution, npixels_per_sample, oversampling=False):
         if npixels_per_sample is not None and npixels_per_sample != self.npixels_per_sample:
             raise ValueError('The npixels_per_sample value is incompatible with the MADMAP1 file.')
         if header is not None:
@@ -1341,9 +1351,9 @@ class MadMap1Observation(object):
 #-------------------------------------------------------------------------------
 
 
-
 class FitsArray(Quantity):
 
+    __slots__ = ('_header',)
     def __new__(cls, data, header=None, unit=None, dtype=None, order='C', copy=True):
         from copy import copy as cp
         result = Quantity(data, unit, dtype=dtype, order=order, copy=copy)
@@ -1449,11 +1459,6 @@ class Map(FitsArray):
         FitsArray.__array_finalize__(self, obj)
         if obj is None: return
 
-    def __array_wrap__(self, obj, context=None):
-        result = FitsArray.__array_wrap__(self, obj, context=context).view(type(self))
-        result.header = self.header
-        return result
-
     @staticmethod
     def empty(shape, header=None, unit=None, dtype=None, order=None):
         return Map(numpy.empty(shape, dtype, order), header, unit, copy=False)
@@ -1544,6 +1549,7 @@ class Map(FitsArray):
 
 class Tod(FitsArray):
 
+    __slots__ = ('mask', 'nsamples')
     def __new__(cls, data, mask=None, nsamples=None, header=None, unit=None, dtype=None, order='C', copy=False):
         result = FitsArray(data, header, unit, dtype, order, copy)
         if not isinstance(data, Tod):
@@ -1553,14 +1559,11 @@ class Tod(FitsArray):
         if mask is not None:
             mask = numpy.array(mask, dtype='int8', copy=copy, order=order)
         result.mask = mask
-        if nsamples is None:
-            if isinstance(data, Tod):
-                result.nsamples = data.nsamples
-            else:
-                result.nsamples = (data.shape[-1],)
+        shape = _validate_sliced_shape(data.shape, nsamples)
+        if numpy.isscalar(shape[-1]):
+            result.nsamples = (shape[-1],)
         else:
-            junk, result.nsamples = Tod._validate_shape(data.shape, nsamples)
-       
+            result.nsamples = shape[-1]
         return result
 
     def __array_finalize__(self, obj):
@@ -1577,18 +1580,21 @@ class Tod(FitsArray):
 
     @staticmethod
     def empty(shape, mask=None, nsamples=None, header=None, unit=None, dtype=None, order=None):
-        shape, nsamples = Tod._validate_shape(shape, nsamples)
-        return Tod(numpy.empty(shape, dtype, order), mask, nsamples, header, unit, copy=False)
+        shape = _validate_sliced_shape(shape, nsamples)
+        shape_flat = _flatten_sliced_shape(shape)
+        return Tod(numpy.empty(shape_flat, dtype, order), mask, shape[-1], header, unit, copy=False)
 
     @staticmethod
     def ones(shape, mask=None, nsamples=None, header=None, unit=None, dtype=None, order=None):
-        shape, nsamples = Tod._validate_shape(shape, nsamples)
-        return Tod(numpy.ones(shape, dtype, order), mask, nsamples, header, unit, copy=False)
+        shape = _validate_sliced_shape(shape, nsamples)
+        shape_flat = _flatten_sliced_shape(shape)
+        return Tod(numpy.ones(shape_flat, dtype, order), mask, shape[-1], header, unit, copy=False)
 
     @staticmethod
     def zeros(shape, mask=None, nsamples=None, header=None, unit=None, dtype=None, order=None):
-        shape, nsamples = Tod._validate_shape(shape, nsamples)
-        return Tod(numpy.zeros(shape, dtype, order), mask, nsamples, header, unit, copy=False)
+        shape = _validate_sliced_shape(shape, nsamples)
+        shape_flat = _flatten_sliced_shape(shape)
+        return Tod(numpy.zeros(shape_flat, dtype, order), mask, shape[-1], header, unit, copy=False)
    
     def copy(self, order='C'):
         return Tod(self, order=order, copy=True)
@@ -1627,65 +1633,11 @@ class Tod(FitsArray):
             output += ' in ' + str(nslices) + ' slices ('+strsamples+')'
         return output + ']'
 
-    @staticmethod
-    def _validate_shape(shape, nsamples):
-        if not isinstance(shape[-1], tuple) and not isinstance(shape[-1], list) and not isinstance(shape[-1], numpy.ndarray):
-            if nsamples is not None and shape[-1] != numpy.sum(nsamples):
-                raise ValueError("The total number of samples '"+str(shape[-1])+"' is not equal to the number of samples specified by the keyword nsamples '"+str(nsamples)+"="+str(numpy.sum(nsamples))+"'.")
-            if nsamples is None:
-                nsamples = (shape[-1],)
-            return tuple(shape), tuple(nsamples)
-        if nsamples is not None and tuple(shape[-1]) != tuple(nsamples):
-            raise ValueError("The slices specified by the shape '"+str(shape)+"' are not compatible with these specified by the keyword nsamples '"+str(nsamples)+"'.")
-        shape_ = list(shape[0:-1])
-        shape_.append(numpy.sum(shape[-1]))
-        return tuple(shape_), tuple(shape[-1])
-
 
 
 #-------------------------------------------------------------------------------
 #
-# Linear operator
-#
-#-------------------------------------------------------------------------------
-
-
-class LeastSquareMatvec(object):
-    def __init__(self, model, unpacking=None):
-        #cgs solves for vectors, so we need to reshape them into something (a map) that the model can handle
-        if unpacking is None:
-            unpacking = Reshaping(numpy.product(model.shapein), model.shapein)
-        self.unpacking = unpacking
-        self.criterion = unpacking.T * model.T * model * unpacking
-    def __call__(self, xvec):
-        xout = self.criterion(xvec, reusein=False)
-        return xout
-
-class PcgCallback():
-    def __init__(self):
-        self.count = 1
-    def __call__(self, x):
-        print 'PCG Iteration '+str(self.count)
-        #if numpy.any(numpy.isnan(x)): print '... NaN in there.'
-        self.count += 1
-
-class RegularizedLeastSquareMatvec(LeastSquareMatvec):
-    def __init__(self, model, unpacking=None, hyper=1.):
-        if unpacking is None:
-            unpacking = Reshaping(numpy.product(model.shapein), model.shapein)
-        self.unpacking = unpacking
-        # define smooth prior
-        dX = DiscreteDifference(axis=1)
-        dY = DiscreteDifference(axis=0)
-        self.criterion = self.unpacking.T * (model.T * model + hyper * (dX.T * dX + dY.T * dY)) * self.unpacking
-
-    def __call__(self, xvec):
-        return self.criterion(xvec)
-
-
-#-------------------------------------------------------------------------------
-#
-# Miscellaneous routines
+# Mappers
 #
 #-------------------------------------------------------------------------------
 
@@ -1693,6 +1645,10 @@ class RegularizedLeastSquareMatvec(LeastSquareMatvec):
 def mapper_naive(tod, model, unit=None):
     """
     Returns a naive map, i.e.: model.transpose(tod) / model.transpose(1)
+
+    The unit of the input Time Ordered Data (TOD) is not restricted, but because
+    by construction, the unit of the output map is the same, it is advisable to 
+    have the TOD in unit of surface brightness.
     """
     mymap = model.transpose(tod)   
     unity = tod.copy()
@@ -1724,42 +1680,58 @@ def mapper_naive(tod, model, unit=None):
 #-------------------------------------------------------------------------------
 
 
-def mapper_ls(tod, model, noise=Identity(), tol=1.e-6, maxiter=300):
-    from scipy.sparse import dia_matrix
-    from scipy.sparse.linalg import LinearOperator, cgs
-
-    matvec = LeastSquareMatvec(noise * model)
-    shape = 2*(numpy.product(model.shapein),)
-    operator = LinearOperator(matvec=matvec, dtype=numpy.float64, shape=shape)
-
-    rhs = matvec.unpacking.transpose(model.transpose(noise.transpose(noise.direct(tod))))
-    x0 = matvec.unpacking.transpose(mapper_naive(tod, model))
-    x0[numpy.isnan(x0)] = 0.
-    solution, nit = cgs(operator, rhs, x0=x0, tol=tol, maxiter=maxiter, callback=PcgCallback())
-    return Map(matvec.unpacking.direct(solution))
+def mapper_ls(tod, model, weight=None, tol=1.e-6, maxiter=300, M=None, verbose=True):
+    return mapper_rls(tod, model, weight=weight, hyper=0, tol=tol, maxiter=maxiter, M=M, verbose=verbose)
 
 
 #-------------------------------------------------------------------------------
 
 
-def mapper_rls(tod, model, noise=Identity(), hyper=1e1, tol=1.e-6, maxiter=300):
-    #from scipy.sparse import dia_matrix
-    from scipy.sparse.linalg import LinearOperator, cgs
+def mapper_rls(tod, model, weight=None, hyper=1.0, tol=1.e-6, maxiter=300, M=None, verbose=True):
 
-    if numpy.any(numpy.isnan(tod)) or numpy.any(numpy.isinf(tod)): raise ValueError('Input Tod contains not finite values.')
+    if weight is None:
+        weight = Identity()
 
-    matvec = RegularizedLeastSquareMatvec(noise * model, hyper=hyper)
-    shape = 2*(numpy.product(model.shapein),)
-    operator = LinearOperator(matvec=matvec, dtype=numpy.float64, shape=shape)
+    C = model.T * weight * model
 
-    rhs = matvec.unpacking.transpose(model.transpose(noise.transpose(noise.direct(tod))))
-    if numpy.any(numpy.isnan(rhs)) or numpy.any(numpy.isinf(rhs)): raise ValueError('RHS contains not finite values.')
-    x0 = matvec.unpacking.transpose(mapper_naive(tod, model))
+    if hyper != 0:
+        dX = DiscreteDifference(axis=1)
+        dY = DiscreteDifference(axis=0)
+        C  = C + hyper * ( dX.T * dX + dY.T * dY )
+
+    operator = C.aslinearoperator()
+
+    map_naive = mapper_naive(tod, model)
+    x0 = operator.unpack.T(map_naive)
     x0[numpy.isnan(x0)] = 0.
-    solution, nit = cgs(operator, rhs, x0=x0, tol=tol, maxiter=maxiter, callback=PcgCallback())
-    return Map(matvec.unpacking.direct(solution))
+    x0[:] = 0
+    rhs = (operator.unpack.T * model.T * weight)(tod)
+    if numpy.any(numpy.isnan(rhs)) or numpy.any(numpy.isinf(rhs)): raise ValueError('RHS contains not finite values.')
+
+    if verbose:
+        def callback(x):
+            import inspect
+            parent_locals = inspect.stack()[1][0].f_locals
+            iter_ = parent_locals['iter_']
+            resid = parent_locals['resid']
+            if resid > parent_locals['tol']:
+                iter_ -= 1
+                print 'Iteration ' + str(iter_) + ': ' + str(resid)
+
+    else:
+        callback = None
+    
+    solution, nit = scipy.sparse.linalg.cg(operator, rhs, x0=x0, tol=tol, maxiter=maxiter, M=M, callback=callback)
+    output = Map(operator.unpack(solution))
+    output.coverage = map_naive.coverage
+    return output
 
 
+
+#-------------------------------------------------------------------------------
+#
+# TOD processing
+#
 #-------------------------------------------------------------------------------
 
 
@@ -1829,6 +1801,10 @@ def filter_polynomial(tod, degree):
 
 
 #-------------------------------------------------------------------------------
+#
+# Miscellaneous routines
+#
+#-------------------------------------------------------------------------------
 
 
 def str2fitsheader(string):
@@ -1855,3 +1831,71 @@ def any_neq(a,b, precision):
     if numpy.any(mask != numpy.isnan(b)):
         return True
     return numpy.any((abs(a-b) > 10.**(-precision) * abs(a))[numpy.isnan(a).__neg__()])
+
+   
+#-------------------------------------------------------------------------------
+
+
+def my_issctype(dtype):
+    """Hack around numpy.issctype bug"""
+    return numpy.issctype(dtype) and str(dtype)[0:2] != '|S'
+
+   
+#-------------------------------------------------------------------------------
+
+
+def _flatten_sliced_shape(shape):
+    if shape is None: return shape
+    if numpy.isscalar(shape):
+        return (int(shape),)
+    return tuple(map(numpy.sum, shape))
+
+   
+#-------------------------------------------------------------------------------
+
+
+def _combine_sliced_shape(shape, nsamples):
+    if numpy.isscalar(shape):
+        shape = [ shape ]
+    else:
+        shape = list(shape) # list makes a shallow copy
+    if numpy.isscalar(nsamples):
+        nsamples = int(nsamples)
+    else:
+        nsamples = tuple(nsamples)
+        if len(nsamples) == 1:
+            nsamples = nsamples[0]
+    shape.append(nsamples)
+    return tuple(shape)
+
+   
+#-------------------------------------------------------------------------------
+
+    
+def _validate_sliced_shape(shape, nsamples=None):
+    if nsamples is not None:
+        if numpy.sum(nsamples) != shape[-1]:
+            raise ValidationError("The sliced input has an incompatible number of samples '" + str(numpy.sum(nsamples)) + "' instead of '" + str(shape[-1]) + "'.")
+    else:
+        nsamples = shape[-1]
+    return _combine_sliced_shape(shape[0:-1], nsamples)
+
+
+#-------------------------------------------------------------------------------
+
+    
+def _smart_reshape(array, shape):
+    curr = array
+    shape = _flatten_sliced_shape(shape)
+    while True:
+        if curr.shape == shape:
+            return curr
+        if curr.base is None or curr.base.dtype != array.dtype or curr.base.__class__ != array.__class__:
+            return curr.reshape(shape)
+        curr = curr.base
+
+   
+#-------------------------------------------------------------------------------
+
+
+__all__ = sorted(filter(lambda v: v[0] != '_' and v not in ['fftw3', 'numpy', 'os', 'pyfits', 'pyplot', 're', 'scipy', 'tmf'], dir()))

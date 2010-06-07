@@ -12,7 +12,7 @@ pacs = PacsObservation(filename=tamasis_dir+'tests/frames_blue.fits',
 tod = pacs.get_tod()
 
 telescope    = Identity('Telescope PSF')
-projection   = Projection(pacs, resolution=3.2, finer_sampling=False, npixels_per_sample=6)
+projection   = Projection(pacs, resolution=3.2, oversampling=False, npixels_per_sample=6)
 multiplexing = CompressionAverage(pacs.fine_sampling_factor, 'Multiplexing')
 crosstalk    = Identity('Crosstalk')
 compression  = CompressionAverage(pacs.compression_factor)

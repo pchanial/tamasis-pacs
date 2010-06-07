@@ -147,7 +147,7 @@ end subroutine pacs_info
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine pacs_map_header(tamasis_dir, filename, nfilenames, finer_sampling, fine_sampling_factor, keep_bad_detectors,            &
+subroutine pacs_map_header(tamasis_dir, filename, nfilenames, oversampling, fine_sampling_factor, keep_bad_detectors,              &
                            bad_detector_mask, nrows, ncolumns, mask_bad_line, resolution, header, status)
 
     use module_pacsinstrument,  only : pacsinstrument
@@ -159,7 +159,7 @@ subroutine pacs_map_header(tamasis_dir, filename, nfilenames, finer_sampling, fi
     !f2py intent(in)   tamasis_dir
     !f2py intent(in)   filename
     !f2py intent(in)   nfilenames
-    !f2py intent(in)   finer_sampling
+    !f2py intent(in)   oversampling
     !f2py intent(in)   fine_sampling_factor
     !f2py intent(in)   keep_bad_detectors
     !f2py intent(in)   bad_detector_mask
@@ -173,7 +173,7 @@ subroutine pacs_map_header(tamasis_dir, filename, nfilenames, finer_sampling, fi
     character(len=*), intent(in) :: tamasis_dir
     character(len=*), intent(in) :: filename
     integer, intent(in)          :: nfilenames
-    logical, intent(in)          :: finer_sampling
+    logical, intent(in)          :: oversampling
     integer, intent(in)          :: fine_sampling_factor
     logical, intent(in)          :: keep_bad_detectors
     logical*1, intent(in)        :: bad_detector_mask(nrows,ncolumns)
@@ -212,7 +212,7 @@ subroutine pacs_map_header(tamasis_dir, filename, nfilenames, finer_sampling, fi
          mask_bad_line, status, bad_detector_mask)
     if (status /= 0) go to 999
     
-    call pacs%compute_map_header(obs, finer_sampling, resolution, header, status)
+    call pacs%compute_map_header(obs, oversampling, resolution, header, status)
     
 999 continue
 
@@ -320,7 +320,7 @@ end subroutine pacs_timeline
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine pacs_pointing_matrix_filename(tamasis_dir, filename, nfilenames, finer_sampling, fine_sampling_factor,                  &
+subroutine pacs_pointing_matrix_filename(tamasis_dir, filename, nfilenames, oversampling, fine_sampling_factor,                    &
                                          npixels_per_sample, nsamples, ndetectors, keep_bad_detectors, bad_detector_mask, nrow,    &
                                          ncol, mask_bad_line, header, pmatrix, status)
 
@@ -336,7 +336,7 @@ subroutine pacs_pointing_matrix_filename(tamasis_dir, filename, nfilenames, fine
     !f2py intent(in)   :: tamasis_dir
     !f2py intent(in)   :: filename
     !f2py intent(in)   :: nfilenames
-    !f2py intent(in)   :: finer_sampling
+    !f2py intent(in)   :: oversampling
     !f2py intent(in)   :: fine_sampling_factor
     !f2py intent(in)   :: npixels_per_sample
     !f2py intent(in)   :: nsamples
@@ -353,7 +353,7 @@ subroutine pacs_pointing_matrix_filename(tamasis_dir, filename, nfilenames, fine
     character(len=*), intent(in) :: tamasis_dir
     character(len=*), intent(in) :: filename
     integer, intent(in)          :: nfilenames
-    logical, intent(in)          :: finer_sampling
+    logical, intent(in)          :: oversampling
     integer, intent(in)          :: fine_sampling_factor
     integer, intent(in)          :: npixels_per_sample
     integer, intent(in)          :: nsamples
@@ -406,7 +406,7 @@ subroutine pacs_pointing_matrix_filename(tamasis_dir, filename, nfilenames, fine
     end if
 
     ! check number of fine samples
-    if (finer_sampling) then
+    if (oversampling) then
         nsamples_expected = sum(obs%slice%nsamples * obs%slice%compression_factor)*fine_sampling_factor
     else
         nsamples_expected = sum(obs%slice%nsamples)
@@ -425,7 +425,7 @@ subroutine pacs_pointing_matrix_filename(tamasis_dir, filename, nfilenames, fine
     if (status /= 0) return
 
     ! compute the projector
-    call pacs%compute_projection_sharp_edges(obs, finer_sampling, header, nx, ny, pmatrix, status)
+    call pacs%compute_projection_sharp_edges(obs, oversampling, header, nx, ny, pmatrix, status)
 
 end subroutine pacs_pointing_matrix_filename
 

@@ -58,6 +58,8 @@ else:
 mask = Masking(None)
 if mask.shapein is not None or mask.shapeout is not None or mask.mask is not None:
     raise TestFailure('Masking(None)')
+if mask(3) != 3:
+    raise TestFailure('Masking(None)(data)')
 
 try:
     junk = mask.direct('str')
@@ -65,12 +67,8 @@ except TypeError:
     pass
 else: 
     raise TestFailure('mask None wrong type str')
-try:
-    junk = mask.direct(32)
-except TypeError:
-    pass
-else: 
-    raise TestFailure('mask None wrong type int')
+
+junk = mask.direct(32)
 try:
     junk = mask.direct(object)
 except TypeError:
@@ -175,4 +173,12 @@ fft = Fft(tod.nsamples)
 tod2 = fft.transpose(fft.direct(tod))
 if any_neq(tod, tod2,14): raise TestFailure('fft4')
 
+
+#--------------------------------
+# Operations on AcquisitionModel
+#--------------------------------
+
+model = 1. + Identity()
+print model((3,))
 print 'OK.'
+
