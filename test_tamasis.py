@@ -5,8 +5,8 @@ from   tamasis import *
 class TestFailure(Exception): pass
 
 obs = PacsObservation(filename=tamasis_dir+'tests/frames_blue.fits',
-                       fine_sampling_factor=1, 
-                       keep_bad_detectors=False)
+                      fine_sampling_factor=1, 
+                      keep_bad_detectors=False)
 
 tod = obs.get_tod()
 
@@ -18,6 +18,7 @@ compression  = CompressionAverage(obs.compression_factor)
 masking      = Masking(tod.mask)
 
 model = masking * crosstalk * multiplexing * projection * telescope
+print model
 model = projection
 print model
 

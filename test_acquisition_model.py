@@ -1,7 +1,9 @@
 import numpy
-from tamasis import *
+import scipy
+from   tamasis import *
 
 class TestFailure(Exception): pass
+
 
 #--------------------
 # CompressionAverage
@@ -50,7 +52,7 @@ else:
     raise TestFailure('mask object')
 try:
     mask = Masking(numpy.array(3))
-except ValueError:
+except TypeError:
     pass
 else: 
     raise TestFailure('mask ndarray rank=0')
@@ -106,14 +108,12 @@ if mask.shapein != a.shape or mask.shapeout != a.shape:
     raise TestFailure('mask 2d')
 b = numpy.array([[[3, 4.], [1., 0.]], [[3., 2], [-1, 9]]])
 c = numpy.array([[[3, 4.], [0., 0.]], [[3., 0], [0, 0]]])
-if id(b) == id(c):
-    raise TestFailure('mask 3d copy')
 if numpy.any(mask.direct(b) != c):
     raise TestFailure('mask 3d direct')
 if numpy.any(mask.transpose(b) != c):
     raise TestFailure('mask 3d transpose')
 
-c = mask.direct(b, reusein=True)
+c = mask.direct(b, reusein=True, reuseout=True)
 if id(b) != id(c):
     raise TestFailure('mask no copy')
 
@@ -179,6 +179,72 @@ if any_neq(tod, tod2,14): raise TestFailure('fft4')
 #--------------------------------
 
 model = 1. + Identity()
-print model((3,))
+if model((3,)) != [6] or model(3) != 6: raise TestFailure('Addition')
+
+model = - Identity()
+if model((3,)) != [-3] or model(3) != -3: raise TestFailure('-I')
+
+model = (-2) * Identity()
+if model((3,)) != [-6] or model(3) != -6: raise TestFailure('-2 I')
+
+model = -(2 * Identity())
+if model((3,)) != [-6] or model(3) != -6: raise TestFailure('-(2I)')
+
+model = 1. - Identity()
+if model((3,)) != [0] or model(3) != 0: raise TestFailure('Subtraction1')
+
+model = 1. - 2 * Identity()
+if model((3,)) != [-3] or model(3) != -3: raise TestFailure('Subtraction2')
+
+model += 2*Identity()
+if model((3,)) != [3] or model(3) != 3: raise TestFailure('+=')
+
+model -= 2*Identity()
+if model((3,)) != [-3] or model(3) != -3: raise TestFailure('-=')
+
+model *= 2
+if model((3,)) != [-6] or model(3) != -6: raise TestFailure('*=')
+
+
+#------------------------------------
+# Linearoperator -> AcquisitionModel
+#------------------------------------
+
+diagonal = numpy.arange(10.)
+M = scipy.sparse.dia_matrix((diagonal, 0), shape=2*diagonal.shape)
+model = asacquisitionmodel(M)
+vec = numpy.ones(10)
+if numpy.any(model(vec)   != diagonal): raise TestFailure()
+if numpy.any(model.T(vec) != diagonal): raise TestFailure()
+
+
+#------------------------------------
+# AcquisitionModel -> Linearoperator
+#------------------------------------
+
+M2 = model.aslinearoperator()
+if M2.__class__ != scipy.sparse.linalg.interface.LinearOperator: raise TestFailure()
+if numpy.any(M2.matvec(vec)  != diagonal): raise TestFailure()
+if numpy.any(M2.rmatvec(vec) != diagonal): raise TestFailure()
+
+
+#---------------------------
+# AcquisitionModelTranspose
+#---------------------------
+
+a = CompressionAverage(3)
+b = a.T.T
+if id(a) != id(b): raise TestFailure()
+
+a = Identity()
+if id(a) != id(a.T): raise TestFailure()
+
+a = Diagonal([1,2,3])
+if id(a) != id(a.T): raise TestFailure()
+
+a = Masking([0,1,1,1])
+if id(a) != id(a.T): raise TestFailure()
+
+
 print 'OK.'
 
