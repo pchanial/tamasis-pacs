@@ -2,7 +2,7 @@ module module_pacsinstrument
 
     use iso_fortran_env,        only : ERROR_UNIT, OUTPUT_UNIT
     use module_fitstools,       only : ft_close, ft_create_header, ft_open_image, ft_read_extension, ft_read_slice,ft_test_extension
-    use module_math,            only : DEG2RAD, pInf, mInf, NaN, mean, nint_down, nint_up
+    use module_math,            only : DEG2RAD, pInf, mInf, mean, nint_down, nint_up
     use module_pacsobservation, only : pacsobservationslice, pacsobservation
     use module_pointingmatrix,  only : pointingelement, xy2roi, roi2pmatrix
     use module_precision,       only : p
@@ -289,7 +289,7 @@ contains
     subroutine filter_detectors_array(this, mask, uv, distortion, flatfield)
 
         class(pacsinstrument), intent(inout) :: this
-        logical*1, intent(in), target        :: mask(:,:)
+        logical*1, intent(in)                :: mask(:,:)
         real*8, intent(in)                   :: uv(:,:,:,:)
         real*8, intent(in)                   :: distortion(:,:,:,:)
         real*8, intent(in)                   :: flatfield(:,:)
@@ -362,9 +362,9 @@ contains
         this%flatfield_detector = this%flatfield_total / this%flatfield_optical
 
         where (mask)
-            this%flatfield_total    = NaN
-            this%flatfield_detector = NaN
-            this%flatfield_optical  = NaN
+            this%flatfield_total    = 1
+            this%flatfield_detector = 1
+            this%flatfield_optical  = 1
         end where
 
     end subroutine filter_detectors_array
