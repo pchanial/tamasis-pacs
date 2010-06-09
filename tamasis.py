@@ -1892,7 +1892,7 @@ def mapper_rls(tod, model, weight=None, hyper=1.0, tol=1.e-6, maxiter=300, M=Non
         callback = None
     
     time0 = time.time()
-    solution, nit = scipy.sparse.linalg.cg(operator, rhs, x0=x0, tol=tol, maxiter=maxiter, callback=callback, M=M0)
+    solution, nit = scipy.sparse.linalg.cgs(operator, rhs, x0=x0, tol=tol, maxiter=maxiter, callback=callback, M=M0)
     output = Map(operator.unpacking(solution))
     output.time = time.time() - time0
     ones = tod.copy()
