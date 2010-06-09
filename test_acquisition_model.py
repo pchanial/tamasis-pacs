@@ -19,7 +19,7 @@ if tuple(tod2.ravel()) != (1.,3.,4.,1.,1.,1.5): raise TestFailure('compAvg2')
 if tod2.nsamples != (2,1): raise TestFailure('compAvg3')
 tod3 = compression.transpose(tod2)
 if tod3.shape != (2,15): raise TestFailure('compAvg1t')
-if tuple(tod3[0,:]) != (0.2,0.2,0.2,0.2,0.2,0.6,0.6,0.6,0.6,0.6,0.8,0.8,0.8,0.8,0.8): raise TestFailure('compAvg2t')
+if any_neq(tod3[0,:], (0.2,0.2,0.2,0.2,0.2,0.6,0.6,0.6,0.6,0.6,0.8,0.8,0.8,0.8,0.8),15): raise TestFailure('compAvg2t')
 if tod3.nsamples != (10,5): raise TestFailure('compAvg3t')
 
 tod = Tod(numpy.ndarray((2,15)), nsamples=(11,4))
