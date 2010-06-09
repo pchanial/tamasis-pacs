@@ -45,9 +45,10 @@ module module_pacsinstrument
         logical              :: keep_bad_detectors
         logical              :: mask_bad_line
 
-        logical*1, pointer   :: mask(:,:)
-        integer, allocatable :: ij(:,:)
-        integer, allocatable :: pq(:,:)
+        logical*1, allocatable :: mask(:,:) ! .true. if the detector has been filtered out in the flattened list of detectors
+        logical*1, allocatable :: bad(:,:)  ! .true. if the detector is flagged as bad (same as mask if keep_bad_detector is false)
+        integer, allocatable   :: ij(:,:)
+        integer, allocatable   :: pq(:,:)
 
         real*8, allocatable  :: flatfield_total(:,:)
         real*8, allocatable  :: flatfield_detector(:,:)
@@ -300,31 +301,35 @@ contains
         this%ncolumns = size(mask, 2)
 
         allocate(this%mask(this%nrows, this%ncolumns))
-        this%mask => mask
+        allocate(this%bad (this%nrows, this%ncolumns))
+        this%bad = mask
 
         ! mask detectors rejected in transparent mode
         if (this%transparent_mode) then
             if (this%channel /= 'r') then
-                this%mask(1:16,1:16) = .true.
-                this%mask(1:16,33:)  = .true.
-                this%mask(17:,:)     = .true.
+                this%bad(1:16,1:16) = .true.
+                this%bad(1:16,33:)  = .true.
+                this%bad(17:,:)     = .true.
             else
-                this%mask(1:8,1:8) = .true.
-                this%mask(1:8,17:) = .true.
-                this%mask(9:,:)    = .true.
+                this%bad(1:8,1:8) = .true.
+                this%bad(1:8,17:) = .true.
+                this%bad(9:,:)    = .true.
             end if
         end if
 
         ! mask erratic line
         if (this%mask_bad_line .and. this%channel /= 'r') then
-            this%mask(12,17:32) = .true.
+            this%bad(12,17:32) = .true.
+        end if
+        
+        if (this%keep_bad_detectors) then
+            this%mask = .false.
+        else
+            this%mask = this%bad
         end if
 
         ! get the number of detectors
-        this%ndetectors = size(this%mask)
-        if (.not. this%keep_bad_detectors) then
-            this%ndetectors = this%ndetectors - count(this%mask)
-        end if
+        this%ndetectors = count(.not. this%mask)
 
         allocate (this%ij(ndims, this%ndetectors))
         allocate (this%pq(ndims, this%ndetectors))
@@ -341,7 +346,7 @@ contains
         do p = 1, this%nrows
             do q = 1, this%ncolumns
                 this%detector_area(p,q) = abs(surface_convex_polygon(this%uv2yz(uv(:,:,p,q), distortion, 0.d0))) * 3600.d0**2
-                if (this%mask(p,q) .and. .not.this%keep_bad_detectors) cycle
+                if (this%mask(p,q)) cycle
                 this%pq(1, idetector) = p-1
                 this%pq(2, idetector) = q-1
                 this%ij(1, idetector) = mod(p-1, 16)
@@ -356,7 +361,7 @@ contains
         this%flatfield_total = flatfield
         this%flatfield_detector = this%flatfield_total / this%flatfield_optical
 
-        where (this%mask)
+        where (mask)
             this%flatfield_total    = NaN
             this%flatfield_detector = NaN
             this%flatfield_optical  = NaN
@@ -627,7 +632,7 @@ contains
         logical, intent(in), optional      :: verbose
 
         integer*8 :: nsamples, destination
-        integer   :: nobs, iobs
+        integer   :: iobs, idetector, nobs
         integer   :: count1, count2, count_rate, count_max
         logical   :: verbose_
 
@@ -657,6 +662,16 @@ contains
             if (status /= 0) return
             destination = destination + obs%slice(iobs)%nsamples
         end do
+
+        ! mask bad detectors if they haven't been filtered out
+        if (this%keep_bad_detectors) then
+            do idetector = 1, this%ndetectors
+                if (this%bad(this%pq(1,idetector)+1,this%pq(2,idetector)+1)) then
+                    signal(:,idetector) = 0.d0
+                    mask  (:,idetector) = .true.
+                end if
+            end do
+        end if
 
         call system_clock(count2, count_rate, count_max)
         if (verbose_) then
@@ -736,11 +751,6 @@ contains
             p = this%pq(1,idetector)
             q = this%pq(2,idetector)
 
-            if (this%mask(p+1,q+1)) then
-                mask(destination:destination+obs%nsamples-1,idetector) = .true.
-                cycle
-            end if
-
             firstcompressed = (obs%first - 1) / 32 + 1
             lastcompressed  = (obs%last  - 1) / 32 + 1
             ncompressed = lastcompressed - firstcompressed + 1
@@ -819,11 +829,6 @@ contains
 
             p = this%pq(1,idetector)
             q = this%pq(2,idetector)
-
-            if (this%mask(p+1,q+1)) then
-                mask(dest:dest+obs%nsamples-1,idetector) = .true.
-                cycle
-            end if
 
             call ft_read_slice(unit, obs%first, obs%last, q+1, p+1, imageshape, mask(dest:dest+obs%nsamples-1,idetector), status)
             if (status /= 0) go to 999
@@ -919,6 +924,8 @@ contains
 
         class(pacsinstrument), intent(inout) :: this
 
+        deallocate (this%bad)
+        deallocate (this%mask)
         deallocate (this%ij)
         deallocate (this%pq)
         deallocate (this%flatfield_total)

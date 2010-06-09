@@ -133,7 +133,7 @@ subroutine pacs_info(tamasis_dir, filename, nfilenames, fine_sampling_factor, ke
     if (status /= 0) return
 
     ndetectors  = pacs%ndetectors
-    output_mask = pacs%mask
+    output_mask = pacs%bad
     compression_factor = obs%slice%compression_factor
     nsamples = obs%slice%nsamples
     unit = obs%unit
@@ -300,7 +300,7 @@ subroutine pacs_timeline(tamasis_dir, filename, nfilenames, nsamples, ndetectors
 
     ! flat fielding
     if (do_flatfielding) then
-        call divide_vectordim2(signal, pack(pacs%flatfield_detector, .not. bad_detector_mask))
+        call divide_vectordim2(signal, pack(pacs%flatfield_detector, .not. pacs%mask))
     end if
     
     ! subtract the mean of each detector timeline
@@ -482,7 +482,7 @@ end subroutine pacs_pointing_matrix_filename
 !!$                   bad_detector_mask)
 !!$    if (status /= 0) go to 999
 !!$
-!!$    if (any(pacs%mask .neqv. bad_detector_mask)) then
+!!$    if (any(pacs%bad .neqv. bad_detector_mask)) then
 !!$        write (*,'(a)') "Info: using user's bad detector mask."
 !!$    end if
 !!$
@@ -555,7 +555,7 @@ end subroutine pacs_pointing_matrix_filename
 !!$                   bad_detector_mask)
 !!$    if (status /= 0) go to 999
 !!$
-!!$    if (any(pacs%mask .neqv. bad_detector_mask)) then
+!!$    if (any(pacs%bad .neqv. bad_detector_mask)) then
 !!$        write (*,'(a)') "Info: using user's bad pixel mask."
 !!$    end if
 !!$
