@@ -30,29 +30,4 @@ backmap = model.transpose(tod)
 backmap.mask = map_mask
 
 # iterative map, taking all map pixels
-reshaping = Reshaping(numpy.product(map_naive.shape), map_naive.shape)
-
-shape = 2*(map_naive.size,)
-matvec = RegularizedLeastSquareMatvec(model, reshaping, hyper=1e1)
-operator = LinearOperator(matvec=matvec, dtype=numpy.float64, shape=shape)
-b  = reshaping.transpose(backmap)
-x0 = reshaping.transpose(map_naive)
-x0[numpy.isnan(x0)] = 0.
-#m = reshaping.transpose(1./weights)
-#m[numpy.isfinite(m) == False] = 1.
-#m = numpy.maximum(m,1.)
-#M = dia_matrix((m, 0), shape=shape)
-solution, nit = cgs(operator, b, x0=x0, tol=1.e-4, maxiter=200, callback=PcgCallback())
-map_iter = Map(reshaping.direct(solution))
-
-map_rls = mapper_rls(tod, model)
-
-dX = DiscreteDifference(axis=1)
-dY = DiscreteDifference(axis=0)
-C = model.T * model + 1.e1 * (dX.T * dX + dY.T * dY)
-operator = C.aslinearoperator()
-b = operator.unpacking.T(backmap)
-x0 = operator.unpacking.T(map_naive)
-x0[numpy.where(numpy.isfinite(x0) == False)] = 0
-solution, nit = cgs(operator, b, x0=x0, tol=1.e-4, maxiter=200, callback=PcgCallback())
-map_iter2 = Map(operator.unpacking(solution))
+map_iter = mapper_rls(tod, model, hyper=1e1, tol=1.e-4)
