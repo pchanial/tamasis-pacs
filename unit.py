@@ -8,6 +8,9 @@ _re_unit = re.compile(r' *([/*])? *([a-zA-Z_]+|\?+)(\^-?[0-9]+(\.[0-9]*)?)? *')
 class UnitError(Exception): pass
 
 def _extract_unit(string):
+    """
+    Convert the input string into a unit as a dictionary
+    """
 
     if string is None or isinstance(string, dict):
         return string
@@ -38,8 +41,7 @@ def _extract_unit(string):
 
 def _multiply_unit_inplace(unit, key, val):
     """
-    Add one unit.
-
+    Multiply a unit as a dictionary by a non-composite one
     Unlike _divide_unit, _multiply_unit and _power_unit,
     the operation is done in place, to speed up main
     caller _extract_unit.
@@ -56,6 +58,9 @@ def _multiply_unit_inplace(unit, key, val):
     return unit
 
 def _normalize_quantity(value):
+    """
+    Recursively convert a Quantity by looking up the DerivedUnits table
+    """
     if value._unit is None:
         return value
     result = Quantity(value, '')
@@ -81,6 +86,9 @@ def _normalize_quantity(value):
     return result    
 
 def _power_unit(unit, power):
+    """
+    Raise to power a unit as a dictionary
+    """
     if unit is None or power == 0:
         return None
     result = unit.copy()
@@ -89,7 +97,8 @@ def _power_unit(unit, power):
     return result
 
 def _multiply_unit(unit1, unit2):
-    """ Multiplication of units. 
+    """
+    Multiplication of units as dictionary. 
     Unlike _power_unit, _divide_unit, the operation is done in place
     of unit1, to speed up main caller _extract_unit.
     """
@@ -109,7 +118,9 @@ def _multiply_unit(unit1, unit2):
     return unit
 
 def _divide_unit(unit1, unit2):
-    """ Division of units. """
+    """
+    Division of units as dictionary
+    """
     if unit2 is None:
         return unit1
     if unit1 is None:
@@ -129,6 +140,9 @@ def _get_units(units):
     return map(lambda q: getattr(q, '_unit', None), units)
 
 def _strunit(unit):
+    """
+    Convert a unit as dictionary into a string
+    """
     if unit is None:
         return ''
     result = ''
@@ -346,10 +360,34 @@ ities of different units may have changed operands to common unit '" + \
 
     @property
     def unit(self):
+        """
+        Return the Quantity unit as a string
+        
+        Example
+        -------
+        >>> Quantity(32., 'm/s').unit
+        'm / s'
+        """
         return _strunit(self._unit)
 
     @unit.setter
     def unit(self, unit):
+        """
+        Convert a Quantity into a new unit
+
+        Parameters
+        ----------
+        unit : string or None
+             A string representing the unit into which the Quantity
+             should be converted
+
+        Example
+        -------
+        >>> q = Quantity(1., 'km')
+        >>> q.unit = 'm'
+        >>> print q
+        1000.0 m
+        """
         newunit = _extract_unit(unit)
         if self._unit is None or newunit is None:
             self._unit = newunit
@@ -362,13 +400,40 @@ ities of different units may have changed operands to common unit '" + \
         numpy.ndarray.__imul__(self.view(numpy.ndarray), numpy.asscalar(q1) / numpy.asscalar(q2))
         self._unit = newunit
 
-    def inunit(self, unit):        
+    def inunit(self, unit):
+        """
+        Return a copy of the Quantity in the specified unit
+
+        Parameters
+        ----------
+        unit : string or None
+             A string representing the unit into which the Quantity
+             should be converted
+
+        Returns
+        -------
+        res : Quantity
+            A copy of the Quantity in the new unit
+
+        Example
+        -------
+        >>> print Quantity(1., 'km').inunit('m')
+        1000.0 m
+        """
         q = Quantity(self, subok=True)
         q.unit = unit
         return q
 
     @property
     def SI(self):
+        """
+        Return a copy of the Quantity in SI unit
+
+        Example
+        -------
+        >>> print Quantity(1., 'km').SI
+        1000.0 m
+        """
         return _normalize_quantity(self)
 
     def __repr__(self):
@@ -415,6 +480,14 @@ class DerivedUnits(object):
         """
         Adds a new derived unit to the current list
         
+        Parameters
+        ----------
+        name : string
+             The name of the new derived unit to be added to the table
+
+        value : Quantity
+             The Quantity corresponding to the new derived unit
+
         Example
         -------
         >>> DerivedUnits.new('mile', Quantity(1.609344, 'km'))
@@ -427,4 +500,16 @@ class DerivedUnits(object):
 
     @staticmethod
     def delete(name):
+        """
+        Delete a derived unit from the table.
+
+        Parameters
+        ----------
+        name : string
+             The name of the unit to be deleted
+
+        Example
+        -------
+        >>> DerivedUnits.delete('mynewunit')
+        """
         del DerivedUnits.table[name]
