@@ -1,9 +1,9 @@
 import numpy
 import re
 
-__all__ = ['UnitError', 'Quantity', 'DerivedUnit']
+__all__ = ['UnitError', 'Quantity', 'DerivedUnits']
 
-_re_unit = re.compile(r' *([/*])? *([a-zA-Z]+|\?)(\^-?[0-9]+(\.[0-9]*)?)? *')
+_re_unit = re.compile(r' *([/*])? *([a-zA-Z_]+|\?+)(\^-?[0-9]+(\.[0-9]*)?)? *')
 
 class UnitError(Exception): pass
 
@@ -35,6 +35,7 @@ def _extract_unit(string):
         start = start + len(match.group(0))
     return result
 
+
 def _multiply_unit_inplace(unit, key, val):
     """
     Add one unit.
@@ -59,17 +60,17 @@ def _normalize_quantity(value):
         return value
     result = Quantity(value, '')
     for key, val in value._unit.iteritems():
-        if (key,val) in DerivedUnit._units:
-            result *= _normalize_quantity(DerivedUnit._units[(key,val)])
-        elif (key,-val) in DerivedUnit._units:
-            result /= _normalize_quantity(DerivedUnit._units[(key,-val)])
-        elif key in DerivedUnit._units:
+        if (key,val) in DerivedUnits.table:
+            result *= _normalize_quantity(DerivedUnits.table[(key,val)])
+        elif (key,-val) in DerivedUnits.table:
+            result /= _normalize_quantity(DerivedUnits.table[(key,-val)])
+        elif key in DerivedUnits.table:
             if val == 1.:
-                result *= _normalize_quantity(DerivedUnit._units[key])
+                result *= _normalize_quantity(DerivedUnits.table[key])
             elif val == -1.:
-                result /= _normalize_quantity(DerivedUnit._units[key])
+                result /= _normalize_quantity(DerivedUnits.table[key])
             else:
-                result *= _normalize_quantity(DerivedUnit._units[key]**val)
+                result *= _normalize_quantity(DerivedUnits.table[key]**val)
         else:
             if result._unit is None:
                 result._unit = { key: val }
@@ -127,9 +128,94 @@ def _divide_unit(unit1, unit2):
 def _get_units(units):
     return map(lambda q: getattr(q, '_unit', None), units)
 
+def _strunit(unit):
+    if unit is None:
+        return ''
+    result = ''
+    has_pos = False
+
+    for key, val in unit.iteritems():
+        if val >= 0:
+            has_pos = True
+            break
+
+    for key, val in sorted(unit.iteritems()):
+        if val < 0 and has_pos:
+            continue
+        result += ' ' + key
+        if val != 1:
+            ival = int(val)
+            if abs(val-ival) <= 1e-7 * abs(val):
+                val = ival
+            result += '^' + str(val)
+
+    if not has_pos:
+        return result[1:]
+
+    for key, val in sorted(unit.iteritems()):
+        if val >= 0:
+            continue
+        val = -val
+        result += ' / ' + key
+        if val != 1:
+            ival = int(val)
+            if abs(val-ival) <= 1e-7 * abs(val):
+                val = ival
+            result += '^' + str(val)
+
+    return result[1:]
+
+
 class Quantity(numpy.ndarray):
     """
     Represent a quantity, i.e. a scalar or array associated with a unit.
+
+    Examples
+    --------
+
+    A Quantity can be converted to a different unit:
+    >>> a = Quantity(18, 'm')
+    >>> a.unit = 'km'
+    >>> a
+    Quantity(0.018, 'km')
+
+    A more useful conversion:
+    >>> sky = Quantity(4*numpy.pi, 'sr')
+    >>> print sky.inunit('deg^2')
+    41252.9612494 deg^2
+    
+    Quantities can be compared:
+    >>> Quantity(0.018, 'km') > Quantity(10., 'm')
+    True
+    >>> minimum(Quantity(1, 'm'), Quantity(0.1, 'km'))
+    Quantity(1.0, 'm')
+
+    Quantities can be operated on:
+    >>> time = Quantity(0.2, 's')
+    >>> a / time
+    Quantity(0.09, 'km / s')
+
+    Units do not have to be standard and ? can be used as a 
+    non-standard one:
+    >>> value = Quantity(1., '?/detector')
+    >>> value *= Quantity(100, 'detector')
+    >>> value
+    Quantity(100.0, '?')
+
+    A derived unit can be converted to a SI one:
+    >>> print Quantity(2, 'Jy').SI
+    2e-26 kg / s^2
+
+    It is also possible to add a new derived unit:
+    >>> DerivedUnits.new('kloug', Quantity(3, 'kg'))
+    >>> print Quantity(2, 'kloug').SI
+    6.0 kg
+
+    In fact, a non-standard unit is not handled differently than one of
+    the 7 SI units, as long as it is not in the DerivedUnits table:
+    >>> DerivedUnits.new('krouf', Quantity(0.5, 'broug^2'))
+    >>> print Quantity(1, 'krouf').SI
+    0.5 broug^2
     """
 
     __slots__ = ('_unit',)
@@ -199,36 +285,54 @@ ities of different units may have changed operands to common unit '" + \
         ufunc = context[0]
         args = context[1]
 
-        if ufunc in (numpy.add, numpy.subtract, numpy.maximum, numpy.minimum,
-                     numpy.greater, numpy.greater_equal, numpy.less,
-                     numpy.less_equal, numpy.equal, numpy.not_equal):
+        if ufunc in (numpy.add, numpy.subtract, numpy.maximum, numpy.minimum):
             if self is not array:
                 # self has highest __array_priority__
                 array._unit = self._unit
             else:
                 # inplace operation
                 if array._unit is None:
-                    array._unit = args[1]._unit
-            return array
+                    array._unit = getattr(args[1], '_unit', None)
+
         elif ufunc is numpy.reciprocal:
             array._unit = _power_unit(args[0]._unit, -1)
+
         elif ufunc is numpy.sqrt:
             array._unit = _power_unit(args[0]._unit, 0.5)
+
         elif ufunc in [numpy.square, numpy.var]:
             array._unit = _power_unit(args[0]._unit, 2)
+
         elif ufunc is numpy.power:
             array._unit = _power_unit(args[0]._unit, args[1])
+
         elif ufunc in [numpy.multiply, numpy.vdot]:
             units = _get_units(args)
             array._unit = _multiply_unit(units[0], units[1])
+
         elif ufunc is numpy.divide:
             units = _get_units(args)
             array._unit = _divide_unit(units[0], units[1])
-        elif ufunc in (numpy.arccos, numpy.arccosh, numpy.arcsin, numpy.arcsinh, numpy.arctan, numpy.arctanh, numpy.arctan2, numpy.cosh, numpy.sinh, numpy.tanh, numpy.cos, numpy.sin, numpy.tan, numpy.log, numpy.log2, numpy.log10, numpy.exp, numpy.exp2, numpy.iscomplex, numpy.isfinite, numpy.isinf, numpy.isnan, numpy.isreal):
+
+        elif ufunc in (numpy.greater, numpy.greater_equal, numpy.less,
+                       numpy.less_equal, numpy.equal, numpy.not_equal,
+                       numpy.iscomplex, numpy.isfinite, numpy.isinf, 
+                       numpy.isnan, numpy.isreal):
+            if numpy.rank(array) == 0:
+                return bool(array)
+            array = array.view(numpy.ndarray)
+
+        elif ufunc in (numpy.arccos, numpy.arccosh, numpy.arcsin, numpy.arcsinh,
+                       numpy.arctan, numpy.arctanh, numpy.arctan2, numpy.cosh,
+                       numpy.sinh, numpy.tanh, numpy.cos, numpy.sin, numpy.tan,
+                       numpy.log, numpy.log2, numpy.log10, numpy.exp, 
+                       numpy.exp2):
             array._unit = None
+
         elif ufunc not in (numpy.abs, numpy.negative ):
             print 'Quantity: unhandled ufunc ', ufunc, 'with', len(args), 'args'
             array._unit = None
+
         else:
             array._unit = self._unit
             
@@ -246,22 +350,26 @@ ities of different units may have changed operands to common unit '" + \
 
     @unit.setter
     def unit(self, unit):
-        
         newunit = _extract_unit(unit)
         if self._unit is None or newunit is None:
             self._unit = newunit
             return
 
-        q1 = Quantity(1., self._unit).unit_si
-        q2 = Quantity(1., newunit).unit_si
+        q1 = Quantity(1., self._unit).SI
+        q2 = Quantity(1., newunit).SI
         if q1._unit != q2._unit:
             raise UnitError("Units '"+self.unit+"' and '" + _strunit(newunit)+"' are incompatible.")
         numpy.ndarray.__imul__(self.view(numpy.ndarray), numpy.asscalar(q1) / numpy.asscalar(q2))
         self._unit = newunit
 
+    def inunit(self, unit):        
+        q = Quantity(self, subok=True)
+        q.unit = unit
+        return q
+
     @property
-    def unit_si(self):
-        return _normalize_quantity(Quantity(1., self._unit))
+    def SI(self):
+        return _normalize_quantity(self)
 
     def __repr__(self):
         return self.__class__.__name__+'(' + str(numpy.array(self,copy=False)) + ", '" + _strunit(self._unit) + "')"
@@ -272,50 +380,16 @@ ities of different units may have changed operands to common unit '" + \
             return result
         return result + ' ' + _strunit(self._unit)
 
-def _strunit(unit):
-    if unit is None:
-        return ''
-    result = ''
-    has_pos = False
 
-    if unit.has_key('?'):
-        result +=' ?'
+class DerivedUnits(object):
+    """
+    This class holds a table of derived units.
 
-    for key, val in unit.iteritems():
-        if val >= 0 or key == '?':
-            has_pos = True
-            break
+    This table is used to compared Quantitiies of different units and to
+    convert a Quantity into the International System.
+    """
 
-    for key, val in sorted(unit.iteritems()):
-        if val < 0 and has_pos or key == '?':
-            continue
-        result += ' ' + key
-        if val != 1:
-            ival = int(val)
-            if abs(val-ival) <= 1e-7 * abs(val):
-                val = ival
-            result += '^' + str(val)
-
-    if not has_pos:
-        return result[1:]
-
-    for key, val in sorted(unit.iteritems()):
-        if val >= 0 or key == '?':
-            continue
-        val = -val
-        result += ' / ' + key
-        if val != 1:
-            ival = int(val)
-            if abs(val-ival) <= 1e-7 * abs(val):
-                val = ival
-            result += '^' + str(val)
-
-    return result[1:]
-
-
-class DerivedUnit(object):
-
-    _units = {
+    table = {
         'arcmin' : Quantity(1./60., 'deg'), 
         'arcsec' : Quantity(1./3600., 'deg'),
         'AU'     : Quantity(149597870700., 'm'),
@@ -337,14 +411,20 @@ class DerivedUnit(object):
         }
 
     @staticmethod
-    def new(name, value, unit=None):
-        if unit is None and not isinstance(value, Quantity):
-            raise ValueError('')
-        if unit is None:
-            DerivedUnit._units[name] = value
-        else:
-            DerivedUnit._units[name] = Quantity(value, unit)
+    def new(name, value):
+        """
+        Adds a new derived unit to the current list
+        
+        Example
+        -------
+        >>> DerivedUnits.new('mile', Quantity(1.609344, 'km'))
+        >>> Quantity(1, 'm').inunit('mile')
+        Quantity(0.000621371192237, 'mile')
+        """
+        if not isinstance(value, Quantity):
+            raise TypeError('2nd argument should be a Quantity.')
+        DerivedUnits.table[name] = value.SI
 
     @staticmethod
     def delete(name):
-        del DerivedUnit._units[name]
+        del DerivedUnits.table[name]
