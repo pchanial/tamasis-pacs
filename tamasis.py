@@ -13,7 +13,7 @@ import tamasisfortran as tmf
 import time
 from   unit import Quantity, UnitError
 
-__version_info__ = (1, 0, 2)
+__version_info__ = (1, 0, 3)
 __version__ = '.'.join((str(i) for i in __version_info__))
 __verbose__ = False
 tamasis_dir = os.path.dirname(__file__) + '/' if os.path.dirname(__file__) != '' else './'
@@ -378,16 +378,16 @@ class AcquisitionModelTranspose(AcquisitionModel):
         return self.model.validate_shapein(shapeout)
 
     def validate_input_direct(self, cls, data, reusein):
-        return self.model.validate_input_transpose()
+        raise NotImplementedError()
 
     def validate_input_transpose(self, cls, data, reusein):
-        return self.model.validate_input_direct()
+        raise NotImplementedError()
 
     def validate_output_direct(self, cls, shapeout, reuseout, **options):
-        return self.model.validate_output_transpose(cls, shapeout, reuseout, *options)
+        raise NotImplementedError()
 
     def validate_output_transpose(self, cls, shapeout, reuseout, **options):
-        return self.model.validate_output_direct(cls, shapeout, reuseout, *options)
+        raise NotImplementedError()
 
 
 #-------------------------------------------------------------------------------
@@ -756,49 +756,56 @@ class PacsMultiplexing(AcquisitionModel):
 
 class Compression(AcquisitionModel):
     """
-    Superclass for compressing the input signal.
+    Abstract class for compressing the input signal.
     Author: P. Chanial
     """
-    def __init__(self, compression_direct, compression_transpose, compression_factor, description):
+    def __init__(self, compression_factor, description):
         AcquisitionModel.__init__(self, description)
-        self._compression_direct = compression_direct
-        self._compression_transpose = compression_transpose
-        self.compression_factor = compression_factor
+        if _my_isscalar(compression_factor):
+            self.factor = int(compression_factor)
+        else:
+            self.factor = tuple(compression_factor)
+
+    def compression_direct(signal, output, compression_factor):
+        raise NotImplementedError()
+
+    def compression_transpose(signal, output, compression_factor):
+        raise NotImplementedError()
 
     def direct(self, signal, reusein=False, reuseout=False):
-        if self.compression_factor == 1:
+        if numpy.all(numpy.array(self.factor) == 1):
             if not reusein: return signal.copy('a')
             return signal
         signal, shapeout = self.validate_input_direct(Tod, signal, reusein)
         output = self.validate_output_direct(Tod, shapeout, reuseout)
-        output.nsamples = tuple(numpy.divide(signal.nsamples, self.compression_factor))
-        self._compression_direct(signal, output, self.compression_factor)
+        output.nsamples = tuple(numpy.divide(signal.nsamples, self.factor))
+        self.compression_direct(signal, output, self.factor)
         return output
 
     def transpose(self, compressed, reusein=False, reuseout=False):
-        if self.compression_factor == 1:
+        if numpy.all(numpy.array(self.factor) == 1):
             if not reusein: return compressed.copy('a')
             return compressed
         compressed, shapein = self.validate_input_transpose(Tod, compressed, reusein)
         output = self.validate_output_transpose(Tod, shapein, reuseout)
-        output.nsamples = tuple(numpy.multiply(compressed.nsamples, self.compression_factor))
-        self._compression_transpose(compressed, output, self.compression_factor)
+        output.nsamples = tuple(numpy.multiply(compressed.nsamples, self.factor))
+        self.compression_transpose(compressed, output, self.factor)
         return output
 
     def validate_shapein(self, shapein):
         if shapein is None:
             return None
-        if numpy.any(numpy.array(shapein[-1]) % self.compression_factor != 0):
-            raise ValidationError('The input timeline size ('+str(shapein[-1])+') is not an integer times the compression factor ('+str(self.compression_factor)+').')
-        return _combine_sliced_shape(shapein[0:-1], numpy.array(shapein[-1]) / self.compression_factor)
+        if numpy.any(numpy.array(shapein[-1]) % self.factor != 0):
+            raise ValidationError('The input timeline size ('+str(shapein[-1])+') is not an integer times the compression factor ('+str(self.factor)+').')
+        return _combine_sliced_shape(shapein[0:-1], numpy.array(shapein[-1]) / self.factor)
 
     def validate_shapeout(self, shapeout):
         if shapeout is None:
             return
-        return _combine_sliced_shape(shapeout[0:-1], numpy.array(shapeout[-1]) * self.compression_factor)
+        return _combine_sliced_shape(shapeout[0:-1], numpy.array(shapeout[-1]) * self.factor)
 
     def __str__(self):
-        return super(Compression, self).__str__()+' (x'+str(self.compression_factor)+')'
+        return super(Compression, self).__str__()+' (x'+str(self.factor)+')'
        
 
 #-------------------------------------------------------------------------------
@@ -810,13 +817,13 @@ class CompressionAverage(Compression):
     Author: P. Chanial
     """
     def __init__(self, compression_factor, description=None):
-        Compression.__init__(self, self.compression_average_direct, self.compression_average_transpose, compression_factor, description)
+        Compression.__init__(self, compression_factor, description)
 
-    def compression_average_direct(self, signal, output, compression_factor):
-        tmf.compression_average_direct(signal.T, output.T, compression_factor)
+    def compression_direct(self, signal, output, compression_factor):
+        tmf.compression_average_direct(signal.T, output.T, numpy.resize(compression_factor, [len(signal.nsamples)]))
         
-    def compression_average_transpose(self, signal, output, compression_factor):
-        tmf.compression_average_transpose(signal.T, output.T, compression_factor)
+    def compression_transpose(self, signal, output, compression_factor):
+        tmf.compression_average_transpose(signal.T, output.T, numpy.resize(compression_factor, [len(signal.nsamples)]))
         
 
 #-------------------------------------------------------------------------------
@@ -828,7 +835,13 @@ class DownSampling(Compression):
     Author: P. Chanial
     """
     def __init__(self, compression_factor, description=None):
-        Compression.__init__(self, tmf.downsampling_direct, tmf.downsampling_transpose, compression_factor, description)
+        Compression.__init__(self, compression_factor, description)
+
+    def compression_direct(self, signal, output, compression_factor):
+        tmf.downsampling_direct(signal.T, output.T, numpy.resize(compression_factor, [len(signal.nsamples)]))
+        
+    def compression_transpose(self, signal, output, compression_factor):
+        tmf.downsampling_transpose(signal.T, output.T, numpy.resize(compression_factor, [len(signal.nsamples)]))
       
 
 #-------------------------------------------------------------------------------
@@ -1327,7 +1340,7 @@ class PacsObservation(_Pacs):
             return tod
 
         newunit = Quantity(1., unit)
-        newunit_si = newunit.unit_si._unit
+        newunit_si = newunit.SI._unit
         if 'sr' in newunit_si and newunit_si['sr'] == -1:
             area = self.detector_area[self.bad_detector_mask == 0].reshape((self.ndetectors,1))
             tod /= area
@@ -1507,17 +1520,19 @@ class MadMap1Observation(object):
 class FitsArray(Quantity):
 
     __slots__ = ('_header',)
-    def __new__(cls, data, header=None, unit=None, dtype=None, order='C', copy=True):
-        from copy import copy as cp
-        result = Quantity(data, unit, dtype=dtype, order=order, copy=copy)
-        if not isinstance(result, FitsArray):
+    def __new__(cls, data, header=None, unit=None, dtype=numpy.float64, copy=True, order='C', subok=False, ndmin=0):
+
+        # get a new FitsArray instance (or a subclass if subok is True)
+        result = Quantity(data, unit, dtype, copy, order, True, ndmin)
+        if not subok and result.__class__ is not cls or not issubclass(result.__class__, cls):
             result = result.view(cls)
+
+        # copy header attribute
         if header is not None:
             result.header = header
-        elif isinstance(data, FitsArray):
-            result.header = cp(data.header) if copy else data.header
-        else:
-            result.header = None
+        elif copy and hasattr(data, '_header') and data._header.__class__ is pyfits.Header:
+            result.header = data._header.copy()
+
         return result
 
     def __array_finalize__(self, obj):
@@ -1564,7 +1579,7 @@ class FitsArray(Quantity):
         from os import remove
   
         if self.header is None:
-            header = FitsArray.create_header(self.shape)
+            header = create_fitsheader(reversed(self.shape))
         else:
             header = self.header
        
@@ -1582,30 +1597,22 @@ class FitsArray(Quantity):
         except IOError:
             pass
 
-    @staticmethod
-    def create_header(shape):
-        if _my_isscalar(shape):
-            shape = (shape,)
-        else:
-            shape = tuple(shape)
-        naxis = len(shape)
-        header = pyfits.Header()
-        header.update('simple', True)
-        header.update('bitpix', -64)
-        header.update('extend', True)
-        header.update('naxis', naxis)
-        for dim in range(naxis):
-            header.update('naxis'+str(dim+1), shape[naxis-dim-1])
-        return header
 
 #-------------------------------------------------------------------------------
 
 
 class Map(FitsArray):
+    
+    """
+    Represent a map, complemented with unit and FITS header.
+    """
+    def __new__(cls, data, header=None, unit=None, dtype=numpy.float64, copy=True, order='C', subok=False, ndmin=0):
 
-    def __new__(cls, data, header=None, unit=None, dtype=None, order='C', copy=True):
-        result = FitsArray(data, header, unit, dtype, order, copy)
-        if not isinstance(data,Map): result = result.view(cls)
+        # get a new Map instance (or a subclass if subok is True)
+        result = FitsArray(data, header, unit, dtype, copy, order, True, ndmin)
+        if not subok and result.__class__ is not cls or not issubclass(result.__class__, cls):
+            result = result.view(cls)
+
         return result
 
     def __array_finalize__(self, obj):
@@ -1625,55 +1632,7 @@ class Map(FitsArray):
         return Map(numpy.zeros(shape, dtype, order), header, unit, copy=False)
 
     def copy(self, order='C'):
-        return Map(self, order=order, copy=True)
-
-    @staticmethod
-    def create_header(naxis, crval=(0.,0.), crpix=None, ctype=('RA---TAN','DEC--TAN'), cunit='deg', cdelt=None, cd=None):
-
-        if _my_isscalar(naxis):
-            naxis = (naxis, naxis)
-        else:
-            naxis = tuple(naxis)
-
-        if len(naxis) != 2:
-            raise ValueError("Invalid dimension '"+str(len(naxis))+"' instead of 2.")
-
-        header = super(Map, self).create_header(naxis)
-
-        if cd is not None:
-            if cd.shape != (2,2):
-                raise ValueError('The CD matrix is not a 2x2 matrix.')
-        else:
-            if cdelt is None:
-                return header
-            if _my_isscalar(cdelt):
-                cdelt = (-cdelt, cdelt)
-            cd = numpy.array(((cdelt[0], 0), (0,cdelt[1])))
-
-        if len(crval) != 2:
-            raise ValueError('CRVAL does not have two elements.')
-        if crpix is None:
-            crpix = numpy.array(naxis) / 2 + 1
-        if len(crpix) != 2:
-            raise ValueError('CRPIX does not have two elements.')
-        if len(ctype) != 2:
-            raise ValueError('CTYPE does not have two elements.')
-        if _my_isscalar(cunit):
-            cunit = (cunit, cunit)
-
-        header.update('crval1', crval[0])
-        header.update('crval2', crval[1])
-        header.update('crpix1', crpix[0])
-        header.update('crpix2', crpix[1])
-        header.update('cd1_1', cd[0,0])
-        header.update('cd2_1', cd[1,0])
-        header.update('cd1_2', cd[0,1])
-        header.update('cd2_2', cd[1,1])
-        header.update('ctype1', ctype[0])
-        header.update('ctype2', ctype[1])
-        header.update('cunit1', cunit[0])
-        header.update('cunit2', cunit[1])
-        return header
+        return Map(self, copy=True, order=order)
 
     def imshow(self, num=None, axis=True, title=None):
         """A simple graphical display function for the Map class"""
@@ -1681,6 +1640,9 @@ class Map(FitsArray):
         finite = self[numpy.isfinite(self)]
         mean   = numpy.mean(finite)
         stddev = numpy.std(finite)
+        print 'finite', finite.unit
+        print 'mean', mean.unit
+        print 'stddev', stddev.unit
         minval = max(mean - 2*stddev, numpy.min(finite))
         maxval = min(mean + 5*stddev, numpy.max(finite))
 
@@ -1703,29 +1665,38 @@ class Map(FitsArray):
 class Tod(FitsArray):
 
     __slots__ = ('mask', 'nsamples')
-    def __new__(cls, data, mask=None, nsamples=None, header=None, unit=None, dtype=None, order='C', copy=False):
-        result = FitsArray(data, header, unit, dtype, order, copy)
-        if not isinstance(data, Tod):
+
+    def __new__(cls, data, mask=None, nsamples=None, header=None, unit=None, dtype=numpy.float64, copy=True, order='C', subok=False, ndmin=0):
+
+        # get a new Tod instance (or a subclass if subok is True)
+        result = FitsArray(data, header, unit, dtype, copy, order, True, ndmin)
+        if not subok and result.__class__ is not cls or not issubclass(result.__class__, cls):
             result = result.view(cls)
-        if mask is None and isinstance(data, Tod):
-            mask = data.mask
+
+        # mask attribute
         if mask is not None:
-            mask = numpy.array(mask, dtype='int8', copy=copy, order=order)
-        result.mask = mask
-        shape = _validate_sliced_shape(result.shape, nsamples)
-        if numpy.rank(result) == 0:
-            result.nsamples = None
+            result.mask = numpy.asarray(mask, dtype='int8')
+        elif copy and hasattr(data, 'mask') and data.mask is not None and data.mask is not numpy.ma.nomask:
+            result.mask = data.mask.copy()
+
+        # nsamples attribute
+        if nsamples is None:
             return result
-        if _my_isscalar(shape[-1]):
-            result.nsamples = (shape[-1],)
+        junk = _validate_sliced_shape(result.shape, nsamples)
+        if _my_isscalar(nsamples):
+            result.nsamples = (int(nsamples),)
         else:
-            result.nsamples = shape[-1]
+            result.nsamples = tuple(nsamples)
+
         return result
 
     def __array_finalize__(self, obj):
         FitsArray.__array_finalize__(self, obj)
         if obj is None: return
-        self.mask = getattr(obj, 'mask', None)
+        if hasattr(obj, 'mask') and obj.mask is not numpy.ma.nomask:
+            self.mask = obj.mask
+        else:
+            self.mask = None
         self.nsamples = getattr(obj, 'nsamples', (obj.shape[-1],) if numpy.rank(obj) > 0 else None)
 
     def __array_wrap__(self, obj, context=None):
@@ -1753,7 +1724,7 @@ class Tod(FitsArray):
         return Tod(numpy.zeros(shape_flat, dtype, order), mask, shape[-1], header, unit, copy=False)
    
     def copy(self, order='C'):
-        return Tod(self, order=order, copy=True)
+        return Tod(self, copy=True, order=order)
 
     def imshow(self, num=None, axis=True, title=None):
         """A simple graphical display function for the Tod class"""
@@ -1821,7 +1792,7 @@ def mapper_naive(tod, model, unit=None):
         return mymap
 
     newunit = Quantity(1., unit)
-    newunit_si = newunit.unit_si._unit
+    newunit_si = newunit.SI._unit
     if 'pixel' in newunit_si and newunit_si['pixel'] == -1:
         h = mymap.header
         try:
@@ -1856,7 +1827,7 @@ def mapper_rls(tod, model, weight=None, hyper=1.0, tol=1.e-6, maxiter=300, M=Non
     if hyper != 0:
         dX = DiscreteDifference(axis=1)
         dY = DiscreteDifference(axis=0)
-        C  += hyper * ( dX.T * dX + dY.T * dY )
+        C += hyper * ( dX.T * dX + dY.T * dY )
 
     if M is None:
         M = Identity('Preconditioner')
@@ -1875,8 +1846,11 @@ def mapper_rls(tod, model, weight=None, hyper=1.0, tol=1.e-6, maxiter=300, M=Non
     map_naive = mapper_naive(tod, model)
     x0 = operator.packing(map_naive)
     x0[numpy.isnan(x0)] = 0.
-    #x0[:] = 0
-    #x0 = numpy.zeros(operator.shape[1])
+
+    if M0 is True:
+        M0 = operator.packing(1./numpy.maximum(0.01,map_naive.coverage))
+        M0[numpy.isfinite(M0) == False] = 1./0.01
+        M0 = scipy.sparse.dia_matrix((M0,0), shape = 2*(M0.size,))
 
     if verbose:
         def callback(x):
@@ -1895,9 +1869,7 @@ def mapper_rls(tod, model, weight=None, hyper=1.0, tol=1.e-6, maxiter=300, M=Non
     solution, nit = scipy.sparse.linalg.cgs(operator, rhs, x0=x0, tol=tol, maxiter=maxiter, callback=callback, M=M0)
     output = Map(operator.unpacking(solution))
     output.time = time.time() - time0
-    ones = tod.copy()
-    ones[:] = 1
-    output.coverage = model.T(ones)
+    output.coverage = map_naive.coverage
 
     return output
 
@@ -1975,10 +1947,107 @@ def filter_polynomial(tod, degree):
     return filtered
 
 
+
 #-------------------------------------------------------------------------------
 #
 # Miscellaneous routines
 #
+#-------------------------------------------------------------------------------
+
+
+def create_fitsheader(axisn, crval=(0.,0.), crpix=None, ctype=('RA---TAN','DEC--TAN'), cunit='deg', cd=None, cdelt=None):
+    """
+    Return a FITS header
+
+    Parameters
+    ----------
+    axisn : array_like of size naxis, the number of dimensions
+        An array containing the dimensions along the axes. For a map, 
+        the first value is the dimension along X and the second along Y
+        according to the FITS convention Note that it is the reversed 
+        order of the numpy convention.
+    crval : 2 element array, optional
+        Reference pixel values (FITS convention)
+    crpix : 2 element array, optional
+        Reference pixel (FITS convention)
+    ctype : 2 element string array, optional
+        Projection types
+    cunit : string or 2 element string array
+        Units of the CD matrix (default is degrees/pixel)
+    cd : 2 x 2 array
+        Astrometry parameters
+            CD1_1 CD1_2
+            CD2_1 CD2_2
+    cdelt : 2 element array
+        Physical increment at the reference pixel
+
+    Examples
+    --------
+    >>> map = Map.ones((10,100), unit='Jy/pixel')
+    >>> header = create_fitsheader(reversed(map.shape), cd=[[-1,0],[0,1]])
+    """
+    if _my_isscalar(axisn):
+        axisn = (axisn,)
+    else:
+        axisn = tuple(axisn)
+
+    naxis = len(axisn)
+    header = pyfits.Header()
+    header.update('simple', True)
+    header.update('bitpix', -64)
+    header.update('extend', True)
+    header.update('naxis', naxis)
+    for dim in range(naxis):
+        header.update('naxis'+str(dim+1), axisn[naxis-dim-1])
+
+    if cd is not None:
+        cd = numpy.asarray(cd, dtype=numpy.float64)
+        if cd.shape != (2,2):
+            raise ValueError('The CD matrix is not a 2x2 matrix.')
+    else:
+        if cdelt is None:
+            return header
+        if _my_isscalar(cdelt):
+            cdelt = (-cdelt, cdelt)
+        cd = numpy.array(((cdelt[0], 0), (0,cdelt[1])))
+
+    crval = numpy.asarray(crval, dtype=numpy.float64)
+    if crval.size != 2:
+        raise ValueError('CRVAL does not have two elements.')
+
+    if crpix is None:
+        crpix = numpy.array(axisn) / 2 + 1
+    else:
+        crpix = numpy.asarray(crpix, dtype=numpy.float64)
+    if crpix.size != 2:
+        raise ValueError('CRPIX does not have two elements.')
+
+    ctype = numpy.asarray(ctype, dtype=numpy.string_)
+    if ctype.size != 2:
+        raise ValueError('CTYPE does not have two elements.')
+
+    cunit = numpy.asarray(cunit, dtype=numpy.string_)
+    if _my_isscalar(cunit):
+        cunit = (cunit, cunit)
+    if cunit.size != 2:
+        raise ValueError('CUNIT does not have two elements.')
+
+    header.update('crval1', crval[0])
+    header.update('crval2', crval[1])
+    header.update('crpix1', crpix[0])
+    header.update('crpix2', crpix[1])
+    header.update('cd1_1' , cd[0,0])
+    header.update('cd2_1' , cd[1,0])
+    header.update('cd1_2' , cd[0,1])
+    header.update('cd2_2' , cd[1,1])
+    header.update('ctype1', ctype[0])
+    header.update('ctype2', ctype[1])
+    header.update('cunit1', cunit[0])
+    header.update('cunit2', cunit[1])
+
+    return header
+
+
 #-------------------------------------------------------------------------------
 
 

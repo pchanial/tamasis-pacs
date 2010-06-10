@@ -56,4 +56,45 @@ tod2 = tod + 1
 if tod2.shape != (10,8): raise TestFailure('Addition')
 if tod2.nsamples != (3,5): raise TestFailure('Addition2')
 
+a = Tod([10,20])
+if a.dtype != numpy.float64: raise TestFailure()
+
+a = Tod([10,20], mask=[True,False])
+b = Tod(a, copy=True)
+if id(a.mask) == id(b.mask): raise TestFailure()
+
+b = Tod(a, copy=False)
+if id(a) != id(b): raise TestFailure()
+
+b = Tod(a, dtype='float32', copy=False)
+if id(a) == id(b): raise TestFailure()
+if id(a.mask) != id(b.mask): raise TestFailure()
+
+header = create_fitsheader([20,10])
+a = FitsArray([10,20], header=header, unit='m')
+b = Tod(a)
+if id(a.header) == id(b.header): raise TestFailure()
+if id(a.unit) != id(b.unit): raise TestFailure()
+
+b = Tod(a, copy=False)
+if id(a.header) != id(b.header): raise TestFailure()
+if id(a.unit) != id(b.unit): raise TestFailure()
+
+a = Tod([20,10], header=header, unit='m')
+b =  FitsArray(a)
+if id(a.header) == id(b.header): raise TestFailure()
+if id(a.unit) != id(b.unit): raise TestFailure()
+
+b = FitsArray(a, copy=False)
+if id(a.header) != id(b.header): raise TestFailure()
+if id(a.unit) != id(b.unit): raise TestFailure()
+
+b =  FitsArray(a, subok=True)
+if id(a) == id(b): raise TestFailure()
+if id(a.header) == id(b.header): raise TestFailure()
+if id(a.unit) != id(b.unit): raise TestFailure()
+
+b = FitsArray(a, copy=False, subok=True)
+if id(a) != id(b): raise TestFailure()
+
 print 'OK.'

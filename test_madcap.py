@@ -26,12 +26,12 @@ packing = Unpacking(observation.mapmask).T
 
 M = 1 / map_naive.coverage
 M[numpy.where(numpy.isfinite(M) == False)] = numpy.max(M[numpy.where(numpy.isfinite(M))])
-map_rlsw1 = mapper_rls(tod, projection*packing, padding.T * fft.T * invNtt * fft * padding, hyper=0, tol=1.e-2, M=M)
+map_rlsw1 = mapper_rls(tod, projection*packing, padding.T * fft.T * invNtt * fft * padding, hyper=0, tol=1.e-4, M=M)
 print map_rlsw1.time
 
 M = packing(1/map_naive.coverage)
 M[numpy.where(numpy.isfinite(M) == False)] = numpy.max(M[numpy.where(numpy.isfinite(M))])
 M = M.reshape(numpy.product(M.shape))
-map_rlsw2 = packing.T(mapper_rls(tod, projection, padding.T * fft.T * invNtt * fft * padding, hyper=0, tol=1.e-2, M=M))
+map_rlsw2 = packing.T(mapper_rls(tod, projection, padding.T * fft.T * invNtt * fft * padding, hyper=0, tol=1.e-4, M=M))
 
 print 'OK.'
