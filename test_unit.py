@@ -17,9 +17,9 @@ q = Quantity(1.)
 q2 = Quantity(1.)
 a = numpy.array(1.)
 i = 1
-test_unit_add(q, q2, 2, {})
-test_unit_add(q, a, 2, {})
-test_unit_add(q, i, 2, {})
+test_unit_add(q, q2, 2, None)
+test_unit_add(q, a, 2, None)
+test_unit_add(q, i, 2, None)
 
 q = Quantity(1., 'm')
 test_unit_add(q, q2, 2, {'m':1.0})
@@ -41,8 +41,8 @@ test_unit_add(q, q2, 1.001, {'km':1.0})
 q = Quantity(1.)
 a = numpy.array(1.)
 i = 1
-test_unit_add(a, q, 2, {})
-test_unit_add(i, q, 2, {})
+test_unit_add(a, q, 2, None)
+test_unit_add(i, q, 2, None)
 
 q = Quantity(1., 'm')
 q2 = Quantity(1.)
@@ -67,9 +67,9 @@ q = Quantity(1.)
 q2 = Quantity(1.)
 a = numpy.array(1.)
 i = 1
-test_unit_sub(q, q2, 0, {})
-test_unit_sub(q, a, 0, {})
-test_unit_sub(q, i, 0, {})
+test_unit_sub(q, q2, 0, None)
+test_unit_sub(q, a, 0, None)
+test_unit_sub(q, i, 0, None)
 
 q = Quantity(1., 'm')
 test_unit_sub(q, q2, 0, {'m':1.0})
@@ -91,8 +91,8 @@ test_unit_sub(q, q2, 0.999, {'km':1.0})
 q = Quantity(1.)
 a = numpy.array(1.)
 i = 1
-test_unit_sub(a, q, 0, {})
-test_unit_sub(i, q, 0, {})
+test_unit_sub(a, q, 0, None)
+test_unit_sub(i, q, 0, None)
 
 q = Quantity(1., 'm')
 q2 = Quantity(1.)
@@ -117,5 +117,49 @@ try:
     a.unit = 'kloug^2'
 except UnitError:
     pass
+
+# test __array_prepare__
+if Quantity(10, 'm') >  Quantity(1,'km')  : raise TestFailure()
+if Quantity(10, 'm') >= Quantity(1,'km')  : raise TestFailure()
+if Quantity(1, 'km') <  Quantity(10,'m')  : raise TestFailure()
+if Quantity(1, 'km') <= Quantity(10,'m')  : raise TestFailure()
+if Quantity(1, 'km') == Quantity(1,'m')   : raise TestFailure()
+if Quantity(1, 'km') != Quantity(1000,'m'): raise TestFailure()
+if numpy.maximum(Quantity(10,'m'),Quantity(1,'km')) != 1000: raise TestFailure()
+if numpy.minimum(Quantity(10,'m'),Quantity(1,'km')) != 10  : raise TestFailure()
+
+# test constructor
+a = numpy.array([10,20])
+b = Quantity(a)
+if a.dtype == b.dtype: raise TestFailure()
+
+a = Quantity([10.],'m')
+b = Quantity(a)
+if a._unit != b._unit: raise TestFailure()
+if id(a) == id(b): raise TestFailure()
+if id(a._unit) != id(b._unit): raise TestFailure()
+
+b = Quantity(a, copy=False)
+b[0]=1
+if a[0] != b[0]: raise TestFailure()
+
+
+a = Tod([10,10], nsamples=(1,1), unit='m')
+b = Quantity(a)
+if a.unit != b.unit: raise TestFailure()
+
+b = Quantity(a, copy=False)
+b[0] = 0
+if a[0] != b[0]: raise TestFailure()
+if id(a) == id(b): raise TestFailure()
+
+a = Tod([10.,10.], nsamples=(1,1))
+b = Quantity(a, subok=True)
+if a.__class__ is not b.__class__: TestFailure()
+if a.nsamples is not b.nsamples: TestFailure()
+
+a = Tod([10.,10.], nsamples=(1,1))
+b = Quantity(a, subok=True, copy=False)
+if id(a) != id(b): TestFailure()
 
 print 'OK.'

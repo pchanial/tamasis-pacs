@@ -1,25 +1,25 @@
 import numpy
 import re
-re_unit = re.compile(r' *([/*])? *([a-zA-Z]+|\?)(\^-?[0-9]+(\.[0-9]*)?)? *')
+
+__all__ = ['UnitError', 'Quantity', 'DerivedUnit']
+
+_re_unit = re.compile(r' *([/*])? *([a-zA-Z]+|\?)(\^-?[0-9]+(\.[0-9]*)?)? *')
 
 class UnitError(Exception): pass
 
-def extract_unit(string):
+def _extract_unit(string):
 
-    if string is None:
-        return {}
-
-    if not isinstance(string, str) and not isinstance(string, dict):
-        raise TypeError('Invalid unit type. Valid types are string or a dictionary.')
-
-    if isinstance(string, dict):
+    if string is None or isinstance(string, dict):
         return string
 
+    if not isinstance(string, str):
+        raise TypeError('Invalid unit type. Valid types are string or dictionary.')
+
     string = string.strip()
-    result = {}
+    result = None
     start = 0
     while start < len(string):
-        match = re_unit.match(string, start)
+        match = _re_unit.match(string, start)
         if match is None:
             raise ValueError("Unit '"+string[start:]+"' cannot be understood.")
         op = match.group(1)
@@ -31,166 +31,208 @@ def extract_unit(string):
             exp = float(exp[1:])
         if op == '/':
             exp = -exp
-        multiply_unit(result, {u:exp})
+        result = _multiply_unit_inplace(result, u, exp)
         start = start + len(match.group(0))
     return result
 
-def normalize_quantity(value):
-    if len(value._unit) == 0:
+def _multiply_unit_inplace(unit, key, val):
+    """
+    Add one unit.
+
+    Unlike _divide_unit, _multiply_unit and _power_unit,
+    the operation is done in place, to speed up main
+    caller _extract_unit.
+    """
+    if unit is None:
+        return { key : val }
+    if unit.has_key(key):
+        if unit[key] == -val:
+            del unit[key]
+        else:
+            unit[key] += val
+    else:
+        unit[key] = val
+    return unit
+
+def _normalize_quantity(value):
+    if value._unit is None:
         return value
     result = Quantity(value, '')
     for key, val in value._unit.iteritems():
         if (key,val) in DerivedUnit._units:
-            result *= normalize_quantity(DerivedUnit._units[(key,val)])
+            result *= _normalize_quantity(DerivedUnit._units[(key,val)])
         elif (key,-val) in DerivedUnit._units:
-            result /= normalize_quantity(DerivedUnit._units[(key,-val)])
+            result /= _normalize_quantity(DerivedUnit._units[(key,-val)])
         elif key in DerivedUnit._units:
             if val == 1.:
-                result *= normalize_quantity(DerivedUnit._units[key])
+                result *= _normalize_quantity(DerivedUnit._units[key])
             elif val == -1.:
-                result /= normalize_quantity(DerivedUnit._units[key])
+                result /= _normalize_quantity(DerivedUnit._units[key])
             else:
-                result *= normalize_quantity(DerivedUnit._units[key]**val)
+                result *= _normalize_quantity(DerivedUnit._units[key]**val)
         else:
-            if key in result._unit:
+            if result._unit is None:
+                result._unit = { key: val }
+            elif key in result._unit:
                 result._unit[key] += val
             else:
                 result._unit[key] = val
-    return result
+    return result    
 
-def add_unit(unit1, unit2):
-    if len(unit1) == 0:
-        return unit2
-    if len(unit2) == 0:
-        return unit1
-    if unit1 == unit2:
-        return unit1
-    
-
-    
-def power_unit(unit, power):
-    if len(unit) == 0 or power == 0:
-        return {}
+def _power_unit(unit, power):
+    if unit is None or power == 0:
+        return None
     result = unit.copy()
     for key in unit:
         result[key] *= power
     return result
 
-def multiply_unit(unit1, unit2):
-    if len(unit2) == 0:
-        return
+def _multiply_unit(unit1, unit2):
+    """ Multiplication of units. 
+    Unlike _power_unit, _divide_unit, the operation is done in place
+    of unit1, to speed up main caller _extract_unit.
+    """
+    if unit2 is None:
+        return unit1
+    if unit1 is None:
+        return unit2
+    unit = unit1.copy()
     for key, val in unit2.iteritems():
-        if unit1.has_key(key):
-            if unit1[key] == -val:
-                del unit1[key]
+        if unit.has_key(key):
+            if unit[key] == -val:
+                del unit[key]
             else:
-                unit1[key] += val
+                unit[key] += val
         else:
-            unit1[key] = val
+            unit[key] = val
+    return unit
 
-def divide_unit(unit1, unit2):
-    if len(unit2) == 0:
-        return
+def _divide_unit(unit1, unit2):
+    """ Division of units. """
+    if unit2 is None:
+        return unit1
+    if unit1 is None:
+        return _power_unit(unit2, -1)
+    unit = unit1.copy()
     for key, val in unit2.iteritems():
-        if unit1.has_key(key):
-            if unit1[key] == val:
-                del unit1[key]
+        if unit.has_key(key):
+            if unit[key] == val:
+                del unit[key]
             else:
-                unit1[key] -= val
+                unit[key] -= val
         else:
-            unit1[key] = -val
+            unit[key] = -val
+    return unit
 
-        
+def _get_units(units):
+    return map(lambda q: getattr(q, '_unit', None), units)
+
 class Quantity(numpy.ndarray):
+    """
+    Represent a quantity, i.e. a scalar or array associated with a unit.
+    """
 
     __slots__ = ('_unit',)
-    def __new__(cls, data, unit=None, dtype=numpy.float64, order='C', copy=True):
-        from copy import copy as cp
-        result = numpy.array(data, dtype=dtype, order=order, copy=copy, subok=True)
-        if unit is not None:
-            unit = extract_unit(unit)
-        if not isinstance(result, Quantity):
+
+    def __new__(cls, data, unit=None, dtype=numpy.float64, copy=True, order='C', subok=False, ndmin=0):
+
+        # get a new Quantity instance (or a subclass if subok is True)
+        result = numpy.array(data, dtype, copy=copy, order=order, subok=True, ndmin=ndmin)
+        if not subok and result.__class__ is not cls or not issubclass(result.__class__, cls):
             result = result.view(cls)
-            if unit is not None:
-                result._unit = unit
-        else:
-            result._unit = data._unit.copy() if copy else data._unit
-            if unit is not None:
-                result.unit = unit
+
+        # copy unit attribute
+        if unit is not None:
+            result._unit = _extract_unit(unit)
+            
         return result
 
     def __array_finalize__(self, obj):
         if obj is None: return
-        self._unit = getattr(obj, '_unit', {})
+        self._unit = getattr(obj, '_unit', None)
 
-    def __array_wrap__(self, obj, context=None):
+    @property
+    def __array_priority__(self):
+        return 1. if self._unit is None else 1.5
 
-        result = numpy.ndarray.__array_wrap__(self, obj, context).view(type(self))
+    def __array_prepare__(self, array, context=None):
+        """
+        Homogenise ufunc's argument units and cast array to the class of the
+        argument of highest __array_priority__
+        """
+
+        if self is not array:
+            array = array.view(type(self))
+        if context is None or self._unit is None:
+            return array
+       
+        ufunc = context[0]
+        if ufunc in (numpy.add, numpy.subtract, numpy.maximum, numpy.minimum,
+                     numpy.greater, numpy.greater_equal, numpy.less,
+                     numpy.less_equal, numpy.equal, numpy.not_equal):
+            for arg in context[1]:
+                u = getattr(arg, '_unit', None)
+                if u is None or u == self._unit:
+                    continue
+
+                print "Warning: applying function '" + str(ufunc) + "' to Quant\
+ities of different units may have changed operands to common unit '" + \
+                    _strunit(self._unit) + "'."
+                arg.unit = self._unit
+
+        return array
+
+    def __array_wrap__(self, array, context=None):
+        """
+        Set unit of the result of a ufunc.
+
+        Since different quantities can share their _unit attribute, a
+        a change in unit of the ufunc result must be preceded by a copy
+        of the argument unit.
+        Not all ufuncs are currently handled. For an exhaustive list of
+        ufuncs, see http://docs.scipy.org/doc/numpy/reference/ufuncs.html
+        """
 
         if context is None:
-            return result
-        
+            return array
+
         ufunc = context[0]
-        if ufunc in [numpy.add, numpy.subtract]:
-            pass
+        args = context[1]
+
+        if ufunc in (numpy.add, numpy.subtract, numpy.maximum, numpy.minimum,
+                     numpy.greater, numpy.greater_equal, numpy.less,
+                     numpy.less_equal, numpy.equal, numpy.not_equal):
+            if self is not array:
+                # self has highest __array_priority__
+                array._unit = self._unit
+            else:
+                # inplace operation
+                if array._unit is None:
+                    array._unit = args[1]._unit
+            return array
         elif ufunc is numpy.reciprocal:
-            result._unit = power_unit(context[1][0]._unit, -1)
+            array._unit = _power_unit(args[0]._unit, -1)
         elif ufunc is numpy.sqrt:
-            result._unit = power_unit(context[1][0]._unit, 0.5)
+            array._unit = _power_unit(args[0]._unit, 0.5)
         elif ufunc in [numpy.square, numpy.var]:
-            result._unit = power_unit(context[1][0]._unit, 2)
+            array._unit = _power_unit(args[0]._unit, 2)
         elif ufunc is numpy.power:
-            result._unit = power_unit(context[1][0]._unit, context[1][1])
+            array._unit = _power_unit(args[0]._unit, args[1])
         elif ufunc in [numpy.multiply, numpy.vdot]:
-            result._unit = getattr(context[1][0], '_unit', {}).copy()
-            multiply_unit(result._unit, getattr(context[1][1], '_unit', {}))
+            units = _get_units(args)
+            array._unit = _multiply_unit(units[0], units[1])
         elif ufunc is numpy.divide:
-            result._unit = getattr(context[1][0], '_unit', {}).copy()
-            divide_unit(result._unit, getattr(context[1][1], '_unit', {}))
-        elif ufunc in (numpy.arccos, numpy.arccosh, numpy.arcsin, numpy.arcsinh, numpy.arctan, numpy.arctanh, numpy.arctan2, numpy.cosh, numpy.sinh, numpy.tanh, numpy.cos, numpy.sin, numpy.tan, numpy.log, numpy.log2, numpy.log10, numpy.exp, numpy.exp2):
-            result._unit = {}
+            units = _get_units(args)
+            array._unit = _divide_unit(units[0], units[1])
+        elif ufunc in (numpy.arccos, numpy.arccosh, numpy.arcsin, numpy.arcsinh, numpy.arctan, numpy.arctanh, numpy.arctan2, numpy.cosh, numpy.sinh, numpy.tanh, numpy.cos, numpy.sin, numpy.tan, numpy.log, numpy.log2, numpy.log10, numpy.exp, numpy.exp2, numpy.iscomplex, numpy.isfinite, numpy.isinf, numpy.isnan, numpy.isreal):
+            array._unit = None
+        elif ufunc not in (numpy.abs, numpy.negative ):
+            print 'Quantity: unhandled ufunc ', ufunc, 'with', len(args), 'args'
+            array._unit = None
         else:
-            result._unit = context[1][0]._unit
+            array._unit = self._unit
             
-        return result
-
-    def __add__(self, other):
-        if not isinstance(other, Quantity) or len(other._unit) == 0 or self._unit == other._unit:
-            return super(Quantity, self).__add__(other)
-
-        if len(self._unit) == 0:
-            result = super(Quantity, self).__add__(other)
-            result._unit = other._unit
-            return result
-        
-        q1 = Quantity(1., self._unit).unit_si
-        q2 = Quantity(1., other._unit).unit_si
-        if q1._unit != q2._unit:
-            raise UnitError("Units '"+self.unit+"' and '"+other.unit+"' are incompatible.")
-
-        return super(Quantity, self).__add__(other.view(numpy.ndarray) * (numpy.asscalar(q2) / numpy.asscalar(q1)))
-
-    def __radd__(self, other):
-        return super(Quantity, self).__add__(other)
-
-    def __sub__(self, other):
-        if not isinstance(other, Quantity) or len(other._unit) == 0 or self._unit == other._unit:
-            return super(Quantity, self).__sub__(other)
-
-        if len(self._unit) == 0:
-            result = super(Quantity, self).__sub__(other)
-            result._unit = other._unit
-            return result
-        
-        q1 = Quantity(1., self._unit).unit_si
-        q2 = Quantity(1., other._unit).unit_si
-        if q1._unit != q2._unit:
-            raise UnitError("Units '"+str(self.unit)+"' and '"+str(other.unit)+"' are incompatible.")
-
-        return super(Quantity, self).__sub__(other.view(numpy.ndarray) * (numpy.asscalar(q2) / numpy.asscalar(q1)))
-
-    def __rsub__(self, other):
-        return -super(Quantity, self).__sub__(other)
+        return array
 
     def __getitem__(self, key):
         item = super(Quantity, self).__getitem__(key)
@@ -200,76 +242,75 @@ class Quantity(numpy.ndarray):
 
     @property
     def unit(self):
-        return self._strunit(self._unit)
+        return _strunit(self._unit)
 
     @unit.setter
     def unit(self, unit):
         
-        newunit = extract_unit(unit)
-        if len(self._unit) == 0 or len(newunit) == 0:
+        newunit = _extract_unit(unit)
+        if self._unit is None or newunit is None:
             self._unit = newunit
             return
 
         q1 = Quantity(1., self._unit).unit_si
         q2 = Quantity(1., newunit).unit_si
         if q1._unit != q2._unit:
-            raise UnitError("Units '"+self.unit+"' and '"+self._strunit(newunit)+"' are incompatible.")
+            raise UnitError("Units '"+self.unit+"' and '" + _strunit(newunit)+"' are incompatible.")
         numpy.ndarray.__imul__(self.view(numpy.ndarray), numpy.asscalar(q1) / numpy.asscalar(q2))
         self._unit = newunit
 
     @property
     def unit_si(self):
-        return normalize_quantity(Quantity(1., self._unit))
+        return _normalize_quantity(Quantity(1., self._unit))
 
     def __repr__(self):
-        return self.__class__.__name__+'(' + str(numpy.array(self,copy=False)) + ", '" + self._strunit(self._unit) + "')"
+        return self.__class__.__name__+'(' + str(numpy.array(self,copy=False)) + ", '" + _strunit(self._unit) + "')"
 
     def __str__(self):
         result = super(Quantity,self).__str__()
-        if len(self._unit) == 0:
+        if self._unit is None:
             return result
-        return result + ' ' + self._strunit(self._unit)
+        return result + ' ' + _strunit(self._unit)
 
-    @staticmethod
-    def _strunit(unit):
-        if len(unit) == 0:
-            return ''
-        result = ''
-        has_pos = False
+def _strunit(unit):
+    if unit is None:
+        return ''
+    result = ''
+    has_pos = False
 
-        if unit.has_key('?'):
-            result +=' ?'
+    if unit.has_key('?'):
+        result +=' ?'
 
-        for key, val in unit.iteritems():
-            if val >= 0 or key == '?':
-                has_pos = True
-                break
+    for key, val in unit.iteritems():
+        if val >= 0 or key == '?':
+            has_pos = True
+            break
 
-        for key, val in sorted(unit.iteritems()):
-            if val < 0 and has_pos or key == '?':
-                continue
-            result += ' ' + key
-            if val != 1:
-                ival = int(val)
-                if abs(val-ival) <= 1e-7 * abs(val):
-                    val = ival
-                result += '^' + str(val)
+    for key, val in sorted(unit.iteritems()):
+        if val < 0 and has_pos or key == '?':
+            continue
+        result += ' ' + key
+        if val != 1:
+            ival = int(val)
+            if abs(val-ival) <= 1e-7 * abs(val):
+                val = ival
+            result += '^' + str(val)
 
-        if not has_pos:
-            return result[1:]
-
-        for key, val in sorted(unit.iteritems()):
-            if val >= 0 or key == '?':
-                continue
-            val = -val
-            result += ' / ' + key
-            if val != 1:
-                ival = int(val)
-                if abs(val-ival) <= 1e-7 * abs(val):
-                    val = ival
-                result += '^' + str(val)
-
+    if not has_pos:
         return result[1:]
+
+    for key, val in sorted(unit.iteritems()):
+        if val >= 0 or key == '?':
+            continue
+        val = -val
+        result += ' / ' + key
+        if val != 1:
+            ival = int(val)
+            if abs(val-ival) <= 1e-7 * abs(val):
+                val = ival
+            result += '^' + str(val)
+
+    return result[1:]
 
 
 class DerivedUnit(object):
