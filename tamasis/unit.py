@@ -317,6 +317,9 @@ ities of different units may have changed operands to common unit '" + \
         ufuncs, see http://docs.scipy.org/doc/numpy/reference/ufuncs.html
         """
 
+        if numpy.__version__ < '1.4.1' and self is not array:
+            array = array.view(type(self))
+
         if context is None:
             return array
 
