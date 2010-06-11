@@ -1,7 +1,7 @@
 import numpy
-from   tamasis import *
 import pyfits
-from   scipy.sparse import dia_matrix
+
+from tamasis import *
 
 observation = MadMap1Observation(tamasis_dir+'tests/madmap1/todSpirePsw_be', tamasis_dir+'tests/madmap1/invnttSpirePsw_be', 
                                  tamasis_dir+'tests/madmap1/madmapSpirePsw.fits[coverage]', 'big_endian', 135, missing_value=numpy.nan)

@@ -1,5 +1,4 @@
 from tamasis import *
-from copy import copy
 import numpy
 import scipy
 from scipy.sparse import dia_matrix

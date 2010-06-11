@@ -247,32 +247,28 @@ class Quantity(numpy.ndarray):
             
         return result
 
-    def mean(self, axis=None, dtype=None, out=None):
-        result = super(self.__class__, self).mean(axis, dtype, out)
-        if numpy.rank(result) == 0:
-            result = Quantity(result, self._unit)
-        return result
-    mean.__doc__ = numpy.ndarray.mean.__doc__
+    def min(self, axis=None, out=None):
+        return _wrap_func(numpy.min, self, self._unit, axis, out)
+    min.__doc__ = numpy.ndarray.min.__doc__
+
+    def max(self, axis=None, out=None):
+        return _wrap_func(numpy.max, self, self._unit, axis, out)
+    max.__doc__ = numpy.ndarray.max.__doc__
 
     def sum(self, axis=None, dtype=None, out=None):
-        result = super(self.__class__, self).sum(axis, dtype, out)
-        if numpy.rank(result) == 0:
-            result = Quantity(result, self._unit)
-        return result
+        return _wrap_func(numpy.sum, self, self._unit, axis, dtype, out)
     sum.__doc__ = numpy.ndarray.sum.__doc__
 
+    def mean(self, axis=None, dtype=None, out=None):
+        return _wrap_func(numpy.mean, self, self._unit, axis, dtype, out)
+    mean.__doc__ = numpy.ndarray.mean.__doc__
+
     def std(self, axis=None, dtype=None, out=None, ddof=0):
-        result = super(self.__class__, self).std(axis, dtype, out, ddof)
-        if numpy.rank(result) == 0:
-            result._unit = self._unit
-        return result
+        return _wrap_func(numpy.std, self, self._unit, axis, dtype, out)
     std.__doc__ = numpy.ndarray.std.__doc__
 
     def var(self, axis=None, dtype=None, out=None, ddof=0):
-        result = super(self.__class__, self).var(axis, dtype, out, ddof)
-        if numpy.rank(result) == 0:
-            result._unit = _power_unit(self._unit, 2)
-        return result
+        return _wrap_func(numpy.var, self, _power_unit(self._unit,2), axis, dtype, out)
     var.__doc__ = numpy.ndarray.var.__doc__
 
     def __array_finalize__(self, obj):
@@ -369,6 +365,10 @@ ities of different units may have changed operands to common unit '" + \
                        numpy.sinh, numpy.tanh, numpy.cos, numpy.sin, numpy.tan,
                        numpy.log, numpy.log2, numpy.log10, numpy.exp, 
                        numpy.exp2):
+            array._unit = None
+
+        elif ufunc in (numpy.bitwise_or, numpy.invert, numpy.logical_and,
+                       numpy.logical_not, numpy.logical_or, numpy.logical_xor):
             array._unit = None
 
         elif ufunc not in (numpy.abs, numpy.negative ):
@@ -541,6 +541,12 @@ class DerivedUnits(object):
         >>> DerivedUnits.delete('mynewunit')
         """
         del DerivedUnits.table[name]
+
+def _wrap_func(func, array, unit, *args):
+    result = func(numpy.asarray(array), *args)
+    if numpy.rank(result) == 0:
+        result = Quantity(result, unit)
+    return result
 
 def _grab_doc(doc, func):
     doc = doc.replace(func + '(shape, ', func + '(shape, unit=None, ')

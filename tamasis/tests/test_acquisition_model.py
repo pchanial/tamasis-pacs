@@ -1,6 +1,7 @@
 import numpy
-import scipy
-from   tamasis import *
+import scipy.sparse.linalg
+
+from tamasis import *
 
 class TestFailure(Exception): pass
 

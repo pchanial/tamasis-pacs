@@ -1095,10 +1095,8 @@ contains
             ! compression factor
             write (OUTPUT_UNIT,'(a,i0)') '      Compression factor: ', this%slice(islice)%compression_factor
 
-            ! compression factor
-            if (this%unit /= 'Jy') then
-                write (OUTPUT_UNIT,'(a)') '      Unit: ' // this%slice(islice)%unit
-            end if
+            ! unit
+            write (OUTPUT_UNIT,'(a)') '      Unit: ' // trim(this%slice(islice)%unit)
 
             ! print maskarray information
             if (this%maskarray_policy%off_target) then

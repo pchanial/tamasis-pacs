@@ -6,14 +6,8 @@ class TestFailure(Exception): pass
 tod = Tod((2,))
 tod = Tod([2])
 tod = Tod(numpy.array([2]))
-try:
-    tod = Tod(2)
-except ValueError:
-    pass
-try:
-    tod = Tod(numpy.array(2))
-except ValueError:
-    pass
+tod = Tod(2)
+tod = Tod(numpy.array(2))
 tod = Tod((2,), nsamples=1)
 tod = Tod([2], nsamples=1)
 tod = Tod(numpy.array([2]), nsamples=1)
@@ -28,7 +22,7 @@ tod = Tod.empty((10,(3,5)), nsamples=(3,5))
 if tod.shape != (10,8): raise TestFailure('Tod.empty2')
 try:
     tod = Tod.empty((10,(3,5)), nsamples=(3,4))
-except ValidationError:
+except ValueError:
     pass
 if tod.shape != (10,8): raise TestFailure('Tod.empty3')
 
@@ -38,7 +32,7 @@ tod = Tod.zeros((10,(3,5)), nsamples=(3,5))
 if tod.shape != (10,8): raise TestFailure('Tod.zeros2')
 try:
     tod = Tod.zeros((10,(3,5)), nsamples=(3,4))
-except ValidationError:
+except ValueError:
     pass
 if tod.shape != (10,8): raise TestFailure('Tod.zeros3')
 
@@ -48,7 +42,7 @@ tod = Tod.ones((10,(3,5)), nsamples=(3,5))
 if tod.shape != (10,8): raise TestFailure('Tod.ones2')
 try:
     tod = Tod.ones((10,(3,5)), nsamples=(3,4))
-except ValidationError:
+except ValueError:
     pass
 if tod.shape != (10,8): raise TestFailure('Tod.ones3')
 

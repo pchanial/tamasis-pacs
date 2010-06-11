@@ -1,10 +1,12 @@
 import numpy
 import pyfits
-from   tamasis import *
+
+from tamasis import *
 
 class TestFailure(Exception): pass
 
-obs = PacsObservation(filename=tamasis_dir+'tests/frames_blue.fits',
+datadir = tamasis_dir + 'tests/'
+obs = PacsObservation(datadir+'frames_blue.fits',
                       fine_sampling_factor=1, 
                       keep_bad_detectors=False)
 
@@ -40,12 +42,12 @@ if any_neq(map_naive, map_naive3, 7): raise TestFailure('mapper_naive, with cust
 # test compatibility with photproject
 tod = obs.get_tod('Jy/arcsec^2')
 map_naive4 = mapper_naive(tod, projection, unit='Jy/pixel')
-hdu_ref = pyfits.open('tests/frames_blue_map_hcss_photproject.fits')[1]
+hdu_ref = pyfits.open(datadir + 'frames_blue_map_hcss_photproject.fits')[1]
 map_ref = Map(hdu_ref.data, hdu_ref.header, unit=hdu_ref.header['qtty____']+'/pixel')
 std_naive = numpy.std(map_naive4[40:60,40:60])
 std_ref = numpy.std(map_ref[40:60,40:60])
 relerror = abs(std_naive-std_ref) / std_ref
-if relerror > 0.025: raise TestFailure('Tncompatibility with HCSS photproject: '+str(relerror*100)+'%.')
+if relerror > 0.025: raise TestFailure('Tncompatibility with HCSS photproject: ' + str(relerror*100)+'%.')
 
 print 'OK.'
 

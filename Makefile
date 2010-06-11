@@ -51,7 +51,7 @@ MODULES = $(wildcard module_*.f)
 SOURCES = $(wildcard test_*.f) pacs_photproject.f
 EXECS = $(SOURCES:.f=)
 FORTRANTESTS = $(wildcard test_*.f)
-PYTHONTESTS = $(wildcard test_*.py)
+PYTHONTESTS = $(wildcard tamasis/tests/test_*.py)
 
 # apply a function to each element of a list
 map = $(foreach a,$(2),$(call $(1),$(a)))
@@ -105,7 +105,7 @@ test_wcslib2 = module_fitstools module_math module_wcslib
 test_wcslibc = module_cfitsio module_wcslibc
 
 .PHONY : all tests
-all : $(EXECS) tamasisfortran.so
+all : $(EXECS) tamasis/tamasisfortran.so
 #all : $(EXECS)
 
 # if %.mod doesn't exist, make %.o. It will create %.mod with the same 
@@ -126,9 +126,10 @@ all : $(EXECS) tamasisfortran.so
 $(MODULES:.f=.o) $(SOURCES:.f=.o):%.o: $$(addsuffix .mod,$$($$*))
 $(EXECS):%:$$(sort $$(call finddeps,$$*))
 
-tamasisfortran.so: tamasisfortran.f90 $(MODULES:.f=.o)
+tamasis/tamasisfortran.so: tamasisfortran.f90 $(MODULES:.f=.o)
 	unset LDFLAGS ; \
-	f2py --fcompiler=${FCOMPILER} --f90exec=$(FC) --f90flags="$(FFLAGS)" -DF2PY_REPORT_ON_ARRAY_COPY=1 -c $^ -m tamasisfortran $(LDFLAGS)
+	f2py --fcompiler=${FCOMPILER} --f90exec=$(FC) --f90flags="$(FFLAGS)" -DF2PY_REPORT_ON_ARRAY_COPY=1 -c $^ -m tamasisfortran $(LDFLAGS) ; \
+	mv -f tamasisfortran.so tamasis/
 # /opt/core-3.1-amd64/ifc/11.1/lib/intel64/libiomp5.a /opt/core-3.1-amd64/ifc/11.1/lib/intel64/libifport.a /opt/core-3.1-amd64/ifc/11.1/lib/intel64/libifcore.a /opt/core-3.1-amd64/ifc/11.1/lib/intel64/libimf.a /opt/core-3.1-amd64/ifc/11.1/lib/intel64/libsvml.a
 
 clean:
