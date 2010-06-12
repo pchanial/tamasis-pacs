@@ -9,7 +9,7 @@ from config import tamasis_dir
 from datatypes import *
 from unit import Quantity
 
-__all__ = [ 'PacsObservation' ]
+__all__ = [ 'PacsObservation', 'pacs_status' ]
 
 class _Pacs():
 
@@ -285,6 +285,9 @@ class PacsSimulation(_Pacs):
         return Tod(signal, mask=mask, nsamples=self.nsamples)
 
    
+#-------------------------------------------------------------------------------
+
+
 class PacsMultiplexing(AcquisitionModel):
     """
     Performs the multiplexing of the PACS subarrays. The subarray columns are read one after the
@@ -326,6 +329,54 @@ class PacsMultiplexing(AcquisitionModel):
         shapein = list(shapeout)
         shapein[1] = shapein[1] * self.fine_sampling_factor
         return tuple(shapein)
+
+
+#-------------------------------------------------------------------------------
+
+
+class pacs_status(object):
+    def __init__(self, filename):
+        self.status = pyfits.open(filename)[2].data
+
+    def __getitem__(self, key):
+        if key == 'ra':
+            return Quantity(self.status.field('RaArray'), 'deg')
+        if key == 'dec':
+            return Quantity(self.status.field('DecArray'), 'deg')
+        if key == 'pa':
+            return Quantity(self.status.field('PaArray'), 'deg')
+        if key == 'time':
+            return Quantity(self.status.field('FineTime')*1.e-6, 's')
+        if key == 'velocity':
+            ra = self['ra']
+            dec = self['dec']
+            time = self['time']
+            dra  = numpy.diff(ra)
+            ddec = numpy.diff(dec)
+            dtime = numpy.diff(time)
+            vel = numpy.sqrt((dra*numpy.cos(dec[0:-1].inunit('rad')))**2 + ddec**2) / dtime
+            vel.unit = 'arcsec/s'
+            u = vel._unit
+            vel = numpy.append(vel, vel[-1])
+            # BUG: append eats the unit...
+            vel._unit = u
+            return vel
+        return self.status.field(key)
+    
+    def __str__(self):
+        names = ['ra', 'dec', 'pa', 'time']
+        for n in self.status.names:
+            names.append(n)
+        names.insert(0, 'ra')
+        names.insert(1, 'dec')
+        names.insert(2, 'pa')
+        names.insert(3, 'time')
+        names.insert(3, 'velocity')
+        return 'PACS status: ' + str(names)
+        
+
+#-------------------------------------------------------------------------------
+
 
 def _str2fitsheader(string):
     """
