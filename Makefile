@@ -133,7 +133,8 @@ tamasis/tamasisfortran.so: tamasisfortran.f90 $(MODULES:.f=.o)
 # /opt/core-3.1-amd64/ifc/11.1/lib/intel64/libiomp5.a /opt/core-3.1-amd64/ifc/11.1/lib/intel64/libifport.a /opt/core-3.1-amd64/ifc/11.1/lib/intel64/libifcore.a /opt/core-3.1-amd64/ifc/11.1/lib/intel64/libimf.a /opt/core-3.1-amd64/ifc/11.1/lib/intel64/libsvml.a
 
 clean:
-	rm -f *.o *.mod *.so *~ $(EXECS)
+	@rm -f *.o *.mod *.so *~ $(EXECS);\
+	find . -name "*pyc" -exec rm '{}' ';'
 
 tests: tests_fortran tests_python
 
