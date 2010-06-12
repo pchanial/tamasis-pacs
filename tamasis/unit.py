@@ -238,13 +238,13 @@ class Quantity(numpy.ndarray):
 
         # get a new Quantity instance (or a subclass if subok is True)
         result = numpy.array(data, dtype, copy=copy, order=order, subok=True, ndmin=ndmin)
-        if not subok and result.__class__ is not cls or not issubclass(result.__class__, cls):
+        if not subok and type(result) is not cls or not isinstance(result, cls):
             result = result.view(cls)
 
         # copy unit attribute
         if unit is not None:
             result._unit = _extract_unit(unit)
-            
+
         return result
 
     def min(self, axis=None, out=None):
@@ -272,7 +272,9 @@ class Quantity(numpy.ndarray):
     var.__doc__ = numpy.ndarray.var.__doc__
 
     def __array_finalize__(self, obj):
-        if obj is None: return
+        # for some numpy methods (append): the result doesn't go through __new__ and
+        # obj is None in __array_finalize__
+        #if obj is None: return
         self._unit = getattr(obj, '_unit', None)
 
     @property
@@ -468,10 +470,10 @@ ities of different units may have changed operands to common unit '" + \
         return _normalize_quantity(self)
 
     def __repr__(self):
-        return self.__class__.__name__+'(' + str(numpy.array(self,copy=False)) + ", '" + _strunit(self._unit) + "')"
+        return type(self).__name__+'(' + str(numpy.asarray(self)) + ", '" + _strunit(self._unit) + "')"
 
     def __str__(self):
-        result = super(Quantity,self).__str__()
+        result = str(numpy.asarray(self))
         if self._unit is None:
             return result
         return result + ' ' + _strunit(self._unit)
