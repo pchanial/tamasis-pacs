@@ -1,5 +1,6 @@
 import matplotlib.pyplot as pyplot
 import numpy
+import os
 import pyfits
 
 from unit import Quantity
@@ -12,6 +13,25 @@ class FitsArray(Quantity):
 
     __slots__ = ('_header',)
     def __new__(cls, data, header=None, unit=None, dtype=numpy.float64, copy=True, order='C', subok=False, ndmin=0):
+
+        if type(data) is str:
+            ihdu = 0
+            while True:
+                try:
+                    hdu = pyfits.open(data)[ihdu]
+                except IndexError:
+                    raise IOError('The FITS file has no data.')
+                if hdu.data is not None:
+                    break
+                ihdu += 1
+            data = hdu.data
+            header = hdu.header
+            copy = False
+            if unit is None:
+                if header.has_key('bunit'):
+                    unit = header['bunit']
+                elif header.has_key('QTTY____'):
+                    unit = header('QTTY____') # HCSS crap
 
         # get a new FitsArray instance (or a subclass if subok is True)
         result = Quantity(data, unit, dtype, copy, order, True, ndmin)
@@ -28,7 +48,8 @@ class FitsArray(Quantity):
 
     def __array_finalize__(self, obj):
         Quantity.__array_finalize__(self, obj)
-        if obj is None: return
+        # obj might be None without __new__ being called... (ex: append)
+        #if obj is None: return
         self._header = getattr(obj, '_header', None)
 
     def __array_wrap__(self, obj, context=None):
@@ -66,9 +87,7 @@ class FitsArray(Quantity):
        
         If the same file already exist it overwrites it.
         """
-        from os.path import isfile
-        from os import remove
-  
+
         if self.header is None:
             header = create_fitsheader(reversed(self.shape))
         else:
@@ -78,9 +97,16 @@ class FitsArray(Quantity):
         if unit != '':
             header.update('BUNIT', unit)
 
-        hdu = pyfits.PrimaryHDU(self.T if self.flags.f_contiguous else self, header)
+        if hasattr(self, 'nsamples'):
+            header.update('NSAMPLES', str(self.nsamples))
+
+        if numpy.rank(self) == 0:
+            value = self.reshape((1,))
+        else:
+            value = self.T if numpy.isfortran(self) else self
+        hdu = pyfits.PrimaryHDU(value, header)
         try:
-            remove(filename)
+            os.remove(filename)
         except OSError:
             pass
         try:
@@ -108,7 +134,6 @@ class Map(FitsArray):
 
     def __array_finalize__(self, obj):
         FitsArray.__array_finalize__(self, obj)
-        if obj is None: return
 
     @staticmethod
     def empty(shape, header=None, unit=None, dtype=None, order=None):
@@ -168,9 +193,20 @@ class Tod(FitsArray):
             result.mask = data.mask.copy()
 
         # nsamples attribute
+        if type(data) is str and nsamples is None:
+            try:
+                nsamples = result.header['nsamples'][1:-1]
+                if len(nsamples) > 0:
+                    nsamples = map(lambda x: int(x), nsamples[1:-1].split(','))
+                else:
+                    result.reshape(())
+                    nsamples = ()
+            except:
+                pass
         if nsamples is None:
             return result
-        junk = validate_sliced_shape(result.shape, nsamples)
+        shape = validate_sliced_shape(result.shape, nsamples)
+        result.nsamples = shape[-1]
         if _my_isscalar(nsamples):
             result.nsamples = (int(nsamples),)
         else:
@@ -180,12 +216,16 @@ class Tod(FitsArray):
 
     def __array_finalize__(self, obj):
         FitsArray.__array_finalize__(self, obj)
-        if obj is None: return
+        # obj might be None without __new__ being called (ex: append, concatenate)
+        if obj is None:
+            self.nsamples = () if numpy.rank(self) == 0 else (self.shape[-1],)
+            self.mask = None
+            return
         if hasattr(obj, 'mask') and obj.mask is not numpy.ma.nomask:
             self.mask = obj.mask
         else:
             self.mask = None
-        self.nsamples = getattr(obj, 'nsamples', (obj.shape[-1],) if numpy.rank(obj) > 0 else None)
+        self.nsamples = getattr(obj, 'nsamples', () if numpy.rank(self) == 0 else (self.shape[-1],))
 
     def __array_wrap__(self, obj, context=None):
         result = FitsArray.__array_wrap__(self, obj, context=context).view(type(self))
@@ -284,14 +324,37 @@ def combine_sliced_shape(shape, nsamples):
 
     
 def validate_sliced_shape(shape, nsamples=None):
-    if isinstance(shape, numpy.ndarray) and len(shape.shape) == 0 or len(shape) == 0:
-        if nsamples is not None and numpy.sum(nsamples) != 1:
-            raise ValueError("The input is scalar, but nsamples is equal to '"+str(nsamples)+"'.")
-        return ()
-        
-    if nsamples is not None:
-        if numpy.sum(nsamples) != numpy.sum(shape[-1]):
-            raise ValueError("The sliced input has an incompatible number of samples '" + str(nsamples) + "' instead of '" + str(shape[-1]) + "'.")
+    # convert shape and nsamples to tuple
+    if shape is None:
+        shape = ()
+    elif _my_isscalar(shape):
+        shape = (int(shape),)
     else:
-        nsamples = shape[-1]
-    return combine_sliced_shape(shape[0:-1], nsamples)
+        shape = tuple(shape)
+    if nsamples is not None:
+        if _my_isscalar(nsamples):
+            nsamples = (int(nsamples),)
+        else:
+            nsamples = tuple(nsamples)
+    
+    if len(shape) == 0:
+        if nsamples is not None and len(nsamples) != 0:
+            raise ValueError("The input is scalar, but nsamples is equal to '"+str(nsamples)+"'.")
+        return (shape,)
+    
+    if nsamples is None:
+        if _my_isscalar(shape[-1]):
+            nsamples = (int(shape[-1]),)
+        else:
+            nsamples = tuple(shape[-1])
+    else:
+        if len(nsamples) == 0:
+            raise ValueError("The input is not scalar and is incompatible with nsamples.")
+        if numpy.any(numpy.array(nsamples) < 0):
+            raise ValueError('The input nsamples has negative values.')
+        elif numpy.sum(nsamples) != numpy.sum(shape[-1]):
+            raise ValueError("The sliced input has an incompatible number of samples '" + str(nsamples) + "' instead of '" + str(shape[-1]) + "'.")
+    
+    l = list(shape[0:-1])
+    l.append(nsamples)
+    return tuple(l)
