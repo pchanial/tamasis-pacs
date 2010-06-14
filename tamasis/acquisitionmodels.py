@@ -16,7 +16,7 @@ from datatypes import Map, Tod, combine_sliced_shape, flatten_sliced_shape, vali
 __all__ = ['AcquisitionModel', 'AcquisitionModelTranspose', 'Composition', 
            'Addition', 'Square', 'Symmetric', 'Diagonal', 'Scalar', 'Identity',
            'DiscreteDifference', 'Projection', 'Compression', 
-           'CompressionAverage', 'DownSampling', 'Masking', 'Unpacking', 
+           'CompressionAverage', 'DownSampling', 'Masking', 'Masking2', 'Unpacking', 'Unpacking2',  
            'Reshaping', 'Padding', 'Fft', 'InvNtt', 'ValidationError', 
            'asacquisitionmodel']
 
@@ -82,24 +82,22 @@ class AcquisitionModel(object):
 
     def aslinearoperator(self, shape=None):
         """Returns the AcquisitionModel as a LinearOperator"""
-        if utils._my_isscalar(shape):
-            shape = (shape, shape)
-        shapein  = flatten_sliced_shape(self.shapein )
-        shapeout = flatten_sliced_shape(self.shapeout)
+
+        shapein  = numpy.product(flatten_sliced_shape(self.shapein))
+        shapeout = numpy.product(flatten_sliced_shape(self.shapeout))
         if shape is None:
-            if (shapein is None or shapeout is None):
+            if (self.shapein is None or self.shapeout is None):
                 raise ValidationError('You must specify the shape of the linear operator: the Acquisition model is not constrained.')
             shape = (shapeout, shapein)
-        elif shapein is not None and shapein  != shape[1] or shapeout is not None and shapeout != shape[0]:
-            raise ValidationError('The input shape is incompatible with the AcquisitionModel.')
+        else:
+            if self.shapein is not None and shapein != shape[1] or self.shapeout is not None and shapeout != shape[0]:
+                raise ValidationError('The input shape is incompatible with the AcquisitionModel.')
 
-        linopshape = (numpy.product(shape[0]), numpy.product(shape[1]))
-
-        packing = Reshaping(shape[0], linopshape[0])
-        unpacking = Reshaping(linopshape[1], shape[1])
+        packing = Reshaping(self.shapeout if self.shapeout is not None else shape[0], shape[0])
+        unpacking = Reshaping(shape[1], self.shapein if self.shapein is not None else shape[1])
 
         model = packing * self * unpacking
-        operator = scipy.sparse.linalg.interface.LinearOperator(linopshape, matvec=model.direct, rmatvec=model.transpose, dtype='float64')
+        operator = scipy.sparse.linalg.interface.LinearOperator(shape, matvec=model.direct, rmatvec=model.transpose, dtype='float64')
         operator.packing   = packing
         operator.unpacking = unpacking
         return operator
@@ -864,6 +862,30 @@ class Masking(Symmetric):
 #-------------------------------------------------------------------------------
 
 
+class Masking2(Symmetric):
+    """
+    Apply a mask. 
+    Where the mask is non-null or True, the input values are set to zero
+    """
+    def __init__(self, mask, description=None):
+        AcquisitionModel.__init__(self, description)
+        if mask is None:
+            self._mask = None
+        else:
+            self._mask = mask
+
+    def direct(self, data, reusein=False, reuseout=False):
+        data[self._mask] = 0.
+        return data
+
+    @property
+    def mask(self):
+        return self._mask
+
+
+#-------------------------------------------------------------------------------
+
+
 class Unpacking(AcquisitionModel):
     """
     Convert 1d map into 2d map, under the control of a mask (true means non-observed)
@@ -887,6 +909,30 @@ class Unpacking(AcquisitionModel):
         output = self.validate_output_transpose(numpy.ndarray, shapein, reuseout)
         tmf.unpack_transpose(unpacked.T, self.mask.T, output.T)
         return output
+
+
+#-------------------------------------------------------------------------------
+
+
+class Unpacking2(AcquisitionModel):
+    """
+    Convert 1d map into 2d map, under the control of a mask (true means non-observed)
+    Author: P. Chanial
+    """
+    def __init__(self, mask, field=0., description=None):
+        AcquisitionModel.__init__(self, description)
+        self.mask = numpy.array(mask, dtype='bool', copy=False) == False
+        self.field = field
+        self.shapein  = (numpy.sum(self.mask),)
+        self.shapeout = tuple(self.mask.shape)
+
+    def direct(self, packed, reusein=False, reuseout=False):
+        output = numpy.zeros(self.shapeout) + self.field
+        output[self.mask] = packed
+        return output
+
+    def transpose(self, unpacked, reusein=False, reuseout=False):
+        return unpacked[self.mask]
 
 
 #-------------------------------------------------------------------------------
