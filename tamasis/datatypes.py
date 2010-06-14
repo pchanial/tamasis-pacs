@@ -119,7 +119,9 @@ class FitsArray(Quantity):
 
 
 class Map(FitsArray):
-    
+
+    __slots__ = ['coverage', 'error']
+
     """
     Represent a map, complemented with unit and FITS header.
     """
