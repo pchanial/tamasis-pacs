@@ -90,6 +90,7 @@ def mapper_rls(tod, model, weight=None, hyper=1.0, tol=1.e-5, maxiter=300, M=Non
     if numpy.any(numpy.isnan(rhs)) or numpy.any(numpy.isinf(rhs)): raise ValueError('RHS contains not finite values.')
     x0 = C.packing(x0)
     x0[numpy.isnan(x0)] = 0.
+    x0[:] = 0
 
     class PcgCallback():
         def __init__(self):
@@ -98,17 +99,26 @@ def mapper_rls(tod, model, weight=None, hyper=1.0, tol=1.e-5, maxiter=300, M=Non
         def __call__(self, x):
             import inspect
             parent_locals = inspect.stack()[1][0].f_locals
-            self.niterations = parent_locals['iter_']
+            self.niterations = parent_locals['iter_'] - 1
             self.residuals = parent_locals['resid']
-            if self.residuals > parent_locals['tol']:
-                self.niterations -= 1
-                if verbose: 
-                    print 'Iteration ' + str(self.niterations) + ': ' + str(self.residuals)
+            if self.residuals < tol:
+                self.niterations += 1
+            if verbose: 
+                print 'Iteration ' + str(self.niterations) + ': ' + str(self.residuals)
+                
 
     callback = PcgCallback()
     
     time0 = time.time()
     solution, nit = solver(C, rhs, x0=x0, tol=tol, maxiter=maxiter, callback=callback, M=M0)
+    if nit < 0:
+        raise ValueError('Invalid input for the solver.')
+
+    if nit > 0:
+        callback.niterations += 1
+        if callback.niterations != maxiter:
+            print 'Warning: mapper_rls: maxiter != niter...'
+
     output = Map(C.unpacking(solution))
 
     if output.header is None:
