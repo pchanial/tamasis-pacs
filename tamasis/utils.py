@@ -7,17 +7,17 @@ import time
 
 __all__ = [ 'any_neq', 'create_fitsheader' ]
 
-def create_fitsheader(axisn, crval=(0.,0.), crpix=None, ctype=('RA---TAN','DEC--TAN'), cunit='deg', cd=None, cdelt=None):
+def create_fitsheader(array, crval=(0.,0.), crpix=None, ctype=('RA---TAN','DEC--TAN'), cunit='deg', cd=None, cdelt=None):
     """
     Return a FITS header
 
     Parameters
     ----------
-    axisn : array_like of size naxis, the number of dimensions
-        An array containing the dimensions along the axes. For a map, 
-        the first value is the dimension along X and the second along Y
-        according to the FITS convention Note that it is the reversed 
-        order of the numpy convention.
+    arra : array_like
+        An array from which the dimensions will be extracted. Note that
+        by FITS convention, the dimension along X is the second value 
+        of the array shape and that the dimension along the Y axis is 
+        the first one.
     crval : 2 element array, optional
         Reference pixel values (FITS convention)
     crpix : 2 element array, optional
@@ -36,12 +36,13 @@ def create_fitsheader(axisn, crval=(0.,0.), crpix=None, ctype=('RA---TAN','DEC--
     Examples
     --------
     >>> map = Map.ones((10,100), unit='Jy/pixel')
-    >>> header = create_fitsheader(reversed(map.shape), cd=[[-1,0],[0,1]])
+    >>> map.header = create_fitsheader(map, cd=[[-1,0],[0,1]])
     """
-    if _my_isscalar(axisn):
-        axisn = (axisn,)
-    else:
-        axisn = tuple(axisn)
+
+    if not isinstance(array, numpy.ndarray):
+        raise TypeError('The input is not an ndarray.')
+
+    axisn = tuple(reversed(array.shape))
 
     naxis = len(axisn)
     header = pyfits.Header()

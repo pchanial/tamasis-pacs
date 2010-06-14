@@ -124,7 +124,7 @@ b = Tod(a, dtype='float32', copy=False)
 if id(a) == id(b): raise TestFailure()
 if id(a.mask) != id(b.mask): raise TestFailure()
 
-header = create_fitsheader([20,10])
+header = create_fitsheader(numpy.ones((20,10)))
 a = FitsArray([10,20], header=header, unit='m')
 b = Tod(a)
 if id(a.header) == id(b.header): raise TestFailure()
