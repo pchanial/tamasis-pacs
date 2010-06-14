@@ -24,9 +24,7 @@ print model
 map_naive = mapper_naive(tod, model)
 weights = map_naive.coverage
 map_mask = weights == 0
-map_naive.mask = map_mask
-backmap = model.transpose(tod)
-backmap.mask = map_mask
+
 
 # iterative map, taking all map pixels
-map_iter = mapper_rls(tod, model, hyper=1e1, tol=1.e-4)
+map_iter = mapper_rls(tod, model, hyper=1., tol=1.e-4)

@@ -2,9 +2,10 @@ import numpy
 import scipy
 import time
 
-from acquisitionmodels import Diagonal, DiscreteDifference, Identity
+from acquisitionmodels import asacquisitionmodel, Diagonal, DiscreteDifference, Identity
 from datatypes import Map, Tod
 from unit import Quantity, UnitError
+from utils import create_fitsheader
 
 __all__ = [ 'mapper_naive', 'mapper_ls', 'mapper_rls' ]
 
@@ -46,14 +47,20 @@ def mapper_naive(tod, model, unit=None):
 #-------------------------------------------------------------------------------
 
 
-def mapper_ls(tod, model, weight=None, tol=1.e-6, maxiter=300, M=None, unpacking=None, verbose=True, M0=None):
-    return mapper_rls(tod, model, weight=weight, hyper=0, tol=tol, maxiter=maxiter, M=M, verbose=verbose, M0=M0)
+def mapper_ls(tod, model, weight=None, tol=1.e-5, maxiter=300, M=None, unpacking=None, verbose=True, solver=None):
+    return mapper_rls(tod, model, weight=weight, hyper=0, tol=tol, maxiter=maxiter, M=M, verbose=verbose, solver=solver, unpacking=unpacking)
 
 
 #-------------------------------------------------------------------------------
 
 
-def mapper_rls(tod, model, weight=None, hyper=1.0, tol=1.e-6, maxiter=300, M=None, verbose=True, M0=None):
+def mapper_rls(tod, model, weight=None, hyper=1.0, tol=1.e-5, maxiter=300, M=None, verbose=True, solver=None, unpacking=None):
+
+    if solver is None:
+        solver = scipy.sparse.linalg.cgs
+
+    if unpacking is None:
+        unpacking = Identity()
 
     if weight is None:
         weight = Identity('Weight')
@@ -65,46 +72,57 @@ def mapper_rls(tod, model, weight=None, hyper=1.0, tol=1.e-6, maxiter=300, M=Non
         dY = DiscreteDifference(axis=0)
         C += hyper * ( dX.T * dX + dY.T * dY )
 
+    C = (unpacking.T * C * unpacking).aslinearoperator()
+
     if M is None:
         M = Identity('Preconditioner')
     elif isinstance(M, numpy.ndarray):
         M = Diagonal(M, description='Preconditioner')
     else:
         M = asacquisitionmodel(M)
+    M0 = (unpacking.T * M * unpacking).aslinearoperator(C.shape)
 
-    C   = M * C
-    rhs = (M * model.T * weight)(tod)
-
-    operator = C.aslinearoperator()
-    rhs = operator.packing(rhs)
-    if numpy.any(numpy.isnan(rhs)) or numpy.any(numpy.isinf(rhs)): raise ValueError('RHS contains not finite values.')
-
+    rhs = unpacking.T * model.T * weight * tod
     map_naive = mapper_naive(tod, model)
-    x0 = operator.packing(map_naive)
+    x0 = unpacking.T * map_naive
+
+    rhs = C.packing(rhs)
+    if numpy.any(numpy.isnan(rhs)) or numpy.any(numpy.isinf(rhs)): raise ValueError('RHS contains not finite values.')
+    x0 = C.packing(x0)
     x0[numpy.isnan(x0)] = 0.
 
-    if M0 is True:
-        M0 = operator.packing(1./numpy.maximum(0.01,map_naive.coverage))
-        M0[numpy.isfinite(M0) == False] = 1./0.01
-        M0 = scipy.sparse.dia_matrix((M0,0), shape = 2*(M0.size,))
-
-    if verbose:
-        def callback(x):
+    class PcgCallback():
+        def __init__(self):
+            self.niterations = 0
+            self.residuals = 0.
+        def __call__(self, x):
             import inspect
             parent_locals = inspect.stack()[1][0].f_locals
-            iter_ = parent_locals['iter_']
-            resid = parent_locals['resid']
-            if resid > parent_locals['tol']:
-                iter_ -= 1
-                print 'Iteration ' + str(iter_) + ': ' + str(resid)
+            self.niterations = parent_locals['iter_']
+            self.residuals = parent_locals['resid']
+            if self.residuals > parent_locals['tol']:
+                self.niterations -= 1
+                if verbose: 
+                    print 'Iteration ' + str(self.niterations) + ': ' + str(self.residuals)
 
-    else:
-        callback = None
+    callback = PcgCallback()
     
     time0 = time.time()
-    solution, nit = scipy.sparse.linalg.cgs(operator, rhs, x0=x0, tol=tol, maxiter=maxiter, callback=callback, M=M0)
-    output = Map(operator.unpacking(solution))
-    output.time = time.time() - time0
+    solution, nit = solver(C, rhs, x0=x0, tol=tol, maxiter=maxiter, callback=callback, M=M0)
+    output = Map(C.unpacking(solution))
+
+    if output.header is None:
+        output.header = create_fitsheader(solution)
+
+    if hasattr(callback, 'niterations'):
+        output.header.update('niter', callback.niterations)
+    output.header.update('nitermax', maxiter)
+    if hasattr(callback, 'residuals'):
+        output.header.update('resid', callback.residuals)
+    output.header.update('tol', tol)
+    output.header.update('solver', solver.__name__)
+
+    output.header.update('time', time.time() - time0)
     output.coverage = map_naive.coverage
 
     return output
