@@ -25,13 +25,13 @@ if any_neq(map_naive_2d,map_ref,15): print 'FAILED: mapper_naive madcap 2'
 packing = Unpacking(observation.mapmask).T
 
 M = 1 / map_naive.coverage
-M[numpy.where(numpy.isfinite(M) == False)] = numpy.max(M[numpy.where(numpy.isfinite(M))])
-map_rlsw1 = mapper_rls(tod, projection*packing, padding.T * fft.T * invNtt * fft * padding, hyper=0, tol=1.e-4, M=M)
+M[numpy.isfinite(M) == False] = numpy.max(M[numpy.isfinite(M)])
+map_rlsw1 = mapper_rls(tod, projection*packing, padding.T * fft.T * invNtt * fft * padding, hyper=0, tol=1.e-5, M=M)
 print map_rlsw1.header['time']
 
 M = packing(1/map_naive.coverage)
-M[numpy.where(numpy.isfinite(M) == False)] = numpy.max(M[numpy.where(numpy.isfinite(M))])
+M[numpy.isfinite(M) == False] = numpy.max(M[numpy.isfinite(M)])
 M = M.reshape(numpy.product(M.shape))
-map_rlsw2 = packing.T(mapper_rls(tod, projection, padding.T * fft.T * invNtt * fft * padding, hyper=0, tol=1.e-4, M=M))
+map_rlsw2 = packing.T(mapper_rls(tod, projection, padding.T * fft.T * invNtt * fft * padding, hyper=0, tol=1.e-5, M=M))
 
 print 'OK.'
