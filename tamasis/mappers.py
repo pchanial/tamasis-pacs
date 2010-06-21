@@ -87,7 +87,7 @@ def mapper_rls(tod, model, weight=None, hyper=1.0, tol=1.e-5, maxiter=300, M=Non
     x0 = unpacking.T * map_naive
 
     rhs = C.packing(rhs)
-    if numpy.any(numpy.isnan(rhs)) or numpy.any(numpy.isinf(rhs)): raise ValueError('RHS contains not finite values.')
+    if not numpy.all(numpy.isfinite(rhs)): raise ValueError('RHS contains not finite values.')
     x0 = C.packing(x0)
     x0[numpy.isnan(x0)] = 0.
     x0[:] = 0
@@ -128,7 +128,7 @@ def mapper_rls(tod, model, weight=None, hyper=1.0, tol=1.e-5, maxiter=300, M=Non
         output.header.update('niter', callback.niterations)
     output.header.update('nitermax', maxiter)
     if hasattr(callback, 'residuals'):
-        output.header.update('resid', callback.residuals)
+        output.header.update('residual', callback.residuals)
     output.header.update('tol', tol)
     output.header.update('solver', solver.__name__)
 
