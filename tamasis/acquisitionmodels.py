@@ -6,6 +6,7 @@ except:
     print 'Warning: Library PyFFTW3 is not installed.'
 
 import numpy
+import multiprocessing
 import scipy.sparse.linalg
 import tamasisfortran as tmf
 import utils
@@ -1044,6 +1045,10 @@ class Fft(AcquisitionModel):
     """
     def __init__(self, nsamples, description=None):
         AcquisitionModel.__init__(self, description)
+        if fftw3.planning.lib_threads is None:
+            ncpus = 1
+        else:
+            ncpus = multiprocessing.cpu_count()
         self.nsamples = tuple(numpy.array(nsamples, ndmin=1))
         self.tarray = []
         self.farray = []
@@ -1054,8 +1059,8 @@ class Fft(AcquisitionModel):
             farray = numpy.empty(n, dtype='float64')
             self.tarray.append(tarray)
             self.farray.append(farray)
-            self.forward_plan.append(fftw3.Plan(tarray, farray, direction='forward', flags=['measure'], realtypes=['halfcomplex r2c']))
-            self.backward_plan.append(fftw3.Plan(farray, tarray, direction='backward', flags=['measure'], realtypes=['halfcomplex c2r']))
+            self.forward_plan.append(fftw3.Plan(tarray, farray, direction='forward', flags=['measure'], realtypes=['halfcomplex r2c'], nthreads=ncpus))
+            self.backward_plan.append(fftw3.Plan(farray, tarray, direction='backward', flags=['measure'], realtypes=['halfcomplex c2r'], nthreads=ncpus))
 
     def direct(self, array, reusein=False, reuseout=False):
         array = self.validate_input(Tod, array)
