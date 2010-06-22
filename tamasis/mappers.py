@@ -48,7 +48,7 @@ def mapper_naive(tod, model, unit=None):
 
 
 def mapper_ls(tod, model, weight=None, unpacking=None, x0=None, tol=1.e-5, maxiter=300, M=None, solver=None, verbose=True):
-    return mapper_rls(tod, model, weight=weight, unpacking=unpacking, hyper=0, x0=x0, tol=tol, maxiter=maxiter, M=M, solver=solve, verbose=verbose)
+    return mapper_rls(tod, model, weight=weight, unpacking=unpacking, hyper=0, x0=x0, tol=tol, maxiter=maxiter, M=M, solver=solver, verbose=verbose)
 
 
 #-------------------------------------------------------------------------------
