@@ -77,6 +77,8 @@ def mapper_rls(tod, model, weight=None, hyper=1.0, tol=1.e-5, maxiter=300, M=Non
     if M is None:
         M = Identity('Preconditioner')
     elif isinstance(M, numpy.ndarray):
+        M = M.copy()
+        M[~numpy.isfinite(M)] = numpy.max(M[numpy.isfinite(M)])
         M = Diagonal(M, description='Preconditioner')
     else:
         M = asacquisitionmodel(M)
