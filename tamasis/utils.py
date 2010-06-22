@@ -7,7 +7,7 @@ import time
 
 __all__ = [ 'any_neq', 'create_fitsheader' ]
 
-def create_fitsheader(array, crval=(0.,0.), crpix=None, ctype=('RA---TAN','DEC--TAN'), cunit='deg', cd=None, cdelt=None):
+def create_fitsheader(array, extension=False, crval=(0.,0.), crpix=None, ctype=('RA---TAN','DEC--TAN'), cunit='deg', cd=None, cdelt=None):
     """
     Return a FITS header
 
@@ -46,9 +46,12 @@ def create_fitsheader(array, crval=(0.,0.), crpix=None, ctype=('RA---TAN','DEC--
 
     naxis = len(axisn)
     header = pyfits.Header()
-    header.update('simple', True)
+    if extension:
+        header.update('xtension', 'IMAGE', 'Image extension')
+    else:
+        header.update('simple', True)
+        header.update('extend', True)
     header.update('bitpix', pyfits.PrimaryHDU.ImgCode[array.dtype.name])
-    header.update('extend', True)
     header.update('naxis', naxis)
     for dim in range(naxis):
         header.update('naxis'+str(dim+1), axisn[naxis-dim-1])

@@ -59,9 +59,6 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None, tol=
     if weight is None:
         weight = Identity('Weight')
 
-    if unpacking is None:
-        unpacking = Identity()
-
     if solver is None:
         solver = scipy.sparse.linalg.cgs
 
@@ -72,7 +69,7 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None, tol=
         dY = DiscreteDifference(axis=0)
         C += hyper * ( dX.T * dX + dY.T * dY )
 
-    C = (unpacking.T * C * unpacking).aslinearoperator()
+    C = C.aslinearoperator(unpacking=unpacking)
 
     if M is None:
         M = Identity('Preconditioner')
@@ -82,16 +79,19 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None, tol=
         M = Diagonal(M, description='Preconditioner')
     else:
         M = asacquisitionmodel(M)
-    M0 = (unpacking.T * M * unpacking).aslinearoperator(C.shape)
+    M0 = M.aslinearoperator(C.shape, unpacking=unpacking)
 
-    rhs = unpacking.T * model.T * weight * tod
-    rhs = C.packing(rhs)
-    if not numpy.all(numpy.isfinite(rhs)): raise ValueError('RHS contains not finite values.')
+    rhs = C.packing * model.T * weight * tod
+    if not numpy.all(numpy.isfinite(rhs)):
+        raise ValueError('RHS contains not finite values.')
+    if rhs.shape != C.shape[1]:
+        raise ValueError("Incompatible size for RHS: '"+str(rhs.shape)+"' instead of '"+str(C.shape[1])+"'.")
 
     if x0 is not None:
-        x0 = C.packing * unpacking.T * x0
         x0 = C.packing(x0)
         x0[numpy.isnan(x0)] = 0.
+        if x0.shape != C.shape[0]:
+            raise ValueError("Incompatible size for x0: '"+str(x0.shape)+"' instead of '"+str(C.shape[0])+"'.")
 
     class PcgCallback():
         def __init__(self):
@@ -106,7 +106,6 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None, tol=
                 self.niterations += 1
             if verbose: 
                 print 'Iteration ' + str(self.niterations) + ': ' + str(self.residual)
-                
 
     callback = PcgCallback()
     

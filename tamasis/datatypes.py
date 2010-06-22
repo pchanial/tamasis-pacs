@@ -124,10 +124,30 @@ class Map(FitsArray):
         if not subok and result.__class__ is not cls or not issubclass(result.__class__, cls):
             result = result.view(cls)
 
+        
+        self.coverage = None
+        self.error = None
+
         return result
 
     def __array_finalize__(self, obj):
         FitsArray.__array_finalize__(self, obj)
+        if obj is None:
+            self.coverage = None
+            self.error = None
+            return
+
+        # coverage
+        if hasattr(obj, 'coverage'):
+            self.coverage = obj.coverage
+        else:
+            self.coverage = None
+
+        # error
+        if hasattr(obj, 'error'):
+            self.error = obj.error
+        else:
+            self.error = None
 
     @staticmethod
     def empty(shape, header=None, unit=None, dtype=None, order=None):
@@ -144,26 +164,32 @@ class Map(FitsArray):
     def copy(self, order='C'):
         return Map(self, copy=True, order=order)
 
-    def imshow(self, num=None, axis=True, title=None):
+    def imshow(self, num=None, axis=True, title=None, coverage=None):
         """A simple graphical display function for the Map class"""
 
-        finite = self[numpy.isfinite(self)]
+        mask = ~numpy.isfinite(self)
+        if coverage is None:
+            coverage = self.coverage
+        if coverage is not None:
+            mask = numpy.logical_or(mask, coverage <= 0)
+        finite = self[~mask]
         mean   = numpy.mean(finite)
         stddev = numpy.std(finite)
         minval = max(mean - 2*stddev, numpy.min(finite))
         maxval = min(mean + 5*stddev, numpy.max(finite))
 
-        pyplot.figure(num=num)
-        # HACK around bug in imshow !!!
-        pyplot.imshow(self.T if self.flags.f_contiguous else self, interpolation='nearest')
-        pyplot.clim(minval, maxval)
+        data = numpy.ma.MaskedArray(self, mask=mask, copy=False)
+        fig = pyplot.figure(num=num)
+        image=pyplot.imshow(data, interpolation='nearest', origin='lower')
+        image.set_clim(minval, maxval)
         if self.header is not None and self.header.has_key('CRPIX1'):
-            pyplot.xlabel('Right Ascension')
-            pyplot.ylabel("Declination")
+            pyplot.xlabel('Right Ascension [pixels]')
+            pyplot.ylabel("Declination [pixels]")
         if title is not None:
             pyplot.title(title)
         pyplot.colorbar()
         pyplot.draw()
+        return fig
 
 
 #-------------------------------------------------------------------------------
@@ -263,15 +289,16 @@ class Tod(FitsArray):
         maxval = mean + 5*stddev
 
         data = numpy.ma.MaskedArray(self, mask=self.mask, copy=False)
-        pyplot.figure(num=num)
-        pyplot.imshow(data, aspect='auto', interpolation='nearest')
-        pyplot.clim(minval, maxval)
+        fig = pyplot.figure(num=num)
+        image = pyplot.imshow(data, aspect='auto', interpolation='nearest')
+        image.set_clim(minval, maxval)
         pyplot.xlabel("Sample")
         pyplot.ylabel('Detector number')
         if title is not None:
             pyplot.title(title)
-        pyplot.colorbar()
-        pyplot.draw()
+        fig.colorbar()
+        fig.draw()
+        return fig
 
     def __str__(self):
         if numpy.rank(self) == 0:
@@ -296,8 +323,10 @@ class Tod(FitsArray):
         if self.mask is None:
             return
         mask = numpy.abs(self.mask).view('uint8')
-        header = create_fitsheader(mask)
-        pyfits.append(filename, mask)
+        header = create_fitsheader(mask, extension=True)
+        print header
+        header.update('extname', 'Mask')
+        pyfits.append(filename, mask, header)
    
 #-------------------------------------------------------------------------------
 

@@ -67,7 +67,7 @@ class AcquisitionModel(object):
 
     @property
     def shape(self):
-        return (self._shapein, self._shapeout)
+        return (self.shapeout, self.shapein)
 
     @property
     def shapein(self):
@@ -85,23 +85,43 @@ class AcquisitionModel(object):
     def shapeout(self, shape):
         self._shapeout = shape
 
-    def aslinearoperator(self, shape=None):
+    def aslinearoperator(self, shape=None, packing=None, unpacking=None):
         """Returns the AcquisitionModel as a LinearOperator"""
 
-        shapein  = numpy.product(flatten_sliced_shape(self.shapein))
-        shapeout = numpy.product(flatten_sliced_shape(self.shapeout))
+        if unpacking is not None:
+            if packing is None:
+                packing = unpacking.T
+                model = packing * self * unpacking
+        elif packing is not None:
+            unpacking = packing.T
+            model = packing * self * unpacking
+        else:
+            packing = Identity()
+            unpacking = Identity()
+            model = self
+            
+        shapein  = numpy.product(flatten_sliced_shape(model.shapein))
+        shapeout = numpy.product(flatten_sliced_shape(model.shapeout))
         if shape is None:
-            if (self.shapein is None or self.shapeout is None):
-                raise ValidationError('You must specify the shape of the linear operator: the Acquisition model is not constrained.')
+            if (model.shapein is None or model.shapeout is None):
+                raise ValidationError('You must specify the shape of the linear operator: the AcquisitionModel is not constrained.')
             shape = (shapeout, shapein)
         else:
-            if self.shapein is not None and shapein != shape[1] or self.shapeout is not None and shapeout != shape[0]:
-                raise ValidationError('The input shape is incompatible with the AcquisitionModel.')
+            if shapein is not None and shapein != shape[1] or \
+               shapeout is not None and shapeout != shape[0]:
+                raise ValidationError("The input shape '" + str(shape) + 
+                      "' is incompatible with the AcquisitionModel '" + str((shapein,shapeout)) + "'.")
 
-        packing = Reshaping(self.shapeout if self.shapeout is not None else shape[0], shape[0])
-        unpacking = Reshaping(shape[1], self.shapein if self.shapein is not None else shape[1])
+        # ensure that input and output of model are vectors
+        if model.shapein is not None and model.shapein != (shape[1],):
+            reshape = Reshaping(shape[1], model.shapein)
+            unpacking = unpacking * reshape
+            model = model * reshape
+        if model.shapeout is not None and model.shapeout != (shape[0],):
+            reshape = Reshaping(model.shapeout, shape[0])
+            packing = reshape * packing
+            model = reshape * model
 
-        model = packing * self * unpacking
         operator = scipy.sparse.linalg.interface.LinearOperator(shape, matvec=model.direct, rmatvec=model.transpose, dtype='float64')
         operator.packing   = packing
         operator.unpacking = unpacking
@@ -901,7 +921,7 @@ class Unpacking(AcquisitionModel):
         self.mask = numpy.array(mask, dtype='int8', copy=False)
         self.field = field
         self.shapein  = (numpy.sum(self.mask == 0),)
-        self.shapeout = tuple(self.mask.shape)
+        self.shapeout = self.mask.shape
 
     def direct(self, packed, reusein=False, reuseout=False):
         packed, shapeout = self.validate_input_direct(numpy.ndarray, packed, reusein)
