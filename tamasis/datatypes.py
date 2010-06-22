@@ -1,6 +1,5 @@
 import matplotlib.pyplot as pyplot
 import numpy
-import os
 import pyfits
 
 from unit import Quantity
@@ -89,7 +88,7 @@ class FitsArray(Quantity):
         """
 
         if self.header is None:
-            header = create_fitsheader(reversed(self.shape))
+            header = create_fitsheader(self)
         else:
             header = self.header
        
@@ -105,14 +104,7 @@ class FitsArray(Quantity):
         else:
             value = self.T if numpy.isfortran(self) else self
         hdu = pyfits.PrimaryHDU(value, header)
-        try:
-            os.remove(filename)
-        except OSError:
-            pass
-        try:
-            hdu.writeto(filename)
-        except IOError:
-            pass
+        hdu.writeto(filename, clobber=True)
 
 
 #-------------------------------------------------------------------------------
@@ -185,6 +177,13 @@ class Tod(FitsArray):
 
         # get a new Tod instance (or a subclass if subok is True)
         result = FitsArray(data, header, unit, dtype, copy, order, True, ndmin)
+        
+        if type(data) is str:
+            try:
+                mask = pyfits.open(data)[1].data.view('int8')
+            except:
+                pass
+
         if not subok and result.__class__ is not cls or not issubclass(result.__class__, cls):
             result = result.view(cls)
 
@@ -197,11 +196,10 @@ class Tod(FitsArray):
         # nsamples attribute
         if type(data) is str and nsamples is None:
             try:
-                nsamples = result.header['nsamples'][1:-1]
+                nsamples = result.header['nsamples'][1:-1].replace(' ', '')
                 if len(nsamples) > 0:
-                    nsamples = map(lambda x: int(x), nsamples[1:-1].split(','))
+                    nsamples = map(lambda x: int(x), nsamples.split(','))
                 else:
-                    result.reshape(())
                     nsamples = ()
             except:
                 pass
@@ -268,7 +266,7 @@ class Tod(FitsArray):
         pyplot.figure(num=num)
         pyplot.imshow(data, aspect='auto', interpolation='nearest')
         pyplot.clim(minval, maxval)
-        pyplot.xlabel("Signal")
+        pyplot.xlabel("Sample")
         pyplot.ylabel('Detector number')
         if title is not None:
             pyplot.title(title)
@@ -293,6 +291,13 @@ class Tod(FitsArray):
             output += ' in ' + str(nslices) + ' slices ('+strsamples+')'
         return output + ']'
 
+    def writefits(self, filename):
+        super(Tod, self).writefits(filename)
+        if self.mask is None:
+            return
+        mask = numpy.abs(self.mask).view('uint8')
+        header = create_fitsheader(mask)
+        pyfits.append(filename, mask)
    
 #-------------------------------------------------------------------------------
 

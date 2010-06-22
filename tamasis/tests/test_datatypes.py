@@ -1,8 +1,19 @@
 import numpy
+import glob
+import os
 from tamasis import *
 from tamasis.datatypes import validate_sliced_shape
+from uuid import uuid1
 
-class TestFailure(Exception): pass
+filename = 'tamasistest-'+str(uuid1())
+
+def test_cleanup():
+    files = glob.glob(filename+'*')
+    for file in files:
+        os.remove(file)
+
+class TestFailure(Exception):
+    test_cleanup()
 
 # validate scalars
 if validate_sliced_shape((),None) != ((),): raise TestFailure()
@@ -143,7 +154,7 @@ b = FitsArray(a, copy=False)
 if id(a.header) != id(b.header): raise TestFailure()
 if id(a.unit) != id(b.unit): raise TestFailure()
 
-b =  FitsArray(a, subok=True)
+b = FitsArray(a, subok=True)
 if id(a) == id(b): raise TestFailure()
 if id(a.header) == id(b.header): raise TestFailure()
 if id(a.unit) != id(b.unit): raise TestFailure()
@@ -167,5 +178,12 @@ a = Tod(1, nsamples = ())
 if a.shape != (): raise TestFailure()
 if a.size != 1: raise TestFailure()
 
+m = numpy.ndarray((10,2,10), dtype='int8')
+m.flat = numpy.random.random(m.size)*2
+a = Tod(numpy.random.random_sample((10,2,10)), mask=m, nsamples=(2,8), unit='Jy')
+a.writefits(filename+'_tod.fits')
+b = Tod(filename+'_tod.fits')
+if numpy.any(a != b) or numpy.any(a.mask != b.mask) or a.nsamples != b.nsamples: raise TestFailure()
 
+test_cleanup()
 print 'OK.'
