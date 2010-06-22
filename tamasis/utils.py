@@ -47,7 +47,7 @@ def create_fitsheader(array, crval=(0.,0.), crpix=None, ctype=('RA---TAN','DEC--
     naxis = len(axisn)
     header = pyfits.Header()
     header.update('simple', True)
-    header.update('bitpix', -64)
+    header.update('bitpix', pyfits.PrimaryHDU.ImgCode[array.dtype.name])
     header.update('extend', True)
     header.update('naxis', naxis)
     for dim in range(naxis):
