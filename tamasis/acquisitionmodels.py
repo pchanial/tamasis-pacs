@@ -5,8 +5,8 @@ try:
 except:
     print 'Warning: Library PyFFTW3 is not installed.'
 
-import numpy
 import multiprocessing
+import numpy
 import scipy.sparse.linalg
 import tamasisfortran as tmf
 import utils
@@ -64,6 +64,10 @@ class AcquisitionModel(object):
     @property
     def T(self):
         return AcquisitionModelTranspose(self)
+
+    @property
+    def shape(self):
+        return (self._shapein, self._shapeout)
 
     @property
     def shapein(self):
