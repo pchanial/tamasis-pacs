@@ -315,8 +315,8 @@ class Tod(FitsArray):
         pyplot.ylabel('Detector number')
         if title is not None:
             pyplot.title(title)
-        fig.colorbar()
-        fig.draw()
+        pyplot.colorbar()
+        pyplot.draw()
         return fig
 
     def __str__(self):
