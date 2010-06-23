@@ -122,6 +122,8 @@ def any_neq(a,b, precision):
     if numpy.any(mask != numpy.isnan(b)):
         return True
     return numpy.any((abs(a-b) > 10.**(-precision) * abs(a))[numpy.isnan(a).__neg__()])
+
+
 #-------------------------------------------------------------------------------
 
 
