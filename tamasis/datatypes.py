@@ -1,3 +1,4 @@
+import matplotlib
 import matplotlib.pyplot as pyplot
 import numpy
 import pyfits
@@ -106,6 +107,60 @@ class FitsArray(Quantity):
         hdu = pyfits.PrimaryHDU(value, header)
         hdu.writeto(filename, clobber=True)
 
+    def imsave(self, filename, colorbar=True, **kw):
+        from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+        is_interactive = matplotlib.is_interactive()
+        matplotlib.interactive(False)
+        dpi = 80.
+        figsize = numpy.clip(numpy.max(numpy.array(self.shape[::-1])/dpi), 8, 50)
+        figsize = (figsize + (2 if colorbar else 0), figsize)
+        self.imshow(colorbar=colorbar, figsize=figsize, dpi=dpi, **kw)
+        fig = pyplot.gcf()
+        fig.savefig(filename)
+        matplotlib.interactive(is_interactive)
+
+    def imshow(self, mask=None, num=None, colorbar=True, title=None, aspect='auto', interpolation='nearest', origin='lower', figsize=None, dpi=None, xlabel='', ylabel='', **kw):
+        """
+        A simple graphical display function for the Tod class
+
+        mask: array-like
+            True means masked.
+        """
+
+        if mask is None:
+            mask = ~numpy.isfinite(self)
+        else:
+            mask = numpy.logical_or(mask, ~numpy.isfinite(self))
+
+        data = numpy.ma.MaskedArray(self, mask=mask, copy=False)
+        mean   = numpy.mean(data)
+        stddev = numpy.std(data)
+        minval = mean - 2*stddev
+        maxval = mean + 5*stddev
+
+        fig = pyplot.figure(num=num, figsize=figsize, dpi=dpi)
+        fontsize = 12. * fig.get_figheight() / 6.125
+
+        image = pyplot.imshow(data, aspect=aspect, interpolation=interpolation, origin=origin, **kw)
+        image.set_clim(minval, maxval)
+
+        ax = pyplot.gca()
+        ax.set_xlabel(xlabel, fontsize=fontsize)
+        ax.set_ylabel(ylabel, fontsize=fontsize)
+        for tick in ax.xaxis.get_major_ticks():
+            tick.label1.set_fontsize(fontsize)
+        for tick in ax.yaxis.get_major_ticks():
+            tick.label1.set_fontsize(fontsize)
+
+        if title is not None:
+            pyplot.title(title, fontsize=fontsize)
+        if colorbar:
+            colorbar = pyplot.colorbar()
+            for tick in colorbar.ax.get_yticklabels():
+                tick.set_fontsize(fontsize)
+
+        pyplot.draw()
+        return image
 
 #-------------------------------------------------------------------------------
 
@@ -174,32 +229,21 @@ class Map(FitsArray):
     def copy(self, order='C'):
         return Map(self, copy=True, order=order)
 
-    def imshow(self, num=None, axis=True, title=None, coverage=None):
+    def imshow(self, mask=None, num=None, title=None, figsize=None, dpi=None, **kw):
         """A simple graphical display function for the Map class"""
 
-        mask = ~numpy.isfinite(self)
-        if coverage is None:
-            coverage = self.coverage
-        if coverage is not None:
-            mask = numpy.logical_or(mask, coverage <= 0)
-        finite = self[~mask]
-        mean   = numpy.mean(finite)
-        stddev = numpy.std(finite)
-        minval = max(mean - 2*stddev, numpy.min(finite))
-        maxval = min(mean + 5*stddev, numpy.max(finite))
+        if mask is None and self.coverage is not None:
+            mask = self.coverage <= 0
 
-        data = numpy.ma.MaskedArray(self, mask=mask, copy=False)
-        fig = pyplot.figure(num=num)
-        image=pyplot.imshow(data, interpolation='nearest', origin='lower')
-        image.set_clim(minval, maxval)
         if self.header is not None and self.header.has_key('CRPIX1'):
-            pyplot.xlabel('Right Ascension [pixels]')
-            pyplot.ylabel("Declination [pixels]")
-        if title is not None:
-            pyplot.title(title)
-        pyplot.colorbar()
-        pyplot.draw()
-        return fig
+            xlabel = 'Right Ascension [pixels]'
+            ylabel = 'Declination [pixels]'
+        else:
+            xlabel = 'X'
+            ylabel = 'Y'
+
+        image = super(Map, self).imshow(mask=mask, num=num, title=title, figsize=figsize, dpi=dpi, xlabel=xlabel, ylabel=ylabel, **kw)
+        return image
 
     def writefits(self, filename):
         super(Map, self).writefits(filename)
@@ -299,25 +343,16 @@ class Tod(FitsArray):
     def copy(self, order='C'):
         return Tod(self, copy=True, order=order)
 
-    def imshow(self, num=None, axis=True, title=None):
-        """A simple graphical display function for the Tod class"""
+    def imshow(self, num=None, title=None, figsize=None, dpi=None, **kw):
+        """
+        A simple graphical display function for the Map class
+        """
 
-        mean   = numpy.mean(self[numpy.isfinite(self)])
-        stddev = numpy.std(self[numpy.isfinite(self)])
-        minval = mean - 2*stddev
-        maxval = mean + 5*stddev
-
-        data = numpy.ma.MaskedArray(self, mask=self.mask, copy=False)
-        fig = pyplot.figure(num=num)
-        image = pyplot.imshow(data, aspect='auto', interpolation='nearest')
-        image.set_clim(minval, maxval)
-        pyplot.xlabel("Sample")
-        pyplot.ylabel('Detector number')
-        if title is not None:
-            pyplot.title(title)
-        pyplot.colorbar()
-        pyplot.draw()
-        return fig
+        mask = self.mask
+        xlabel = 'Sample'
+        ylabel = 'Detector number'
+        image = super(Tod, self).imshow(mask=mask, num=num, title=title, origin='upper', figsize=figsize, dpi=dpi, xlabel=xlabel, ylabel=ylabel, **kw)
+        return image
 
     def __str__(self):
         if numpy.rank(self) == 0:
