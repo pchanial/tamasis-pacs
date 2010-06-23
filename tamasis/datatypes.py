@@ -117,16 +117,26 @@ class Map(FitsArray):
     """
     Represent a map, complemented with unit and FITS header.
     """
-    def __new__(cls, data, header=None, unit=None, dtype=numpy.float64, copy=True, order='C', subok=False, ndmin=0):
+    def __new__(cls, data, coverage=None, error=None, header=None, unit=None, dtype=numpy.float64, copy=True, order='C', subok=False, ndmin=0):
 
         # get a new Map instance (or a subclass if subok is True)
         result = FitsArray(data, header, unit, dtype, copy, order, True, ndmin)
+
+        if type(data) is str:
+            try:
+                error = pyfits.open(data)['Error'].data
+            except:
+                pass
+            try:
+                coverage = pyfits.open(data)['Coverage'].data
+            except:
+                pass
+
         if not subok and result.__class__ is not cls or not issubclass(result.__class__, cls):
             result = result.view(cls)
-
         
-        self.coverage = None
-        self.error = None
+        result.coverage = coverage
+        result.error = error
 
         return result
 
@@ -150,16 +160,16 @@ class Map(FitsArray):
             self.error = None
 
     @staticmethod
-    def empty(shape, header=None, unit=None, dtype=None, order=None):
-        return Map(numpy.empty(shape, dtype, order), header, unit, copy=False)
+    def empty(shape, coverage=None, error=None, header=None, unit=None, dtype=None, order=None):
+        return Map(numpy.empty(shape, dtype, order), coverage, error, header, unit, copy=False)
 
     @staticmethod
-    def ones(shape, header=None, unit=None, dtype=None, order=None):
-        return Map(numpy.ones(shape, dtype, order), header, unit, copy=False)
+    def ones(shape, coverage=None, error=None, header=None, unit=None, dtype=None, order=None):
+        return Map(numpy.ones(shape, dtype, order), coverage, error, header, unit, copy=False)
 
     @staticmethod
-    def zeros(shape, header=None, unit=None, dtype=None, order=None):
-        return Map(numpy.zeros(shape, dtype, order), header, unit, copy=False)
+    def zeros(shape, coverage=None, error=None, header=None, unit=None, dtype=None, order=None):
+        return Map(numpy.zeros(shape, dtype, order), coverage, error, header, unit, copy=False)
 
     def copy(self, order='C'):
         return Map(self, copy=True, order=order)
@@ -191,6 +201,15 @@ class Map(FitsArray):
         pyplot.draw()
         return fig
 
+    def writefits(self, filename):
+        super(Map, self).writefits(filename)
+        if self.error is not None:
+            header = create_fitsheader(self.error, extname='Error')
+            pyfits.append(filename, self.error, header)
+        if self.coverage is not None:
+            header = create_fitsheader(self.coverage, extname='Coverage')
+            pyfits.append(filename, self.coverage, header)
+
 
 #-------------------------------------------------------------------------------
 
@@ -206,7 +225,7 @@ class Tod(FitsArray):
         
         if type(data) is str:
             try:
-                mask = pyfits.open(data)[1].data.view('int8')
+                mask = pyfits.open(data)['Mask'].data.view('int8')
             except:
                 pass
 
@@ -323,9 +342,7 @@ class Tod(FitsArray):
         if self.mask is None:
             return
         mask = numpy.abs(self.mask).view('uint8')
-        header = create_fitsheader(mask, extension=True)
-        print header
-        header.update('extname', 'Mask')
+        header = create_fitsheader(mask, extname='Mask')
         pyfits.append(filename, mask, header)
    
 #-------------------------------------------------------------------------------
