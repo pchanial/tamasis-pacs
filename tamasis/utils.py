@@ -7,17 +7,20 @@ import time
 
 __all__ = [ 'any_neq', 'create_fitsheader' ]
 
-def create_fitsheader(array, extension=False, crval=(0.,0.), crpix=None, ctype=('RA---TAN','DEC--TAN'), cunit='deg', cd=None, cdelt=None):
+def create_fitsheader(array, extname=None, crval=(0.,0.), crpix=None, ctype=('RA---TAN','DEC--TAN'), cunit='deg', cd=None, cdelt=None):
     """
     Return a FITS header
 
     Parameters
     ----------
-    arra : array_like
+    array : array_like
         An array from which the dimensions will be extracted. Note that
         by FITS convention, the dimension along X is the second value 
         of the array shape and that the dimension along the Y axis is 
         the first one.
+    extname: None or string
+        if a string is specified ('' can be used), the returned header
+        type will be an Image HDU (otherwise a Primary HDU)
     crval : 2 element array, optional
         Reference pixel values (FITS convention)
     crpix : 2 element array, optional
@@ -45,16 +48,22 @@ def create_fitsheader(array, extension=False, crval=(0.,0.), crpix=None, ctype=(
     axisn = tuple(reversed(array.shape))
 
     naxis = len(axisn)
-    header = pyfits.Header()
-    if extension:
-        header.update('xtension', 'IMAGE', 'Image extension')
+    if extname is None:
+        card = pyfits.createCard('simple', True)
     else:
-        header.update('simple', True)
-        header.update('extend', True)
-    header.update('bitpix', pyfits.PrimaryHDU.ImgCode[array.dtype.name])
-    header.update('naxis', naxis)
+        card = pyfits.createCard('xtension', 'IMAGE', 'Image extension')
+    header = pyfits.Header([card])
+    header.update('bitpix', pyfits.PrimaryHDU.ImgCode[array.dtype.name], 'array data type')
+    header.update('naxis', naxis, 'number of array dimensions')
     for dim in range(naxis):
         header.update('naxis'+str(dim+1), axisn[naxis-dim-1])
+    if extname is None:
+        header.update('extend', True)
+    else:
+        header.update('pcount', 0, 'number of parameters')
+        header.update('gcount', 1, 'number of groups')
+        header.update('extname', extname)
+
 
     if cd is not None:
         cd = numpy.asarray(cd, dtype=numpy.float64)
