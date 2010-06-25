@@ -9,10 +9,11 @@ __all__ = [ 'MadMap1Observation' ]
 class MadMap1Observation(object):
     """Class for the handling of an observation in the MADMAP1 format"""
     def __init__(self, todfile, invnttfile, mapmaskfile, convert, ndetectors, missing_value=None):
-        nslices, status = tmf.read_madmap1_nslices(invnttfile, ndetectors)
-        if (status != 0): raise RuntimeError()
-        self.npixels_per_sample, nsamples, status = tmf.read_madmap1_info(todfile, invnttfile, convert, ndetectors, nslices)
-        if (status != 0): raise RuntimeError()
+        nslices, status = tmf.madmap1_nslices(invnttfile, ndetectors)
+        if status != 0: raise RuntimeError()
+        self.nslices = nslices
+        self.npixels_per_sample, nsamples, ncorrelations, status = tmf.madmap1_info(todfile, invnttfile, convert, ndetectors, nslices)
+        if status != 0: raise RuntimeError()
 
         self.todfile = todfile
         self.invnttfile = invnttfile
@@ -35,9 +36,10 @@ class MadMap1Observation(object):
         else:
             self.mapmask[mask == missing_value] = 1
         self.convert = convert
+        self.ncorrelations = ncorrelations
         self.ndetectors = ndetectors
-        self.nsamples = tuple(nsamples)
         self.nfinesamples = tuple(nsamples)
+        self.nsamples = tuple(nsamples)
 
     def get_pointing_matrix(self, header, resolution, npixels_per_sample, oversampling=False):
         if npixels_per_sample is not None and npixels_per_sample != self.npixels_per_sample:
@@ -57,14 +59,19 @@ class MadMap1Observation(object):
         sizeofpmatrix = self.npixels_per_sample * numpy.sum(self.nsamples) * self.ndetectors
         print 'Info: Allocating '+str(sizeofpmatrix/2.**17)+' MiB for the pointing matrix.'
         pmatrix = numpy.zeros(sizeofpmatrix, dtype=numpy.int64)
-        status = tmf.read_madmap1(self.todfile, self.invnttfile, self.convert, self.npixels_per_sample, tod.T, pmatrix)
-        if (status != 0): raise RuntimeError()
+        status = tmf.madmap1_read_tod(self.todfile, self.invnttfile, self.convert, self.npixels_per_sample, tod.T, pmatrix)
+        if status != 0: raise RuntimeError()
         return pmatrix, header, self.ndetectors, self.nsamples, self.npixels_per_sample
 
     def get_tod(self):
         tod = Tod.zeros((self.ndetectors,self.nsamples))
         sizeofpmatrix = self.npixels_per_sample * numpy.sum(self.nsamples) * self.ndetectors
         pmatrix = numpy.zeros(sizeofpmatrix, dtype=numpy.int64)
-        status = tmf.read_madmap1(self.todfile, self.invnttfile, self.convert, self.npixels_per_sample, tod.T, pmatrix)
-        if (status != 0): raise RuntimeError()
+        status = tmf.madmap1_read_tod(self.todfile, self.invnttfile, self.convert, self.npixels_per_sample, tod.T, pmatrix)
+        if status != 0: raise RuntimeError()
         return tod
+
+    def get_filter_uncorrelated(self):
+        data, nsamples, status = tmf.madmap1_read_filter(self.invnttfile, self.convert, self.ncorrelations, self.ndetectors, self.nslices)
+        if status != 0: raise RuntimeError()
+        return data.T

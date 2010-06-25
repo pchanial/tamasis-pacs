@@ -5,56 +5,65 @@ module module_filtering
     implicit none
     private
 
-    public :: filterset
+    public :: FilterUncorrelated
     public :: create_filter_uncorrelated
 
     include 'fftw3.f'
 
-    type filterset
+    type FilterUncorrelated
         integer                :: ncorrelations
-        integer                :: ndetectors
-        integer                :: nslices
         integer                :: bandwidth
-        integer*8, allocatable :: first(:), last(:)
-        real(p), allocatable   :: data(:,:,:) ! (filter values, detector, slice)
-    end type filterset
+        integer                :: ndetectors
+        real(p), allocatable   :: data(:,:) ! (filter values, detector)
+    end type FilterUncorrelated
 
 contains
 
-    subroutine create_filter_uncorrelated(filter, nsamples, nsamples_tot, tod, status)
 
-        type(filterset), intent(in) :: filter
-        integer, intent(in)         :: nsamples(:), nsamples_tot
-!        real(dp), intent(out)       :: tod(sum(nsamples),filter%ndetectors)
-        real(dp), intent(out)       :: tod(nsamples_tot,filter%ndetectors)
-        integer, intent(out)        :: status
+    subroutine create_filter_uncorrelated(filter, nsamples, ndetectors, tod, status)
 
-        integer :: ndetectors, nslices, islice, islicefilter, idetector, dest
+        type(FilterUncorrelated), intent(in) :: filter(:)
+        integer, intent(in)                  :: nsamples(:)
+        integer, intent(in)                  :: ndetectors
+        real(dp), intent(out)                :: tod(sum(nsamples),ndetectors)
+        integer, intent(out)                 :: status
+
         real(p), allocatable :: in(:), out(:)
-        integer*8 :: plan
+        integer              :: dest, idetector, ifilter, islice, nslices
+        integer*8            :: plan
 
         status = 1
 
-        ndetectors = filter%ndetectors
         nslices = size(nsamples)
-        if (nslices /= filter%nslices .and. nslices /= 1) then
+        if (nslices /= size(filter) .and. nslices /= 1) then
             write (ERROR_UNIT,'(a,2(i0,a))') "CREATE_FILTER_UNCORRELATED: The timeline's slice number '", nslices, "' is incompatib&
-                  &le with the number of filter slices '", filter%nslices, "'."
+                  &le with the number of filter slices '", size(filter), "'."
+            return
+        end if
+
+        if (any(filter%ndetectors /= filter(1)%ndetectors)) then
+            write (ERROR_UNIT,'(a)') 'CREATE_FILTER_UNCORRELATED: Slices do not have the same number of detectors.'
+            return
+        end if
+
+        if (filter(1)%ndetectors /= ndetectors) then
+            write (ERROR_UNIT,'(a,2(i0,a))') "CREATE_FILTER_UNCORRELATED: The specified number of detectors '", ndetectors, "'does &
+                  &not match that in the filter '", filter(1)%ndetectors, "'."
             return
         end if
 
         dest = 1
         do islice = 1, nslices
 
-            if (filter%nslices /= 1) then
-                islicefilter = islice
+            if (size(filter) /= 1) then
+                ifilter = islice
             else
-                islicefilter = 1
+                ifilter = 1
             end if
 
-            if (nsamples(islice) < filter%bandwidth) then
+            if (nsamples(islice) < filter(ifilter)%bandwidth) then
                 write (ERROR_UNIT,'(a,3(i0,a))') "CREATE_FILTER_UNCORRELATED: Slice '", islice, "' cannot be filtered because it ha&
-                      &s a size '", nsamples(islice), "' smaller than the filter bandwidth '", filter%bandwidth, "'."
+                      &s a size '", nsamples(islice), "' smaller than the filter bandwidth '", filter(ifilter)%bandwidth, "'."
                 return
             end if
 
@@ -64,10 +73,10 @@ contains
 
             do idetector = 1, ndetectors
 
-                in(1:filter%ncorrelations+1) = filter%data(:,idetector,islicefilter)
-                in(filter%ncorrelations+2:nsamples(islice)-filter%ncorrelations) = 0
-                in(nsamples(islice)-filter%ncorrelations+1:nsamples(islice)) = &
-                     filter%data(filter%ncorrelations+1:2:-1,idetector,islicefilter)
+                in(1:filter(ifilter)%ncorrelations+1) = filter(ifilter)%data(:,idetector)
+                in(filter(ifilter)%ncorrelations+2:nsamples(islice)-filter(ifilter)%ncorrelations) = 0
+                in(nsamples(islice)-filter(ifilter)%ncorrelations+1:nsamples(islice)) = &
+                     filter(ifilter)%data(filter(ifilter)%ncorrelations+1:2:-1,idetector)
 
                 call dfftw_execute_r2r(plan, in, out)
 

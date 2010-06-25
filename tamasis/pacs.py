@@ -21,6 +21,10 @@ class _Pacs():
     - compression_factor  : number of frames which are collapsed during the compression stage
     - array              : 'blue', 'green' or 'red' array name
     - ndetectors         : number of detectors involved in the processing
+    methods:
+        - get_tod
+        - get_pointing_matrix
+        - get_filter_uncorrelated
     Author: P. Chanial
     """
 
@@ -215,6 +219,22 @@ class PacsObservation(_Pacs):
         if status != 0: raise RuntimeError()
 
         return pmatrix, header, self.ndetectors, nsamples, npixels_per_sample
+
+    def get_filter_uncorrelated(self):
+        """
+        Reads an inverse noise time-time correlation matrix from a calibration file, in PACS-DP format.
+        """
+        mask = self.bad_detector_mask
+        if self.keep_bad_detectors:
+            mask[:] = False
+
+        ncorrelations, status = tmf.pacs_read_filter_calibration_ncorrelations(tamasis_dir, self.channel)
+        if status != 0: raise RuntimeError()
+
+        data, status = tmf.pacs_read_filter_calibration(tamasis_dir, self.channel, ncorrelations, self.ndetectors, numpy.asfortranarray(mask))
+        if status != 0: raise RuntimeError()
+
+        return data.T
 
     @staticmethod
     def _files2tmf(filename):

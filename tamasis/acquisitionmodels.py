@@ -1130,11 +1130,14 @@ class Fft(AcquisitionModel):
 
 class InvNtt(Diagonal):
 
-    def __init__(self, shape, filename, convert='native', description=None):
-        ndetectors = shape[0]
-        nsamples = numpy.array(shape[1], ndmin=1, dtype='int32')
-        nsamples_tot = numpy.sum(nsamples)
-        tod_filter, ncorrelations, status = tmf.invntt_madmap1(filename, convert, nsamples, nsamples_tot, ndetectors)
+    def __init__(self, nsamples, filter, description=None):
+        nsamples = numpy.asarray(nsamples)
+        ndetectors = filter.shape[-2]
+        ncorrelations = filter.shape[-1] - 1
+        nslices = nsamples.size
+        if numpy.rank(filter) == 2:
+            filter = numpy.resize(filter, (nslices, ndetectors, ncorrelations+1))
+        tod_filter, status = tmf.fft_filter_uncorrelated(filter.T, nsamples, numpy.sum(nsamples))
         if status != 0: raise RuntimeError()
         Diagonal.__init__(self, tod_filter.T, nsamples, description)
         self.ncorrelations = ncorrelations

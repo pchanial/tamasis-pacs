@@ -1,7 +1,7 @@
 module module_madcap
 
     use iso_fortran_env,       only : ERROR_UNIT
-    use module_filtering,      only : filterset
+    use module_filtering,      only : FilterUncorrelated
     use module_pointingmatrix, only : pointingelement
     use module_precision,      only : p
     use module_string,         only : strinteger
@@ -172,21 +172,18 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine read_tod_pix_per_sample_is_one(signalfile, weightfile, pixelfile, convert, first, last, tod, pmatrix, status)
+    subroutine read_tod_pix_per_sample_is_one(signalfile, weightfile, pixelfile, convert, nsamples, tod, pmatrix, status)
 
         character(len=*), intent(in)       :: signalfile, weightfile, pixelfile
         character(len=*), intent(in)       :: convert
-        integer*8, intent(in)              :: first(:), last(:)
+        integer, intent(in)                :: nsamples(:)
         real(p), intent(out)               :: tod(:,:)
         type(pointingelement), intent(out) :: pmatrix(:,:,:)
         integer, intent(out)               :: status
 
-        integer   :: ndetectors, nslices, idetector, islice
-#ifdef GFORTRAN
-        integer*4 :: sarray(13)
-#endif
+        integer :: dest, ndetectors, nslices, idetector, islice
 
-        nslices = size(first)
+        nslices = size(nsamples)
         ndetectors = size(tod,2)
         
         status = 1
@@ -212,27 +209,30 @@ contains
             return
         end if
 
+        dest = 1
         do islice = 1, nslices
 
             do idetector = 1, ndetectors
 
-                read (11, iostat=status) tod(first(islice):last(islice),idetector)
+                read (11, iostat=status) tod(dest:dest+nsamples(islice)-1,idetector)
                 if (status /= 0) then
                     write (ERROR_UNIT,'(a)') "Error: Failed to read signal file '" // signalfile // "'."
                     go to 999
                 end if
-                read (12, iostat=status) pmatrix(1,first(islice):last(islice),idetector)%weight
+                read (12, iostat=status) pmatrix(1,dest:dest+nsamples(islice)-1,idetector)%weight
                 if (status /= 0) then
                     write (ERROR_UNIT,'(a)') "Error: Failed to read weight file '" // weightfile // "'."
                     go to 999
                 end if
-                read (13, iostat=status) pmatrix(1,first(islice):last(islice),idetector)%pixel
+                read (13, iostat=status) pmatrix(1,dest:dest+nsamples(islice)-1,idetector)%pixel
                 if (status /= 0) then
                     write (ERROR_UNIT,'(a)') "Error: Failed to read pixel file '" // pixelfile // "'."
                     go to 999
                 end if
 
             end do
+
+            dest = dest + nsamples(islice)
 
         end do
 
@@ -246,17 +246,17 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine read_tod_madmap1(filename, convert, first, last, tod, pmatrix, status)
+    subroutine read_tod_madmap1(filename, convert, nsamples, tod, pmatrix, status)
 
         character(len=*), intent(in)       :: filename
         character(len=*), intent(in)       :: convert
-        integer*8, intent(in)              :: first(:), last(:)
+        integer, intent(in)                :: nsamples(:)
         real(p), intent(out)               :: tod(:,:)
         type(pointingelement), intent(out) :: pmatrix(:,:,:)
         integer, intent(out)               :: status
 
-        integer*8 :: filesize, nsamples, isample
-        integer   :: npixels_per_sample, ndetectors, nslices, idetector, islice
+        integer*8 :: filesize
+        integer   :: dest, idetector, isample, islice, ndetectors, npixels_per_sample, nsamples_tot, nslices
 #ifdef GFORTRAN
         integer*4 :: sarray(13)
 #else
@@ -265,8 +265,8 @@ contains
 
         ndetectors = size(tod,2)
         npixels_per_sample = size(pmatrix,1)
-        nslices = size(first)
-        nsamples = sum(last-first+1)
+        nslices = size(nsamples)
+        nsamples_tot = sum(nsamples)
 
         inquire (file=filename, size=filesize)
 #ifdef GFORTRAN
@@ -274,10 +274,10 @@ contains
         filesize = sarray(8)
 #endif
 
-        if (filesize /= 4*8 + 8 * nsamples * (1 + npixels_per_sample) * ndetectors) then
+        if (filesize /= 4*8 + 8 * nsamples_tot * (1 + npixels_per_sample) * ndetectors) then
             status = 1
             write (ERROR_UNIT,'(a,2(i0,a))') "Error: Invalid file size ('", filesize, "' instead of '",                            &
-                  4*8 + 8 * nsamples * (1 + npixels_per_sample) * ndetectors, "')."
+                  4*8 + 8 * nsamples_tot * (1 + npixels_per_sample) * ndetectors, "')."
             return
         end if
 
@@ -287,10 +287,10 @@ contains
             return
         end if
 
-        if (sum(last-first+1) /= size(tod,1)) then
+        if (nsamples_tot /= size(tod,1)) then
             status = 1
             write (ERROR_UNIT,'(a,2(i0,a))') "Error: Invalid number of samples in input tod ('", size(tod,1), "' instead of '",    &
-                  sum(last-first+1), "')."
+                  nsamples_tot, "')."
             return
         end if
 
@@ -302,11 +302,12 @@ contains
         end if
 
         ! read the tod
+        dest = 1
         do islice = 1, nslices
 
             do idetector = 1, ndetectors
 
-                do isample = first(islice), last(islice)
+                do isample = dest, dest + nsamples(islice) - 1
 
                     read (11, iostat=status) tod(isample,idetector)
                     if (status /= 0) go to 999
@@ -323,6 +324,8 @@ contains
                 end do
 
             end do
+
+            dest = dest + nsamples(islice)
 
         end do
 
@@ -464,69 +467,54 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine read_filter(filename, convert, ndetectors, filter, status)
+    subroutine read_filter(filename, convert, ndetectors, filter, nsamples, status)
 
-        character(len=*), intent(in) :: filename
-        character(len=*), intent(in) :: convert
-        integer, intent(in)          :: ndetectors
-        type(filterset), intent(out) :: filter
-        integer, intent(out)         :: status
+        character(len=*), intent(in)                       :: filename
+        character(len=*), intent(in)                       :: convert
+        integer, intent(in)                                :: ndetectors
+        type(FilterUncorrelated), allocatable, intent(out) :: filter(:)
+        integer, allocatable, intent(out)                  :: nsamples(:)
+        integer, intent(out)                               :: status
 
         integer*8, allocatable :: first(:), last(:)
         integer, allocatable   :: ncorrelations(:)
-        integer*8              :: nsamples, isample
-        integer                :: islice, idetector, ifilter
+        integer                :: islice, idetector, ifilter, nslices
 
         call read_filter_headers(filename, convert, ndetectors, first, last, ncorrelations, status)
         if (status /= 0) return
 
-        ! set number of correlations and bandwidth
-        if (any(ncorrelations /= ncorrelations(1))) then
-            status = 1
-            write (ERROR_UNIT,'(a)') 'Error: Filter files do not have the same correlation length.'
-            return
-        end if        
-        filter%ncorrelations = ncorrelations(1)
-        filter%bandwidth = 2*ncorrelations(1) + 1
-
-        ! set number of detectors
-        filter%ndetectors = ndetectors
-
         ! set number of slices, update ranges and read invntt values
-        filter%nslices = size(first) / ndetectors
+        nslices = size(first) / ndetectors
+        allocate (filter(nslices))
+        allocate (nsamples(nslices))
 
-        allocate(filter%first(filter%nslices))
-        allocate(filter%last (filter%nslices))
-        allocate(filter%data (filter%ncorrelations+1,filter%ndetectors,filter%nslices))
-        isample = 1
+        do islice=1, nslices
 
-        do islice=1, filter%nslices
-
-           nsamples = last((islice-1)*ndetectors+1) - first((islice-1)*ndetectors+1) + 1
+           nsamples(islice) = last((islice-1)*ndetectors+1) - first((islice-1)*ndetectors+1) + 1
+           filter(islice)%ncorrelations = ncorrelations(islice)
+           filter(islice)%bandwidth = 2 * ncorrelations(islice) + 1
+           filter(islice)%ndetectors = ndetectors
+           allocate (filter(islice)%data(ncorrelations(islice)+1,ndetectors))
 
            do idetector = 1, ndetectors
 
                ifilter = (islice-1)*ndetectors + idetector
-               if (last(ifilter) - first(ifilter) + 1 /= nsamples) then
+               if (last(ifilter) - first(ifilter) + 1 /= nsamples(islice)) then
                    write (ERROR_UNIT,'(a)') "Error: Filter '" // filename // '.' // strinteger(ifilter-1)// "' does not apply to th&
                          &e same number of samples than filter '" // filename // '.' // strinteger((islice-1)*ndetectors) // "'."
                    status = 1
-                   deallocate (filter%first)
-                   deallocate (filter%last)
-                   deallocate (filter%data)
+                   do ifilter=1, islice
+                       deallocate (filter(ifilter)%data)
+                   end do
                    return
                end if
 
                open (11, file=filename // '.' // strinteger(ifilter-1), form='unformatted', access='stream', convert=convert,      &
                      action='read')
-               read (11, pos=3*8+1) filter%data(:,idetector,islice)
+               read (11, pos=3*8+1) filter(islice)%data(:,idetector)
                close (11)
 
            end do
-
-           filter%first(islice) = isample
-           filter%last (islice) = isample + nsamples - 1
-           isample = isample + nsamples
 
         end do
 

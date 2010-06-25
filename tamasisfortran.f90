@@ -147,6 +147,86 @@ end subroutine pacs_info
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
+subroutine pacs_read_filter_calibration_ncorrelations(tamasis_dir, channel, ncorrelations, status)
+
+    use module_pacsinstrument, only : read_filter_calibration_ncorrelations
+    use module_tamasis,        only : init_tamasis
+    implicit none
+
+    !f2py intent(in)   tamasis_dir
+    !f2py intent(in)   channel
+    !f2py intent(out)  ncorrelations
+    !f2py intent(out)  status
+    
+    character(len=*), intent(in) :: tamasis_dir
+    character, intent(in)        :: channel
+    integer, intent(out)         :: ncorrelations
+    integer, intent(out)         :: status
+    
+    call init_tamasis(tamasis_dir)
+    ncorrelations = read_filter_calibration_ncorrelations(channel, status)
+
+end subroutine pacs_read_filter_calibration_ncorrelations
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine pacs_read_filter_calibration(tamasis_dir, channel, ncorrelations, ndetectors, mask, nrows, ncolumns, data, status)
+
+    use iso_fortran_env,       only : ERROR_UNIT
+    use module_filtering,      only : FilterUncorrelated
+    use module_pacsinstrument, only : read_filter_calibration
+    use module_tamasis,        only : init_tamasis
+    implicit none
+
+    !f2py threadsafe
+    !f2py intent(in)   tamasis_dir
+    !f2py intent(in)   channel
+    !f2py intent(in)   ncorrelations
+    !f2py intent(in)   ndetectors
+    !f2py intent(in)   mask
+    !f2py intent(hide) nrows = shape(mask,0)
+    !f2py intent(hide) ncolumns = shape(mask,1)
+    !f2py intent(out)  data
+    !f2py intent(out)  status
+
+    character(len=*), intent(in) :: tamasis_dir
+    character, intent(in)        :: channel
+    integer, intent(in)          :: ncorrelations
+    integer, intent(in)          :: ndetectors
+    logical*1, intent(in)        :: mask(nrows,ncolumns)
+    integer, intent(in)          :: nrows
+    integer, intent(in)          :: ncolumns
+    real*8, intent(out)          :: data(ncorrelations+1,ndetectors)
+    integer, intent(out)         :: status
+
+    type(FilterUncorrelated)     :: filter
+
+    call init_tamasis(tamasis_dir)
+    call read_filter_calibration(channel, mask, filter, status)
+    if (status /= 0) return
+
+    if (filter%ndetectors /= ndetectors) then
+        status = 1
+        write (ERROR_UNIT,'(a,2(i0,a))') "The specified number of detectors '", ndetectors, "' does not match that in the calibrati&
+              &on file '", filter%ndetectors, "'."
+    end if
+    if (filter%ncorrelations /= ncorrelations) then
+        status = 1
+        write (ERROR_UNIT,'(a,2(i0,a))') "The specified number of correlations '", ncorrelations, "' does not match that in the cal&
+              &ibration file '", filter%ncorrelations, "'."
+    end if
+    if (status /= 0) return
+
+    data = filter%data
+
+end subroutine pacs_read_filter_calibration
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
 subroutine pacs_map_header(tamasis_dir, filename, nfilenames, oversampling, fine_sampling_factor, keep_bad_detectors,              &
                            bad_detector_mask, nrows, ncolumns, mask_bad_line, resolution, header, status)
 
@@ -959,7 +1039,7 @@ end subroutine filter_median
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine read_madmap1_nslices(invnttfile, ndetectors, nslices, status)
+subroutine madmap1_nslices(invnttfile, ndetectors, nslices, status)
 
     use module_madcap, only : get_nfilters
     implicit none
@@ -981,13 +1061,13 @@ subroutine read_madmap1_nslices(invnttfile, ndetectors, nslices, status)
     if (status /= 0) return
     nslices = nfilterfiles / ndetectors
 
-end subroutine read_madmap1_nslices
+end subroutine madmap1_nslices
 
 
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine read_madmap1_info(todfile, invnttfile, convert, ndetectors, nslices, npixels_per_sample, nsamples, status)
+subroutine madmap1_info(todfile, invnttfile, convert, ndetectors, nslices, npixels_per_sample, nsamples, ncorrelations, status)
 
     use iso_fortran_env, only : ERROR_UNIT
     use module_madcap,   only : read_filter_headers, read_tod_header
@@ -1002,6 +1082,7 @@ subroutine read_madmap1_info(todfile, invnttfile, convert, ndetectors, nslices, 
     !f2py intent(in)  :: nslices
     !f2py intent(out) :: npixels_per_sample
     !f2py intent(out) :: nsamples
+    !f2py intent(out) :: ncorrelations
     !f2py intent(out) :: status
 
     character(len=*), intent(in) :: todfile
@@ -1011,21 +1092,23 @@ subroutine read_madmap1_info(todfile, invnttfile, convert, ndetectors, nslices, 
     integer, intent(in)          :: nslices
     integer, intent(out)         :: npixels_per_sample
     integer, intent(out)         :: nsamples(nslices)
+    integer, intent(out)         :: ncorrelations
     integer, intent(out)         :: status
 
     integer*8, allocatable       :: first(:), last(:)
-    integer, allocatable         :: ncorrelations(:)
+    integer, allocatable         :: ncorrelations_(:)
     integer                      :: idetector, ifilter, islice
     integer*8                    :: nsamples_tot
 
     call read_tod_header(todfile, convert, ndetectors, nsamples_tot, npixels_per_sample, status)
     if (status /= 0) return
 
-    call read_filter_headers(invnttfile, convert, ndetectors, first, last, ncorrelations, status)
+    call read_filter_headers(invnttfile, convert, ndetectors, first, last, ncorrelations_, status)
     if (status /= 0) return
 
+    ncorrelations = ncorrelations_(1)
     ! check number of correlations
-    if (any(ncorrelations /= ncorrelations(1))) then
+    if (any(ncorrelations_ /= ncorrelations)) then
         status = 1
         write (ERROR_UNIT,'(a)') 'Error: Filter files do not have the same correlation length.'
         return
@@ -1058,15 +1141,15 @@ subroutine read_madmap1_info(todfile, invnttfile, convert, ndetectors, nslices, 
         return
     end if
 
-end subroutine read_madmap1_info
+end subroutine madmap1_info
 
 
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine read_madmap1(todfile, invnttfile, convert, npixels_per_sample, nsamples, ndetectors, tod, pmatrix, status)
+subroutine madmap1_read_tod(todfile, invnttfile, convert, npixels_per_sample, nsamples_tot, ndetectors, tod, pmatrix, status)
 
-    use module_filtering,      only : filterset
+    use module_filtering,      only : FilterUncorrelated
     use module_madcap,         only : read_filter, read_tod
     use module_pointingmatrix, only : pointingelement
     implicit none
@@ -1076,131 +1159,139 @@ subroutine read_madmap1(todfile, invnttfile, convert, npixels_per_sample, nsampl
     !f2py intent(in)               :: invnttfile
     !f2py intent(in)               :: convert
     !f2py intent(in)               :: npixels_per_sample
-    !f2py intent(hide)             :: nsamples = shape(tod,0)
+    !f2py intent(hide)             :: nsamples_tot = shape(tod,0)
     !f2py intent(hide)             :: ndetectors = shape(tod,1)
-    !f2py intent(inout)            :: tod(nsamples,ndetectors)
-    !f2py integer*8, intent(inout) :: pmatrix(npixels_per_sample*nsamples*ndetectors)
+    !f2py intent(inout)            :: tod
+    !f2py integer*8, intent(inout) :: pmatrix(npixels_per_sample*nsamples_tot*ndetectors)
     !f2py intent(out)              :: status
 
     character(len=*), intent(in)         :: todfile
     character(len=*), intent(in)         :: invnttfile
     character(len=*), intent(in)         :: convert
     integer, intent(in)                  :: npixels_per_sample
-    integer*8, intent(in)                :: nsamples
+    integer, intent(in)                  :: nsamples_tot
     integer, intent(in)                  :: ndetectors
-    real*8, intent(inout)                :: tod(nsamples,ndetectors)
-    type(pointingelement), intent(inout) :: pmatrix(npixels_per_sample,nsamples,ndetectors)
+    real*8, intent(inout)                :: tod(nsamples_tot,ndetectors)
+    type(pointingelement), intent(inout) :: pmatrix(npixels_per_sample,nsamples_tot,ndetectors)
     integer, intent(out)                 :: status
 
-    type(filterset)                      :: filter
+    type(FilterUncorrelated), allocatable :: filter(:)
+    integer, allocatable                  :: nsamples(:)
     
-
-    call read_filter(invnttfile, convert, ndetectors, filter, status)
+    call read_filter(invnttfile, convert, ndetectors, filter, nsamples, status)
     if (status /= 0) return
 
-    call read_tod(todfile, convert, filter%first, filter%last, tod, pmatrix, status)
+    call read_tod(todfile, convert, nsamples, tod, pmatrix, status)
 
-end subroutine read_madmap1
+end subroutine madmap1_read_tod
 
 
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine invntt_madmap1(filename, convert, nslices, nsamples, nsamples_tot, ndetectors, tod_filter, ncorrelations,      &
-                                   status)
+subroutine madmap1_read_filter(filename, convert, ncorrelations, ndetectors, nslices, data, nsamples, status)
+
+    use iso_fortran_env,  only : ERROR_UNIT
+    use module_filtering, only : FilterUncorrelated, create_filter_uncorrelated
+    use module_madcap,    only : read_filter
+    implicit none
 
     !f2py threadsafe
     !f2py intent(in)   :: filename
     !f2py intent(in)   :: convert
-    !f2py intent(hide) :: nslices = size(nsamples)
-    !f2py intent(in)   :: nsamples
-    !f2py intent(in)   :: nsamples_tot
+    !f2py intent(in)   :: ncorrelations
     !f2py intent(in)   :: ndetectors
-    !f2py intent(out)  :: tod(nsamples_tot,ndetectors)
-    !f2py intent(out)  :: ncorrelations
+    !f2py intent(in)   :: nslices
+    !f2py intent(out)  :: data
+    !f2py intent(out)  :: nsamples
     !f2py intent(out)  :: status
-
-    use module_filtering, only : create_filter_uncorrelated, filterset
-    use module_madcap,    only : read_filter
-    implicit none
 
     character(len=*), intent(in) :: filename
     character(len=*), intent(in) :: convert
-    integer, intent(in)          :: nslices
-    integer, intent(in)          :: nsamples(nslices)
-    integer, intent(in)          :: nsamples_tot
+    integer, intent(in)          :: ncorrelations
     integer, intent(in)          :: ndetectors
-    real*8, intent(out)          :: tod_filter(nsamples_tot,ndetectors)
-    integer, intent(out)         :: ncorrelations
+    integer, intent(in)          :: nslices
+    real*8, intent(out)          :: data(ncorrelations+1, ndetectors, nslices)
+    integer, intent(out)         :: nsamples(nslices)
     integer, intent(out)         :: status
 
-    type(filterset)              :: filter
+    type(FilterUncorrelated), allocatable :: filter(:)
+    integer, allocatable                  :: nsamples_(:)
+    integer                               :: islice
 
-    call read_filter(filename, convert, ndetectors, filter, status)
+    call read_filter(filename, convert, ndetectors, filter, nsamples_, status)
     if (status /= 0) return
 
-    ncorrelations = filter%ncorrelations
-
-    call create_filter_uncorrelated(filter, nsamples, nsamples_tot, tod_filter, status)
-    if (status /= 0) return
-
-end subroutine invntt_madmap1
-
-
-!-----------------------------------------------------------------------------------------------------------------------------------
-
-
-subroutine sqrt_invntt_madmap1(filename, convert, nslices, nsamples, nsamples_tot, ndetectors, tod_filter, ncorrelations,      &
-                                   status)
-
-    !f2py threadsafe
-    !f2py intent(in)   :: filename
-    !f2py intent(in)   :: convert
-    !f2py intent(hide) :: nslices = size(nsamples)
-    !f2py intent(in)   :: nsamples
-    !f2py intent(in)   :: nsamples_tot
-    !f2py intent(in)   :: ndetectors
-    !f2py intent(out)  :: tod(nsamples_tot,ndetectors)
-    !f2py intent(out)  :: ncorrelations
-    !f2py intent(out)  :: status
-
-    use iso_fortran_env,  only : OUTPUT_UNIT
-    use module_filtering, only : create_filter_uncorrelated, filterset
-    use module_madcap,    only : read_filter
-    implicit none
-
-    character(len=*), intent(in) :: filename
-    character(len=*), intent(in) :: convert
-    integer, intent(in)          :: nslices
-    integer, intent(in)          :: nsamples(nslices)
-    integer, intent(in)          :: nsamples_tot
-    integer, intent(in)          :: ndetectors
-    real*8, intent(out)          :: tod_filter(nsamples_tot,ndetectors)
-    integer, intent(out)         :: ncorrelations
-    integer, intent(out)         :: status
-
-    type(filterset)              :: filter
-
-    call read_filter(filename, convert, ndetectors, filter, status)
-    if (status /= 0) return
-
-    ncorrelations = filter%ncorrelations
-
-    call create_filter_uncorrelated(filter, nsamples, nsamples_tot, tod_filter, status)
-    if (status /= 0) return
-
-    if (any(tod_filter < 0)) then
-        write (OUTPUT_UNIT,'(a)') 'SQRT_INVNTT_MADMAP1: some values are negative.'
+    if (size(filter) /= nslices) then
+        status = 1
+        write (ERROR_UNIT,'(a)') 'READ_FILTER_MADMAP1: Incompatible number of slices.'
+    else
+        nsamples = nsamples_
     end if
 
-    tod_filter = sqrt(tod_filter)
-    
-    ! set NaN values to zero
-    where (tod_filter /= tod_filter)
-        tod_filter = 0
-    end where
+    if (any(filter%ncorrelations /= ncorrelations)) then
+        status = 1
+        write (ERROR_UNIT,'(a)') 'READ_FILTER_MADMAP1: filters have an invalid correlation length.'
+    end if
 
-end subroutine sqrt_invntt_madmap1
+    if (any(filter%ndetectors /= ndetectors)) then
+        status = 1
+        write (ERROR_UNIT,'(a)') 'READ_FILTER_MADMAP1: filters have an invalid number of detectors.'
+    end if
+
+    if (status /= 0) return
+
+    do islice = 1, nslices
+        data(:,:,islice) = filter(islice)%data
+    end do
+
+end subroutine madmap1_read_filter
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine fft_filter_uncorrelated(data, nsamples, nsamples_tot, ncorrelations, ndetectors, nslices, tod_filter, status)
+
+    use iso_fortran_env,  only : ERROR_UNIT
+    use module_filtering, only : FilterUncorrelated, fft_filter => create_filter_uncorrelated
+    implicit none
+
+    !f2py threadsafe
+    !f2py intent(in)   :: data
+    !f2py intent(in)   :: nsamples
+    !f2py intent(in)   :: nsamples_tot
+    !f2py intent(hide) :: ncorrelations = size(data,0) - 1
+    !f2py intent(hide) :: ndetectors = size(data,1)
+    !f2py intent(hide) :: nslices = size(data,2)
+    !f2py intent(out)  :: tod_filter
+    !f2py intent(out)  :: status
+
+    integer, intent(in)  :: nsamples_tot
+    integer, intent(in)  :: ncorrelations
+    integer, intent(in)  :: ndetectors
+    integer, intent(in)  :: nslices
+    real*8, intent(in)   :: data(ncorrelations+1,ndetectors,nslices)
+    integer, intent(in)  :: nsamples(nslices)
+    real*8, intent(out)  :: tod_filter(nsamples_tot,ndetectors)
+    integer, intent(out) :: status
+
+    type(FilterUncorrelated), allocatable :: filter(:)
+    integer                               :: islice
+
+    allocate (filter(nslices))
+    filter%ncorrelations = ncorrelations
+    filter%bandwidth = 2 * ncorrelations + 1
+    filter%ndetectors = ndetectors
+    do islice = 1, nslices
+        allocate (filter(islice)%data(ncorrelations+1,ndetectors))
+        filter(islice)%data = data(:,:,islice)
+    end do
+
+    call fft_filter(filter, nsamples, ndetectors, tod_filter, status)
+    if (status /= 0) return
+
+end subroutine fft_filter_uncorrelated
 
 
 !-----------------------------------------------------------------------------------------------------------------------------------

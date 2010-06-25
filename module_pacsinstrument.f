@@ -1,11 +1,13 @@
 module module_pacsinstrument
 
     use iso_fortran_env,        only : ERROR_UNIT, OUTPUT_UNIT
-    use module_fitstools,       only : ft_close, ft_create_header, ft_open_image, ft_read_extension, ft_read_slice,ft_test_extension
+    use module_filtering,       only : FilterUncorrelated
+    use module_fitstools,       only : ft_close, ft_open, ft_create_header, ft_open_image, ft_read_extension, ft_read_slice,       &
+                                       ft_test_extension
     use module_math,            only : DEG2RAD, pInf, mInf, mean, nint_down, nint_up
     use module_pacsobservation, only : pacsobservationslice, pacsobservation
     use module_pointingmatrix,  only : pointingelement, xy2roi, roi2pmatrix
-    use module_precision,       only : p
+    use module_precision,       only : dp, p
     use module_projection,      only : convex_hull, surface_convex_polygon
     use module_string,          only : strinteger
     use module_tamasis,         only : get_tamasis_path, tamasis_path_len
@@ -18,6 +20,10 @@ module module_pacsinstrument
     public :: pacsinstrument
     public :: multiplexing_direct
     public :: multiplexing_transpose
+    public :: read_filter_calibration_ncorrelations
+    public :: read_filter_calibration
+    public :: read_filter_filename
+
 
     integer, parameter :: ndims = 2
     integer, parameter :: nvertices = 4
@@ -25,6 +31,16 @@ module module_pacsinstrument
     integer, parameter :: shape_red (2) = [16, 32]
     integer, parameter :: distortion_degree = 3
     real*8,  parameter :: sampling = 0.025d0
+
+
+    ! these calibration files are taken from HCSS 4.0.70
+    character(len=*), parameter :: filename_saa = 'PCalPhotometer_SubArrayArray_FM_v5.fits'
+    character(len=*), parameter :: filename_ai  = 'PCalPhotometer_ArrayInstrument_FM_v5.fits'
+    character(len=*), parameter :: filename_bpm = 'PCalPhotometer_BadPixelMask_FM_v5.fits'
+    character(len=*), parameter :: filename_ff  = 'PCalPhotometer_FlatField_FM_v3.fits'
+    character(len=*), parameter :: filename_ib  = 'PCalPhotometer_InvnttBS_FM_v1.fits[Contents]'
+    character(len=*), parameter :: filename_ig  = 'PCalPhotometer_InvnttBL_FM_v1.fits[Contents]'
+    character(len=*), parameter :: filename_ir  = 'PCalPhotometer_InvnttRed_FM_v1.fits[Contents]'
 
     type pacsinstrument
  
@@ -170,12 +186,6 @@ contains
 
         class(pacsinstrument), intent(inout) :: this
         integer, intent(out)                 :: status
-
-        ! these calibration files are taken from HCSS 4.0.70
-        character(len=*), parameter :: filename_saa = 'PCalPhotometer_SubArrayArray_FM_v5.fits'
-        character(len=*), parameter :: filename_ai  = 'PCalPhotometer_ArrayInstrument_FM_v5.fits'
-        character(len=*), parameter :: filename_bpm = 'PCalPhotometer_BadPixelMask_FM_v5.fits'
-        character(len=*), parameter :: filename_ff  = 'PCalPhotometer_FlatField_FM_v3.fits'
 
         integer,          parameter :: hdu_blue(4) = [8, 12, 16, 20]
         integer,          parameter :: hdu_red (4) = [6, 10, 14, 18]
@@ -839,6 +849,111 @@ contains
         if (status == 0) status = status_close
 
     end subroutine read_oldstyle
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    function read_filter_calibration_ncorrelations(channel, status) result (ncorrelations)
+
+        character, intent(in) :: channel
+        integer, intent(out)  :: status
+        integer               :: ncorrelations
+
+        integer               :: unit
+        character(len=70)     :: comment
+
+        select case (channel)
+            case ('b')
+                call ft_open(get_calfile(filename_ib), unit, status)
+            case ('g')
+                call ft_open(get_calfile(filename_ig), unit, status)
+            case ('r')
+                call ft_open(get_calfile(filename_ir), unit, status)
+            case default
+                status = 1
+                write (ERROR_UNIT,'(a)') "READ_FILTER_CALIBRATION_NCORRELATIONS: invalid channel: '" // channel // "'."
+        end select
+        if (status /= 0) return
+
+        call ftgkyj(unit, 'NAXIS1', ncorrelations, comment, status)
+        if (status /= 0) return
+
+        ncorrelations = ncorrelations - 1
+
+        call ft_close(unit, status)
+
+    end function read_filter_calibration_ncorrelations
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine read_filter_calibration(channel, mask, filter, status)
+
+        character, intent(in)                 :: channel
+        logical*1, intent(in)                 :: mask(:,:)
+        type(FilterUncorrelated), intent(out) :: filter
+        integer, intent(out)                  :: status
+
+        select case (channel)
+            case ('b')
+                call read_filter_filename(get_calfile(filename_ib), mask, filter, status)
+            case ('g')
+                call read_filter_filename(get_calfile(filename_ig), mask, filter, status)
+            case ('r')
+                call read_filter_filename(get_calfile(filename_ir), mask, filter, status)
+            case default
+                status = 1
+                write (ERROR_UNIT,'(a)') "READ_FILTER_CALIBRATION: invalid channel: '" // channel // "'."
+        end select
+
+    end subroutine read_filter_calibration
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine read_filter_filename(filename, mask, filter, status)
+
+        character(len=*), intent(in)          :: filename
+        logical*1, intent(in)                 :: mask(:,:)
+        type(FilterUncorrelated), intent(out) :: filter
+        integer, intent(out)                  :: status
+
+        real(dp), allocatable :: data(:,:)
+        integer               :: idetector, ndetectors, nrows, ncolumns, p, q
+
+        ndetectors = size(mask) - count(mask)
+        nrows = size(mask, 1)
+        ncolumns = size(mask, 2)
+
+        call ft_read_extension(filename, data, status)
+        if (status /= 0) return
+
+        filter%ncorrelations = size(data, 1) - 1
+        if (size(data, 2) /= size(mask)) then
+            status = 1
+            write (ERROR_UNIT,'(a,2(i0,a))') "Calibration file '" // filename // "' contains an incorrect number of detectors: '", &
+                  size(data, 2), "' instead of '", size(mask), "'."
+            return
+        end if
+        filter%ndetectors = ndetectors
+        filter%bandwidth  = 2 * filter%ncorrelations + 1
+        
+        allocate (filter%data(filter%ncorrelations+1,filter%ndetectors))
+
+        !XXX CHECK P, Q layout in calibration file
+        idetector = 1
+        do p = 1, nrows
+            do q = 1, ncolumns
+                if (mask(p,q)) cycle
+                filter%data(:,idetector) = data(:, (p-1) * ncolumns + q)
+                idetector = idetector + 1
+            end do
+        end do
+
+    end subroutine read_filter_filename
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
