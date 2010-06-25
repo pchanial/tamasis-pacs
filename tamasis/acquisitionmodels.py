@@ -856,6 +856,7 @@ class Masking(Symmetric):
             self.mask = None
         else:
             self.mask = mask
+        # shapein is not set, since it would fail for Tod with more than one slice
 
     def direct(self, data, reusein=False, reuseout=False):
         data = self.validate_input(numpy.ndarray, data)
@@ -874,14 +875,12 @@ class Masking(Symmetric):
     def mask(self, mask):
         if mask is None:
             self._mask = None
-            self.shapein = None
             return
         if not utils._my_issctype(numpy.asarray(mask).dtype):
             raise TypeError("Invalid type for the mask: '" + utils.get_type(mask) + "'.")
         self._mask = numpy.asarray(mask, dtype='int8')
         if numpy.rank(self._mask) == 0:
             raise TypeError('The input mask should not be scalar.')
-        self.shapein = self._mask.shape
 
 
 #-------------------------------------------------------------------------------
