@@ -81,8 +81,6 @@ else:
 
 a = numpy.array([0, 0., 1., 1., 0., 1])
 mask = Masking(a)
-if mask.shapein != a.shape or mask.shapeout != a.shape:
-    raise TestFailure('mask 1d')
 b = numpy.array([3., 4., 1., 0., 3., 2.])
 c = numpy.array([3., 4., 0., 0., 3., 0.])
 if id(b) == id(c):
@@ -94,8 +92,6 @@ if numpy.any(mask.transpose(b) != c):
 
 a = numpy.array([[0, 0.], [1., 1.], [0., 1.]])
 mask = Masking(a)
-if mask.shapein != a.shape or mask.shapeout != a.shape:
-    raise TestFailure('mask 2d')
 b = numpy.array([[3., 4.], [1., 0.], [3., 2.]])
 c = numpy.array([[3., 4.], [0., 0.], [3., 0.]])
 if numpy.any(mask.direct(b) != c):
@@ -105,8 +101,6 @@ if numpy.any(mask.transpose(b) != c):
 
 a = numpy.array([[[0, 0.], [1., 1.]], [[0., 1], [1, 1]]])
 mask = Masking(a)
-if mask.shapein != a.shape or mask.shapeout != a.shape:
-    raise TestFailure('mask 2d')
 b = numpy.array([[[3, 4.], [1., 0.]], [[3., 2], [-1, 9]]])
 c = numpy.array([[[3, 4.], [0., 0.]], [[3., 0], [0, 0]]])
 if numpy.any(mask.direct(b) != c):
