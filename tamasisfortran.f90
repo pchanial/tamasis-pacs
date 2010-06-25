@@ -436,7 +436,7 @@ subroutine pacs_pointing_matrix_filename(tamasis_dir, filename, nfilenames, over
     logical, intent(in)          :: oversampling
     integer, intent(in)          :: fine_sampling_factor
     integer, intent(in)          :: npixels_per_sample
-    integer, intent(in)          :: nsamples
+    integer*8, intent(in)        :: nsamples
     integer, intent(in)          :: ndetectors
     logical, intent(in)          :: keep_bad_detectors
     logical*1, intent(in)        :: bad_detector_mask(nrow,ncol)
@@ -678,7 +678,10 @@ subroutine pointing_matrix_direct(pmatrix, map1d, signal, npixels_per_sample, ns
     type(pointingelement), intent(inout) :: pmatrix(npixels_per_sample, nsamples, ndetectors)
     real*8, intent(in)    :: map1d(npixels)
     real*8, intent(inout) :: signal(nsamples, ndetectors)
-    integer, intent(in)   :: npixels_per_sample, nsamples, ndetectors, npixels
+    integer, intent(in)   :: npixels_per_sample
+    integer*8, intent(in) :: nsamples
+    integer, intent(in)   :: ndetectors
+    integer, intent(in)   :: npixels
 
     call pmatrix_direct(pmatrix, map1d, signal)
 
@@ -705,7 +708,10 @@ subroutine pointing_matrix_transpose(pmatrix, signal, map1d, npixels_per_sample,
     type(pointingelement), intent(inout) :: pmatrix(npixels_per_sample, nsamples, ndetectors)
     real*8, intent(in)    :: signal(nsamples, ndetectors)
     real*8, intent(inout) :: map1d(npixels)
-    integer, intent(in)   :: npixels_per_sample, nsamples, ndetectors, npixels
+    integer, intent(in)   :: npixels_per_sample
+    integer*8, intent(in) :: nsamples
+    integer, intent(in)   :: ndetectors
+    integer, intent(in)   :: npixels
 
     call pmatrix_transpose(pmatrix, signal, map1d)
 
@@ -730,7 +736,10 @@ subroutine pointing_matrix_ptp(pmatrix, ptp, npixels_per_sample, nsamples, ndete
 
     type(pointingelement), intent(inout) :: pmatrix(npixels_per_sample, nsamples, ndetectors)
     real*8, intent(out)                  :: ptp(npixels, npixels)
-    integer, intent(in)                  :: npixels_per_sample, nsamples, ndetectors, npixels
+    integer, intent(in)                  :: npixels_per_sample
+    integer*8, intent(in)                :: nsamples
+    integer, intent(in)                  :: ndetectors
+    integer, intent(in)                  :: npixels
 
     call pmatrix_ptp(pmatrix, ptp)
 
@@ -909,7 +918,7 @@ subroutine backprojection_weighted(pmatrix, data, mask, map1d, weights1d, npixel
     real*8, intent(inout)             :: map1d(npixels)
     real*8, intent(inout)             :: weights1d(npixels)
     integer, intent(in)               :: npixels_per_sample
-    integer, intent(in)               :: nsamples
+    integer*8, intent(in)             :: nsamples
     integer, intent(in)               :: ndetectors
     integer, intent(in)               :: npixels
 
@@ -942,7 +951,9 @@ subroutine deglitch_l2b_std(pmatrix, nx, ny, data, mask, nsigma, npixels_per_sam
     real*8, intent(in)                :: data(nsamples,ndetectors)
     logical*1, intent(inout)          :: mask(nsamples,ndetectors)
     real*8, intent(in)                :: nsigma
-    integer, intent(in)               :: npixels_per_sample, nsamples, ndetectors
+    integer, intent(in)               :: npixels_per_sample
+    integer*8, intent(in)             :: nsamples
+    integer, intent(in)               :: ndetectors
 
     call deglitch_l2b(pmatrix, nx, ny, data, mask, nsigma, .false., verbose=.true.)
 
@@ -973,7 +984,9 @@ subroutine deglitch_l2b_mad(pmatrix, nx, ny, data, mask, nsigma, npixels_per_sam
     real*8, intent(in)                :: data(nsamples,ndetectors)
     logical*1, intent(inout)          :: mask(nsamples,ndetectors)
     real*8, intent(in)                :: nsigma
-    integer, intent(in)               :: npixels_per_sample, nsamples, ndetectors
+    integer, intent(in)               :: npixels_per_sample
+    integer*8, intent(in)             :: nsamples
+    integer, intent(in)               :: ndetectors
 
     call deglitch_l2b(pmatrix, nx, ny, data, mask, nsigma, .true., verbose=.true.)
 
