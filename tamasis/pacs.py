@@ -356,7 +356,13 @@ class PacsMultiplexing(AcquisitionModel):
 
 class pacs_status(object):
     def __init__(self, filename):
-        self.status = pyfits.open(filename)[2].data
+        hdu = pyfits.open(filename)[2]
+        while True:
+            try:
+                self.status = hdu.data
+                break
+            except IndexError, errmsg:
+                pass
 
     def __getitem__(self, key):
         if key == 'ra':
