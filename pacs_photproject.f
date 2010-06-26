@@ -138,7 +138,7 @@ program pacs_photproject
     ! remove flat field
     if (do_flatfield) then
         write (OUTPUT_UNIT,'(a)') 'Flat-fielding... '
-        call divide_vectordim2(signal, pack(pacs%flatfield_detector, pacs%mask))
+        call divide_vectordim2(signal, pack(pacs%flatfield_detector, .not. pacs%mask))
     end if
 
     ! filtering

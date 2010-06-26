@@ -76,7 +76,7 @@ program test_ngc6946_bpj
 
     ! remove flat field
     write(*,'(a)') 'Flat-fielding... '
-    call divide_vectordim2(signal, pack(pacs%flatfield_detector, pacs%mask))
+    call divide_vectordim2(signal, pack(pacs%flatfield_detector, .not. pacs%mask))
 
     ! remove mean value in timeline
     write(*,'(a)') 'Removing mean value... '
