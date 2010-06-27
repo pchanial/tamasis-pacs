@@ -13,7 +13,7 @@ endif
 
 # set up compiler flags
 ifeq "$(FC)" "gfortran"
-    FFLAGS_DEBUG = -g -fbacktrace -Warray-temporaries -O0 -fcheck=all -ffree-form -fopenmp -Wall -fPIC -cpp -DGFORTRAN
+    FFLAGS_DEBUG = -g -fbacktrace -O0 -fcheck=all -ffree-form -fopenmp -Wall -fPIC -cpp -DGFORTRAN
     FFLAGS_RELEASE = -fbacktrace -O3 -ffree-form -fopenmp -Wall -fPIC -cpp -DGFORTRAN
     LDFLAGS = -lgomp $(shell pkg-config --libs cfitsio) $(shell pkg-config --libs wcslib) $(shell pkg-config --libs fftw3)
     FCOMPILER=gnu95
