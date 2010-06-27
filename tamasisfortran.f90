@@ -20,7 +20,7 @@ subroutine pacs_info_channel(filename, nfilenames, channel, status)
 
     character(len=len(filename)/nfilenames), allocatable :: filename_(:)
     class(pacsobservation), allocatable :: obs
-    type(maskarray)                     :: maskarray_policy
+    type(maskarray)                     :: policy
     integer                             :: iobs
 
     ! split input filename
@@ -35,7 +35,7 @@ subroutine pacs_info_channel(filename, nfilenames, channel, status)
     end do
 
     allocate(obs)
-    call obs%init(filename_, maskarray_policy, status)
+    call obs%init(filename_, policy, status)
     if (status /= 0) return
 
     channel = obs%channel
@@ -98,7 +98,7 @@ subroutine pacs_info(tamasis_dir, filename, nfilenames, fine_sampling_factor, ke
     character(len=len(filename)/nfilenames), allocatable :: filename_(:)
     class(pacsobservation), allocatable :: obs
     class(pacsinstrument), allocatable  :: pacs
-    type(maskarray)                     :: maskarray_policy
+    type(maskarray)                     :: policy
     integer                             :: iobs
 
     ! initialise tamasis
@@ -116,7 +116,7 @@ subroutine pacs_info(tamasis_dir, filename, nfilenames, fine_sampling_factor, ke
     end do
 
     allocate(obs)
-    call obs%init(filename_, maskarray_policy, status, verbose=.true.)
+    call obs%init(filename_, policy, status, verbose=.true.)
     if (status /= 0) return
 
     ! print some information about the observation
@@ -135,7 +135,7 @@ subroutine pacs_info(tamasis_dir, filename, nfilenames, fine_sampling_factor, ke
     ndetectors  = pacs%ndetectors
     output_mask = pacs%bad
     compression_factor = obs%slice%compression_factor
-    nsamples = obs%slice%nsamples
+    nsamples = obs%slice%nvalids
     unit = obs%unit
     detector_area = pacs%detector_area
     flatfield_detector = pacs%flatfield_detector
@@ -266,7 +266,7 @@ subroutine pacs_map_header(tamasis_dir, filename, nfilenames, oversampling, fine
     character(len=len(filename)/nfilenames), allocatable :: filename_(:)
     class(pacsobservation), allocatable :: obs
     class(pacsinstrument), allocatable  :: pacs
-    type(maskarray)                     :: maskarray_policy
+    type(maskarray)                     :: policy
     integer                             :: iobs
     
     ! initialise tamasis
@@ -284,7 +284,7 @@ subroutine pacs_map_header(tamasis_dir, filename, nfilenames, oversampling, fine
     end do
 
     allocate(obs)
-    call obs%init(filename_, maskarray_policy, status)
+    call obs%init(filename_, policy, status)
     if (status /= 0) go to 999
 
     allocate(pacs)
@@ -346,7 +346,7 @@ subroutine pacs_timeline(tamasis_dir, filename, nfilenames, nsamples, ndetectors
     character(len=len(filename)/nfilenames), allocatable :: filename_(:)
     class(pacsobservation), allocatable :: obs
     class(pacsinstrument), allocatable  :: pacs
-    type(maskarray)                     :: maskarray_policy
+    type(maskarray)                     :: policy
     integer                             :: iobs, destination
 
     ! initialise tamasis
@@ -365,7 +365,7 @@ subroutine pacs_timeline(tamasis_dir, filename, nfilenames, nsamples, ndetectors
 
     ! initialise observations
     allocate(obs)
-    call obs%init(filename_, maskarray_policy, status)
+    call obs%init(filename_, policy, status)
     if (status /= 0) go to 999
 
     ! initialise pacs instrument
@@ -387,8 +387,8 @@ subroutine pacs_timeline(tamasis_dir, filename, nfilenames, nsamples, ndetectors
     if (do_subtraction_mean) then
         destination = 1
         do iobs=1, nfilenames
-            call subtract_meandim1(signal(destination:destination+obs%slice(iobs)%nsamples-1,:))
-            destination = destination + obs%slice(iobs)%nsamples
+            call subtract_meandim1(signal(destination:destination+obs%slice(iobs)%nvalids-1,:))
+            destination = destination + obs%slice(iobs)%nvalids
          end do
     end if
 
@@ -449,7 +449,7 @@ subroutine pacs_pointing_matrix_filename(tamasis_dir, filename, nfilenames, over
     character(len=len(filename)/nfilenames), allocatable :: filename_(:)
     class(pacsobservation), allocatable :: obs
     class(pacsinstrument), allocatable  :: pacs
-    type(maskarray)                     :: maskarray_policy
+    type(maskarray)                     :: policy
     integer                             :: iobs, nx, ny, count, nsamples_expected
 
     ! initialise tamasis
@@ -468,7 +468,7 @@ subroutine pacs_pointing_matrix_filename(tamasis_dir, filename, nfilenames, over
 
     ! initialise observations
     allocate(obs)
-    call obs%init(filename_, maskarray_policy, status)
+    call obs%init(filename_, policy, status)
     if (status /= 0) return
 
     ! initialise pacs instrument
@@ -487,9 +487,9 @@ subroutine pacs_pointing_matrix_filename(tamasis_dir, filename, nfilenames, over
 
     ! check number of fine samples
     if (oversampling) then
-        nsamples_expected = sum(obs%slice%nsamples * obs%slice%compression_factor)*fine_sampling_factor
+        nsamples_expected = sum(obs%slice%nvalids * obs%slice%compression_factor)*fine_sampling_factor
     else
-        nsamples_expected = sum(obs%slice%nsamples)
+        nsamples_expected = sum(obs%slice%nvalids)
     end if
     if (nsamples /= nsamples_expected) then
         status = 1

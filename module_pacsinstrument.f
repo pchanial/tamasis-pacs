@@ -2,8 +2,8 @@ module module_pacsinstrument
 
     use iso_fortran_env,        only : ERROR_UNIT, OUTPUT_UNIT
     use module_filtering,       only : FilterUncorrelated
-    use module_fitstools,       only : ft_close, ft_open, ft_create_header, ft_open_image, ft_read_extension, ft_read_slice,       &
-                                       ft_test_extension
+    use module_fitstools,       only : ft_check_error_cfitsio, ft_close, ft_create_header, ft_open, ft_open_image,                 &
+                                       ft_read_extension, ft_read_slice, ft_test_extension
     use module_math,            only : DEG2RAD, pInf, mInf, mean, nint_down, nint_up
     use module_pacsobservation, only : pacsobservationslice, pacsobservation
     use module_pointingmatrix,  only : pointingelement, xy2roi, roi2pmatrix
@@ -12,6 +12,7 @@ module module_pacsinstrument
     use module_string,          only : strinteger
     use module_tamasis,         only : get_tamasis_path, tamasis_path_len
     use module_wcs,             only : init_astrometry, ad2xy_gnomonic, ad2xy_gnomonic_vect
+    use omp_lib
     implicit none
     private
 
@@ -366,7 +367,7 @@ contains
             end do
         end do
         
-        center = this%detector_area(this%nrows/2:this%nrows/2+1,this%ncolumns/2:this%ncolumns/2)
+        center = this%detector_area(this%nrows/2:this%nrows/2+1,this%ncolumns/2:this%ncolumns/2+1)
         this%flatfield_optical = this%detector_area / mean(reshape(center,[4]))
         this%flatfield_total = flatfield
         this%flatfield_detector = this%flatfield_total / this%flatfield_optical
@@ -507,7 +508,7 @@ contains
         real*8               :: ra, dec, pa, chop
         real*8, allocatable  :: hull_uv(:,:), hull(:,:)
         integer, allocatable :: ihull(:)
-        integer              :: sampling_factor, islice, itime
+        integer              :: sampling_factor, isample, islice, itime
 
         xmin = pInf
         xmax = mInf
@@ -534,6 +535,9 @@ contains
             !!$omp reduction(max:xmax,ymax) &
             !!$omp private(itime,ra,dec,pa,chop,hull) firstprivate(index)
             do itime = 1, obs%slice(islice)%nsamples * sampling_factor
+
+                isample = (itime - 1) / sampling_factor + 1
+                if (obs%slice(islice)%p(isample)%invalid .and. obs%policy%remove_invalid) cycle
 
                 call obs%get_position_index(islice, itime, sampling_factor, ra, dec, pa, chop)
                 hull = this%uv2yz(hull_uv, this%distortion_yz_blue, chop)
@@ -567,7 +571,8 @@ contains
         real*8  :: coords(ndims,this%ndetectors*nvertices), coords_yz(ndims,this%ndetectors*nvertices)
         real*8  :: ra, dec, pa, chop, chop_old
         integer :: roi(ndims,2,this%ndetectors)
-        integer :: nsamples, npixels_per_sample, islice, itime, sampling_factor, dest
+        integer :: isample, islice, itime, nsamples, npixels_per_sample, sampling_factor, dest
+        integer :: chunksize, first, last, offset
         integer :: count1, count2, count_rate, count_max
         logical :: out
 
@@ -584,7 +589,7 @@ contains
         ! loop over the observations
         do islice = 1, obs%nslices
 
-            nsamples = int(obs%slice(islice)%nsamples, kind=kind(0))
+            nsamples = obs%slice(islice)%nsamples
             chop_old = pInf
 
             ! check if it is required to interpolate pointing positions
@@ -594,10 +599,26 @@ contains
                sampling_factor = 1
             end if
 
-            !$omp parallel do default(shared) firstprivate(chop_old)   &
-            !$omp private(itime, ra, dec, pa, chop, coords, coords_yz, roi) &
+            !$omp parallel default(shared) firstprivate(chop_old)   &
+            !$omp private(itime, ra, dec, pa, chop, coords, coords_yz, roi, offset) &
             !$omp reduction(max : npixels_per_sample) reduction(.or. : out)
-            do itime = 1, nsamples * sampling_factor
+            
+            chunksize = nsamples * sampling_factor / omp_get_num_threads()
+
+            first = chunksize * omp_get_thread_num() + 1
+            last = min(first + chunksize - 1, nsamples * sampling_factor)
+            if (obs%policy%remove_invalid) then
+                offset = count(obs%slice(islice)%p(:first-1)%invalid) * sampling_factor
+            else
+                offset = 0
+            end if
+
+            do itime = first, last
+                isample = (itime - 1) / sampling_factor + 1
+                if (obs%slice(islice)%p(isample)%invalid .and. obs%policy%remove_invalid) then
+                    offset = offset + 1
+                    cycle
+                end if
                 call obs%get_position_index(islice, itime, sampling_factor, ra, dec, pa, chop)
                 if (abs(chop-chop_old) > 1.d-2) then
                     coords_yz = this%uv2yz(this%corners_uv, this%distortion_yz, chop)
@@ -606,10 +627,12 @@ contains
                  coords = this%yz2ad(coords_yz, ra, dec, pa)
                  coords = ad2xy_gnomonic(coords)
                  roi    = xy2roi(coords, nvertices)
-                 call roi2pmatrix(roi, nvertices, coords, nx, ny, itime + dest, npixels_per_sample, out, pmatrix)
+                 call roi2pmatrix(roi, nvertices, coords, nx, ny, itime + dest - offset, npixels_per_sample, out, pmatrix)
              end do
-             !$omp end parallel do
-             dest = dest + nsamples * sampling_factor
+
+             !$omp end parallel
+             dest = dest + obs%slice(islice)%nvalids * sampling_factor
+
         end do
 
         call system_clock(count2, count_rate, count_max)
@@ -641,10 +664,10 @@ contains
         integer, intent(out)               :: status
         logical, intent(in), optional      :: verbose
 
-        integer*8 :: nsamples, destination
-        integer   :: iobs, idetector, nobs
-        integer   :: count1, count2, count_rate, count_max
-        logical   :: verbose_
+        integer :: dest
+        integer :: iobs, idetector, nobs
+        integer :: count1, count2, count_rate, count_max
+        logical :: verbose_
 
         verbose_ = .false.
         if (present(verbose)) verbose_ = verbose
@@ -654,23 +677,26 @@ contains
         end if
         call system_clock(count1, count_rate, count_max)
 
-        status   = 1
-        nobs     = obs%nslices
-        nsamples = obs%nsamples_tot
+        status = 1
+        nobs   = obs%nslices
 
         ! check that the total number of samples in the observations is equal
         ! to the number of samples in the signal and mask arrays
-        if (nsamples /= size(signal,1) .or. nsamples /= size(mask,1)) then
+        if (obs%nvalids /= size(signal,1) .or. obs%nvalids /= size(mask,1)) then
             write (ERROR_UNIT,'(a)') 'Error: read: invalid dimensions.'
             return
         end if
 
+        ! set mask to ok
+        mask = .false.
+
         ! loop over the PACS observations
-        destination = 1
+        dest = 1
         do iobs = 1, nobs
-            call this%read_one(obs%slice(iobs), destination, signal, mask, status)
+            call this%read_one(obs%slice(iobs), obs%policy%remove_invalid, signal(dest:dest+obs%slice(iobs)%nvalids-1,:),          &
+                 mask(dest:dest+obs%slice(iobs)%nvalids-1,:), status)
             if (status /= 0) return
-            destination = destination + obs%slice(iobs)%nsamples
+            dest = dest + obs%slice(iobs)%nvalids
         end do
 
         ! mask bad detectors if they haven't been filtered out
@@ -685,7 +711,7 @@ contains
 
         call system_clock(count2, count_rate, count_max)
         if (verbose_) then
-            write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
+            write (*,'(f6.2,a)') real(count2-count1) / count_rate, 's'
         end if
 
     end subroutine read
@@ -694,31 +720,32 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine read_one(this, obs, destination, signal, mask, status)
+    subroutine read_one(this, obs, remove_invalid, signal, mask, status)
 
         class(pacsinstrument), intent(in)   :: this
 !!$        class(observationslice), intent(in) :: obs
         class(pacsobservationslice), intent(in) :: obs
-        integer*8, intent(in)               :: destination
+        logical, intent(in)                 :: remove_invalid
         real*8, intent(inout)               :: signal(:,:)
         logical*1, intent(inout)            :: mask  (:,:)
         integer, intent(out)                :: status
 
-        integer*8              :: p, q
+        integer                :: p, q
         integer                :: idetector, unit, length
-        integer                :: status_close
         integer, allocatable   :: imageshape(:)
         logical                :: mask_found
         integer*4, allocatable :: maskcompressed(:)
         integer*4              :: maskval
-        integer*8              :: ncompressed
-        integer*8              :: isample, icompressed, ibit
-        integer*8              :: firstcompressed, lastcompressed
+        integer                :: ncompressed
+        integer                :: isample, icompressed, ibit
+        integer                :: firstcompressed, lastcompressed
+        real(dp)               :: signal_(obs%nsamples)
+        logical*1              :: mask_(obs%nsamples)
 
         ! old style file format
         length = len_trim(obs%filename)
         if (obs%filename(length-4:length) /= '.fits') then
-            call this%read_oldstyle(obs, destination, signal, mask, status)
+            call this%read_oldstyle(obs, remove_invalid, signal, mask, status)
             return
         end if
 
@@ -731,42 +758,53 @@ contains
             p = this%pq(1,idetector)
             q = this%pq(2,idetector)
 
-            call ft_read_slice(unit, obs%first, obs%last, q+1, p+1, imageshape, signal(destination:destination+obs%nsamples-1,     &
-                 idetector),status)
-            if (status /= 0) go to 999
+            call ft_read_slice(unit, obs%first, obs%last, q+1, p+1, imageshape, signal_, status)
+            if (status /= 0) return
+
+            if (remove_invalid) then
+                signal(:, idetector) = pack(signal_, .not. obs%p%invalid)
+            else
+                signal(:, idetector) = signal_
+            end if
 
         end do
 
         call ft_close(unit, status)
         if (status /= 0) return
 
-
         ! read Mask HDU
-        mask(destination:destination+obs%nsamples-1,:) = .false.
         mask_found = ft_test_extension(trim(obs%filename)//'[Master]', status)
         if (status /= 0) return
 
         if (.not. mask_found) then
             write (*,'(a)') 'Info: mask Master is not found.'
-            go to 100
+            return
         end if
 
         call ft_open_image(trim(obs%filename) // '[Master]', unit, 3, imageshape, status)
         if (status /= 0) return
 
-        allocate(maskcompressed(imageshape(1)))
+        firstcompressed = (obs%first - 1) / 32 + 1
+        lastcompressed  = (obs%last  - 1) / 32 + 1
+        ncompressed = lastcompressed - firstcompressed + 1
+
+        if (lastcompressed > imageshape(1)) then
+            status = 1
+            write (ERROR_UNIT, '(a)') 'There is not enough samples in ' // trim(obs%filename) // '[Master] for this pointing.'
+            return
+        end if
+
+        allocate (maskcompressed(ncompressed))
 
         do idetector = 1, size(mask,2)
 
             p = this%pq(1,idetector)
             q = this%pq(2,idetector)
 
-            firstcompressed = (obs%first - 1) / 32 + 1
-            lastcompressed  = (obs%last  - 1) / 32 + 1
-            ncompressed = lastcompressed - firstcompressed + 1
+            mask_ = .false.
 
-            call ft_read_slice(unit, firstcompressed, lastcompressed, q+1, p+1, imageshape, maskcompressed(1:ncompressed),status)
-            if (status /= 0) go to 999
+            call ft_read_slice(unit, firstcompressed, lastcompressed, q+1, p+1, imageshape, maskcompressed, status)
+            if (status /= 0) return
 
             ! loop over the bytes of the compressed mask
             do icompressed = firstcompressed, lastcompressed
@@ -774,26 +812,24 @@ contains
                 maskval = maskcompressed(icompressed-firstcompressed+1)
                 if (maskval == 0) cycle
 
-                isample = (icompressed-1)*32 - obs%first + destination + 1
+                isample = (icompressed-1)*32 - obs%first + 2
 
                 ! loop over the bits of a compressed mask byte
-                do ibit = max(0, obs%first - (icompressed-1)*32-1), min(31, obs%last - (icompressed-1)*32-1)
-                    mask(isample+ibit,idetector) = mask(isample+ibit,idetector) .or. btest(maskval,ibit)
+                do ibit = max(0, obs%first - (icompressed-1)*32 - 1), min(31, obs%last - (icompressed-1)*32 - 1)
+                    mask_(isample+ibit) = btest(maskval,ibit)
                 end do
 
             end do
+            
+            if (remove_invalid) then
+                mask(:,idetector) = mask(:,idetector) .or. pack(mask_, .not. obs%p%invalid)
+            else
+                mask(:,idetector) = mask(:,idetector) .or. mask_ .or. obs%p%invalid
+            end if
 
         end do
 
         call ft_close(unit, status)
-        if (status /= 0) return
-
-    100 do isample = 1, obs%nsamples
-            if (obs%p(isample)%invalid) mask(destination+isample-1,:) = .true.
-        end do
-        return
-
-    999 call ft_close(unit, status_close)
 
     end subroutine read_one
 
@@ -801,18 +837,20 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine read_oldstyle(this, obs, dest, signal, mask, status)
+    subroutine read_oldstyle(this, obs, remove_invalid, signal, mask, status)
 
         class(pacsinstrument), intent(in)   :: this
 !!$        class(observationslice), intent(in) :: obs
         class(pacsobservationslice), intent(in) :: obs
-        integer*8, intent(in)               :: dest
+        logical, intent(in)                 :: remove_invalid
         real*8, intent(inout)               :: signal(:,:)
         logical*1, intent(inout)            :: mask(:,:)
         integer, intent(out)                :: status
 
-        integer*8            :: p, q
-        integer              :: idetector, unit, status_close
+        integer              :: p, q
+        integer              :: idetector, unit
+        real(dp)             :: signal_(obs%nsamples)
+        logical*1            :: mask_(obs%nsamples)
         integer, allocatable :: imageshape(:)
 
         ! handle signal
@@ -823,8 +861,14 @@ contains
 
             p = this%pq(1,idetector)
             q = this%pq(2,idetector)
-            call ft_read_slice(unit, obs%first, obs%last, q+1, p+1, imageshape, signal(dest:dest+obs%nsamples-1,idetector),status)
-            if (status /= 0) go to 999
+            call ft_read_slice(unit, obs%first, obs%last, q+1, p+1, imageshape, signal_, status)
+            if (status /= 0) return
+
+            if (remove_invalid) then
+                signal(:, idetector) = pack(signal_, .not. obs%p%invalid)
+            else
+                signal(:, idetector) = signal_
+            end if
 
         end do
 
@@ -840,13 +884,18 @@ contains
             p = this%pq(1,idetector)
             q = this%pq(2,idetector)
 
-            call ft_read_slice(unit, obs%first, obs%last, q+1, p+1, imageshape, mask(dest:dest+obs%nsamples-1,idetector), status)
-            if (status /= 0) go to 999
+            call ft_read_slice(unit, obs%first, obs%last, q+1, p+1, imageshape, mask_, status)
+            if (status /= 0) return
+
+            if (remove_invalid) then
+                mask(:, idetector) = pack(mask_, .not. obs%p%invalid)
+            else
+                mask(:, idetector) = mask_ .or. obs%p%invalid
+            end if
 
         end do
 
-    999 call ft_close(unit, status_close)
-        if (status == 0) status = status_close
+        call ft_close(unit, status)
 
     end subroutine read_oldstyle
 
@@ -877,7 +926,7 @@ contains
         if (status /= 0) return
 
         call ftgkyj(unit, 'NAXIS1', ncorrelations, comment, status)
-        if (status /= 0) return
+        if (ft_check_error_cfitsio(status, unit)) return
 
         ncorrelations = ncorrelations - 1
 

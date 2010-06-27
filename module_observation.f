@@ -22,8 +22,10 @@ public :: pacsobservation
     public :: pointing
 
     type maskarray
-        logical :: wrong_time = .true.
+        logical :: remove_invalid = .true.
+        logical :: off_scan = .true.
         logical :: off_target = .true.
+        logical :: wrong_time = .true.
     end type maskarray
 
     type pointing
@@ -33,17 +35,18 @@ public :: pacsobservation
         real(dp) :: pa
         real(dp) :: chop
         logical  :: invalid
-        logical  :: wrong_time
+        logical  :: off_scan
         logical  :: off_target
+        logical  :: wrong_time
     end type pointing
 
 !!$    type observationslice
-!!$        integer*8          :: first, last, nsamples
+!!$        integer            :: first, last, nsamples
 !!$        character(len=256) :: filename
 !!$        character          :: channel
 !!$        character(len=80)  :: observing_mode
 !!$        integer            :: compression_factor
-!!$        real(dp)           :: delta
+!!$        real(dp)           :: sampling_interval
 !!$        type(pointing), allocatable :: p(:)
 !!$
 !!$    end type observationslice
@@ -51,36 +54,38 @@ public :: pacsobservation
 !!$ type, extends(observationslice) :: pacsobservationslice
     type :: pacsobservationslice
 
-        integer*8          :: first, last, nsamples
+        integer            :: first, last, nsamples, nvalids
         character(len=256) :: filename
         character          :: channel
         character(len=70)  :: observing_mode
         character(len=70)  :: unit
         integer            :: compression_factor
-        real(dp)           :: delta
+        real(dp)           :: sampling_interval
         type(pointing), allocatable :: p(:)
 
     contains
         
-        procedure :: set_filename
-        procedure :: set_valid_slice
         procedure :: set_channel
         procedure :: set_compression_mode
+        procedure :: set_filename
+        procedure :: set_invalid
         procedure :: set_observing_mode
-        procedure :: set_pointing
+        procedure :: set_astrometry
         procedure :: set_unit
-        procedure :: validate_pointing
-        procedure :: set_pointing_oldstyle
+        procedure :: set_flags
+        procedure :: set_sampling_interval
+        procedure :: set_astrometry_oldstyle
 
     end type pacsobservationslice
 
     type :: observation
         integer           :: nslices
-        integer           :: nsamples_tot
+        integer           :: nsamples   ! number of pointings
+        integer           :: nvalids    ! number of pointings for which the signal and mask should be read
         character         :: channel
         character(len=70) :: observing_mode
         character(len=70) :: unit
-        type(maskarray)   :: maskarray_policy
+        type(maskarray)   :: policy
         type(pacsobservationslice), allocatable :: slice(:)
     contains
         procedure :: compute_center
@@ -203,7 +208,7 @@ contains
 
         class(observation), intent(in) :: this
         real*8, intent(out)            :: ra0, dec0
-        integer                        :: isample, islice, n180
+        integer                        :: isample, islice, n180, nvalids
         real*8                         :: ra, dec
         logical                        :: zero_minus, zero_plus
 
@@ -212,11 +217,13 @@ contains
         zero_minus = .false.
         zero_plus  = .false.
         n180 = 0
+        nvalids = 0
 
         do islice = 1, this%nslices
-            !$omp parallel do default(shared) reduction(+:n180,ra0,dec0)           &
+            !$omp parallel do default(shared) reduction(+:n180, nvalids,ra0,dec0)           &
             !$omp reduction(.or.:zero_minus,zero_plus) private(isample, ra, dec)
             do isample=1, this%slice(islice)%nsamples
+                if (this%slice(islice)%p(isample)%invalid) cycle
                 ra  = this%slice(islice)%p(isample)%ra
                 dec = this%slice(islice)%p(isample)%dec
                 zero_minus = zero_minus .or. ra > 270.d0
@@ -224,14 +231,15 @@ contains
                 if (ra >= 180.d0) n180 = n180 + 1
                 ra0  = ra0  + ra
                 dec0 = dec0 + dec
+                nvalids = nvalids + 1
             end do
             !$omp end parallel do
         end do
 
         if (zero_minus .and. zero_plus) ra0 = ra0 - 360.d0 * n180
 
-        ra0  = ra0  / this%nsamples_tot
-        dec0 = dec0 / this%nsamples_tot
+        ra0  = ra0  / nvalids
+        dec0 = dec0 / nvalids
             
     end subroutine compute_center
 
@@ -276,10 +284,11 @@ contains
 
         class(pacsobservationslice), intent(inout) :: this
         character(len=*), intent(in)               :: filename
-        integer*8, intent(out)                     :: first, last
+        integer, intent(out)                       :: first, last
         integer, intent(out)                       :: status
 
         integer :: pos, length, delim
+        logical :: is_slice
  
         status = 0
         first = 0
@@ -288,8 +297,8 @@ contains
         length = len_trim(filename)
         if (length > len(this%filename)) then
             status = 1
-            write (ERROR_UNIT,'(a,i0,a,i0,a)') 'ERROR: Input filename length is&
-                 & too long ', length, '. Maximum is ', len(this%filename), '.'
+            write (ERROR_UNIT,'(a,i0,a,i0,a)') 'ERROR: Input filename length is too long ', length, '. Maximum is ',               &
+                  len(this%filename), '.'
             return
         end if
 
@@ -303,8 +312,7 @@ contains
 
         if (pos == 1) then
             status = 1
-            write (ERROR_UNIT,'(a)') "ERROR: Missing opening bracket in '" //  &
-                 trim(filename) // "'."
+            write (ERROR_UNIT,'(a)') "ERROR: Missing opening bracket in '" // trim(filename) // "'."
             return
         end if
       
@@ -313,43 +321,44 @@ contains
 
         ! find delimiter ':'
         delim = index(filename(pos:length), ':')
-        if (delim == 0) then
-            delim = length + 1
-        else 
+        is_slice = delim > 0
+        if (is_slice) then
             delim = pos + delim - 1
-        end if
-
-        ! read last sample
-        if (delim < length) then
-            read (filename(delim+1:length), '(i20)', iostat=status) last
-            if (status /= 0) then
-                write (ERROR_UNIT,'(a)') "ERROR: Invalid last sample: '" //    &
-                      filename(pos-1:length+1) // "'."
-                return
-            end if
+        else 
+            delim = length + 1
         end if
 
         ! read first sample
         if (delim > pos) then
             read (filename(pos:delim-1), '(i20)', iostat=status) first
             if (status /= 0) then
-                write (ERROR_UNIT,'(a)') "ERROR: Invalid first sample: '" //    &
-                      filename(pos-1:length+1) // "'."
+                write (ERROR_UNIT,'(a)') "ERROR: Invalid first sample: '" // filename(pos-1:length+1) // "'."
                 return
             end if
         end if
 
+        ! read last sample
+        if (is_slice) then
+            if (delim < length) then
+                read (filename(delim+1:length), '(i20)', iostat=status) last
+                if (status /= 0) then
+                    write (ERROR_UNIT,'(a)') "ERROR: Invalid last sample: '" // filename(pos-1:length+1) // "'."
+                    return
+                end if
+            end if
+        else
+            last = first
+        end if
+
         if (last /= 0 .and. last < first) then
             status = 1
-            write (ERROR_UNIT,'(a,2(i0,a))')"ERROR: Last sample '", last,  &
-                  "' is less than the first sample '", first, "'."
+            write (ERROR_UNIT,'(a,2(i0,a))')"ERROR: Last sample '", last,  "' is less than the first sample '", first, "'."
             return
         end if
 
         if (first < 0) then
             status = 1
-            write (ERROR_UNIT,'(a,i0,a)')"ERROR: The first sample '", first,&
-                  "' is less than 1."
+            write (ERROR_UNIT,'(a,i0,a)')"ERROR: The first sample '", first, "' is less than 1."
             return
         end if
 
@@ -362,15 +371,95 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
+    subroutine set_invalid(this, policy, first, last, status)
+
+        class(pacsobservationslice), intent(inout) :: this
+        type(maskarray), intent(in)                :: policy
+        integer, intent(in)                        :: first, last
+        integer, intent(out)                       :: status
+
+        type(pointing), allocatable :: p_(:)
+        integer                     :: isample
+
+        status = 0
+
+        ! set invalid flag according to the mask policy
+        if (policy%off_scan) then
+            where (this%p%off_scan)
+                this%p%invalid = .true.
+            end where
+        end if
+
+        if (policy%off_target) then
+            where (this%p%off_target)
+                this%p%invalid = .true.
+            end where
+        end if
+
+        if (policy%wrong_time) then
+            where (this%p%wrong_time)
+                this%p%invalid = .true.
+            end where
+        end if
+        
+        ! if a slice is specified, mask its complement otherwise, search for it
+        this%first = first
+        if (first /= 0) then
+            this%p(1:first-1)%invalid = .true.
+        else
+            do isample = 1, size(this%p)
+                if (.not. this%p(isample)%invalid) exit
+            end do
+            this%first = isample
+        end if
+
+        this%last = last
+        if (last /= 0) then
+            if (last > this%nsamples) then
+                status = 1
+                write (ERROR_UNIT,'(a,2(i0,a))') "ERROR: The last sample '", last, "' exceeds the size of the observation '",      &
+                     this%nsamples, "'."
+                return
+            end if
+            this%p(last+1:)%invalid = .true.
+        else
+            do isample = size(this%p), 1, -1
+                if (.not. this%p(isample)%invalid) exit
+            end do
+            this%last = isample
+        end if
+
+        if (this%first > this%last) then
+            this%first = 1
+            this%last  = this%nsamples
+        end if
+        
+        ! retain pointings bracketed by [first,last]
+        this%nsamples = this%last - this%first + 1
+        allocate (p_(this%nsamples))
+        p_ = this%p(this%first:this%last)
+        call move_alloc (p_, this%p)
+
+        if (policy%remove_invalid) then
+            this%nvalids = count(.not. this%p%invalid)
+        else
+            this%nvalids = this%nsamples
+        end if
+
+    end subroutine set_invalid
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
     ! sets 'b', 'g' or 'r' for a blue, green or red channel observation
     subroutine set_channel(this, status)
 
         class(pacsobservationslice), intent(inout) :: this
         integer, intent(out)                       :: status
 
-        integer                       :: length, unit, nsamples
-        integer                       :: status_close
-        character(len=2), allocatable :: channels(:)
+        integer                       :: length, unit, ivalid, nsamples
+        character(len=5), allocatable :: channels(:)
 
         this%channel = ' '
 
@@ -398,25 +487,42 @@ contains
         call ft_read_column(unit, 'BAND', 1, nsamples, channels, status)
         if (status /= 0) return
 
-        if (any(channels /= channels(1))) then
+        call ft_close(unit, status)
+        if (status /= 0) return
+
+        ! get first defined BAND
+        do ivalid=1, nsamples
+            if (channels(ivalid) /= 'UNDEF') exit
+        end do
+
+        ! check that there is at least one defind BAND
+        if (ivalid > nsamples) then
             status = 1
-            write (ERROR_UNIT,'(a)') 'Observation is BANDSWITCH.'
-        else
-           select case (channels(1))
-               case ('BS')
-                   this%channel = 'b'
-               case ('BL')
-                   this%channel = 'g'
-               case ('R ')
-                   this%channel = 'r'
-               case default
-                   status = 1
-                   write (ERROR_UNIT,'(a)') 'Invalid array BAND value: ' // channels(1)
-           end select
+            write (ERROR_UNIT, '(a)') 'All observation samples have UNDEF band.'
+            return
         end if
 
-        call ft_close(unit, status_close)
-        if (status == 0) status = status_close
+        ! check the observation only has one BAND
+        if (any(channels /= channels(ivalid) .and. channels /= 'UNDEF')) then
+            status = 1
+            write (ERROR_UNIT,'(a)') 'Observation is BANDSWITCH.'
+            return
+        end if
+
+        ! mark UNDEF BAND as invalid
+        this%p%invalid = this%p%invalid .or. channels == 'UNDEF'
+
+        select case (channels(ivalid))
+        case ('BS')
+            this%channel = 'b'
+        case ('BL')
+            this%channel = 'g'
+        case ('R')
+            this%channel = 'r'
+        case default
+            status = 1
+            write (ERROR_UNIT,'(a)') 'Invalid array BAND value: ' // channels(ivalid)
+        end select
 
     end subroutine set_channel
 
@@ -451,8 +557,7 @@ contains
         do
             call ftgkys(unit, 'key.META_' // strinteger(ikey), keyword, comment, status)
             if (status /= 0) then
-                write (ERROR_UNIT,'(a)') "ERROR: FITS keyword 'algorithm' is &
-                    &not found."
+                write (ERROR_UNIT,'(a)') "ERROR: FITS keyword 'algorithm' is not found."
                 go to 999
             end if
             if (keyword == 'algorithm') exit
@@ -464,8 +569,7 @@ contains
         if (algorithm(1:19) == 'Floating Average  :') then
             read (algorithm(20:),'(i3)', iostat=status) this%compression_factor
             if (status /= 0) then
-                write (ERROR_UNIT, '(a)') "ERROR: The compression algorithm '" &
-                    // trim(algorithm) // "' is not understood."
+                write (ERROR_UNIT, '(a)') "ERROR: The compression algorithm '" // trim(algorithm) // "' is not understood."
                 go to 999
             end if
         else if (algorithm == 'None') then
@@ -535,227 +639,183 @@ contains
 
 
     ! if the first sample to consider is not specified, then:
-    !     - if the bbtype is set, we search starting from the beginning the first valid sample
+    !     - if the bbid is set, we search starting from the beginning the first valid sample
     !     - otherwise, we search starting from the end for the first sample that satisfies abs(chopfpuangle) > 0.01.
     ! if invalid samples have been found, we then discard the first 10, that might be affected by relaxation.
-    subroutine set_valid_slice(this, first, last, maskarray_policy, status)
+    subroutine set_flags(this, status)
 
         class(pacsobservationslice), intent(inout) :: this
-        integer*8, intent(in)                      :: first, last
-        type(maskarray), intent(in)                :: maskarray_policy
         integer, intent(out)                       :: status
 
         logical(1), allocatable :: off_target(:)
-        integer*8               :: nsamples
+        logical(1), allocatable :: off_scan(:)
         integer                 :: length
-        integer*8               :: isample
-        integer*8, allocatable  :: bbtype(:)
-        integer*8, allocatable  :: chop(:)
+        integer                 :: unit
+        integer                 :: isample, itarget
+        integer*8, allocatable  :: bbid(:)
+        real*8, allocatable     :: chop(:)
 
         length = len_trim(this%filename)
         if (this%filename(length-4:length) /= '.fits') then
             write (OUTPUT_UNIT,'(a)') 'Warning: Obsolete file format.'
             call ft_read_extension(trim(this%filename) // '_ChopFpuAngle.fits', chop, status)
             if (status /= 0) return
-            allocate (bbtype(size(chop)))
-            bbtype = 0
+            this%nsamples = size(chop)
+            allocate (bbid(this%nsamples))
+            bbid = 0
         else
-            call ft_read_column(trim(this%filename)//'[Status]', 'BBTYPE', bbtype, status)
+
+            call ft_open_bintable(trim(this%filename) // '[Status]', unit, this%nsamples, status)
             if (status /= 0) return
-            call ft_read_column(trim(this%filename)//'[Status]', 'CHOPFPUANGLE', chop, status)
+
+            allocate (bbid(this%nsamples))
+            call ft_read_column(unit, 'BBID', 1, this%nsamples, bbid, status)
             if (status /= 0) return
+            bbid = ishft(bbid, -16)
+
+            allocate (chop(this%nsamples))
+            call ft_read_column(unit, 'CHOPFPUANGLE', 1, this%nsamples, chop, status)
+            if (status /= 0) return
+
+            call ft_close(unit, status)
+            if (status /= 0) return
+
         end if
 
-        nsamples = size(bbtype)
-
-        if (nsamples == 0) then
+        if (this%nsamples == 0) then
             status = 1
-            write (ERROR_UNIT) 'ERROR: Status extension is empty.'
+            write (ERROR_UNIT, '(a)') 'ERROR: Status extension is empty.'
             return
         end if
 
-        allocate (off_target(nsamples))
-
-        if (maxval(bbtype) == 0) then
-            off_target = abs(chop) > 1._p
-        else
-            off_target = bbtype /= 3282
-        end if
-
-        if (last > nsamples) then
-           status = 1
-           write (ERROR_UNIT,'(a,2(i0,a))') "ERROR: The last sample '", last, "' exceeds the size of the observation '",       &
-                nsamples, "'."
-           return
-        end if
-
-        ! set last valid sample
-        if (last == 0) then
-           do isample = nsamples, 1, -1
-               if (.not. off_target(isample)) exit
-           end do
-           if (isample == 0) then
-               write (OUTPUT_UNIT,'(a)') 'Warning: No in-scan sample. Automatic search for valid slice is disabled.'
-               this%first = 1
-               this%last  = nsamples
-               go to 999
-           end if
-           this%last = isample
-        else
-           this%last = last
-        end if
-
-        ! set first valid sample. 
-        if (first == 0) then
-            if (maxval(bbtype) == 0) then
-                do isample = this%last, 1, -1
-                    if (off_target(isample)) exit
-                end do
-                this%first = isample + 1
-            else
-                do isample = 1, this%last
-                    if (.not. off_target(isample)) exit
-                end do
-                this%first = isample
+        if (maxval(bbid) == 0) then
+            where (abs(chop) > 0.01_p)
+                bbid = z'4004'
+            elsewhere
+                bbid = z'cd2'
+            end where
+            do isample = 1, this%nsamples
+                if (bbid(isample) == z'4004') exit
+            end do
+            if (isample <= this%nsamples) then
+                bbid(1:isample-1) = z'4000'
             end if
+        end if
 
-            ! discard first 10 samples if invalid samples have been detected
-            if (this%first /= 1) then
-                if (this%first + 10 > this%last) then
-                    write (OUTPUT_UNIT,'(a)') 'Warning: It is not possible to discard the first 10 scan samples. The observation is&
-                          & too short or the specified last sample is not large enough.'
-                else
-                    this%first = this%first + 10
-                end if
-            end if
-        else
-            this%first = first
+        allocate (off_target(this%nsamples))
+        allocate (off_scan(this%nsamples))
+
+        off_target = bbid /= z'cd2'
+        off_scan = bbid /= z'cd2' .and. bbid /= z'4000'
+
+        ! search for the first on-target sample
+        do itarget = 1, this%nsamples
+            if (.not. off_target(itarget)) exit
+        end do
+        if (itarget <= this%nsamples) then
+            ! backward search first off-scan sample
+            do isample = itarget-1, 1, -1
+                if (off_scan(isample)) exit
+            end do
+            ! mask as off-scan all samples before the last 0x4000 block
+            off_scan(1:isample) = .true.
         end if
         
-    999 this%nsamples = this%last - this%first + 1
         if (allocated(this%p)) deallocate (this%p)
         allocate (this%p(this%nsamples))
-        this%p%invalid    = .false.
+        this%p%invalid = .false.
+        this%p%off_scan = off_scan
+        this%p%off_target = off_target
         this%p%wrong_time = .false.
-        this%p%off_target = off_target(this%first:this%last)
-        if (maskarray_policy%off_target) this%p%invalid = this%p%off_target
 
-    end subroutine set_valid_slice
+    end subroutine set_flags
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine set_pointing(this, status)
+    subroutine set_astrometry(this, status)
 
         class(pacsobservationslice), intent(inout) :: this
         integer, intent(out)                       :: status
 
-        real(dp), allocatable  :: buffer(:)
         integer*8, allocatable :: timeus(:)
-        integer                :: nsamples, first, last, status_close
+        integer                :: nsamples
         integer                :: length, unit
         
         length = len_trim(this%filename)
         if (this%filename(length-4:length) /= '.fits') then
-            call this%set_pointing_oldstyle(status)
+            call this%set_astrometry_oldstyle(status)
             return
         end if
-        
-        if (this%nsamples <= 1) then
-            status = 1
-            write (ERROR_UNIT,'(a)') 'Input time has less than 2 samples.'
-            return
-        end if
-
-        allocate(timeus(this%nsamples))
-        allocate(buffer(this%nsamples))
         
         call ft_open_bintable(trim(this%filename) // '[Status]', unit, nsamples, status)
         if (status /= 0) return
-        if (nsamples < this%nsamples) then
+        
+        if (nsamples <= 1) then
+            write (ERROR_UNIT,'(a)') 'Input time has less than 2 samples.'
+            call ft_close(unit, status)
             status = 1
-            write (ERROR_UNIT,'(a)') 'ERROR: There is not pointing information for every frame.'
-            go to 999
+            return
         end if
-        
-        ! get first and last sample in file
-        first = this%first
-        last  = this%last
-        
-        call ft_read_column(unit, 'FINETIME', first, last, timeus, status)
-        if (status /= 0) go to 999
-        buffer = timeus * 1.d-6
-        this%p%time = buffer
-        
-        call ft_read_column(unit, 'RaArray', first, last, buffer, status)
-        if (status /= 0) go to 999
-        this%p%ra = buffer
-        
-        call ft_read_column(unit, 'DecArray', first, last, buffer, status)
-        if (status /= 0) go to 999
-        this%p%dec = buffer
-        
-        call ft_read_column(unit, 'PaArray', first, last, buffer, status)
-        if (status /= 0) go to 999
-        this%p%pa = buffer
-        
-        call ft_read_column(unit, 'CHOPFPUANGLE', first, last,buffer,status)
-        if (status /= 0) go to 999
-        this%p%chop = buffer
 
-    999 call ft_close(unit, status_close)
-        if (status == 0) status = status_close
+        allocate(timeus(nsamples))
+        
+        call ft_read_column(unit, 'FINETIME', 1, nsamples, timeus, status)
+        if (status /= 0) return
+        this%p%time = timeus * 1.d-6
+        
+        call ft_read_column(unit, 'RaArray', 1, nsamples, this%p%ra, status)
+        if (status /= 0) return
+        
+        call ft_read_column(unit, 'DecArray', 1, nsamples, this%p%dec, status)
+        if (status /= 0) return
+        
+        call ft_read_column(unit, 'PaArray', 1, nsamples, this%p%pa, status)
+        if (status /= 0) return
+                
+        call ft_read_column(unit, 'CHOPFPUANGLE', 1, nsamples, this%p%chop, status)
         if (status /= 0) return
 
-    end subroutine set_pointing
+        call ft_close(unit, status)
+
+    end subroutine set_astrometry
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine set_pointing_oldstyle(this, status)
+    subroutine set_astrometry_oldstyle(this, status)
 
         class(pacsobservationslice), intent(inout) :: this
         integer, intent(out)                       :: status
 
         real(dp), allocatable  :: buffer(:)
         integer*8, allocatable :: timeus(:)
-        integer                :: first, last
-        
-        if (this%nsamples <= 1) then
-            status = 1
-            write (ERROR_UNIT,'(a)') 'Input time has less than 2 samples.'
-            return
-        end if
-
-        ! get first and last sample in file
-        first = this%first
-        last  = this%last
         
         call ft_read_extension(trim(this%filename)//'_Time.fits', timeus, status)
         if (status /= 0) return
         allocate(buffer(size(timeus)))
         buffer = timeus * 1.0d-6
-        this%p%time = buffer(first:last)
+        this%p%time = buffer
 
         call ft_read_extension(trim(this%filename) // '_RaArray.fits', buffer, status)
         if (status /= 0) return
-        this%p%ra = buffer(first:last)
+        this%p%ra = buffer
 
         call ft_read_extension(trim(this%filename) // '_DecArray.fits', buffer, status)
         if (status /= 0) return
-        this%p%dec = buffer(first:last)
+        this%p%dec = buffer
 
         call ft_read_extension(trim(this%filename) // '_PaArray.fits', buffer, status)
         if (status /= 0) return
-        this%p%pa = buffer(first:last)
+        this%p%pa = buffer
 
         call ft_read_extension(trim(this%filename) // '_ChopFpuAngle.fits', buffer, status)
         if (status /= 0) return
-        this%p%chop = buffer(first:last)
+        this%p%chop = buffer
 
-    end subroutine set_pointing_oldstyle
+    end subroutine set_astrometry_oldstyle
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
@@ -782,15 +842,16 @@ contains
         status = 0
         this%unit = trim(this%unit)
 
+        call ft_close(unit, status)
+
     end subroutine set_unit
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine validate_pointing(this, maskarray_policy, status, verbose)
+    subroutine set_sampling_interval(this, status, verbose)
 
         class(pacsobservationslice), intent(inout) :: this
-        type(maskarray), intent(in)                :: maskarray_policy
         integer, intent(out)                       :: status
         logical, intent(in)                        :: verbose
 
@@ -799,12 +860,18 @@ contains
         real(dp), allocatable  :: delta(:)
         real(dp)               :: delta_max
 
+        ! special case if there is only one sample
+        if (this%nsamples == 1) then
+            this%sampling_interval = this%compression_factor * 0.024996_dp
+            return
+        end if
+
         status = 1
 
         ! check that the input time is monotonous (and increasing)
         allocate(delta(this%nsamples-1))
         delta = this%p(2:this%nsamples)%time - this%p(1:this%nsamples-1)%time
-        this%delta = median(delta)
+        this%sampling_interval = median(delta)
         njumps = 0
         do isample = 2, this%nsamples
             if (delta(isample-1) <= 0) then
@@ -816,8 +883,7 @@ contains
                 end if
                 njumps = njumps + 1
                 this%p(isample)%wrong_time = .true.
-                if (maskarray_policy%wrong_time) this%p(isample)%invalid = .true.
-                this%p(isample)%time = this%p(isample-1)%time + this%delta
+                this%p(isample)%time = this%p(isample-1)%time + this%sampling_interval
                 this%p(isample)%ra   = this%p(isample-1)%ra  
                 this%p(isample)%dec  = this%p(isample-1)%dec 
                 this%p(isample)%pa   = this%p(isample-1)%pa  
@@ -835,9 +901,9 @@ contains
         
         ! check if there are gaps
         delta_max = maxval(abs(delta))
-        if (verbose .and. any(neq_real(delta, this%delta, 3))) then
+        if (verbose .and. any(neq_real(delta, this%sampling_interval, 3))) then
             write (*,'(a,$)') "Warning: In observation '" // trim(this%filename) //"', the pointing time is not evenly spaced."
-            if (delta_max > 1.5_p * this%delta) then
+            if (delta_max > 1.5_p * this%sampling_interval) then
                 write (*,'(a)') ' Largest gap is ' // strreal(delta_max*1000._p,1) // 'ms.'
             else
                 write (*,*)
@@ -845,8 +911,8 @@ contains
         end if
         
         ! check the compression factor from the data themselves
-        compression_factor = nint(this%delta / 0.024996_dp)
-        if (neq_real(compression_factor * 0.024996_dp, this%delta, 2)) then
+        compression_factor = nint(this%sampling_interval / 0.024996_dp)
+        if (neq_real(compression_factor * 0.024996_dp, this%sampling_interval, 2)) then
             write (*,'(a)') 'Error: The sampling time is not an integer number of PACS sampling time (40Hz).'
             return
         end if
@@ -860,20 +926,20 @@ contains
 
         status = 0
 
-    end subroutine validate_pointing
+    end subroutine set_sampling_interval
 
 
     ! the following belongs to module_pacsobservation.f
     ! moved here because of gfortran bug #44065
 
-    subroutine init(this, filename, maskarray_policy, status, verbose)
+    subroutine init(this, filename, policy, status, verbose)
 
         class(pacsobservation), intent(inout) :: this
         character(len=*), intent(in)          :: filename(:)
-        type(maskarray), intent(in)           :: maskarray_policy
+        type(maskarray), intent(in)           :: policy
         integer, intent(out)                  :: status
         logical, intent(in), optional         :: verbose
-        integer*8                             :: first, last
+        integer                               :: first, last
         integer                               :: islice
         logical                               :: verbose_
 
@@ -892,24 +958,18 @@ contains
 
         ! set number of observations
         this%nslices = size(filename)
-
-        ! set the mask policy '.true.' means 'taken into account'
-        this%maskarray_policy = maskarray_policy        
-        
-        if (allocated(this%slice)) then
-            do islice = 1, this%nslices
-                if (allocated(this%slice(islice)%p)) deallocate (this%slice(islice)%p)
-            end do
-            deallocate(this%slice)
-        end if
+        if (allocated(this%slice)) deallocate(this%slice)
         allocate(this%slice(this%nslices))
 
+        ! set the mask policy '.true.' means rejected or masked out
+        this%policy = policy        
+        
         do islice = 1, this%nslices
 
             call this%slice(islice)%set_filename(filename(islice), first, last, status)
             if (status /= 0) return
 
-            call this%slice(islice)%set_valid_slice(first, last, this%maskarray_policy, status)
+            call this%slice(islice)%set_flags(status)
             if (status /= 0) return
 
             call this%slice(islice)%set_channel(status)
@@ -924,10 +984,13 @@ contains
             call this%slice(islice)%set_unit(status)
             if (status /= 0) return
 
-            call this%slice(islice)%set_pointing(status)
+            call this%slice(islice)%set_astrometry(status)
             if (status /= 0) return
-                
-            call this%slice(islice)%validate_pointing(this%maskarray_policy, status, verbose_)
+            
+            call this%slice(islice)%set_sampling_interval(status, verbose_)
+            if (status /= 0) return
+
+            call this%slice(islice)%set_invalid(this%policy, first, last, status)
             if (status /= 0) return
 
         end do
@@ -981,7 +1044,8 @@ contains
             if (status /= 0) return
         end if
 
-        this%nsamples_tot = sum(this%slice%nsamples)
+        this%nsamples = sum(this%slice%nsamples)
+        this%nvalids  = sum(this%slice%nvalids)
 
     end subroutine init
 
@@ -994,7 +1058,7 @@ contains
         real*8, intent(in)                    :: time(:),ra(:),dec(:),pa(:),chop(:)
         integer, intent(out)                  :: status
         logical, intent(in), optional         :: verbose
-        integer*8                             :: nsamples
+        integer                               :: nsamples
         logical                               :: verbose_
 
         if (present(verbose)) then
@@ -1026,10 +1090,10 @@ contains
         endif
 
         this%nslices      = 1
-        this%nsamples_tot = nsamples
+        this%nsamples = nsamples
         this%channel      = ' '
         this%observing_mode = 'Unknown'
-        this%maskarray_policy = maskarray(wrong_time=.true., off_target=.true.)
+        this%policy = maskarray(wrong_time=.true., off_target=.true.)
 
         allocate (this%slice(1))
         this%slice(1)%first    = 1
@@ -1039,7 +1103,7 @@ contains
         this%slice(1)%channel  = ' '
         this%slice(1)%observing_mode = 'Unknown'
         this%slice(1)%compression_factor = nint((time(2)-time(1)) / 0.024996_dp)
-        this%slice(1)%delta = time(2)-time(1)
+        this%slice(1)%sampling_interval = time(2)-time(1)
         allocate (this%slice(1)%p(nsamples))
 
         this%slice(1)%p%time       = time
@@ -1051,7 +1115,10 @@ contains
         this%slice(1)%p%wrong_time = .false.
         this%slice(1)%p%off_target = .false.
 
-        call this%slice(1)%validate_pointing(this%maskarray_policy, status, verbose_)
+        call this%slice(1)%set_sampling_interval(status, verbose_)
+        if (status /= 0) return
+
+        call this%slice(1)%set_invalid(this%policy, 1, nsamples, status)
 
     end subroutine init_sim
 
@@ -1063,7 +1130,9 @@ contains
 
         class(pacsobservation), intent(in) :: this
 
-        integer :: islice, nrejected, nsamples
+        integer                :: islice, nrejected, nsamples
+        logical*1, allocatable :: invalid(:)
+        character(len=8)       :: mode
 
         write (*,*)
 
@@ -1073,7 +1142,7 @@ contains
 
             ! observation number & file name
             write (OUTPUT_UNIT,'(a)') 'Info: Observation' // strternary(this%nslices>1, ' ' // strinteger(islice), '') // ': ' //  &
-                trim(this%slice(islice)%filename)
+                  trim(this%slice(islice)%filename)
             write (OUTPUT_UNIT,'(a)') '      Section: [' // strsection(this%slice(islice)%first,this%slice(islice)%last) // ']'
             
             ! channel
@@ -1098,20 +1167,43 @@ contains
             ! unit
             write (OUTPUT_UNIT,'(a)') '      Unit: ' // trim(this%slice(islice)%unit)
 
+            ! recompute invalid samples to 
+            allocate (invalid(nsamples))
+            invalid = .false.
+
             ! print maskarray information
-            if (this%maskarray_policy%off_target) then
-                nrejected = count(this%slice(islice)%p%off_target)
+
+            mode = strternary(this%policy%remove_invalid, 'Removed ', 'Masked ')
+            if (this%policy%off_scan) then
+                invalid = invalid .or. this%slice(islice)%p%off_scan
+                nrejected = count(this%slice(islice)%p%off_scan)
                 if (nrejected > 0) then
-                    write (OUTPUT_UNIT,'(a,2(i0,a))') "      Mask 'off target': Rejecting ", nrejected, ' / ', nsamples, '.'
+                    write (OUTPUT_UNIT,'(3a,2(i0,a))') "      Mask 'off scan': ", trim(mode), ' ', nrejected, ' / ', nsamples, '.'
                 end if
             end if
 
-            if (this%maskarray_policy%wrong_time) then
-                nrejected = count(this%slice(islice)%p%wrong_time)
+            if (this%policy%off_target) then
+                invalid = invalid .or. this%slice(islice)%p%off_target
+                nrejected = count(this%slice(islice)%p%off_target)
                 if (nrejected > 0) then
-                    write (OUTPUT_UNIT,'(a,2(i0,a))') "      Mask 'wrong time': Rejecting ", nrejected, ' / ', nsamples, '.'
+                    write (OUTPUT_UNIT,'(3a,2(i0,a))') "      Mask 'off target': ", trim(mode), ' ', nrejected, ' / ', nsamples, '.'
                 end if
             end if
+
+            if (this%policy%wrong_time) then
+                invalid = invalid .or. this%slice(islice)%p%wrong_time
+                nrejected = count(this%slice(islice)%p%wrong_time)
+                if (nrejected > 0) then
+                    write (OUTPUT_UNIT,'(3a,2(i0,a))') "      Mask 'wrong time': ", trim(mode), ' ', nrejected, ' / ', nsamples, '.'
+                end if
+            end if
+
+            nrejected = count(invalid) - count(this%slice(islice)%p%invalid)
+            if (nrejected > 0) then
+                write (OUTPUT_UNIT,'(3a,2(i0,a))') "      Other: ", trim(mode), ' ', nrejected, ' / ', nsamples, '.'
+            end if
+
+            deallocate (invalid)
 
             write (*,*)
 

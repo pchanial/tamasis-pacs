@@ -86,7 +86,7 @@ program pacs_photproject
     if (status /= 0) go to 999
     call obs%init(infile, maskarray_policy, status, verbose=.true.)
     if (status /= 0) go to 999
-    nsamples = obs%nsamples_tot
+    nsamples = obs%nsamples
 
     ! print observation info
     call obs%print()

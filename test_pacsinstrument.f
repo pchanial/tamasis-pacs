@@ -37,7 +37,7 @@ program test_pacsinstrument
     call pacs%init(obs%channel, obs%observing_mode == 'Transparent', 1, .false., .false., status)
     if (status /= 0) stop 'FAILED: pacsinstrument%init'
 
-    allocate(time(obs%nsamples_tot))
+    allocate(time(obs%nsamples))
     time = obs%slice(1)%p%time
 
     if (pacs%ndetectors /= 1997) stop 'FAILED: ndetectors'
