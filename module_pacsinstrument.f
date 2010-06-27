@@ -540,7 +540,7 @@ contains
                 if (obs%slice(islice)%p(isample)%invalid .and. obs%policy%remove_invalid) cycle
 
                 call obs%get_position_index(islice, itime, sampling_factor, ra, dec, pa, chop)
-                hull = this%uv2yz(hull_uv, this%distortion_yz_blue, chop)
+                hull = this%uv2yz(hull_uv, this%distortion_yz, chop)
                 hull = this%yz2ad(hull, ra, dec, pa)
                 hull = ad2xy_gnomonic(hull)
                 xmin = min(xmin, minval(hull(1,:)))
@@ -599,16 +599,17 @@ contains
                sampling_factor = 1
             end if
 
+            chunksize = ceiling(real(nsamples) / omp_get_max_threads())
+
             !$omp parallel default(shared) firstprivate(chop_old)   &
-            !$omp private(itime, ra, dec, pa, chop, coords, coords_yz, roi, offset) &
+            !$omp private(itime, ra, dec, pa, chop, coords, coords_yz, roi, offset, first, last) &
             !$omp reduction(max : npixels_per_sample) reduction(.or. : out)
             
-            chunksize = nsamples * sampling_factor / omp_get_num_threads()
+            first = chunksize * sampling_factor * omp_get_thread_num() + 1
+            last = min(first + chunksize - 1, nsamples) * sampling_factor
 
-            first = chunksize * omp_get_thread_num() + 1
-            last = min(first + chunksize - 1, nsamples * sampling_factor)
             if (obs%policy%remove_invalid) then
-                offset = count(obs%slice(islice)%p(:first-1)%invalid) * sampling_factor
+                offset = count(obs%slice(islice)%p(:(first-1)/sampling_factor)%invalid) * sampling_factor
             else
                 offset = 0
             end if
