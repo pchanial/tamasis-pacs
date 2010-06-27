@@ -532,7 +532,7 @@ contains
     subroutine ft_read_slice_logical_filename(filename, x1, x2, array, status)
 
         character(len=*), intent(in) :: filename
-        integer*8, intent(in)        :: x1, x2
+        integer, intent(in)          :: x1, x2
         logical*1, intent(inout)     :: array(x2 - x1 + 1)
         integer, intent(out)         :: status
 
@@ -555,7 +555,7 @@ contains
     subroutine ft_read_slice_logical_unit(unit, x1, x2, array, status)
 
         integer, intent(in)      :: unit
-        integer*8, intent(in)    :: x1, x2
+        integer, intent(in)      :: x1, x2
         logical*1, intent(inout) :: array(x2 - x1 + 1)
         integer, intent(out)     :: status
 
@@ -574,7 +574,7 @@ contains
     subroutine ft_read_slice_int4_filename(filename, x1, x2, array, status)
 
         character(len=*), intent(in) :: filename
-        integer*8, intent(in)        :: x1, x2
+        integer, intent(in)          :: x1, x2
         integer*4, intent(inout)     :: array(x2 - x1 + 1)
         integer, intent(out)         :: status
 
@@ -597,7 +597,7 @@ contains
     subroutine ft_read_slice_int4_unit(unit, x1, x2, array, status)
 
         integer, intent(in)      :: unit
-        integer*8, intent(in)    :: x1, x2
+        integer, intent(in)      :: x1, x2
         integer*4, intent(inout) :: array(x2 - x1 + 1)
         integer, intent(out)     :: status
         integer :: anynull
@@ -615,7 +615,7 @@ contains
     subroutine ft_read_slice_int8_filename(filename, x1, x2, array, status)
 
         character(len=*), intent(in) :: filename
-        integer*8, intent(in)        :: x1, x2
+        integer, intent(in)          :: x1, x2
         integer*8, intent(inout)     :: array(x2 - x1 + 1)
         integer, intent(out)         :: status
 
@@ -638,7 +638,7 @@ contains
     subroutine ft_read_slice_int8_unit(unit, x1, x2, array, status)
 
         integer, intent(in)      :: unit
-        integer*8, intent(in)    :: x1, x2
+        integer, intent(in)      :: x1, x2
         integer*8, intent(inout) :: array(x2 - x1 + 1)
         integer, intent(out)     :: status
 
@@ -657,7 +657,7 @@ contains
     subroutine ft_read_slice_double_filename(filename, x1, x2, array, status)
 
         character(len=*), intent(in) :: filename
-        integer*8, intent(in)        :: x1, x2
+        integer, intent(in)          :: x1, x2
         real*8, intent(inout)        :: array(x2 - x1 + 1)
         integer, intent(out)         :: status
 
@@ -680,7 +680,7 @@ contains
     subroutine ft_read_slice_double_unit(unit, x1, x2, array, status)
 
         integer, intent(in)    :: unit
-        integer*8, intent(in)  :: x1, x2
+        integer, intent(in)    :: x1, x2
         real*8, intent(inout)  :: array(x2 - x1 + 1)
         integer, intent(out)   :: status
 
@@ -699,14 +699,14 @@ contains
     subroutine ft_read_slice_logical_3d(unit, x1, x2, y, z, naxes, array, status)
 
         integer, intent(in)      :: unit
-        integer*8, intent(in)    :: x1, x2
-        integer*8, intent(in)    :: y, z
+        integer, intent(in)      :: x1, x2
+        integer, intent(in)      :: y, z
         integer, intent(in)      :: naxes(3)
         logical*1, intent(inout) :: array(x2 - x1 + 1)
         integer, intent(out)     :: status
 
         integer                  :: anynull
-        integer*8                :: firstpix
+        integer                  :: firstpix
 
         status = 0
         firstpix = x1 + naxes(1) * (y - 1 + naxes(2) * (z - 1))
@@ -722,14 +722,14 @@ contains
     subroutine ft_read_slice_int4_3d(unit, x1, x2, y, z, naxes, array, status)
 
         integer, intent(in)      :: unit
-        integer*8, intent(in)    :: x1, x2
-        integer*8, intent(in)    :: y, z
+        integer, intent(in)      :: x1, x2
+        integer, intent(in)      :: y, z
         integer, intent(in)      :: naxes(3)
         integer*4, intent(inout) :: array(x2 - x1 + 1)
         integer, intent(out)     :: status
 
         integer                  :: anynull
-        integer*8                :: firstpix
+        integer                  :: firstpix
 
         status = 0
         firstpix = x1 + naxes(1) * (y - 1 + naxes(2) * (z - 1))
@@ -745,14 +745,14 @@ contains
     subroutine ft_read_slice_int8_3d(unit, x1, x2, y, z, naxes, array, status)
 
         integer, intent(in)      :: unit
-        integer*8, intent(in)    :: x1, x2
-        integer*8, intent(in)    :: y, z
+        integer, intent(in)      :: x1, x2
+        integer, intent(in)      :: y, z
         integer, intent(in)      :: naxes(3)
         integer*8, intent(inout) :: array(x2 - x1 + 1)
         integer, intent(out)     :: status
 
         integer                  :: anynull
-        integer*8                :: firstpix
+        integer                  :: firstpix
 
         status = 0
         firstpix = x1 + naxes(1) * (y - 1 + naxes(2) * (z - 1))
@@ -768,14 +768,14 @@ contains
     subroutine ft_read_slice_double_3d(unit, x1, x2, y, z, naxes, array, status)
 
         integer, intent(in)   :: unit
-        integer*8, intent(in) :: x1, x2
-        integer*8, intent(in) :: y, z
+        integer, intent(in)   :: x1, x2
+        integer, intent(in)   :: y, z
         integer, intent(in)   :: naxes(3)
         real*8, intent(inout) :: array(x2 - x1 + 1)
         integer, intent(out)  :: status
 
         integer               :: anynull
-        integer*8             :: firstpix
+        integer               :: firstpix
 
         status = 0
         firstpix = x1 + naxes(1) * (y - 1 + naxes(2) * (z - 1))
