@@ -119,7 +119,7 @@ class FitsArray(Quantity):
         fig.savefig(filename)
         matplotlib.interactive(is_interactive)
 
-    def imshow(self, mask=None, num=None, colorbar=True, title=None, aspect='auto', interpolation='nearest', origin='lower', figsize=None, dpi=None, xlabel='', ylabel='', **kw):
+    def imshow(self, mask=None, num=None, colorbar=True, title=None, aspect=None, interpolation='nearest', origin='lower', figsize=None, dpi=None, xlabel='', ylabel='', **kw):
         """
         A simple graphical display function for the Tod class
 
@@ -135,8 +135,8 @@ class FitsArray(Quantity):
         data = numpy.ma.MaskedArray(self, mask=mask, copy=False)
         mean   = numpy.mean(data)
         stddev = numpy.std(data)
-        minval = mean - 2*stddev
-        maxval = mean + 5*stddev
+        minval = max(mean - 2*stddev, numpy.min(data))
+        maxval = min(mean + 5*stddev, numpy.max(data))
 
         fig = pyplot.figure(num=num, figsize=figsize, dpi=dpi)
         fontsize = 12. * fig.get_figheight() / 6.125
@@ -229,7 +229,7 @@ class Map(FitsArray):
     def copy(self, order='C'):
         return Map(self, copy=True, order=order)
 
-    def imshow(self, mask=None, num=None, title=None, figsize=None, dpi=None, **kw):
+    def imshow(self, mask=None, num=None, title=None, figsize=None, dpi=None, aspect='equal', **kw):
         """A simple graphical display function for the Map class"""
 
         if mask is None and self.coverage is not None:
@@ -242,7 +242,7 @@ class Map(FitsArray):
             xlabel = 'X'
             ylabel = 'Y'
 
-        image = super(Map, self).imshow(mask=mask, num=num, title=title, figsize=figsize, dpi=dpi, xlabel=xlabel, ylabel=ylabel, **kw)
+        image = super(Map, self).imshow(mask=mask, num=num, title=title, figsize=figsize, dpi=dpi, xlabel=xlabel, ylabel=ylabel, aspect=aspect, **kw)
         return image
 
     def writefits(self, filename):
@@ -343,7 +343,7 @@ class Tod(FitsArray):
     def copy(self, order='C'):
         return Tod(self, copy=True, order=order)
 
-    def imshow(self, num=None, title=None, figsize=None, dpi=None, **kw):
+    def imshow(self, num=None, title=None, figsize=None, dpi=None, aspect='auto', **kw):
         """
         A simple graphical display function for the Map class
         """
@@ -351,7 +351,7 @@ class Tod(FitsArray):
         mask = self.mask
         xlabel = 'Sample'
         ylabel = 'Detector number'
-        image = super(Tod, self).imshow(mask=mask, num=num, title=title, origin='upper', figsize=figsize, dpi=dpi, xlabel=xlabel, ylabel=ylabel, **kw)
+        image = super(Tod, self).imshow(mask=mask, num=num, title=title, origin='upper', figsize=figsize, dpi=dpi, xlabel=xlabel, ylabel=ylabel, aspect=aspect, **kw)
         return image
 
     def __str__(self):
