@@ -3,7 +3,7 @@ import pyfits
 import scipy
 import tamasisfortran as tmf
 
-__all__ = [ 'deglitch_l2std', 'deglitch_l2mad', 'filter_median', 'filter_polynomial' ]
+__all__ = [ 'deglitch_l2std', 'deglitch_l2mad', 'filter_median', 'filter_polynomial', 'interpolate_linear' ]
 
 def deglitch_l2std(tod, projection, nsigma=5.):
     """
@@ -68,3 +68,27 @@ def filter_polynomial(tod, degree):
         dest = dest + nsamples
 
     return filtered
+
+
+#-------------------------------------------------------------------------------
+
+
+def interpolate_linear(tod):
+    """
+    Interpolate masked values of a Tod
+    """
+    tod = tod.copy()
+    if tod.mask is None:
+        return tod
+
+    dest = 0
+    for islice in range(len(tod.nsamples)):
+        nsamples = tod.nsamples[islice]
+        x = numpy.arange(nsamples)
+        for idetector in range(tod.shape[0]):
+            tod_ = tod[idetector,dest:dest+nsamples]
+            valid = tod.mask[idetector,dest:dest+nsamples] == 0
+            tod_[~valid] = numpy.interp(x[~valid], x[valid], tod_[valid])
+        dest = dest + nsamples
+    
+    return tod
