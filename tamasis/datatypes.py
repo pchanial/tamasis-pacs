@@ -135,8 +135,9 @@ class FitsArray(Quantity):
         data = numpy.ma.MaskedArray(self, mask=mask, copy=False)
         mean   = numpy.mean(data)
         stddev = numpy.std(data)
-        minval = max(mean - 2*stddev, numpy.min(data))
-        maxval = min(mean + 5*stddev, numpy.max(data))
+        # casting to float because of a bug numpy1.4 + matplotlib
+        minval = float(max(mean - 2*stddev, numpy.min(data)))
+        maxval = float(min(mean + 5*stddev, numpy.max(data)))
 
         fig = pyplot.figure(num=num, figsize=figsize, dpi=dpi)
         fontsize = 12. * fig.get_figheight() / 6.125
