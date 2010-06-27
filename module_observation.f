@@ -24,7 +24,7 @@ public :: pacsobservation
     type maskarray
         logical :: remove_invalid = .true.
         logical :: off_scan = .true.
-        logical :: off_target = .true.
+        logical :: off_target = .false.
         logical :: wrong_time = .true.
     end type maskarray
 
