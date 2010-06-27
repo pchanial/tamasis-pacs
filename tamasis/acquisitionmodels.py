@@ -13,12 +13,13 @@ import utils
 
 from config import __verbose__
 from datatypes import Map, Tod, combine_sliced_shape, flatten_sliced_shape, validate_sliced_shape
+from processing import interpolate_linear
 
 __all__ = ['AcquisitionModel', 'AcquisitionModelTranspose', 'Composition', 
            'Addition', 'Square', 'Symmetric', 'Diagonal', 'Scalar', 'Identity',
            'DiscreteDifference', 'Projection', 'Compression', 
            'CompressionAverage', 'DownSampling', 'Masking', 'Masking2', 'Unpacking', 'Unpacking2',  
-           'Reshaping', 'Padding', 'Fft', 'InvNtt', 'ValidationError', 
+           'Reshaping', 'Padding', 'Fft', 'InvNtt', 'InterpolationLinear', 'ValidationError', 
            'asacquisitionmodel']
 
 
@@ -893,10 +894,7 @@ class Masking2(Symmetric):
     """
     def __init__(self, mask, description=None):
         AcquisitionModel.__init__(self, description)
-        if mask is None:
-            self._mask = None
-        else:
-            self._mask = mask
+        self._mask = mask
 
     def direct(self, data, reusein=False, reuseout=False):
         data[self._mask] = 0.
@@ -1141,6 +1139,17 @@ class InvNtt(Diagonal):
         Diagonal.__init__(self, tod_filter.T, nsamples, description)
         self.ncorrelations = ncorrelations
 
+
+#-------------------------------------------------------------------------------
+
+
+class InterpolationLinear(Square):
+    def __init__(self, mask, description=None):
+        Square.__init__(self, description)
+        self.mask = mask
+    def direct(self, data, reusein=False, reuseout=False):
+        data.mask = self.mask
+        return interpolate_linear(data)
 
 #-------------------------------------------------------------------------------
 
