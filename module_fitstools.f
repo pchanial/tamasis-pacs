@@ -1306,8 +1306,8 @@ contains
 
         if (charvalue /= 'F' .and. charvalue /= 'T') then
             status = 1
-            write (ERROR_UNIT,'(a)') "ft_read_parameter_header_logical: invalid logical value '" // trim(charvalue) // "' for parameter '"&
-                  // param // "' in FITS header."
+            write (ERROR_UNIT,'(a)') "ft_read_parameter_header_logical: invalid logical value '" // trim(charvalue) //             &
+                  "' for parameter '" // param // "' in FITS header."
             return
         end if
 
@@ -1368,8 +1368,8 @@ contains
 
         read (charvalue,'(i20)',iostat=status) value
         if (status /= 0) then
-            write (ERROR_UNIT,'(a)') "ft_read_parameter_header_int8: invalid integer value '" // trim(charvalue) // "' for parameter '" //&
-                                     param // "' in FITS header."
+            write (ERROR_UNIT,'(a)') "ft_read_parameter_header_int8: invalid integer value '" // trim(charvalue) //                &
+                  "' for parameter '" // param // "' in FITS header."
             return
         end if
 
@@ -1398,8 +1398,8 @@ contains
 
         read (charvalue,'(bn,f20.0)',iostat=status) value
         if (status /= 0) then
-            write (ERROR_UNIT,'(a)') "ft_read_parameter_header_double: invalid real value '" // trim(charvalue) // "' for parameter '" // &
-                                     param // "' in FITS header."
+            write (ERROR_UNIT,'(a)') "ft_read_parameter_header_double: invalid real value '" // trim(charvalue) //                 &
+                  "' for parameter '" // param // "' in FITS header."
             return
         end if
 
