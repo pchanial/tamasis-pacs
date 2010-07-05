@@ -1338,8 +1338,8 @@ contains
 
         read (charvalue,'(i20)',iostat=status) value
         if (status /= 0) then
-            write (ERROR_UNIT,'(a)') "ft_read_parameter_header_int4: invalid integer value '" // trim(charvalue) // "' for parameter '" //&
-                  param // "' in FITS header."
+            write (ERROR_UNIT,'(a)') "ft_read_parameter_header_int4: invalid integer value '" // trim(charvalue) //                &
+                  "' for parameter '" // param // "' in FITS header."
             return
         end if
 
