@@ -59,8 +59,8 @@ module module_fitstools
     end interface ft_write
 
     interface ft_read_parameter
-        module procedure ft_read_parameter_logical, ft_read_parameter_int4, ft_read_parameter_int8, ft_read_parameter_double,      &
-                         ft_read_parameter_character
+        module procedure ft_read_parameter_header_logical, ft_read_parameter_header_int4, ft_read_parameter_header_int8,           &
+                         ft_read_parameter_header_double, ft_read_parameter_header_character
     end interface ft_read_parameter
 
 
@@ -1287,7 +1287,7 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_parameter_logical(header, param, value, count, comment, must_exist, status)
+    subroutine ft_read_parameter_header_logical(header, param, value, count, comment, must_exist, status)
 
         character(len=*), intent(in)             :: header
         character(len=*), intent(in)             :: param
@@ -1306,20 +1306,20 @@ contains
 
         if (charvalue /= 'F' .and. charvalue /= 'T') then
             status = 1
-            write (ERROR_UNIT,'(a)') "ft_read_parameter_logical: invalid logical value '" // trim(charvalue) // "' for parameter '"&
+            write (ERROR_UNIT,'(a)') "ft_read_parameter_header_logical: invalid logical value '" // trim(charvalue) // "' for parameter '"&
                   // param // "' in FITS header."
             return
         end if
 
         if (charvalue == 'T') value = .true.
 
-    end subroutine ft_read_parameter_logical
+    end subroutine ft_read_parameter_header_logical
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_parameter_int4(header, param, value, count, comment, must_exist, status)
+    subroutine ft_read_parameter_header_int4(header, param, value, count, comment, must_exist, status)
 
         character(len=*), intent(in)             :: header
         character(len=*), intent(in)             :: param
@@ -1338,18 +1338,18 @@ contains
 
         read (charvalue,'(i20)',iostat=status) value
         if (status /= 0) then
-            write (ERROR_UNIT,'(a)') "ft_read_parameter_int4: invalid integer value '" // trim(charvalue) // "' for parameter '" //&
+            write (ERROR_UNIT,'(a)') "ft_read_parameter_header_int4: invalid integer value '" // trim(charvalue) // "' for parameter '" //&
                   param // "' in FITS header."
             return
         end if
 
-    end subroutine ft_read_parameter_int4
+    end subroutine ft_read_parameter_header_int4
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_parameter_int8(header, param, value, count, comment, must_exist, status)
+    subroutine ft_read_parameter_header_int8(header, param, value, count, comment, must_exist, status)
 
         character(len=*), intent(in)             :: header
         character(len=*), intent(in)             :: param
@@ -1368,18 +1368,18 @@ contains
 
         read (charvalue,'(i20)',iostat=status) value
         if (status /= 0) then
-            write (ERROR_UNIT,'(a)') "ft_read_parameter_int8: invalid integer value '" // trim(charvalue) // "' for parameter '" //&
+            write (ERROR_UNIT,'(a)') "ft_read_parameter_header_int8: invalid integer value '" // trim(charvalue) // "' for parameter '" //&
                                      param // "' in FITS header."
             return
         end if
 
-    end subroutine ft_read_parameter_int8
+    end subroutine ft_read_parameter_header_int8
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_parameter_double(header, param, value, count, comment, must_exist, status)
+    subroutine ft_read_parameter_header_double(header, param, value, count, comment, must_exist, status)
 
         character(len=*), intent(in)             :: header
         character(len=*), intent(in)             :: param
@@ -1398,18 +1398,18 @@ contains
 
         read (charvalue,'(bn,f20.0)',iostat=status) value
         if (status /= 0) then
-            write (ERROR_UNIT,'(a)') "ft_read_parameter_double: invalid real value '" // trim(charvalue) // "' for parameter '" // &
+            write (ERROR_UNIT,'(a)') "ft_read_parameter_header_double: invalid real value '" // trim(charvalue) // "' for parameter '" // &
                                      param // "' in FITS header."
             return
         end if
 
-    end subroutine ft_read_parameter_double
+    end subroutine ft_read_parameter_header_double
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_parameter_character(header, param, value, count, comment, must_exist, status)
+    subroutine ft_read_parameter_header_character(header, param, value, count, comment, must_exist, status)
 
         character(len=*), intent(in)             :: header
         character(len=*), intent(in)             :: param
@@ -1445,7 +1445,37 @@ contains
            j = j + 1
         end do
 
-    end subroutine ft_read_parameter_character
+    end subroutine ft_read_parameter_header_character
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    function ft_read_parameter_unit_double(unit, keyword, found, status, must_exist, comment) result(value)
+
+        integer, intent(in)                      :: unit
+        character(len=*), intent(in)             :: keyword
+        logical, intent(out)                     :: found
+        integer, intent(out)                     :: status
+        logical, optional, intent(in)            :: must_exist
+        character(len=70), optional, intent(out) :: comment
+        real(dp)                                 :: value
+
+        character(len=70) :: comment_
+        
+        found = .false.
+        status = 0
+
+        call ftgkyd(unit, keyword, value, comment_, status)
+        if (status /= 0) then
+            if (status /= 202 .or. must_exist) return
+        else
+            found = .true.
+        end if
+
+        if (present(comment)) comment = comment_
+
+    end function
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
