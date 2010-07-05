@@ -2,7 +2,12 @@ import matplotlib
 import matplotlib.pyplot as pyplot
 import numpy
 import pyfits
-
+try:
+    import ds9
+    _imported_ds9 = True
+except:
+    _imported_ds9 = False
+    
 from unit import Quantity
 from utils import create_fitsheader, _my_isscalar
 
@@ -11,7 +16,7 @@ __all__ = [ 'FitsArray', 'Map', 'Tod' ]
 
 class FitsArray(Quantity):
 
-    __slots__ = ('_header',)
+    __slots__ = ('_header', '__dict__')
     def __new__(cls, data, header=None, unit=None, dtype=numpy.float64, copy=True, order='C', subok=False, ndmin=0):
 
         if type(data) is str:
@@ -162,6 +167,64 @@ class FitsArray(Quantity):
 
         pyplot.draw()
         return image
+
+    _ds9_id = 1
+    def ds9(self, id=None, cmap='heat', scale=('scope local', 'mode 99.5'), wait=10, zoom='to fit'):
+        """
+        Display the array using ds9
+
+        Parameters
+        ----------
+        id : string
+            A string which identifies the ds9 process. If not provided,
+            the id will be 'ds9_#', where '#' is incremented each time
+            a ds9 process is launched.
+        cmap : string, tuple of string
+            Specify the cmap access point (ex: 'heat')
+        scale : string , tuple of string
+            Specify the scale access point (ex: 'mode 99')
+        wait : integer
+            Seconds to wait for ds9 to start
+        zoom : string
+            Specify the zoom access point (ex: 'to fit')
+
+        Examples
+        --------
+        >>> map = Map('myfits.fits')
+        >>> map.ds9(id='myfits.fits', scale='histequ', cmap='invert yes')
+        """
+        if not _imported_ds9:
+            raise RuntimeError('The library pyds9 has not been installed.')
+        import os, time, xpa
+        if isinstance(cmap, str):
+            cmap = (cmap,)
+        if isinstance(scale, str):
+            scale = (scale,)
+
+        if id is None:
+            id = 'ds9_' + str(self._ds9_id)
+            self._ds9_id += 1
+
+        command = 'ds9 -title ' + id
+        for option in cmap:
+            command += ' -cmap ' + option
+        for option in scale:
+            command += ' -scale ' + option
+            
+        command += '&'
+        os.system(command)
+        for i in range(wait):
+            list = xpa.xpaaccess(id, None, 1024)
+            if list: break
+            time.sleep(1)
+	if not list:
+	    raise ValueError, 'no active ds9 running for target: %s' % list
+        d = ds9.ds9(id)
+        d.set_np2arr(self.view(numpy.ndarray).T)
+        d.set('zoom ' + zoom)
+        if self.header is not None:
+            d.set('wcs append', str(self.header))
+        return d
 
 #-------------------------------------------------------------------------------
 
