@@ -174,7 +174,7 @@ class PacsObservation(_Pacs):
         header = _str2fitsheader(header)
         return header
    
-    def get_tod(self, unit=None, flatfielding=True, subtraction_mean=False):
+    def get_tod(self, unit=None, flatfielding=True, subtraction_mean=True):
         """
         Returns the signal and mask timelines.
         """
