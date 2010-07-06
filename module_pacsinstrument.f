@@ -3,7 +3,7 @@ module module_pacsinstrument
     use iso_fortran_env,        only : ERROR_UNIT, OUTPUT_UNIT
     use module_filtering,       only : FilterUncorrelated
     use module_fitstools,       only : ft_check_error_cfitsio, ft_close, ft_create_header, ft_open, ft_open_image,                 &
-                                       ft_read_extension, ft_read_slice, ft_test_extension
+                                       ft_read_image, ft_read_slice, ft_test_extension
     use module_math,            only : DEG2RAD, pInf, mInf, mean, nint_down, nint_up
     use module_pacsobservation, only : pacsobservationslice, pacsobservation
     use module_pointingmatrix,  only : pointingelement, xy2roi, roi2pmatrix
@@ -198,28 +198,28 @@ contains
 
         ! read bad pixel mask
 
-        call ft_read_extension(get_calfile(filename_bpm) // '[blue]', tmplogical, status)
+        call ft_read_image(get_calfile(filename_bpm) // '[blue]', tmplogical, status)
         if (status /= 0) return
         this%mask_blue = transpose(tmplogical)
 
-        call ft_read_extension(get_calfile(filename_bpm) // '[green]', tmplogical, status)
+        call ft_read_image(get_calfile(filename_bpm) // '[green]', tmplogical, status)
         if (status /= 0) return
         this%mask_green = transpose(tmplogical)
 
-        call ft_read_extension(get_calfile(filename_bpm) // '[red]', tmplogical, status)
+        call ft_read_image(get_calfile(filename_bpm) // '[red]', tmplogical, status)
         if (status /= 0) return
         this%mask_red = transpose(tmplogical)
 
 
         ! read flat fields
 
-        call ft_read_extension(get_calfile(filename_ff) // '+12',  tmp2, status)
+        call ft_read_image(get_calfile(filename_ff) // '+12',  tmp2, status)
         if (status /= 0) return
         this%flatfield_blue = transpose(tmp2)
-        call ft_read_extension(get_calfile(filename_ff) // '+7', tmp2, status)
+        call ft_read_image(get_calfile(filename_ff) // '+7', tmp2, status)
         if (status /= 0) return
         this%flatfield_green = transpose(tmp2)
-        call ft_read_extension(get_calfile(filename_ff) // '+2',   tmp2, status)
+        call ft_read_image(get_calfile(filename_ff) // '+2',   tmp2, status)
         if (status /= 0) return
         this%flatfield_red = transpose(tmp2)
 
@@ -228,16 +228,16 @@ contains
 
         do ivertex=1, nvertices
 
-            call ft_read_extension(get_calfile(filename_saa), tmp2, status, hdu_blue(ivertex)  )
+            call ft_read_image(get_calfile(filename_saa), tmp2, status, hdu_blue(ivertex)  )
             if (status /= 0) return
             this%corners_uv_blue(1,ivertex,:,:) = transpose(tmp2)
-            call ft_read_extension(get_calfile(filename_saa), tmp2, status, hdu_blue(ivertex)+1)
+            call ft_read_image(get_calfile(filename_saa), tmp2, status, hdu_blue(ivertex)+1)
             if (status /= 0) return
             this%corners_uv_blue(2,ivertex,:,:) = transpose(tmp2)
-            call ft_read_extension(get_calfile(filename_saa), tmp2, status, hdu_red (ivertex)  )
+            call ft_read_image(get_calfile(filename_saa), tmp2, status, hdu_red (ivertex)  )
             if (status /= 0) return
             this%corners_uv_red (1,ivertex,:,:) = transpose(tmp2)
-            call ft_read_extension(get_calfile(filename_saa), tmp2, status, hdu_red (ivertex)+1)
+            call ft_read_image(get_calfile(filename_saa), tmp2, status, hdu_red (ivertex)+1)
             if (status /= 0) return
             this%corners_uv_red (2,ivertex,:,:) = transpose(tmp2)
 
@@ -246,16 +246,16 @@ contains
 
         ! read the distortion coefficients in the (y,z) plane
 
-        call ft_read_extension(get_calfile(filename_ai) // '[ycoeffblue]', tmp3, status)
+        call ft_read_image(get_calfile(filename_ai) // '[ycoeffblue]', tmp3, status)
         if (status /= 0) return
         this%distortion_yz_blue(1,:,:,:) = tmp3
-        call ft_read_extension(get_calfile(filename_ai) // '[zcoeffblue]', tmp3, status)
+        call ft_read_image(get_calfile(filename_ai) // '[zcoeffblue]', tmp3, status)
         if (status /= 0) return
         this%distortion_yz_blue(2,:,:,:) = tmp3
-        call ft_read_extension(get_calfile(filename_ai) // '[ycoeffred]', tmp3, status)
+        call ft_read_image(get_calfile(filename_ai) // '[ycoeffred]', tmp3, status)
         if (status /= 0) return
         this%distortion_yz_red (1,:,:,:) = tmp3
-        call ft_read_extension(get_calfile(filename_ai) // '[zcoeffred]', tmp3, status)
+        call ft_read_image(get_calfile(filename_ai) // '[zcoeffred]', tmp3, status)
         if (status /= 0) return
         this%distortion_yz_red (2,:,:,:) = tmp3
 
@@ -978,7 +978,7 @@ contains
         nrows = size(mask, 1)
         ncolumns = size(mask, 2)
 
-        call ft_read_extension(filename, data, status)
+        call ft_read_image(filename, data, status)
         if (status /= 0) return
 
         filter%ncorrelations = size(data, 1) - 1

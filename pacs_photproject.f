@@ -1,7 +1,7 @@
 program pacs_photproject
 
     use iso_fortran_env,        only : ERROR_UNIT, OUTPUT_UNIT
-    use module_fitstools,       only : ft_header2str, ft_read_parameter, ft_write
+    use module_fitstools,       only : ft_header2str, ft_read_keyword, ft_write_image
     use module_deglitching,     only : deglitch_l2b
     use module_optionparser,    only : optionparser
     use module_pacsinstrument,  only : pacsinstrument
@@ -116,11 +116,11 @@ program pacs_photproject
     if (status /= 0) go to 999
 
     ! allocate memory for the maps
-    call ft_read_parameter(header, 'naxis1', nx, count2, status=status)
-    if (status /= 0 .or. count2 == 0) go to 999
+    call ft_read_keyword(header, 'naxis1', nx, status=status)
+    if (status /= 0) go to 999
 
-    call ft_read_parameter(header, 'naxis2', ny, count2, status=status)
-    if (status /= 0 .or. count2 == 0) go to 999
+    call ft_read_keyword(header, 'naxis2', ny, status=status)
+    if (status /= 0) go to 999
 
     allocate(map1d(0:nx*ny-1), weight1d(0:nx*ny-1))
 
@@ -193,7 +193,7 @@ program pacs_photproject
 
     ! write the map as fits file
     write(OUTPUT_UNIT,'(a)') 'Writing FITS file... '
-    call ft_write(outfile, reshape(map1d, [nx,ny]), header, status)
+    call ft_write_image(outfile, reshape(map1d, [nx,ny]), header, status)
     if (status /= 0) go to 999
 
     call exit(0)

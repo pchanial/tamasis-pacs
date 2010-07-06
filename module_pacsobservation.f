@@ -15,7 +15,7 @@
 module module_pacsobservation
 
     use iso_fortran_env,    only : ERROR_UNIT, OUTPUT_UNIT
-    use module_fitstools,   only : ft_open, ft_open_bintable, ft_read_column, ft_read_extension, ft_close
+    use module_fitstools,   only : ft_open, ft_open_bintable, ft_read_column, ft_read_image, ft_close
     use module_observation, only : maskarray, observation, pointing, pacsobservationslice, pacsobservation
     use module_precision,   only : dp, p
     use module_string,      only : strinteger, strreal, strsection, strternary

@@ -7,7 +7,7 @@
 module module_observation
 
     use iso_fortran_env,  only : ERROR_UNIT, OUTPUT_UNIT
-    use module_fitstools, only : ft_open, ft_open_bintable, ft_read_column, ft_read_extension, ft_close
+    use module_fitstools, only : ft_open, ft_open_bintable, ft_read_column, ft_read_image, ft_close
     use module_math,      only : NaN, median, neq_real
     use module_precision, only : dp, p
     use module_string,    only : strinteger, strlowcase, strreal, strsection, strternary
@@ -658,7 +658,7 @@ contains
         length = len_trim(this%filename)
         if (this%filename(length-4:length) /= '.fits') then
             write (OUTPUT_UNIT,'(a)') 'Warning: Obsolete file format.'
-            call ft_read_extension(trim(this%filename) // '_ChopFpuAngle.fits', chop, status)
+            call ft_read_image(trim(this%filename) // '_ChopFpuAngle.fits', chop, status)
             if (status /= 0) return
             this%nsamples = size(chop)
             allocate (bbid(this%nsamples))
@@ -793,25 +793,25 @@ contains
         real(dp), allocatable  :: buffer(:)
         integer*8, allocatable :: timeus(:)
         
-        call ft_read_extension(trim(this%filename)//'_Time.fits', timeus, status)
+        call ft_read_image(trim(this%filename)//'_Time.fits', timeus, status)
         if (status /= 0) return
         allocate(buffer(size(timeus)))
         buffer = timeus * 1.0d-6
         this%p%time = buffer
 
-        call ft_read_extension(trim(this%filename) // '_RaArray.fits', buffer, status)
+        call ft_read_image(trim(this%filename) // '_RaArray.fits', buffer, status)
         if (status /= 0) return
         this%p%ra = buffer
 
-        call ft_read_extension(trim(this%filename) // '_DecArray.fits', buffer, status)
+        call ft_read_image(trim(this%filename) // '_DecArray.fits', buffer, status)
         if (status /= 0) return
         this%p%dec = buffer
 
-        call ft_read_extension(trim(this%filename) // '_PaArray.fits', buffer, status)
+        call ft_read_image(trim(this%filename) // '_PaArray.fits', buffer, status)
         if (status /= 0) return
         this%p%pa = buffer
 
-        call ft_read_extension(trim(this%filename) // '_ChopFpuAngle.fits', buffer, status)
+        call ft_read_image(trim(this%filename) // '_ChopFpuAngle.fits', buffer, status)
         if (status /= 0) return
         this%p%chop = buffer
 

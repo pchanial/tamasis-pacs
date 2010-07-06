@@ -22,11 +22,11 @@ module module_fitstools
     public :: ft_open_bintable
     public :: ft_open_image
     public :: ft_read_column
-    public :: ft_read_extension
-    public :: ft_read_parameter
+    public :: ft_read_image
+    public :: ft_read_keyword
     public :: ft_read_slice
     public :: ft_test_extension
-    public :: ft_write
+    public :: ft_write_image
 
     integer, private, parameter :: GROUP = 1
     integer, private, parameter :: NULLVAL = 0
@@ -39,11 +39,11 @@ module module_fitstools
                          ft_read_column_double_filename, ft_read_column_double_unit
     end interface ft_read_column
 
-    interface ft_read_extension
-        module procedure ft_read_extension_logical_1d, ft_read_extension_int8_1d, ft_read_extension_double_1d,                     &
-                         ft_read_extension_logical_2d, ft_read_extension_double_2d,                                                &
-                         ft_read_extension_logical_3d, ft_read_extension_double_3d
-    end interface ft_read_extension
+    interface ft_read_image
+        module procedure ft_read_image_logical_1d, ft_read_image_int8_1d, ft_read_image_double_1d,                                 &
+                         ft_read_image_logical_2d, ft_read_image_double_2d,                                                        &
+                         ft_read_image_logical_3d, ft_read_image_double_3d
+    end interface ft_read_image
 
     interface ft_read_slice
         module procedure ft_read_slice_logical_filename, ft_read_slice_logical_unit,                                               &
@@ -54,20 +54,22 @@ module module_fitstools
                          ft_read_slice_int8_3d, ft_read_slice_double_3d
     end interface ft_read_slice
 
-    interface ft_write
-        module procedure writefits_double_1d, writefits_double_2d, writefits_double_3d
-    end interface ft_write
+    interface ft_write_image
+        module procedure ft_write_image_double_1d, ft_write_image_double_2d, ft_write_image_double_3d
+    end interface ft_write_image
 
-    interface ft_read_parameter
-        module procedure ft_read_parameter_header_logical, ft_read_parameter_header_int4, ft_read_parameter_header_int8,           &
-                         ft_read_parameter_header_double, ft_read_parameter_header_character
-    end interface ft_read_parameter
+    interface ft_read_keyword
+        module procedure ft_read_keyword_header_logical, ft_read_keyword_header_int4, ft_read_keyword_header_int8,                 &
+                         ft_read_keyword_header_double, ft_read_keyword_header_character,                                          &
+                         ft_read_keyword_unit_logical, ft_read_keyword_unit_int4, ft_read_keyword_unit_int8,                       &
+                         ft_read_keyword_unit_double, ft_read_keyword_unit_character
+   end interface ft_read_keyword
 
 
 contains
 
 
-    subroutine ft_read_column_character_filename(filename, colname, data,status)
+    subroutine ft_read_column_character_filename(filename, colname, data, status)
 
         character(len=*), intent(in)               :: filename
         character(len=*), intent(in)               :: colname
@@ -91,8 +93,7 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_column_character_unit(unit, colname, first, last, data, &
-                                             status)
+    subroutine ft_read_column_character_unit(unit, colname, first, last, data, status)
         integer, intent(in)           :: unit
         character(len=*), intent(in)  :: colname
         integer, intent(in)           :: first, last
@@ -151,7 +152,7 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_column_int4_unit(unit, colname, first, last, data,status)
+    subroutine ft_read_column_int4_unit(unit, colname, first, last, data, status)
 
         integer, intent(in)          :: unit
         character(len=*), intent(in) :: colname
@@ -211,7 +212,7 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_column_int8_unit(unit, colname, first, last, data,status)
+    subroutine ft_read_column_int8_unit(unit, colname, first, last, data, status)
 
         integer, intent(in)          :: unit
         character(len=*), intent(in) :: colname
@@ -260,7 +261,7 @@ contains
         if (status /= 0) return
         
         allocate(data(nrecords))
-        call ft_read_column_double_unit(unit, colname, 1, nrecords, data,status)
+        call ft_read_column_double_unit(unit, colname, 1, nrecords, data, status)
         if (status /= 0) return
         
         call ft_close(unit, status)
@@ -271,8 +272,7 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_column_double_unit(unit, colname, first, last, data,    &
-                                          status)
+    subroutine ft_read_column_double_unit(unit, colname, first, last, data, status)
         integer, intent(in)          :: unit
         character(len=*), intent(in) :: colname
         integer, intent(in)          :: first, last
@@ -307,7 +307,7 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_extension_logical_1d(filename, output, status, hdu)
+    subroutine ft_read_image_logical_1d(filename, output, status, hdu)
 
         character(len=*), intent(in)        :: filename
         logical*1, allocatable, intent(out) :: output(:)
@@ -328,13 +328,13 @@ contains
 
         call ft_close(unit, status)
 
-    end subroutine ft_read_extension_logical_1d
+    end subroutine ft_read_image_logical_1d
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_extension_int8_1d(filename, output, status, hdu)
+    subroutine ft_read_image_int8_1d(filename, output, status, hdu)
 
         character(len=*), intent(in)        :: filename
         integer*8, allocatable, intent(out) :: output(:)
@@ -355,13 +355,13 @@ contains
 
         call ft_close(unit, status)
 
-    end subroutine ft_read_extension_int8_1d
+    end subroutine ft_read_image_int8_1d
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_extension_double_1d(filename, output, status, hdu)
+    subroutine ft_read_image_double_1d(filename, output, status, hdu)
 
         character(len=*), intent(in)     :: filename
         real*8, allocatable, intent(out) :: output(:)
@@ -382,13 +382,13 @@ contains
 
         call ft_close(unit, status)
 
-    end subroutine ft_read_extension_double_1d
+    end subroutine ft_read_image_double_1d
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_extension_logical_2d(filename, output, status, hdu)
+    subroutine ft_read_image_logical_2d(filename, output, status, hdu)
 
         character(len=*), intent(in)        :: filename
         integer, intent(out)                :: status
@@ -407,8 +407,7 @@ contains
 
         do j = 1, imageshape(2)
 
-           call ftgpvb(unit, GROUP, firstpix, imageshape(1), NULLVAL,          &
-                       output(:, j), anynull, status)
+           call ftgpvb(unit, GROUP, firstpix, imageshape(1), NULLVAL, output(:, j), anynull, status)
            if (ft_check_error_cfitsio(status, unit, filename)) return
 
            firstpix = firstpix + imageshape(1)
@@ -417,13 +416,13 @@ contains
 
         call ft_close(unit, status)
 
-    end subroutine ft_read_extension_logical_2d
+    end subroutine ft_read_image_logical_2d
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_extension_double_2d(filename, output, status, hdu)
+    subroutine ft_read_image_double_2d(filename, output, status, hdu)
     
         character(len=*), intent(in)     :: filename
         real*8, allocatable, intent(out) :: output(:,:)
@@ -451,13 +450,13 @@ contains
 
         call ft_close(unit, status)
 
-    end subroutine ft_read_extension_double_2d
+    end subroutine ft_read_image_double_2d
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_extension_logical_3d(filename, output, status)
+    subroutine ft_read_image_logical_3d(filename, output, status)
 
         character(len=*), intent(in)        :: filename
         logical*1, allocatable, intent(out) :: output(:,:,:)
@@ -486,13 +485,13 @@ contains
 
         call ft_close(unit, status)
 
-    end subroutine ft_read_extension_logical_3d
+    end subroutine ft_read_image_logical_3d
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_extension_double_3d(filename, output, status)
+    subroutine ft_read_image_double_3d(filename, output, status)
 
         character(len=*), intent(in)     :: filename
         real*8, allocatable, intent(out) :: output(:,:,:)
@@ -523,7 +522,7 @@ contains
 
         call ft_close(unit, status)
 
-    end subroutine ft_read_extension_double_3d
+    end subroutine ft_read_image_double_3d
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
@@ -1008,15 +1007,34 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine writefits_double_1d(filename, data, header, status)
+    function check_duplicate_keywords(keyword) result (is_dup)
+
+        character(len=8), intent(in) :: keyword
+        logical                      :: is_dup
+
+        is_dup = keyword == 'SIMPLE' .or. keyword == 'BITPIX' .or. keyword == 'NAXIS' .or. keyword == 'EXTEND'
+        if (is_dup) return
+
+        if (keyword(1:5) == 'NAXIS') then
+            is_dup = .true.
+        end if
+
+    end function check_duplicate_keywords
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine ft_write_image_double_1d(filename, data, header, status)
 
         character(len=*), intent(in)    :: filename
         real*8, intent(in)              :: data(:)
         character(len=*), intent(in), optional :: header
         integer, intent(out)            :: status
 
-        integer                         :: irec, unit, blocksize, bitpix, naxis, naxes(1)
-        logical                         :: simple, extend
+        integer           :: irec, unit, blocksize, bitpix, naxis, naxes(1)
+        logical           :: simple, extend
+        character(len=80) :: record
 
         ! delete file if it exists
         open(10, file=filename, status='unknown')
@@ -1041,6 +1059,8 @@ contains
         ! write the astrometry keywords
         if (present(header)) then
             do irec=1, len(header) / 80
+                record = header((irec-1)*80+1:irec*80)
+                if (check_duplicate_keywords(record(1:8))) cycle
                 call FTPREC(unit,header((irec-1)*80+1:irec*80), status)
             end do
             if (ft_check_error_cfitsio(status, unit, filename)) return
@@ -1053,21 +1073,22 @@ contains
         ! close the fits file
         call ft_close(unit, status)
 
-    end subroutine writefits_double_1d
+    end subroutine ft_write_image_double_1d
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine writefits_double_2d(filename, data, header, status)
+    subroutine ft_write_image_double_2d(filename, data, header, status)
 
         character(len=*), intent(in)    :: filename
         real*8, intent(in)              :: data(:,:)
         character(len=*), intent(in), optional :: header
         integer, intent(out)            :: status
 
-        integer                         :: irec, unit, blocksize, bitpix, naxis, naxes(2)
-        logical                         :: simple, extend
+        integer           :: irec, unit, blocksize, bitpix, naxis, naxes(2)
+        logical           :: simple, extend
+        character(len=80) :: record
 
         ! delete file if it exists
         open(10, file=filename, status='unknown')
@@ -1092,6 +1113,8 @@ contains
         ! write the astrometry keywords
         if (present(header)) then
             do irec=1, len(header) / 80
+                record = header((irec-1)*80+1:irec*80)
+                if (check_duplicate_keywords(record(1:8))) cycle
                 call FTPREC(unit,header((irec-1)*80+1:irec*80), status)
             end do
             if (ft_check_error_cfitsio(status, unit, filename)) return
@@ -1104,21 +1127,22 @@ contains
         ! close the fits file
         call ft_close(unit, status)
 
-    end subroutine writefits_double_2d
+    end subroutine ft_write_image_double_2d
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine writefits_double_3d(filename, data, header, status)
+    subroutine ft_write_image_double_3d(filename, data, header, status)
 
         character(len=*), intent(in)    :: filename
         real*8, intent(in)              :: data(:,:,:)
         character(len=*), intent(in), optional :: header
         integer, intent(out)            :: status
 
-        integer                         :: irec, unit, blocksize, bitpix, naxis
-        logical                         :: simple, extend
+        integer           :: irec, unit, blocksize, bitpix, naxis
+        logical           :: simple, extend
+        character(len=80) :: record
 
         ! delete file if it exists
         open(10, file=filename, status='unknown')
@@ -1142,6 +1166,8 @@ contains
         ! write the astrometry keywords
         if (present(header)) then
             do irec=1, len(header) / 80
+                record = header((irec-1)*80+1:irec*80)
+                if (check_duplicate_keywords(record(1:8))) cycle
                 call FTPREC(unit,header((irec-1)*80+1:irec*80), status)
             end do
             if (ft_check_error_cfitsio(status, unit, filename)) return
@@ -1154,7 +1180,7 @@ contains
         ! close the fits file
         call ft_close(unit, status)
 
-    end subroutine writefits_double_3d
+    end subroutine ft_write_image_double_3d
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
@@ -1198,46 +1224,46 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_getparam(header, param, value, count, comment, must_exist, status)
+    subroutine get_keyword(header, param, value, found, comment, must_exist, status)
 
         character(len=*), intent(in)   :: header
         character(len=*), intent(in)   :: param
         character(len=70), intent(out) :: value
-        integer, intent(out)           :: count
+        logical, intent(out)           :: found
         character(len=70), intent(out), optional :: comment
         logical, intent(in), optional  :: must_exist
         integer, intent(out)           :: status
 
         character(len=70)              :: buffer
         character(len=len(param))      :: strlowparam
-        integer                        :: ncards, i, iparam
+        integer                        :: i, iparam, ncards
 
-        status = 1
+        status = 0
         value = ' '
 
         ncards = (len(header)-1) / 80 + 1! allow for an additional \0
-        iparam = 0
-        count = 0
+        found = .false.
         if (present(comment)) comment = ' '
         strlowparam = strlowcase(param)
 
         ! find the record number associated to the parameter
-        do i = 1, ncards
-           if (strlowcase(header((i-1)*80+1:(i-1)*80+8)) /= strlowparam) cycle
-           count = count + 1
-           if (iparam > 0) cycle
-           iparam = i
+        do iparam = 1, ncards
+           if (strlowcase(header((iparam-1)*80+1:(iparam-1)*80+8)) == strlowparam) then
+              found = .true.
+              exit
+           end if
         end do
 
         ! the parameter is not found
-        if (count == 0) then
+        if (.not. found) then
             if (present(must_exist)) then
                 if (must_exist) then
+                    status = 202
                     write (ERROR_UNIT, '(a)') "Missing keyword '" // strupcase(param) // "' in FITS header."
                     return
                 end if
             end if
-            goto 999
+            return
         end if
 
         buffer = adjustl(header((iparam-1)*80+11:iparam*80))
@@ -1246,7 +1272,7 @@ contains
         if (buffer(1:1) /= "'") then
             i = index(buffer, '/')
             if (i == 0) i = 71
-            goto 888 ! end of slash
+            goto 999 ! end of slash
         end if
 
         ! find ending quote
@@ -1254,189 +1280,191 @@ contains
         do while (i <= 70)
             if (buffer(i:i) == "'") then
                 i = i + 1
-                if (i == 71) goto 888 ! end of slash
+                if (i == 71) goto 999 ! end of slash
                 if (buffer(i:i) /= "'") exit
             end if
             i = i + 1
         end do
 
-        if (i == 71) then
-            write (ERROR_UNIT,'(a)') 'FITS card value not properly terminated by a quote.' // header((iparam-1)*80:iparam*80)
-            return
-        end if
-
-        ! i points right after ending quote, let's find '/'
+        ! i points right after ending quote, let's find '/' ignoring what's before it
         do while (i <= 70)
             if (buffer(i:i) == '/') exit
-            if (buffer(i:i) /= ' ') then
-                write (ERROR_UNIT,'(a)') 'FITS card value is malformed. ' // header((iparam-1)*80:iparam*80)
-                return
-            end if
             i = i + 1
         end do
 
         ! i points to '/' or is 71
-    888 value   = buffer(1:i-1)
+    999 value = buffer(1:i-1)
         if (present(comment)) comment = buffer(i+1:)
 
-    999 status  = 0
-
-    end subroutine ft_getparam
+    end subroutine get_keyword
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_parameter_header_logical(header, param, value, count, comment, must_exist, status)
+    subroutine ft_read_keyword_header_logical(header, param, value, found, status, comment)
 
         character(len=*), intent(in)             :: header
         character(len=*), intent(in)             :: param
         logical, intent(out)                     :: value
-        integer, intent(out)                     :: count
-        character(len=70), optional, intent(out) :: comment
-        logical, optional, intent(in)            :: must_exist
+        logical, intent(out), optional           :: found
         integer, intent(out)                     :: status
+        character(len=70), optional, intent(out) :: comment
 
-        character(len=70)                        :: charvalue
+        character(len=70) :: charvalue
+        logical           :: found_
 
         value = .false.
 
-        call ft_getparam(header, param, charvalue, count, comment, must_exist, status)
-        if (status /= 0 .or. count == 0) return
+        call get_keyword(header, param, charvalue, found_, comment, .not. present(found), status)
+        if (present(found)) found = found_
+        if (status /= 0 .or. .not. found_) return
 
-        if (charvalue /= 'F' .and. charvalue /= 'T') then
+        charvalue = strupcase(charvalue)
+        if (charvalue /= 'FALSE'(1:len_trim(charvalue)) .and. charvalue /= 'TRUE'(1:len_trim(charvalue))) then
             status = 1
-            write (ERROR_UNIT,'(a)') "ft_read_parameter_header_logical: invalid logical value '" // trim(charvalue) //             &
+            write (ERROR_UNIT,'(a)') "ft_read_keyword_header_logical: invalid logical value '" // trim(charvalue) //             &
                   "' for parameter '" // param // "' in FITS header."
             return
         end if
 
-        if (charvalue == 'T') value = .true.
+        if (charvalue(1:1) == 'T') value = .true.
 
-    end subroutine ft_read_parameter_header_logical
+    end subroutine ft_read_keyword_header_logical
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_parameter_header_int4(header, param, value, count, comment, must_exist, status)
+    subroutine ft_read_keyword_header_int4(header, param, value, found, status, comment)
 
         character(len=*), intent(in)             :: header
         character(len=*), intent(in)             :: param
         integer*4, intent(out)                   :: value
-        integer, intent(out)                     :: count
-        character(len=70), optional, intent(out) :: comment
-        logical, optional, intent(in)            :: must_exist
+        logical, intent(out), optional           :: found
         integer, intent(out)                     :: status
+        character(len=70), optional, intent(out) :: comment
 
-        character(len=70)                        :: charvalue
+        character(len=70) :: charvalue
+        logical           :: found_
 
         value = 0
 
-        call ft_getparam(header, param, charvalue, count, comment, must_exist, status)
-        if (status /= 0 .or. count == 0) return
+        call get_keyword(header, param, charvalue, found_, comment, .not. present(found), status)
+        if (present(found)) found = found_
+        if (status /= 0 .or. .not. found_) return
 
         read (charvalue,'(i20)',iostat=status) value
         if (status /= 0) then
-            write (ERROR_UNIT,'(a)') "ft_read_parameter_header_int4: invalid integer value '" // trim(charvalue) //                &
+            write (ERROR_UNIT,'(a)') "ft_read_keyword_header_int4: invalid integer value '" // trim(charvalue) //                &
                   "' for parameter '" // param // "' in FITS header."
             return
         end if
 
-    end subroutine ft_read_parameter_header_int4
+    end subroutine ft_read_keyword_header_int4
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_parameter_header_int8(header, param, value, count, comment, must_exist, status)
+    subroutine ft_read_keyword_header_int8(header, param, value, found, status, comment)
 
         character(len=*), intent(in)             :: header
         character(len=*), intent(in)             :: param
         integer*8, intent(out)                   :: value
-        integer, intent(out)                     :: count
-        character(len=70), optional, intent(out) :: comment
-        logical, optional, intent(in)            :: must_exist
+        logical, intent(out), optional           :: found
         integer, intent(out)                     :: status
+        character(len=70), optional, intent(out) :: comment
 
-        character(len=70)                        :: charvalue
+        character(len=70) :: charvalue
+        logical           :: found_
 
         value = 0
 
-        call ft_getparam(header, param, charvalue, count, comment, must_exist, status)
-        if (status /= 0 .or. count == 0) return
+        call get_keyword(header, param, charvalue, found_, comment, .not. present(found), status)
+        if (present(found)) found = found_
+        if (status /= 0 .or. .not. found_) return
 
         read (charvalue,'(i20)',iostat=status) value
         if (status /= 0) then
-            write (ERROR_UNIT,'(a)') "ft_read_parameter_header_int8: invalid integer value '" // trim(charvalue) //                &
+            write (ERROR_UNIT,'(a)') "ft_read_keyword_header_int8: invalid integer value '" // trim(charvalue) //                &
                   "' for parameter '" // param // "' in FITS header."
             return
         end if
 
-    end subroutine ft_read_parameter_header_int8
+    end subroutine ft_read_keyword_header_int8
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_parameter_header_double(header, param, value, count, comment, must_exist, status)
+    subroutine ft_read_keyword_header_double(header, param, value, found, status, comment)
 
         character(len=*), intent(in)             :: header
         character(len=*), intent(in)             :: param
         real*8, intent(out)                      :: value
-        integer, intent(out)                     :: count
-        character(len=70), optional, intent(out) :: comment
-        logical, optional, intent(in)            :: must_exist
+        logical, intent(out), optional           :: found
         integer, intent(out)                     :: status
+        character(len=70), optional, intent(out) :: comment
 
-        character(len=70)                        :: charvalue
+        character(len=70) :: charvalue
+        logical           :: found_
 
         value = 0.d0
 
-        call ft_getparam(header, param, charvalue, count, comment, must_exist, status)
-        if (status /= 0 .or. count == 0) return
+        call get_keyword(header, param, charvalue, found_, comment, .not. present(found), status)
+        if (present(found)) found = found_
+        if (status /= 0 .or. .not. found_) return
 
         read (charvalue,'(bn,f20.0)',iostat=status) value
         if (status /= 0) then
-            write (ERROR_UNIT,'(a)') "ft_read_parameter_header_double: invalid real value '" // trim(charvalue) //                 &
+            write (ERROR_UNIT,'(a)') "ft_read_keyword_header_double: invalid real value '" // trim(charvalue) //                 &
                   "' for parameter '" // param // "' in FITS header."
             return
         end if
 
-    end subroutine ft_read_parameter_header_double
+    end subroutine ft_read_keyword_header_double
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_parameter_header_character(header, param, value, count, comment, must_exist, status)
+    subroutine ft_read_keyword_header_character(header, param, value, found, status, comment)
 
         character(len=*), intent(in)             :: header
         character(len=*), intent(in)             :: param
         character(len=70), intent(out)           :: value
-        integer, intent(out)                     :: count
-        character(len=70), optional, intent(out) :: comment
-        logical, optional, intent(in)            :: must_exist
+        logical, intent(out), optional           :: found
         integer, intent(out)                     :: status
+        character(len=70), optional, intent(out) :: comment
 
-        character(len=70)                        :: charvalue
-        integer                                  :: ncharvalue, i, j
+        character(len=70) :: charvalue
+        integer           :: ncharvalue, i, j
+        logical           :: found_
+
+        call get_keyword(header, param, charvalue, found_, comment, .not. present(found), status)
+        if (present(found)) found = found_
+        if (status /= 0 .or. .not. found_) return
+
+        if (charvalue(1:1) /= "'") then
+           value = charvalue
+           return
+        end if
 
         value = ' '
 
-        call ft_getparam(header, param, charvalue, count, comment, must_exist, status)
-        if (status /= 0 .or. count == 0) return
+        ! remove leading quote
+        charvalue = charvalue(2:len_trim(charvalue))
 
-        ! remove quotes
-        if (charvalue(1:1) == "'") then
-           charvalue = charvalue(2:len_trim(charvalue)-1)
-        end if
-
+        ! scan until next '
         ! make double quotes single
         ncharvalue = len_trim(charvalue)
         i = 1
         j = 1
         do while (j <= ncharvalue)
+           if (charvalue(j:j) == "'") then
+              if (j == ncharvalue .or. charvalue(j+1:j+1) /= "'") exit
+           end if
            value(i:i) = charvalue(j:j)
            i = i + 1
            if (j /= ncharvalue) then
@@ -1445,37 +1473,167 @@ contains
            j = j + 1
         end do
 
-    end subroutine ft_read_parameter_header_character
+    end subroutine ft_read_keyword_header_character
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    function ft_read_parameter_unit_double(unit, keyword, found, status, must_exist, comment) result(value)
+    subroutine ft_read_keyword_unit_logical(unit, keyword, value, found, status, comment)
 
         integer, intent(in)                      :: unit
         character(len=*), intent(in)             :: keyword
-        logical, intent(out)                     :: found
+        logical*4, intent(out)                   :: value
+        logical, intent(out), optional           :: found
         integer, intent(out)                     :: status
-        logical, optional, intent(in)            :: must_exist
         character(len=70), optional, intent(out) :: comment
-        real(dp)                                 :: value
 
+        logical           :: found_
         character(len=70) :: comment_
         
-        found = .false.
+        found_ = .false.
+        status = 0
+
+        call ftgkyl(unit, keyword, value, comment_, status)
+        if (status /= 0) then
+            if (status == 202 .and. present(found)) status = 0
+            if (ft_check_error_cfitsio(status)) return
+        else
+            found_ = .true.
+        end if
+
+        if (present(found)) found = found_
+        if (present(comment)) comment = comment_
+
+    end subroutine ft_read_keyword_unit_logical
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine ft_read_keyword_unit_int4(unit, keyword, value, found, status, comment)
+
+        integer, intent(in)                      :: unit
+        character(len=*), intent(in)             :: keyword
+        integer*4, intent(out)                   :: value
+        logical, intent(out), optional           :: found
+        integer, intent(out)                     :: status
+        character(len=70), optional, intent(out) :: comment
+
+        logical           :: found_
+        character(len=70) :: comment_
+        
+        found_ = .false.
+        status = 0
+
+        call ftgkyj(unit, keyword, value, comment_, status)
+        if (status /= 0) then
+            if (status == 202 .and. present(found)) status = 0
+            if (ft_check_error_cfitsio(status)) return
+        else
+            found_ = .true.
+        end if
+
+        if (present(found)) found = found_
+        if (present(comment)) comment = comment_
+
+    end subroutine ft_read_keyword_unit_int4
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine ft_read_keyword_unit_int8(unit, keyword, value, found, status, comment)
+
+        integer, intent(in)                      :: unit
+        character(len=*), intent(in)             :: keyword
+        integer*8, intent(out)                   :: value
+        logical, intent(out), optional           :: found
+        integer, intent(out)                     :: status
+        character(len=70), optional, intent(out) :: comment
+
+        logical           :: found_
+        character(len=70) :: comment_
+                
+        found_ = .false.
+        status = 0
+
+        call ftgkyk(unit, keyword, value, comment_, status)
+        if (status /= 0) then
+            if (status == 202 .and. present(found)) status = 0
+            if (ft_check_error_cfitsio(status)) return
+        else
+            found_ = .true.
+        end if
+
+        if (present(found)) found = found_
+        if (present(comment)) comment = comment_
+
+    end subroutine ft_read_keyword_unit_int8
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine ft_read_keyword_unit_double(unit, keyword, value, found, status, comment)
+
+        integer, intent(in)                      :: unit
+        character(len=*), intent(in)             :: keyword
+        real(dp) , intent(out)                   :: value
+        logical, intent(out), optional           :: found
+        integer, intent(out)                     :: status
+        character(len=70), optional, intent(out) :: comment
+
+        logical           :: found_
+        character(len=70) :: comment_
+        
+        found_ = .false.
         status = 0
 
         call ftgkyd(unit, keyword, value, comment_, status)
         if (status /= 0) then
-            if (status /= 202 .or. must_exist) return
+            if (status == 202 .and. present(found)) status = 0
+            if (ft_check_error_cfitsio(status)) return
         else
-            found = .true.
+            found_ = .true.
         end if
 
+        if (present(found)) found = found_
         if (present(comment)) comment = comment_
 
-    end function
+    end subroutine ft_read_keyword_unit_double
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine ft_read_keyword_unit_character(unit, keyword, value, found, status, comment)
+
+        integer, intent(in)                      :: unit
+        character(len=*), intent(in)             :: keyword
+        character(len=70), intent(out)           :: value
+        logical, intent(out), optional           :: found
+        integer, intent(out)                     :: status
+        character(len=70), optional, intent(out) :: comment
+
+        logical           :: found_
+        character(len=70) :: comment_
+        
+        found_ = .false.
+        status = 0
+
+        call ftgkys(unit, keyword, value, comment_, status)
+        if (status /= 0) then
+            if (status == 202 .and. present(found)) status = 0
+            if (ft_check_error_cfitsio(status)) return
+        else
+            found_ = .true.
+        end if
+
+        if (present(found)) found = found_
+        if (present(comment)) comment = comment_
+
+    end subroutine ft_read_keyword_unit_character
 
 
     !-------------------------------------------------------------------------------------------------------------------------------

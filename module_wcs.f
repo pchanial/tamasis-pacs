@@ -2,7 +2,7 @@ module module_wcs
 
     use iso_c_binding
     use iso_fortran_env,  only : ERROR_UNIT
-    use module_fitstools, only : ft_read_parameter
+    use module_fitstools, only : ft_read_keyword
     use module_math,      only : DEG2RAD, RAD2DEG
     use module_string,    only : strinteger, strlowcase, strupcase
     use module_wcslib
@@ -37,64 +37,61 @@ contains
         type(astrometry), intent(out), optional :: astr
         integer, intent(out)          :: status
 
-        type(astrometry)              :: myastr
-        integer                       :: count
-        integer                       :: has_cd
-        real*8                        :: crota2, cdelt1, cdelt2
-        character(len=70)             :: buffer
+        type(astrometry)  :: myastr
+        logical           :: found
+        integer           :: has_cd
+        real*8            :: crota2, cdelt1, cdelt2
+        character(len=70) :: buffer
 
         has_cd = 0
 
-        call ft_read_parameter(header, 'naxis1', myastr%naxis(1), count, must_exist=.true., status=status)
+        call ft_read_keyword(header, 'naxis1', myastr%naxis(1), status=status)
         if (status /= 0) return
 
-        call ft_read_parameter(header, 'naxis2', myastr%naxis(2), count, must_exist=.true., status=status)
+        call ft_read_keyword(header, 'naxis2', myastr%naxis(2), status=status)
         if (status /= 0) return
 
-        call ft_read_parameter(header, 'crpix1', myastr%crpix(1), count, must_exist=.true., status=status)
+        call ft_read_keyword(header, 'crpix1', myastr%crpix(1), status=status)
         if (status /= 0) return
 
-        call ft_read_parameter(header, 'crpix2', myastr%crpix(2), count, must_exist=.true., status=status)
+        call ft_read_keyword(header, 'crpix2', myastr%crpix(2), status=status)
         if (status /= 0) return
 
-        call ft_read_parameter(header, 'crval1', myastr%crval(1), count, must_exist=.true., status=status)
+        call ft_read_keyword(header, 'crval1', myastr%crval(1), status=status)
         if (status /= 0) return
 
-        call ft_read_parameter(header, 'crval2', myastr%crval(2), count, must_exist=.true., status=status)
+        call ft_read_keyword(header, 'crval2', myastr%crval(2), status=status)
         if (status /= 0) return
 
-        call ft_read_parameter(header, 'cd1_1', myastr%cd(1,1), count, must_exist=.false., status=status)
+        call ft_read_keyword(header, 'cd1_1', myastr%cd(1,1), found, status)
         if (status /= 0) return
-        if (count /= 0) has_cd = has_cd + 1
+        if (found) has_cd = has_cd + 1
 
-        call ft_read_parameter(header, 'cd2_1', myastr%cd(2,1), count, must_exist=.false., status=status)
+        call ft_read_keyword(header, 'cd2_1', myastr%cd(2,1), found, status)
         if (status /= 0) return
-        if (count /= 0) has_cd = has_cd + 1
+        if (found) has_cd = has_cd + 1
 
-        call ft_read_parameter(header, 'cd1_2', myastr%cd(1,2), count, must_exist=.false., status=status)
+        call ft_read_keyword(header, 'cd1_2', myastr%cd(1,2), found, status)
         if (status /= 0) return
-        if (count /= 0) has_cd = has_cd + 1
+        if (found) has_cd = has_cd + 1
 
-        call ft_read_parameter(header, 'cd2_2', myastr%cd(2,2), count, must_exist=.false., status=status)
+        call ft_read_keyword(header, 'cd2_2', myastr%cd(2,2), found, status)
         if (status /= 0) return
-        if (count /= 0) has_cd = has_cd + 1
+        if (found) has_cd = has_cd + 1
 
-        call ft_read_parameter(header, 'cd2_2', myastr%cd(2,2), count, must_exist=.false., status=status)
-        if (status /= 0) return
-
-        call ft_read_parameter(header, 'ctype1', buffer, count, must_exist=.true., status=status)
+        call ft_read_keyword(header, 'ctype1', buffer, status=status)
         if (status /= 0) return
         myastr%ctype(1) = strupcase(buffer(1:8))
 
-        call ft_read_parameter(header, 'ctype2', buffer, count, must_exist=.true., status=status)
+        call ft_read_keyword(header, 'ctype2', buffer, status=status)
         if (status /= 0) return
         myastr%ctype(2) = strupcase(buffer(1:8))
 
-        call ft_read_parameter(header, 'cunit1', buffer, count, must_exist=.false., status=status)
+        call ft_read_keyword(header, 'cunit1', buffer, status=status)
         if (status /= 0) return
         myastr%cunit(1) = strlowcase(buffer(1:8))
 
-        call ft_read_parameter(header, 'cunit2', buffer, count, must_exist=.false., status=status)
+        call ft_read_keyword(header, 'cunit2', buffer, status=status)
         if (status /= 0) return
         myastr%cunit(2) = strlowcase(buffer(1:8))
 
@@ -105,23 +102,23 @@ contains
         end if
 
         if (has_cd == 0) then
-            call ft_read_parameter(header, 'cdelt1', cdelt1, count, must_exist=.false., status=status)
+            call ft_read_keyword(header, 'cdelt1', cdelt1, found, status)
             if (status /= 0) return
-            if (count == 0) then
+            if (.not. found) then
                 write (ERROR_UNIT,'(a)') 'Astrometry definition cannot be extracted from header.'
                 status = 1
                 return
             end if
-            call ft_read_parameter(header, 'cdelt2', cdelt2, count, must_exist=.false., status=status)
+            call ft_read_keyword(header, 'cdelt2', cdelt2, found, status)
             if (status /= 0) return
-            if (count == 0) then
+            if (.not. found) then
                 write (ERROR_UNIT,'(a)') 'Astrometry definition cannot be extracted from header.'
                 status = 1
                 return
             end if
-            call ft_read_parameter(header, 'crota2', crota2, count, must_exist=.false., status=status)
+            call ft_read_keyword(header, 'crota2', crota2, found, status)
             if (status /= 0) return
-            if (count == 0) then
+            if (.not. found) then
                 crota2 = 0.
             end if
             
@@ -324,10 +321,10 @@ contains
         integer, intent(out)             :: nx, ny
         integer, intent(out)             :: status
 
-        integer(kind=C_INT)              :: wcs_(WCSLEN)
-
-        integer(kind=C_INT)              :: wcsp
-        integer                          :: nreject, nwcs, statfix(WCSFIX_NWCS), count1, count2
+        integer(kind=C_INT)  :: wcs_(WCSLEN)
+        integer(kind=C_INT)  :: wcsp
+        integer              :: nreject, nwcs, statfix(WCSFIX_NWCS)
+        logical              :: found1, found2
 
         status = wcspih(header // C_NULL_CHAR, len(header)/80, WCSHDR_all, 0, nreject, nwcs, wcsp)
         if (status /= 0) then
@@ -387,12 +384,12 @@ contains
         end if
 
         ! extract NAXIS1 and NAXIS2 keywords
-        call ft_read_parameter(header, 'naxis1', nx, count1, status=status)
+        call ft_read_keyword(header, 'naxis1', nx, found1, status)
         if (status /= 0) return
-        call ft_read_parameter(header, 'naxis2', ny, count2, status=status)
+        call ft_read_keyword(header, 'naxis2', ny, found2, status)
         if (status /= 0) return
 
-        if (count1 == 0 .or. count2 == 0) then
+        if (.not. found1 .or. .not. found2) then
             status = 1
             write (ERROR_UNIT,'(a)') "Missing NAXISn keyword(s) in header."
             return

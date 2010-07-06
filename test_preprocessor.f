@@ -1,6 +1,6 @@
 program test_preprocessor
 
-    use module_fitstools, only : ft_read_extension
+    use module_fitstools, only : ft_read_image
     use module_math, only      : median, neq_real
     use module_preprocessor
     implicit none
@@ -24,8 +24,8 @@ program test_preprocessor
 
     deallocate (filtered)
 
-    call ft_read_extension('tests/timeline_transparent_mode.fits', timeline, status)
-    if (status /= 0) stop 'FAILED ft_read_extension'
+    call ft_read_image('tests/timeline_transparent_mode.fits', timeline, status)
+    if (status /= 0) stop 'FAILED ft_read_image'
 
     allocate (filtered(size(timeline)), reference(size(timeline)))
     filtered = timeline

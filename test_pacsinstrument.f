@@ -1,6 +1,6 @@
 program test_pacsinstrument
 
-    use module_fitstools,       only : ft_read_parameter, ft_header2str
+    use module_fitstools,       only : ft_read_keyword, ft_header2str
     use module_math,            only : mean, neq_real
     use module_pacsinstrument
     use module_pacsobservation, only : pacsobservation, maskarray
@@ -109,11 +109,11 @@ program test_pacsinstrument
     call pacs%compute_map_header(obs, .false., 3.d0, header, status)
     if (status /= 0) stop 'FAILED: compute_map_header'
 
-    call ft_read_parameter(header, 'naxis1', nx, count1, status=status)
-    if (status /= 0 .or. count1 == 0) stop 'FAILED: read_param NAXIS1'
+    call ft_read_keyword(header, 'naxis1', nx, status=status)
+    if (status /= 0) stop 'FAILED: read_param NAXIS1'
 
-    call ft_read_parameter(header, 'naxis2', ny, count1, status=status)
-    if (status /= 0 .or. count1 == 0) stop 'FAILED: read_param NAXIS2'
+    call ft_read_keyword(header, 'naxis2', ny, status=status)
+    if (status /= 0) stop 'FAILED: read_param NAXIS2'
 
     call init_astrometry(header, status=status)
     if (status /= 0) stop 'FAILED: init_astrometry'

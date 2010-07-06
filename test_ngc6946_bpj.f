@@ -1,7 +1,7 @@
 program test_ngc6946_bpj
 
     use iso_fortran_env,        only : ERROR_UNIT, OUTPUT_UNIT
-    use module_fitstools,       only : ft_read_parameter
+    use module_fitstools,       only : ft_read_keyword
     use module_math,            only : pInf, neq_real, sum_kahan
     use module_pacsinstrument,  only : ndims, nvertices, pacsinstrument
     use module_pacsobservation, only : pacsobservation, maskarray
@@ -27,7 +27,7 @@ program test_ngc6946_bpj
     logical*1, allocatable              :: mask(:,:)
     character(len=2880)                 :: header
     integer                             :: nx, ny
-    integer                             :: status, count, count0, count1
+    integer                             :: status, count0, count1
     integer                             :: count2, count_rate, count_max
     integer                             :: idetector, isample
     integer*8                           :: nsamples
@@ -56,10 +56,10 @@ program test_ngc6946_bpj
     call pacs%compute_map_header(obs, .false., 3.d0, header, status)
     if (status /= 0) stop 'FAILED: compute_map_header.'
 
-    call ft_read_parameter(header, 'naxis1', nx, count, status=status)
-    if (status /= 0 .or. count == 0) stop 'FAILED: compute_map_header 2.'
-    call ft_read_parameter(header, 'naxis2', ny, count, status=status)
-    if (status /= 0 .or. count == 0) stop 'FAILED: compute_map_header 3.'
+    call ft_read_keyword(header, 'naxis1', nx, status=status)
+    if (status /= 0) stop 'FAILED: compute_map_header 2.'
+    call ft_read_keyword(header, 'naxis2', ny, status=status)
+    if (status /= 0) stop 'FAILED: compute_map_header 3.'
 
     ! allocate memory for the map
     allocate(map1d(0:nx*ny-1))

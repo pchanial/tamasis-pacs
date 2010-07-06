@@ -405,7 +405,7 @@ subroutine pacs_pointing_matrix_filename(tamasis_dir, filename, nfilenames, over
                                          ncol, mask_bad_line, header, pmatrix, status)
 
     use iso_fortran_env,        only : ERROR_UNIT
-    use module_fitstools,       only : ft_read_parameter
+    use module_fitstools,       only : ft_read_keyword
     use module_pacsinstrument,  only : pacsinstrument
     use module_pacsobservation, only : pacsobservation, maskarray
     use module_pointingmatrix,  only : pointingelement
@@ -450,7 +450,7 @@ subroutine pacs_pointing_matrix_filename(tamasis_dir, filename, nfilenames, over
     class(pacsobservation), allocatable :: obs
     class(pacsinstrument), allocatable  :: pacs
     type(maskarray)                     :: policy
-    integer                             :: iobs, nx, ny, count, nsamples_expected
+    integer                             :: iobs, nx, ny, nsamples_expected
 
     ! initialise tamasis
     call init_tamasis(tamasis_dir)
@@ -499,9 +499,9 @@ subroutine pacs_pointing_matrix_filename(tamasis_dir, filename, nfilenames, over
     end if
 
     ! get the size of the map
-    call ft_read_parameter(header, 'naxis1', nx, count, must_exist=.true., status=status)
+    call ft_read_keyword(header, 'naxis1', nx, status=status)
     if (status /= 0) return
-    call ft_read_parameter(header, 'naxis2', ny, count, must_exist=.true., status=status)
+    call ft_read_keyword(header, 'naxis2', ny, status=status)
     if (status /= 0) return
 
     ! compute the projector
@@ -585,7 +585,7 @@ end subroutine pacs_pointing_matrix_filename
 !!$                                nrow, ncol, header, pmatrix)
 !!$
 !!$    use, intrinsic :: ISO_FORTRAN_ENV
-!!$    use module_fitstools, only : ft_read_parameter
+!!$    use module_fitstools, only : ft_read_keyword
 !!$    use module_pacsinstrument, only : pacsinstrument
 !!$    use module_pacspointing, only : pacspointing
 !!$    use module_pointingmatrix, only : pointingelement
@@ -622,7 +622,7 @@ end subroutine pacs_pointing_matrix_filename
 !!$
 !!$    class(pacsinstrument), allocatable   :: pacs
 !!$    class(pacspointing), allocatable     :: pointing
-!!$    integer                              :: status, count,  count1, count2, count_rate, count_max, nx, ny
+!!$    integer                              :: status,  count1, count2, count_rate, count_max, nx, ny
 !!$
 !!$    ! read pointing information
 !!$    allocate(pointing)
@@ -639,9 +639,9 @@ end subroutine pacs_pointing_matrix_filename
 !!$        write (*,'(a)') "Info: using user's bad pixel mask."
 !!$    end if
 !!$
-!!$    call ft_read_parameter(header, 'naxis1', nx, count, must_exist=.true., status=status)
+!!$    call ft_read_keyword(header, 'naxis1', nx, status=status)
 !!$    if (status /= 0) return
-!!$    call ft_read_parameter(header, 'naxis2', ny, count, must_exist=.true., status=status)
+!!$    call ft_read_keyword(header, 'naxis2', ny, status=status)
 !!$    if (status /= 0) return
 !!$
 !!$    ! compute the projector

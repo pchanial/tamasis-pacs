@@ -1,7 +1,7 @@
 program test_madcap
 
     use module_filtering,      only : FilterUncorrelated
-    use module_fitstools,      only : ft_read_extension
+    use module_fitstools,      only : ft_read_image
     use module_madcap
     use module_math,           only : NaN, neq_real
     use module_pointingmatrix, only : backprojection_weighted, pointingelement
@@ -43,13 +43,13 @@ program test_madcap
     call read_tod(todfile, 'big_endian', nsamples, tod, pmatrix, status)
     if (status /= 0) stop 'FAILED: read_tod spire'
 
-    call ft_read_extension('tests/madmap1/naivemapSpirePsw.fits[image]', map_ref, status)
-    if (status /= 0) stop 'FAILED: ft_read_extension image'
+    call ft_read_image('tests/madmap1/naivemapSpirePsw.fits[image]', map_ref, status)
+    if (status /= 0) stop 'FAILED: ft_read_image image'
     nx = size(map_ref,1)
     ny = size(map_ref,2)
 
-    call ft_read_extension('tests/madmap1/madmapSpirePsw.fits[coverage]', coverage, status)
-    if (status /= 0) stop 'FAILED: ft_read_extension coverage'
+    call ft_read_image('tests/madmap1/madmapSpirePsw.fits[coverage]', coverage, status)
+    if (status /= 0) stop 'FAILED: ft_read_image coverage'
 
 #ifdef GFORTRAN
     where (coverage < 1e-15_p)
