@@ -16,6 +16,9 @@ module module_preprocessor
     interface median_filtering_nocopy
         module procedure median_filtering_nocopy_1d_1d, median_filtering_nocopy_1d_2d
     end interface median_filtering_nocopy
+    interface subtract_meandim1
+        module procedure subtract_meandim1, subtract_meandim1_mask
+    end interface subtract_meandim1
 
 contains
 
@@ -35,6 +38,27 @@ contains
         !$omp end parallel do
 
     end subroutine subtract_meandim1
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine subtract_meandim1_mask(data, mask)
+
+        real*8, intent(inout) :: data(:,:)
+        logical*1, intent(in) :: mask(:,:)
+        integer               :: nsamples, ndetectors, idetector
+
+        ndetectors = size(data,2)
+        !$omp parallel do
+        do idetector=1, ndetectors
+            nsamples = count(.not. mask(:,idetector))
+            if (nsamples == 0) cycle
+            data(:,idetector) = data(:,idetector) - sum_kahan(data(:,idetector), logical(mask(:,idetector), kind(.true.)))/nsamples
+        end do
+        !$omp end parallel do
+
+    end subroutine subtract_meandim1_mask
 
 
     !-------------------------------------------------------------------------------------------------------------------------------

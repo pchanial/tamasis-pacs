@@ -387,7 +387,8 @@ subroutine pacs_timeline(tamasis_dir, filename, nfilenames, nsamples, ndetectors
     if (do_subtraction_mean) then
         destination = 1
         do iobs=1, nfilenames
-            call subtract_meandim1(signal(destination:destination+obs%slice(iobs)%nvalids-1,:))
+            call subtract_meandim1(signal(destination:destination+obs%slice(iobs)%nvalids-1,:),                                    &
+                                   mask(destination:destination+obs%slice(iobs)%nvalids-1,:))
             destination = destination + obs%slice(iobs)%nvalids
          end do
     end if
