@@ -386,6 +386,18 @@ class Tod(FitsArray):
         result.nsamples = self.nsamples
         return result
 
+    def __getitem__(self, key):
+        item = super(Quantity, self).__getitem__(key)
+        if not isinstance(item, Tod) or not isinstance(key, tuple):
+            return item
+        if len(key) > 1:
+            if not isinstance(key[-1], slice):
+                item = item.view(FitsArray)
+            else:
+                if key[-1].start is not None or key[-1].stop is not None or key[-1].step is not None:
+                    item.nsamples = (item.shape[-1],)
+        return item
+
     @staticmethod
     def empty(shape, mask=None, nsamples=None, header=None, unit=None, dtype=None, order=None):
         shape = validate_sliced_shape(shape, nsamples)

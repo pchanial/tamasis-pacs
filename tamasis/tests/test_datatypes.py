@@ -178,6 +178,20 @@ a = Tod(1, nsamples = ())
 if a.shape != (): raise TestFailure()
 if a.size != 1: raise TestFailure()
 
+a = Tod.ones((10,20), nsamples=(5,15))
+b = a[:,:12]
+if b.nsamples != (12,): raise TestFailure()
+b = a[:3,:]
+if b.nsamples != a.nsamples: raise TestFailure()
+b = a[3]
+if b.nsamples != a.nsamples: raise TestFailure()
+b = a[3,:]
+if b.nsamples != a.nsamples: raise TestFailure()
+b = a[:,2]
+if not isinstance(b, FitsArray): raise TestFailure()
+b = a[4,2]
+if not isinstance(b, numpy.float64): raise TestFailure()
+
 m = numpy.ndarray((10,2,10), dtype='int8')
 m.flat = numpy.random.random(m.size)*2
 a = Tod(numpy.random.random_sample((10,2,10)), mask=m, nsamples=(2,8), unit='Jy')
