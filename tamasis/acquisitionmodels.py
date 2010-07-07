@@ -683,7 +683,8 @@ class Projection(AcquisitionModel):
         - unit
     The instance has the following specific attributes:
         - header: the FITS header of the map
-        - pmatrix: opaque representation of the pointing matrix
+        - pmatrix: transparent view of the pointing matrix
+        - _pmatrix: opaque representation of the pointing matrix
         - npixels_per_sample: maximum number of sky map pixels that can be intercepted by a detector
     Author: P. Chanial
     """
