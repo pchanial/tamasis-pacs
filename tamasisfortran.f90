@@ -898,32 +898,33 @@ end subroutine downsampling_transpose
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine backprojection_weighted(pmatrix, data, mask, map1d, weights1d, npixels_per_sample, nsamples, ndetectors, npixels)
+subroutine backprojection_weighted(pmatrix, data, mask, map1d, weight1d, npixels_per_sample, nsamples, ndetectors, npixels)
 
     use module_pointingmatrix, only : bpw => backprojection_weighted, pointingelement
     implicit none
 
     !f2py threadsafe
-    !f2py integer*8,intent(in):: pmatrix(npixels_per_sample*nsamples*ndetectors)
-    !f2py intent(in)          :: data
-    !f2py intent(in)          :: mask
-    !f2py intent(inout)       :: map1d
-    !f2py intent(in)          :: npixels_per_sample
-    !f2py intent(hide)        :: nsamples = shape(data,0)
-    !f2py intent(hide)        :: ndetectors = shape(data,1)
-    !f2py intent(hide)        :: npixels = size(map1d)
+    !f2py integer*8,intent(in) :: pmatrix(npixels_per_sample*nsamples*ndetectors)
+    !f2py intent(in)           :: data
+    !f2py intent(in)           :: mask
+    !f2py intent(inout)        :: map1d
+    !f2py intent(inout)        :: weight1d
+    !f2py intent(in)           :: npixels_per_sample
+    !f2py intent(hide)         :: nsamples = shape(data,0)
+    !f2py intent(hide)         :: ndetectors = shape(data,1)
+    !f2py intent(hide)         :: npixels = size(map1d)
 
     type(pointingelement), intent(in) :: pmatrix(npixels_per_sample,nsamples,ndetectors)
     real*8, intent(in)                :: data(nsamples,ndetectors)
     logical*1, intent(in)             :: mask(nsamples,ndetectors)
     real*8, intent(inout)             :: map1d(npixels)
-    real*8, intent(inout)             :: weights1d(npixels)
+    real*8, intent(inout)             :: weight1d(npixels)
     integer, intent(in)               :: npixels_per_sample
     integer*8, intent(in)             :: nsamples
     integer, intent(in)               :: ndetectors
     integer, intent(in)               :: npixels
 
-    call bpw(pmatrix, data, mask, map1d, weights1d)
+    call bpw(pmatrix, data, mask, map1d, weight1d)
 
 end subroutine backprojection_weighted
 
