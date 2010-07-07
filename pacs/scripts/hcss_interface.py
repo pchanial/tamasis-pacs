@@ -12,35 +12,34 @@
 import numpy
 from   optparse import OptionParser
 import sys
-import tamasisfortran as tmf
 from   tamasis import *
 
-# set up the option parser
+# preprocessor options
 parser = OptionParser('Usage: %prog [options] fitsfile...')
-parser.add_option('--output-map', '-o', help='write output map to FILE in FITS format [default:'
-                  ' %default]', metavar='FILE', dest='outputmapfile')
-parser.add_option('--output-tod', help='write tod to FILE in FITS format [default:'
-                  ' %default]', metavar='FILE', dest='outputtodfile')
-parser.add_option('--header', help='use FITS header in FILE to specify the map '
-                  'projection [default: automatic]', metavar='FILE')
-parser.add_option('--resolution', help='input pixel size of the map in arcsecon'
-                  'ds [default: %default]', default=3.2)
-parser.add_option('-n', '--npixels-per-sample', help='maximum number of sky pix'
-                  'els intercepted by a PACS detector [default: 5 for the blue '
-                  'channel and 11 for the red one]')
-parser.add_option('--no-flatfield', help='do not divide by calibration flat-fie'
-                  'ld [default: False]', dest='do_flatfielding', action='store_'
-                  'false', default=True)
-parser.add_option('-f', '--filtering', help='method for timeline filtering: mea'
-                  'n or none [default: %default]', metavar='METHOD', default='n'
-                  'one')
-parser.add_option('-l', '--length', help='filtering length [default: %default]',
-                  default=200)
+parser.add_option('--output-tod', help='write tod to disk in FITS format [default:'
+                  ' %default]', action='store_true', dest='do_outputtod', default=False)
+parser.add_option('--flatfielding', help='divide by calibration flat-fie'
+                  'ld [default: %default]', dest='do_flatfielding', action='store_'
+                  'true', default=False)
+parser.add_option('--subtraction-mean', help='subtract mean value [default: %default]', dest='do_subtraction_mean', action='store_'
+                  'true', default=False)
+parser.add_option('--median-filtering', help='window length for timeline median filtering.', metavar='LENGTH')
 parser.add_option('-d', '--deglitching', help='method for timeline deglitching:'
                   ' l2std, l2mad or none [default: %default]', metavar='METHOD',
                   default='none')
 parser.add_option('--nsigma', help='N-sigma deglitching value [default: %defaul'
                   't]', default=5.)
+parser.add_option('-n', '--npixels-per-sample', help='maximum number of sky pix'
+                  'els intercepted by a PACS detector [default: 5 for the blue '
+                  'channel and 11 for the red one]')
+
+# mapper options
+parser.add_option('--output-map', help='write output map to disk in FITS format [default:'
+                  ' %default]', action='store_true', dest='do_outputmap', default=True)
+parser.add_option('--header', help='use FITS header in FILE to specify the map '
+                  'projection [default: automatic]', metavar='FILE')
+parser.add_option('--resolution', help='input pixel size of the map in arcsecon'
+                  'ds [default: %default]', default=3.2)
 parser.add_option('--ds9', help='display the map using ds9', action='store_true', dest='do_ds9', default=False)
 
 (options, filename) = parser.parse_args(sys.argv[1:])
@@ -54,37 +53,32 @@ if options.deglitching not in ('none', 'l2std', 'l2mad'):
     raise ValueError("Invalid deglitching method '"+options.deglitching+"'. Val"
                      "id methods are 'l2std', 'l2mad' or 'none'.")
 
-options.filtering = options.filtering.lower()
-if options.filtering not in ('none', 'median'):
-    raise ValueError("Invalid filtering method '"+options.filtering+"'. Valid m"
-                     "ethods are 'median', or 'none'.")
+if options.median_filtering is not None:
+    try:
+        length = int(options.median_filtering)
+    except:
+        raise ValueError("Invalid filtering length '"+options.median_filtering+"'.")
 
 if options.npixels_per_sample is not None:
     options.npixels_per_sample = int(options.npixels_per_sample)
-options.length = int(options.length)
-
-print
-
-bad_detector_mask = None
-# uncomment the following lines to make a map with fewer detectors
-# 1 means bad detector
-#
-#bad_detector_mask = numpy.ones([32,64], dtype='int8')
-#bad_detector_mask[0,0] = 0
 
 # Set up the PACS observation(s)
-obs = PacsObservation(filename=filename,
-                      header=options.header,
-                      resolution=options.resolution,
-                      fine_sampling_factor = 1,
-                      bad_detector_mask = bad_detector_mask,
-                      keep_bad_detectors=False)
+obs = PacsObservation(filename, keep_bad_detectors=True)
 
 # Read the timeline
-tod = obs.get_tod(do_flatfielding=options.do_flatfielding, do_subtraction_mean=options.filtering == 'none')
+tod = obs.get_tod(flatfielding=options.do_flatfielding, subtraction_mean=options.do_subtraction_mean, unit='Jy/arcsec^2')
 
-if options.filtering == 'median':
-    tod = filter_median(tod, options.length)
+if options.median_filtering is not None:
+    tod = filter_median(tod, length)
+
+# Set up the acquisition model. oversampling is set to False because
+# photproject does not attempt to sample better than what is transmitted
+if options.deglitching != 'none' or options.do_outputmap:
+    projection = Projection(obs,
+                            header=options.header,
+                            resolution=options.resolution,
+                            oversampling=False,
+                            npixels_per_sample=options.npixels_per_sample)
 
 # Deglitch
 if options.deglitching != 'none':
@@ -94,40 +88,29 @@ if options.deglitching != 'none':
     else:
         tod.mask = deglitch_l2mad(tod, projection, nsigma=options.nsigma)
 
-if options.outputtodfile is not None:
-    tod.writefits(options.outputtodfile)
+if options.do_outputtod:
+    if len(tod.nsamples) != len(filename):
+        raise ValueError('The number of tod slices is not the number of input filenames.')
+    dest = 0
+    for nsamples, f in zip(tod.nsamples, filename):
+        tod[:,dest:dest+nsamples].writefits(f+'_tod.fits')
+        dest += nsamples
 
-if options.outputtodfile is None:
-    return
+if not options.do_outputmap:
+    exit()
 
 # Get map dimensions
-nx = obs.header['naxis1']
-ny = obs.header['naxis2']
-
-# Set up the acquisition model. oversampling is set to False because
-# photproject does not attempt to sample better than what is transmitted
-projection = Projection(obs, oversampling=False, npixels_per_sample=options.npixels_per_sample)
+nx = projection.header['naxis1']
+ny = projection.header['naxis2']
 
 # Backproject the timeline and divide it by the weight
 print 'Computing the map...'
-mymap = Map.zeros((ny,nx), header=obs.header)
-tmf.backprojection_weighted(projection.pmatrix, tod.T, tod.mask.T, 
-                            mymap.T, projection.npixels_per_sample)
+mymap = mapper_naive(tod, projection, unit='Jy/pixel')
 
 # Write resulting map as a FITS file
 print 'Writing the map...'
-mymap.writefits(options.outputfile)
+mymap.writefits(filename[0] + '_map.fits')
 
-# Plot the map
+# Display map
 if options.do_ds9:
      mymap.ds9()
-
-#    idetector = 0
-#    figure()
-#    plot(tod[:,idetector])
-#    index=numpy.where(tod.mask[:,idetector])
-#    plot(index, tod.data[index,idetector], 'ro')
-#    show()
-
-
-
