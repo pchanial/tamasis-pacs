@@ -64,7 +64,6 @@ def create_fitsheader(array, extname=None, crval=(0.,0.), crpix=None, ctype=('RA
         header.update('gcount', 1, 'number of groups')
         header.update('extname', extname)
 
-
     if cd is not None:
         cd = numpy.asarray(cd, dtype=numpy.float64)
         if cd.shape != (2,2):
