@@ -3,7 +3,7 @@ module module_pacsinstrument
     use iso_fortran_env,        only : ERROR_UNIT, OUTPUT_UNIT
     use module_filtering,       only : FilterUncorrelated
     use module_fitstools,       only : ft_check_error_cfitsio, ft_close, ft_create_header, ft_open, ft_open_image,                 &
-                                       ft_read_image, ft_read_slice, ft_test_extension
+                                       ft_read_image, ft_read_keyword_hcss, ft_read_slice, ft_test_extension
     use module_math,            only : DEG2RAD, pInf, mInf, mean, nint_down, nint_up
     use module_pacsobservation, only : pacsobservationslice, pacsobservation
     use module_pointingmatrix,  only : pointingelement, xy2roi, roi2pmatrix
@@ -42,6 +42,7 @@ module module_pacsinstrument
     character(len=*), parameter :: filename_ib  = 'PCalPhotometer_InvnttBS_FM_v1.fits[Contents]'
     character(len=*), parameter :: filename_ig  = 'PCalPhotometer_InvnttBL_FM_v1.fits[Contents]'
     character(len=*), parameter :: filename_ir  = 'PCalPhotometer_InvnttRed_FM_v1.fits[Contents]'
+    character(len=*), parameter :: filename_res = 'PCalPhotometer_Responsivity_FM_v5.fits'
 
     type pacsinstrument
  
@@ -67,6 +68,7 @@ module module_pacsinstrument
         integer, allocatable   :: ij(:,:)
         integer, allocatable   :: pq(:,:)
 
+        real*8               :: responsivity ! Jy/V
         real*8, allocatable  :: flatfield_total(:,:)
         real*8, allocatable  :: flatfield_detector(:,:)
         real*8, allocatable  :: flatfield_optical(:,:)
@@ -283,11 +285,14 @@ contains
 
         select case (this%channel)
            case ('r')
-              call this%filter_detectors_array(this%mask_red,   this%corners_uv_red,  this%distortion_yz_red,  this%flatfield_red)
+              call this%filter_detectors_array(this%mask_red,   this%corners_uv_red,  this%distortion_yz_red,                      &
+                                               this%flatfield_red, 'red')
            case ('g')
-              call this%filter_detectors_array(this%mask_green, this%corners_uv_blue, this%distortion_yz_blue, this%flatfield_green)
+              call this%filter_detectors_array(this%mask_green, this%corners_uv_blue, this%distortion_yz_blue,                     &
+                                               this%flatfield_green, 'green')
            case ('b')
-              call this%filter_detectors_array(this%mask_blue,  this%corners_uv_blue, this%distortion_yz_blue, this%flatfield_blue)
+              call this%filter_detectors_array(this%mask_blue,  this%corners_uv_blue, this%distortion_yz_blue,                     &
+                                               this%flatfield_blue, 'blue')
         end select
 
     end subroutine filter_detectors
@@ -297,15 +302,16 @@ contains
 
 
     ! a flatten array of detector values is travelled through columns and then through rows
-    subroutine filter_detectors_array(this, mask, uv, distortion, flatfield)
+    subroutine filter_detectors_array(this, mask, uv, distortion, flatfield, channel)
 
         class(pacsinstrument), intent(inout) :: this
         logical*1, intent(in)                :: mask(:,:)
         real*8, intent(in)                   :: uv(:,:,:,:)
         real*8, intent(in)                   :: distortion(:,:,:,:)
         real*8, intent(in)                   :: flatfield(:,:)
+        character(len=*), intent(in)         :: channel
 
-        integer   :: idetector, p, q
+        integer   :: idetector, p, q, status, unit
         real*8    :: center(2,2)
 
         this%nrows    = size(mask, 1)
@@ -377,6 +383,14 @@ contains
             this%flatfield_detector = 1
             this%flatfield_optical  = 1
         end where
+
+        ! Responsivity
+        call ft_open(get_calfile(filename_res) // '[' // channel // ']', unit, status)
+        if (status /= 0) return
+        call ft_read_keyword_hcss(unit, 'Responsivity', this%responsivity, status=status)
+        if (status /= 0) return
+        call ft_close(unit, status)
+        if (status /= 0) return
 
     end subroutine filter_detectors_array
 

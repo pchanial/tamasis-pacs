@@ -136,7 +136,7 @@ class PacsObservation(_Pacs):
             bad_detector_mask = numpy.ones((nrows,ncolumns), dtype='int8')
 
         # retrieve information from the observations
-        ndetectors, bad_detector_mask, transparent_mode, compression_factor, nsamples, unit, detector_area, dflat, oflat, status = tmf.pacs_info(tamasis_dir, filename_, nfilenames, fine_sampling_factor, keep_bad_detectors, numpy.asfortranarray(bad_detector_mask), mask_bad_line)
+        ndetectors, bad_detector_mask, transparent_mode, compression_factor, nsamples, unit, responsivity, detector_area, dflat, oflat, status = tmf.pacs_info(tamasis_dir, filename_, nfilenames, fine_sampling_factor, keep_bad_detectors, numpy.asfortranarray(bad_detector_mask), mask_bad_line)
         if status != 0: raise RuntimeError()
 
         self.filename = filename
@@ -156,6 +156,7 @@ class PacsObservation(_Pacs):
         self.transparent_mode = transparent_mode
         self.compression_factor = compression_factor
         self.unit = unit.strip()+' / detector'
+        self.responsivity = Quantity(responsivity, 'V/Jy')
         self.detector_area = Map(detector_area, unit='arcsec^2/detector')
         self.flatfield = {
             'total'   : Map(dflat*oflat),
@@ -186,8 +187,10 @@ class PacsObservation(_Pacs):
 
         # the flux calibration has been done by using HCSS photproject and assuming that the central detectors had a size of 3.2x3.2
         # squared arcseconds. To be consistent with detector sharp edge model, we need to adjust the Tod.
-        if tod.unit == 'Jy / detector':
-            tod *= numpy.mean(self.detector_area[15:18,31:33]) / Quantity(3.2**2, 'arcsec^2/detector')
+        if tod.unit == 'Jy / detector' or tod.unit == 'V / detector':
+            i = self.nrows    / 2 - 1
+            j = self.ncolumns / 2 - 1
+            tod *= numpy.mean(self.detector_area[i:i+2,j:j+2]) / Quantity(3.2**2, 'arcsec^2/detector')
 
         if unit is None:
             return tod
@@ -198,6 +201,9 @@ class PacsObservation(_Pacs):
             area = self.detector_area[self.bad_detector_mask == 0].reshape((self.ndetectors,1))
             tod /= area
            
+        if 'V' in tod._unit and tod._unit['V'] == 1 and 'V' not in newunit_si:
+            tod /= self.responsivity
+
         tod.unit = newunit._unit
         return tod
 

@@ -48,7 +48,7 @@ end subroutine pacs_info_channel
 
 subroutine pacs_info(tamasis_dir, filename, nfilenames, fine_sampling_factor, keep_bad_detectors, bad_detector_mask,               &
                      nrows, ncolumns, mask_bad_line, ndetectors, output_mask, transparent_mode, compression_factor, nsamples,      &
-                     unit, detector_area, flatfield_detector, flatfield_optical, status)
+                     unit, responsivity, detector_area, flatfield_detector, flatfield_optical, status)
 
     use module_pacsinstrument,  only : pacsinstrument
     use module_pacsobservation, only : pacsobservation, maskarray
@@ -71,6 +71,7 @@ subroutine pacs_info(tamasis_dir, filename, nfilenames, fine_sampling_factor, ke
     !f2py intent(out)  compression_factor
     !f2py intent(out)  nsamples
     !f2py intent(out)  unit
+    !f2py intent(out)  responsivity
     !f2py intent(out)  detector_area
     !f2py intent(out)  flatfield_detector
     !f2py intent(out)  flatfield_optical
@@ -90,6 +91,7 @@ subroutine pacs_info(tamasis_dir, filename, nfilenames, fine_sampling_factor, ke
     integer, intent(out)           :: compression_factor(nfilenames)
     integer, intent(out)           :: nsamples(nfilenames)
     character(len=70), intent(out) :: unit
+    real*8, intent(out)            :: responsivity
     real*8, intent(out)            :: detector_area(nrows,ncolumns)
     real*8, intent(out)            :: flatfield_detector(nrows,ncolumns)
     real*8, intent(out)            :: flatfield_optical(nrows,ncolumns)
@@ -137,6 +139,7 @@ subroutine pacs_info(tamasis_dir, filename, nfilenames, fine_sampling_factor, ke
     compression_factor = obs%slice%compression_factor
     nsamples = obs%slice%nvalids
     unit = obs%unit
+    responsivity = pacs%responsivity
     detector_area = pacs%detector_area
     flatfield_detector = pacs%flatfield_detector
     flatfield_optical = pacs%flatfield_optical
