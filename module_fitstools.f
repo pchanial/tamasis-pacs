@@ -1230,10 +1230,10 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine get_keyword(header, param, value, found, comment, must_exist, status)
+    subroutine get_keyword(header, keyword, value, found, comment, must_exist, status)
 
         character(len=*), intent(in)   :: header
-        character(len=*), intent(in)   :: param
+        character(len=*), intent(in)   :: keyword
         character(len=70), intent(out) :: value
         logical, intent(out)           :: found
         character(len=70), intent(out), optional :: comment
@@ -1241,8 +1241,8 @@ contains
         integer, intent(out)           :: status
 
         character(len=70)              :: buffer
-        character(len=len(param))      :: strlowparam
-        integer                        :: i, iparam, ncards
+        character(len=len(keyword))      :: strlowkeyword
+        integer                        :: i, ikeyword, ncards
 
         status = 0
         value = ' '
@@ -1250,29 +1250,29 @@ contains
         ncards = (len(header)-1) / 80 + 1! allow for an additional \0
         found = .false.
         if (present(comment)) comment = ' '
-        strlowparam = strlowcase(param)
+        strlowkeyword = strlowcase(keyword)
 
-        ! find the record number associated to the parameter
-        do iparam = 1, ncards
-           if (strlowcase(header((iparam-1)*80+1:(iparam-1)*80+8)) == strlowparam) then
+        ! find the record number associated to the keyword
+        do ikeyword = 1, ncards
+           if (strlowcase(header((ikeyword-1)*80+1:(ikeyword-1)*80+8)) == strlowkeyword) then
               found = .true.
               exit
            end if
         end do
 
-        ! the parameter is not found
+        ! the keyword is not found
         if (.not. found) then
             if (present(must_exist)) then
                 if (must_exist) then
                     status = 202
-                    write (ERROR_UNIT, '(a)') "Missing keyword '" // strupcase(param) // "' in FITS header."
+                    write (ERROR_UNIT, '(a)') "Missing keyword '" // strupcase(keyword) // "' in FITS header."
                     return
                 end if
             end if
             return
         end if
 
-        buffer = adjustl(header((iparam-1)*80+11:iparam*80))
+        buffer = adjustl(header((ikeyword-1)*80+11:ikeyword*80))
 
         ! simple case, the value is not enclosed in quotes
         if (buffer(1:1) /= "'") then
@@ -1308,10 +1308,10 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_keyword_header_logical(header, param, value, found, status, comment)
+    subroutine ft_read_keyword_header_logical(header, keyword, value, found, status, comment)
 
         character(len=*), intent(in)             :: header
-        character(len=*), intent(in)             :: param
+        character(len=*), intent(in)             :: keyword
         logical, intent(out)                     :: value
         logical, intent(out), optional           :: found
         integer, intent(out)                     :: status
@@ -1322,15 +1322,15 @@ contains
 
         value = .false.
 
-        call get_keyword(header, param, charvalue, found_, comment, .not. present(found), status)
+        call get_keyword(header, keyword, charvalue, found_, comment, .not. present(found), status)
         if (present(found)) found = found_
         if (status /= 0 .or. .not. found_) return
 
         charvalue = strupcase(charvalue)
         if (charvalue /= 'FALSE'(1:min(5,len_trim(charvalue))) .and. charvalue /= 'TRUE'(1:min(4,len_trim(charvalue)))) then
-            status = 1
+            status = 404
             write (ERROR_UNIT,'(a)') "ft_read_keyword_header_logical: invalid logical value '" // trim(charvalue) //             &
-                  "' for parameter '" // param // "' in FITS header."
+                  "' for keyword '" // keyword // "' in FITS header."
             return
         end if
 
@@ -1342,10 +1342,10 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_keyword_header_int4(header, param, value, found, status, comment)
+    subroutine ft_read_keyword_header_int4(header, keyword, value, found, status, comment)
 
         character(len=*), intent(in)             :: header
-        character(len=*), intent(in)             :: param
+        character(len=*), intent(in)             :: keyword
         integer*4, intent(out)                   :: value
         logical, intent(out), optional           :: found
         integer, intent(out)                     :: status
@@ -1356,14 +1356,15 @@ contains
 
         value = 0
 
-        call get_keyword(header, param, charvalue, found_, comment, .not. present(found), status)
+        call get_keyword(header, keyword, charvalue, found_, comment, .not. present(found), status)
         if (present(found)) found = found_
         if (status /= 0 .or. .not. found_) return
 
         read (charvalue,'(i20)',iostat=status) value
         if (status /= 0) then
+            status = 407
             write (ERROR_UNIT,'(a)') "ft_read_keyword_header_int4: invalid integer value '" // trim(charvalue) //                &
-                  "' for parameter '" // param // "' in FITS header."
+                  "' for keyword '" // keyword // "' in FITS header."
             return
         end if
 
@@ -1373,10 +1374,10 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_keyword_header_int8(header, param, value, found, status, comment)
+    subroutine ft_read_keyword_header_int8(header, keyword, value, found, status, comment)
 
         character(len=*), intent(in)             :: header
-        character(len=*), intent(in)             :: param
+        character(len=*), intent(in)             :: keyword
         integer*8, intent(out)                   :: value
         logical, intent(out), optional           :: found
         integer, intent(out)                     :: status
@@ -1387,14 +1388,15 @@ contains
 
         value = 0
 
-        call get_keyword(header, param, charvalue, found_, comment, .not. present(found), status)
+        call get_keyword(header, keyword, charvalue, found_, comment, .not. present(found), status)
         if (present(found)) found = found_
         if (status /= 0 .or. .not. found_) return
 
         read (charvalue,'(i20)',iostat=status) value
         if (status /= 0) then
+            status = 407
             write (ERROR_UNIT,'(a)') "ft_read_keyword_header_int8: invalid integer value '" // trim(charvalue) //                &
-                  "' for parameter '" // param // "' in FITS header."
+                  "' for keyword '" // keyword // "' in FITS header."
             return
         end if
 
@@ -1404,10 +1406,10 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_keyword_header_double(header, param, value, found, status, comment)
+    subroutine ft_read_keyword_header_double(header, keyword, value, found, status, comment)
 
         character(len=*), intent(in)             :: header
-        character(len=*), intent(in)             :: param
+        character(len=*), intent(in)             :: keyword
         real*8, intent(out)                      :: value
         logical, intent(out), optional           :: found
         integer, intent(out)                     :: status
@@ -1418,14 +1420,15 @@ contains
 
         value = 0.d0
 
-        call get_keyword(header, param, charvalue, found_, comment, .not. present(found), status)
+        call get_keyword(header, keyword, charvalue, found_, comment, .not. present(found), status)
         if (present(found)) found = found_
         if (status /= 0 .or. .not. found_) return
 
         read (charvalue,'(bn,f20.0)',iostat=status) value
         if (status /= 0) then
+            status = 409
             write (ERROR_UNIT,'(a)') "ft_read_keyword_header_double: invalid real value '" // trim(charvalue) //                 &
-                  "' for parameter '" // param // "' in FITS header."
+                  "' for keyword '" // keyword // "' in FITS header."
             return
         end if
 
@@ -1435,10 +1438,10 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_keyword_header_character(header, param, value, found, status, comment)
+    subroutine ft_read_keyword_header_character(header, keyword, value, found, status, comment)
 
         character(len=*), intent(in)             :: header
-        character(len=*), intent(in)             :: param
+        character(len=*), intent(in)             :: keyword
         character(len=*), intent(out)            :: value
         logical, intent(out), optional           :: found
         integer, intent(out)                     :: status
@@ -1448,7 +1451,7 @@ contains
         integer           :: ncharvalue, i, j
         logical           :: found_
 
-        call get_keyword(header, param, charvalue, found_, comment, .not. present(found), status)
+        call get_keyword(header, keyword, charvalue, found_, comment, .not. present(found), status)
         if (present(found)) found = found_
         if (status /= 0 .or. .not. found_) return
 
