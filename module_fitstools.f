@@ -1663,7 +1663,7 @@ contains
         
         if (present(found)) found = .false.
 
-        ikey = 1
+        ikey = 0
         do
             call ft_read_keyword(unit, 'key.META_' // strinteger(ikey), kwd, found_, status)
             if (status /= 0) return
@@ -1705,7 +1705,7 @@ contains
         
         if (present(found)) found = .false.
 
-        ikey = 1
+        ikey = 0
         do
             call ft_read_keyword(unit, 'key.META_' // strinteger(ikey), kwd, found_, status)
             if (status /= 0) return
@@ -1747,7 +1747,7 @@ contains
         
         if (present(found)) found = .false.
 
-        ikey = 1
+        ikey = 0
         do
             call ft_read_keyword(unit, 'key.META_' // strinteger(ikey), kwd, found_, status)
             if (status /= 0) return
@@ -1789,7 +1789,7 @@ contains
         
         if (present(found)) found = .false.
 
-        ikey = 1
+        ikey = 0
         do
             call ft_read_keyword(unit, 'key.META_' // strinteger(ikey), kwd, found_, status)
             if (status /= 0) return
@@ -1831,7 +1831,7 @@ contains
         
         if (present(found)) found = .false.
 
-        ikey = 1
+        ikey = 0
         do
             call ft_read_keyword(unit, 'key.META_' // strinteger(ikey), kwd, found_, status)
             if (status /= 0) return

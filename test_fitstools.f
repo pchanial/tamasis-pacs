@@ -1,11 +1,12 @@
 program test_fitstools
+
     use module_fitstools
     implicit none
 
-    character(len=*), parameter :: filename_header = 'tests/csh_header_ngc6946.fits'
+    character(len=*), parameter :: filename_header = 'tests/header.fits'
 
     integer                     :: status, unit
-    character(len=2880)         :: header
+    character(len=2880*2)       :: header
     character(len=160)          :: header_too_small
     real*8                      :: image(10,15)
     real*8, allocatable         :: image_(:,:)
@@ -18,10 +19,10 @@ program test_fitstools
 
     ! test extraction of header in FITS file
     call ft_header2str(filename_header, header_too_small, status=status)
-    if (status == 0) stop 'FAILED: ft_header2str'
+    if (status == 0) stop 'FAILED: ft_header2str1'
 
     call ft_header2str(filename_header, header, status=status)
-    if (status /= 0) stop 'FAILED: ft_header2str'
+    if (status /= 0) stop 'FAILED: ft_header2str2'
 
     call ft_read_keyword(header, 'donotexist', ivalue, found, status)
     if (status /= 0 .or. found) stop 'FAILED: donotexist1'
@@ -150,7 +151,7 @@ program test_fitstools
     if (any(image /= image_)) stop 'FAILED: ft_read_image comparison'
 
     ! test reading keywords from unit
-    call ft_open('tests/csh_header_ngc6946.fits', unit, status)
+    call ft_open('tests/header.fits', unit, status)
     if (status /= 0) stop 'FAILED open read_keyword'
 
     call ft_read_keyword(unit, 'donotexist', ivalue, found, status)
@@ -170,23 +171,23 @@ program test_fitstools
 
     call ft_read_keyword(unit, 'donotexist', ivalue, status=status)
     if (status == 0) stop 'FAILED: unit,donotexist1b'
-    call ft_open('tests/csh_header_ngc6946.fits', unit, status)
+    call ft_open('tests/header.fits', unit, status)
 
     call ft_read_keyword(unit, 'donotexist', lvalue, status=status)
     if (status == 0) stop 'FAILED: unit,donotexist2b'
-    call ft_open('tests/csh_header_ngc6946.fits', unit, status)
+    call ft_open('tests/header.fits', unit, status)
 
     call ft_read_keyword(unit, 'donotexist', dvalue, status=status)
     if (status == 0) stop 'FAILED: unit,donotexist3b'
-    call ft_open('tests/csh_header_ngc6946.fits', unit, status)
+    call ft_open('tests/header.fits', unit, status)
 
     call ft_read_keyword(unit, 'donotexist', cvalue, status=status)
     if (status == 0) stop 'FAILED: unit,donotexist4b'
-    call ft_open('tests/csh_header_ngc6946.fits', unit, status)
+    call ft_open('tests/header.fits', unit, status)
 
     call ft_read_keyword(unit, 'donotexist', lvalue, status=status)
     if (status == 0) stop 'FAILED: unit,donotexist5b'
-    call ft_open('tests/csh_header_ngc6946.fits', unit, status)
+    call ft_open('tests/header.fits', unit, status)
 
     call ft_read_keyword(unit, 'naxis', ivalue, found, status)
     if (status /= 0 .or. ivalue /= 2) stop 'FAILED: unit,naxis'
@@ -250,19 +251,19 @@ program test_fitstools
 
     call ft_read_keyword(unit, 'testme4', bvalue, found, status)
     if (status == 0) stop 'FAILED: unit,testme4'
-    call ft_open('tests/csh_header_ngc6946.fits', unit, status)
+    call ft_open('tests/header.fits', unit, status)
 
     call ft_read_keyword(unit, 'testme5', ivalue, found, status)
     if (status == 0) stop 'FAILED: unit,testme5a'
-    call ft_open('tests/csh_header_ngc6946.fits', unit, status)
+    call ft_open('tests/header.fits', unit, status)
 
     call ft_read_keyword(unit, 'testme5', lvalue, found, status)
     if (status == 0) stop 'FAILED: unit,testme5b'
-    call ft_open('tests/csh_header_ngc6946.fits', unit, status)
+    call ft_open('tests/header.fits', unit, status)
 
     call ft_read_keyword(unit, 'testme6', dvalue, found, status)
     if (status == 0) stop 'FAILED: unit,testme6'
-    call ft_open('tests/csh_header_ngc6946.fits', unit, status)
+    call ft_open('tests/header.fits', unit, status)
 
     call ft_read_keyword(unit, 'testme7', cvalue, found, status)
     if (status /= 0 .or. cvalue /= "3''D") stop 'FAILED: unit,testme7'
@@ -276,8 +277,60 @@ program test_fitstools
     call ft_read_keyword(unit, 'testme10', cvalue, found, status)
     if (status /= 0 .or. cvalue /= "'/  / myc10") stop 'FAILED unit,testme10'
     
+    ! ft_read_keyword_hcss
+    call ft_read_keyword_hcss(unit, 'donotexist', bvalue, found, status)
+    if (status /= 0 .or. found) stop 'FAILED: hcss,donotexist1a'
+
+    call ft_read_keyword_hcss(unit, 'donotexist', ivalue, found, status)
+    if (status /= 0 .or. found) stop 'FAILED: hcss,donotexist2a'
+
+    call ft_read_keyword_hcss(unit, 'donotexist', lvalue, found, status)
+    if (status /= 0 .or. found) stop 'FAILED: hcss,donotexist3a'
+
+    call ft_read_keyword_hcss(unit, 'donotexist', dvalue, found, status)
+    if (status /= 0 .or. found) stop 'FAILED: hcss,donotexist4a'
+
+    call ft_read_keyword_hcss(unit, 'donotexist', cvalue, found, status)
+    if (status /= 0 .or. found) stop 'FAILED: hcss,donotexist5a'
+
+    call ft_read_keyword_hcss(unit, 'donotexist', bvalue, status=status)
+    if (status == 0) stop 'FAILED: hcss,donotexist1b'
+    call ft_open('tests/header.fits', unit, status)
+    
+    call ft_read_keyword_hcss(unit, 'donotexist', ivalue, status=status)
+    if (status == 0) stop 'FAILED: hcss,donotexist2b'
+    call ft_open('tests/header.fits', unit, status)
+
+    call ft_read_keyword_hcss(unit, 'donotexist', lvalue, status=status)
+    if (status == 0) stop 'FAILED: hcss,donotexist3b'
+    call ft_open('tests/header.fits', unit, status)
+
+    call ft_read_keyword_hcss(unit, 'donotexist', dvalue, status=status)
+    if (status == 0) stop 'FAILED: hcss,donotexist4b'
+    call ft_open('tests/header.fits', unit, status)
+
+    call ft_read_keyword_hcss(unit, 'donotexist', cvalue, status=status)
+    if (status == 0) stop 'FAILED: hcss,donotexist5b'
+    call ft_open('tests/header.fits', unit, status)
+
+    call ft_read_keyword_hcss(unit, 'camBool', bvalue, found, status)
+    if (status /= 0 .or. .not. found .or. .not. bvalue) stop 'FAILED: hcss,camBool'
+
+    call ft_read_keyword_hcss(unit, 'detRow', ivalue, found, status)
+    if (status /= 0 .or. .not. found .or. ivalue /= 32) stop 'FAILED: hcss,detRow'
+
+    call ft_read_keyword_hcss(unit, 'detRow', lvalue, found, status)
+    if (status /= 0 .or. .not. found .or. lvalue /= 32) stop 'FAILED: hcss,detRow'
+
+    call ft_read_keyword_hcss(unit, 'detDouble', dvalue, found, status)
+    if (status /= 0 .or. .not. found .or. dvalue /= 64.5) stop 'FAILED: hcss,detDouble'
+
+    call ft_read_keyword_hcss(unit, 'camName', cvalue, found, status)
+    if (status /= 0 .or. .not. found .or. cvalue /= 'Blue Photometer') stop 'FAILED: hcss,camName'
+
     call ft_close(unit, status)
     if (status /= 0) stop 'FAILED close read_keyword'
+
     stop 'OK.'
 
 end program test_fitstools

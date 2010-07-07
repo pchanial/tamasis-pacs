@@ -5,7 +5,7 @@ program test_wcs
     use module_wcs
     implicit none
 
-    character(len=*), parameter :: filename_header = 'tests/csh_header_ngc6946.fits'
+    character(len=*), parameter :: filename_header = 'tests/header.fits'
     integer                     :: n
 
     type(astrometry)            :: astr

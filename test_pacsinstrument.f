@@ -13,7 +13,7 @@ program test_pacsinstrument
     class(pacsobservation), allocatable :: obs
     type(maskarray)                     :: maskarray_policy
     character(len=*), parameter :: filename(1) = 'tests/frames_blue.fits'
-    character(len=*), parameter :: filename_header = 'tests/csh_header_ngc6946.fits'
+    character(len=*), parameter :: filename_header = 'tests/header.fits'
 
     real*8, allocatable    :: yz(:,:), ad(:,:), xy(:,:), time(:)
     integer                :: status, i, j, nx, ny, index
