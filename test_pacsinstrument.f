@@ -19,7 +19,7 @@ program test_pacsinstrument
     integer                :: status, i, j, nx, ny, index
     integer                :: count1, count2, count_rate, count_max
     real*8                 :: ra, dec, pa, chop, xmin, xmax, ymin, ymax, ra0, dec0
-    character(len=2880)    :: header
+    character(len=2880*2)  :: header
 
     real*8, allocatable    :: a_vect(:), d_vect(:), ad_vect(:,:)
     integer                :: n
