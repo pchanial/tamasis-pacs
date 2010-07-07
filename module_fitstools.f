@@ -24,6 +24,7 @@ module module_fitstools
     public :: ft_read_column
     public :: ft_read_image
     public :: ft_read_keyword
+    public :: ft_read_keyword_hcss
     public :: ft_read_slice
     public :: ft_test_extension
     public :: ft_write_image
@@ -63,7 +64,12 @@ module module_fitstools
                          ft_read_keyword_header_double, ft_read_keyword_header_character,                                          &
                          ft_read_keyword_unit_logical, ft_read_keyword_unit_int4, ft_read_keyword_unit_int8,                       &
                          ft_read_keyword_unit_double, ft_read_keyword_unit_character
-   end interface ft_read_keyword
+    end interface ft_read_keyword
+
+    interface ft_read_keyword_hcss
+        module procedure ft_read_keyword_hcss_logical, ft_read_keyword_hcss_int4, ft_read_keyword_hcss_int8,                       &
+                         ft_read_keyword_hcss_double, ft_read_keyword_hcss_character
+    end interface ft_read_keyword_hcss
 
 
 contains
@@ -1321,7 +1327,7 @@ contains
         if (status /= 0 .or. .not. found_) return
 
         charvalue = strupcase(charvalue)
-        if (charvalue /= 'FALSE'(1:len_trim(charvalue)) .and. charvalue /= 'TRUE'(1:len_trim(charvalue))) then
+        if (charvalue /= 'FALSE'(1:min(5,len_trim(charvalue))) .and. charvalue /= 'TRUE'(1:min(4,len_trim(charvalue)))) then
             status = 1
             write (ERROR_UNIT,'(a)') "ft_read_keyword_header_logical: invalid logical value '" // trim(charvalue) //             &
                   "' for parameter '" // param // "' in FITS header."
@@ -1433,7 +1439,7 @@ contains
 
         character(len=*), intent(in)             :: header
         character(len=*), intent(in)             :: param
-        character(len=70), intent(out)           :: value
+        character(len=*), intent(out)            :: value
         logical, intent(out), optional           :: found
         integer, intent(out)                     :: status
         character(len=70), optional, intent(out) :: comment
@@ -1497,7 +1503,7 @@ contains
         call ftgkyl(unit, keyword, value, comment_, status)
         if (status /= 0) then
             if (status == 202 .and. present(found)) status = 0
-            if (ft_check_error_cfitsio(status)) return
+            if (ft_check_error_cfitsio(status, unit)) return
         else
             found_ = .true.
         end if
@@ -1529,7 +1535,7 @@ contains
         call ftgkyj(unit, keyword, value, comment_, status)
         if (status /= 0) then
             if (status == 202 .and. present(found)) status = 0
-            if (ft_check_error_cfitsio(status)) return
+            if (ft_check_error_cfitsio(status, unit)) return
         else
             found_ = .true.
         end if
@@ -1561,7 +1567,7 @@ contains
         call ftgkyk(unit, keyword, value, comment_, status)
         if (status /= 0) then
             if (status == 202 .and. present(found)) status = 0
-            if (ft_check_error_cfitsio(status)) return
+            if (ft_check_error_cfitsio(status, unit)) return
         else
             found_ = .true.
         end if
@@ -1593,7 +1599,7 @@ contains
         call ftgkyd(unit, keyword, value, comment_, status)
         if (status /= 0) then
             if (status == 202 .and. present(found)) status = 0
-            if (ft_check_error_cfitsio(status)) return
+            if (ft_check_error_cfitsio(status, unit)) return
         else
             found_ = .true.
         end if
@@ -1611,7 +1617,7 @@ contains
 
         integer, intent(in)                      :: unit
         character(len=*), intent(in)             :: keyword
-        character(len=70), intent(out)           :: value
+        character(len=*), intent(out)            :: value
         logical, intent(out), optional           :: found
         integer, intent(out)                     :: status
         character(len=70), optional, intent(out) :: comment
@@ -1625,7 +1631,7 @@ contains
         call ftgkys(unit, keyword, value, comment_, status)
         if (status /= 0) then
             if (status == 202 .and. present(found)) status = 0
-            if (ft_check_error_cfitsio(status)) return
+            if (ft_check_error_cfitsio(status, unit)) return
         else
             found_ = .true.
         end if
@@ -1634,6 +1640,216 @@ contains
         if (present(comment)) comment = comment_
 
     end subroutine ft_read_keyword_unit_character
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine ft_read_keyword_hcss_logical(unit, keyword, value, found, status, comment)
+
+        integer, intent(in)                      :: unit
+        character(len=*), intent(in)             :: keyword
+        logical, intent(out)                     :: value
+        logical, intent(out), optional           :: found
+        integer, intent(out)                     :: status
+        character(len=70), optional, intent(out) :: comment
+
+        logical           :: found_
+        integer           :: ikey
+        character(len=70) :: comment_, kwd
+        
+        if (present(found)) found = .false.
+
+        ikey = 1
+        do
+            call ft_read_keyword(unit, 'key.META_' // strinteger(ikey), kwd, found_, status)
+            if (status /= 0) return
+            if (.not. found_) go to 999
+            if (kwd == keyword) exit
+            ikey = ikey + 1
+        end do
+
+        call ft_read_keyword(unit, 'META_' // strinteger(ikey), value, found_, status, comment_)
+        if (status /= 0) return
+        if (.not. found_) go to 999
+
+        if (present(found)) found = .true.
+        if (present(comment)) comment = comment_
+        return
+
+    999 if (present(found)) return
+        status = 1
+        write (ERROR_UNIT,'(a)') "FT_READ_KEYWORD_HCSS: FITS keyword '" // keyword // "' is not found."
+
+    end subroutine ft_read_keyword_hcss_logical
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine ft_read_keyword_hcss_int4(unit, keyword, value, found, status, comment)
+
+        integer, intent(in)                      :: unit
+        character(len=*), intent(in)             :: keyword
+        integer*4, intent(out)                   :: value
+        logical, intent(out), optional           :: found
+        integer, intent(out)                     :: status
+        character(len=70), optional, intent(out) :: comment
+
+        logical           :: found_
+        integer           :: ikey
+        character(len=70) :: comment_, kwd
+        
+        if (present(found)) found = .false.
+
+        ikey = 1
+        do
+            call ft_read_keyword(unit, 'key.META_' // strinteger(ikey), kwd, found_, status)
+            if (status /= 0) return
+            if (.not. found_) go to 999
+            if (kwd == keyword) exit
+            ikey = ikey + 1
+        end do
+
+        call ft_read_keyword(unit, 'META_' // strinteger(ikey), value, found_, status, comment_)
+        if (status /= 0) return
+        if (.not. found_) go to 999
+
+        if (present(found)) found = .true.
+        if (present(comment)) comment = comment_
+        return
+
+    999 if (present(found)) return
+        status = 1
+        write (ERROR_UNIT,'(a)') "FT_READ_KEYWORD_HCSS: FITS keyword '" // keyword // "' is not found."
+
+    end subroutine ft_read_keyword_hcss_int4
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine ft_read_keyword_hcss_int8(unit, keyword, value, found, status, comment)
+
+        integer, intent(in)                      :: unit
+        character(len=*), intent(in)             :: keyword
+        integer*8, intent(out)                      :: value
+        logical, intent(out), optional           :: found
+        integer, intent(out)                     :: status
+        character(len=70), optional, intent(out) :: comment
+
+        logical           :: found_
+        integer           :: ikey
+        character(len=70) :: comment_, kwd
+        
+        if (present(found)) found = .false.
+
+        ikey = 1
+        do
+            call ft_read_keyword(unit, 'key.META_' // strinteger(ikey), kwd, found_, status)
+            if (status /= 0) return
+            if (.not. found_) go to 999
+            if (kwd == keyword) exit
+            ikey = ikey + 1
+        end do
+
+        call ft_read_keyword(unit, 'META_' // strinteger(ikey), value, found_, status, comment_)
+        if (status /= 0) return
+        if (.not. found_) go to 999
+
+        if (present(found)) found = .true.
+        if (present(comment)) comment = comment_
+        return
+
+    999 if (present(found)) return
+        status = 1
+        write (ERROR_UNIT,'(a)') "FT_READ_KEYWORD_HCSS: FITS keyword '" // keyword // "' is not found."
+
+    end subroutine ft_read_keyword_hcss_int8
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine ft_read_keyword_hcss_double(unit, keyword, value, found, status, comment)
+
+        integer, intent(in)                      :: unit
+        character(len=*), intent(in)             :: keyword
+        real*8, intent(out)                      :: value
+        logical, intent(out), optional           :: found
+        integer, intent(out)                     :: status
+        character(len=70), optional, intent(out) :: comment
+
+        logical           :: found_
+        integer           :: ikey
+        character(len=70) :: comment_, kwd
+        
+        if (present(found)) found = .false.
+
+        ikey = 1
+        do
+            call ft_read_keyword(unit, 'key.META_' // strinteger(ikey), kwd, found_, status)
+            if (status /= 0) return
+            if (.not. found_) go to 999
+            if (kwd == keyword) exit
+            ikey = ikey + 1
+        end do
+
+        call ft_read_keyword(unit, 'META_' // strinteger(ikey), value, found_, status, comment_)
+        if (status /= 0) return
+        if (.not. found_) go to 999
+
+        if (present(found)) found = .true.
+        if (present(comment)) comment = comment_
+        return
+
+    999 if (present(found)) return
+        status = 1
+        write (ERROR_UNIT,'(a)') "FT_READ_KEYWORD_HCSS: FITS keyword '" // keyword // "' is not found."
+
+    end subroutine ft_read_keyword_hcss_double
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine ft_read_keyword_hcss_character(unit, keyword, value, found, status, comment)
+
+        integer, intent(in)                      :: unit
+        character(len=*), intent(in)             :: keyword
+        character(len=*), intent(out)            :: value
+        logical, intent(out), optional           :: found
+        integer, intent(out)                     :: status
+        character(len=70), optional, intent(out) :: comment
+
+        logical           :: found_
+        integer           :: ikey
+        character(len=70) :: comment_, kwd
+        
+        if (present(found)) found = .false.
+
+        ikey = 1
+        do
+            call ft_read_keyword(unit, 'key.META_' // strinteger(ikey), kwd, found_, status)
+            if (status /= 0) return
+            if (.not. found_) go to 999
+            if (kwd == keyword) exit
+            ikey = ikey + 1
+        end do
+
+        call ft_read_keyword(unit, 'META_' // strinteger(ikey), value, found_, status, comment_)
+        if (status /= 0) return
+        if (.not. found_) go to 999
+
+        if (present(found)) found = .true.
+        if (present(comment)) comment = comment_
+        return
+
+    999 if (present(found)) return
+        status = 1
+        write (ERROR_UNIT,'(a)') "FT_READ_KEYWORD_HCSS: FITS keyword '" // keyword // "' is not found."
+
+    end subroutine ft_read_keyword_hcss_character
 
 
     !-------------------------------------------------------------------------------------------------------------------------------

@@ -7,7 +7,7 @@
 module module_observation
 
     use iso_fortran_env,  only : ERROR_UNIT, OUTPUT_UNIT
-    use module_fitstools, only : ft_open, ft_open_bintable, ft_read_column, ft_read_image, ft_close
+    use module_fitstools, only : ft_open, ft_open_bintable, ft_read_column, ft_read_image, ft_read_keyword_hcss, ft_close
     use module_math,      only : NaN, median, neq_real
     use module_precision, only : dp, p
     use module_string,    only : strinteger, strlowcase, strreal, strsection, strternary
@@ -535,8 +535,8 @@ contains
         class(pacsobservationslice), intent(inout) :: this
         integer, intent(out)                       :: status
 
-        integer           :: unit, ikey, length, status_close
-        character(len=70) :: algorithm, keyword, comment
+        integer           :: unit, length
+        character(len=70) :: algorithm
 
         this%compression_factor = 0
 
@@ -553,32 +553,22 @@ contains
         call ft_open(trim(this%filename), unit, status)
         if (status /= 0) return
 
-        ikey = 1
-        do
-            call ftgkys(unit, 'key.META_' // strinteger(ikey), keyword, comment, status)
-            if (status /= 0) then
-                write (ERROR_UNIT,'(a)') "ERROR: FITS keyword 'algorithm' is not found."
-                go to 999
-            end if
-            if (keyword == 'algorithm') exit
-            ikey = ikey + 1
-        end do
+        call ft_read_keyword_hcss(unit, 'algorithm', algorithm, status=status)
+        if (status /= 0) return
 
-        call ftgkys(unit, 'META_' // strinteger(ikey), algorithm, comment, status)
+        call ft_close(unit, status)
+        if (status /= 0) return
 
         if (algorithm(1:19) == 'Floating Average  :') then
             read (algorithm(20:),'(i3)', iostat=status) this%compression_factor
             if (status /= 0) then
                 write (ERROR_UNIT, '(a)') "ERROR: The compression algorithm '" // trim(algorithm) // "' is not understood."
-                go to 999
+                return
             end if
         else if (algorithm == 'None') then
             this%compression_factor = 1
         end if
         
-    999 call ft_close(unit, status_close)
-        if (status == 0) status = status_close
-
     end subroutine set_compression_mode
 
 
@@ -588,8 +578,8 @@ contains
     subroutine set_observing_mode(this, status)
         class(pacsobservationslice), intent(inout) :: this
         integer, intent(out)                       :: status
-        integer           :: unit, ikey, length, status_close
-        character(len=70) :: compression, keyword, comment
+        integer           :: unit, length
+        character(len=70) :: compression
 
         this%observing_mode = 'Unknown'
 
@@ -605,20 +595,12 @@ contains
         call ft_open(trim(this%filename), unit, status)
         if (status /= 0) return
 
-        ikey = 1
-        do
-            call ftgkys(unit, 'key.META_'//strinteger(ikey), keyword, comment, status)
-            if (status /= 0) then
-                status = 0
-                write (ERROR_UNIT,'(a)') "Warning: FITS keyword 'compMode' is n&
-                    &ot found. Assuming normal mode."
-                go to 999
-            end if
-            if (keyword == 'compMode') exit
-            ikey = ikey + 1
-        end do
+        call ft_read_keyword_hcss(unit, 'compMode', compression, status=status)
+        if (status /= 0) return
 
-        call ftgkys(unit, 'META_'//strinteger(ikey), compression, comment, status)
+        call ft_close(unit, status)
+        if (status /= 0) return
+
         if (compression == 'Photometry Lossless Compression Mode') then
             this%observing_mode = 'Transparent'
         else if (compression == 'Photometry Default Mode') then
@@ -628,9 +610,6 @@ contains
         else
             write (OUTPUT_UNIT,'(a)') "Warning: Unknown compression mode: '" // trim(compression) // "'."
         end if
-
-    999 call ft_close(unit, status_close)
-        if (status == 0) status = status_close
 
     end subroutine set_observing_mode
 
