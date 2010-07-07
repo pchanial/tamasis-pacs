@@ -9,7 +9,7 @@ program test_wcs
     integer                     :: n
 
     type(astrometry)            :: astr
-    character(len=2880)         :: header
+    character(len=2880*2)       :: header
     integer                     :: status, i
     real*8, dimension(5)        :: a, d, x, y, xref, yref
     real*8, dimension(:), allocatable   :: a_vect, d_vect, x_vect, y_vect
