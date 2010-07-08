@@ -402,6 +402,12 @@ class Tod(FitsArray):
                     item.nsamples = (item.shape[-1],)
         return item
 
+    def reshape(self, newdims, order='C'):
+        result = super(Tod, self).reshape(newdims, order=order)
+        if self.mask is not None:
+            result.mask = self.mask.reshape(newdims, order=order)
+        return result
+
     @staticmethod
     def empty(shape, mask=None, nsamples=None, header=None, unit=None, dtype=None, order=None):
         shape = validate_sliced_shape(shape, nsamples)
