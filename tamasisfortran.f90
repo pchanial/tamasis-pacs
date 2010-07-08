@@ -1004,7 +1004,7 @@ end subroutine deglitch_l2b_mad
 subroutine filter_median(data, length, nsamples, nsamples_tot, nslices, ndetectors, status)
 
     use iso_fortran_env,     only : ERROR_UNIT, OUTPUT_UNIT
-    use module_preprocessor, only : median_filtering_nocopy
+    use module_preprocessor, only : median_filtering
     implicit none
 
     !f2py threadsafe
@@ -1045,7 +1045,7 @@ subroutine filter_median(data, length, nsamples, nsamples_tot, nslices, ndetecto
     call system_clock(count1, count_rate, count_max)
     start = 1
     do islice = 1, nslices
-        call median_filtering_nocopy(data(start:start+nsamples(islice)-1,:), length)
+        call median_filtering(data(start:start+nsamples(islice)-1,:), length)
         start = start + nsamples(islice)
     end do
     call system_clock(count2, count_rate, count_max)

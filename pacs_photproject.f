@@ -7,7 +7,7 @@ program pacs_photproject
     use module_pacsinstrument,  only : pacsinstrument
     use module_pacsobservation, only : pacsobservation, maskarray
     use module_pointingmatrix,  only : backprojection_weighted, pointingelement
-    use module_preprocessor,    only : divide_vectordim2, median_filtering_nocopy, subtract_meandim1
+    use module_preprocessor,    only : divide_vectordim2, median_filtering, subtract_meandim1
     use module_string,          only : strlowcase
     use module_tamasis,         only : init_tamasis
     implicit none
@@ -162,7 +162,7 @@ program pacs_photproject
 
                 !$omp parallel do
                 do idetector = 1, pacs%ndetectors
-                    call median_filtering_nocopy(signal(start:start+obs%slice(iobs)%nsamples-1,idetector), filtering_length)
+                    call median_filtering(signal(start:start+obs%slice(iobs)%nsamples-1,idetector), filtering_length)
                 end do
                 !$omp end parallel do
                 start = start + obs%slice(iobs)%nsamples

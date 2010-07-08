@@ -1,6 +1,6 @@
 module module_preprocessor
 
-    use module_math, only : sum_kahan
+    use module_math, only : median, sum_kahan
     use module_sort, only : histogram, reorder
     implicit none
     private
@@ -11,11 +11,11 @@ module module_preprocessor
     public :: multiply_vectordim2
     public :: divide_vectordim2
     public :: apply_mask
-    public :: median_filtering_nocopy
+    public :: median_filtering
 
-    interface median_filtering_nocopy
-        module procedure median_filtering_nocopy_1d_1d, median_filtering_nocopy_1d_2d
-    end interface median_filtering_nocopy
+    interface median_filtering
+        module procedure median_filtering_1d_1d, median_filtering_1d_2d
+    end interface median_filtering
     interface subtract_meandim1
         module procedure subtract_meandim1, subtract_meandim1_mask
     end interface subtract_meandim1
@@ -168,7 +168,7 @@ contains
 
     ! median filtering in O(1) for the window length
     ! the samples inside the window form an histogram which is updated as the window slides.
-    subroutine median_filtering_nocopy_1d_1d(data, length)
+    subroutine median_filtering_1d_1d(data, length)
 
         real*8, intent(inout) :: data(:)
         integer, intent(in)   :: length
@@ -180,8 +180,13 @@ contains
 
         ndata = size(data)
 
+        if (ndata <= length) then
+           data = data - median(data)
+           return
+        end if
+
         call reorder(data, order, nbins, table, 12)
-        
+
         allocate (hist(nbins))
         half_minus = min((length-1) / 2, ndata-1)
         half_plus  = min(length / 2, ndata-1)
@@ -192,7 +197,6 @@ contains
 
         data(1) = data(1) - table(ibin)
         do i = 2, ndata
-
 
             ! there are missing values on the left hand side, we'll add them one by one until we reach a sample of size 'length' 
             if (i <= half_minus + 1) then
@@ -271,13 +275,13 @@ contains
 
         end do
 
-    end subroutine median_filtering_nocopy_1d_1d
+    end subroutine median_filtering_1d_1d
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine median_filtering_nocopy_1d_2d(data, length)
+    subroutine median_filtering_1d_2d(data, length)
 
         real*8, intent(inout) :: data(:,:)
         integer, intent(in)   :: length
@@ -286,11 +290,11 @@ contains
 
         !$omp parallel do
         do i = 1, size(data, 2)
-            call median_filtering_nocopy(data(:,i), length)
+            call median_filtering(data(:,i), length)
         end do
         !$omp end parallel do
 
-    end subroutine median_filtering_nocopy_1d_2d
+    end subroutine median_filtering_1d_2d
 
 
     !-------------------------------------------------------------------------------------------------------------------------------

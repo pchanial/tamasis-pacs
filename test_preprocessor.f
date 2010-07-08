@@ -13,12 +13,12 @@ program test_preprocessor
 
     allocate (filtered(10))
     filtered = small
-    call median_filtering_nocopy(filtered, 3)
+    call median_filtering(filtered, 3)
     !print(scipy.signalmedfilt(small, kernel_size=3))
     if (any(neq_real(small-filtered,[1.2d0,5.d0,3.d0,4.d0,4.d0,4.d0,5.d0,10d0,22.d0,22.d0],15))) stop 'FAILED: medfilt1'
 
     filtered = small
-    call median_filtering_nocopy(filtered, 5)
+    call median_filtering(filtered, 5)
     !print(scipy.signalmedfilt(small, kernel_size=3))
     if (any(neq_real(small-filtered,[5.d0,3.d0,4.d0,4.d0,4.d0,4.d0,5.d0,10.d0,10.d0,22.d0],15))) stop 'FAILED: medfilt2'
 
@@ -31,7 +31,7 @@ program test_preprocessor
     filtered = timeline
     
     call system_clock(count1, count_rate, count_max)
-    call median_filtering_nocopy(filtered, 99)
+    call median_filtering(filtered, 99)
     call system_clock(count2, count_rate, count_max)
     write(*,'(f6.3,a)') real(count2-count1)/count_rate, 's'
 
