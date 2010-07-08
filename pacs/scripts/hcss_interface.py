@@ -30,8 +30,7 @@ parser.add_option('-d', '--deglitching', help='method for timeline deglitching:'
 parser.add_option('--nsigma', help='N-sigma deglitching value [default: %defaul'
                   't]', default=5.)
 parser.add_option('-n', '--npixels-per-sample', help='maximum number of sky pix'
-                  'els intercepted by a PACS detector [default: 5 for the blue '
-                  'channel and 11 for the red one]')
+                  'els intercepted by a PACS detector [default: 6]', default=6)
 
 # mapper options
 parser.add_option('--output-map', help='write output map to disk in FITS format [default:'
@@ -39,7 +38,7 @@ parser.add_option('--output-map', help='write output map to disk in FITS format 
 parser.add_option('--header', help='use FITS header in FILE to specify the map '
                   'projection [default: automatic]', metavar='FILE')
 parser.add_option('--resolution', help='input pixel size of the map in arcsecon'
-                  'ds [default: %default]', default=3.2)
+                  'ds [default: 3.2 for the blue channel, 6.4 for the red one]')
 parser.add_option('--ds9', help='display the map using ds9', action='store_true', dest='do_ds9', default=False)
 
 (options, filename) = parser.parse_args(sys.argv[1:])
@@ -92,8 +91,9 @@ if options.do_outputtod:
     if len(tod.nsamples) != len(filename):
         raise ValueError('The number of tod slices is not the number of input filenames.')
     dest = 0
+    tod_ = tod.reshape((obs.nrows, obs.ncolumns, tod.shape[-1]))
     for nsamples, f in zip(tod.nsamples, filename):
-        tod[:,dest:dest+nsamples].writefits(f+'_tod.fits')
+        tod_[:,:,dest:dest+nsamples].writefits(f+'_tod.fits')
         dest += nsamples
 
 if not options.do_outputmap:
