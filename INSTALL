@@ -16,7 +16,7 @@ Requirements:
 - PyFFTW3 0.2 with patches (https://launchpad.net/pyfftw)
 - pyfits 2.3 (http://www.stsci.edu/resources/software_hardware/pyfits)
 
-Recommended package:
-====================
+Recommended packages:
+=====================
 - kapteyn (http://www.astro.rug.nl/software/kapteyn/index.html)
-
+- pyds9
