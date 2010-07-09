@@ -32,6 +32,14 @@ parser.add_option('--nsigma', help='N-sigma deglitching value [default: %defaul'
 parser.add_option('-n', '--npixels-per-sample', help='maximum number of sky pix'
                   'els intercepted by a PACS detector [default: 6]', default=6)
 
+parser.add_option('--frame-policy-inscan', help='Policy for in-scan frames [default: %default]', default='keep')
+
+parser.add_option('--frame-policy-turnaround', help='Policy for turn-around frames [default: %default]', default='keep')
+
+parser.add_option('--frame-policy-other', help='Policy for non in-scan and non turn-around frames [default: %default]', default='remove')
+
+parser.add_option('--frame-policy-invalid', help='Policy for invalid frames [default: %default]', default='mask')
+
 # mapper options
 parser.add_option('--output-map', help='write output map to disk in FITS format [default:'
                   ' %default]', action='store_true', dest='do_outputmap', default=True)
@@ -62,7 +70,7 @@ if options.npixels_per_sample is not None:
     options.npixels_per_sample = int(options.npixels_per_sample)
 
 # Set up the PACS observation(s)
-obs = PacsObservation(filename, keep_bad_detectors=True)
+obs = PacsObservation(filename, keep_bad_detectors=True, frame_policy_inscan=options.frame_policy_inscan, frame_policy_turnaround=options.frame_policy_turnaround, frame_policy_other=options.frame_policy_other, frame_policy_invalid=options.frame_policy_invalid)
 
 # Read the timeline
 tod = obs.get_tod(flatfielding=options.do_flatfielding, subtraction_mean=options.do_subtraction_mean, unit='Jy/arcsec^2')
