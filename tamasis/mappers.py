@@ -2,7 +2,7 @@ import numpy
 import scipy
 import time
 
-from acquisitionmodels import asacquisitionmodel, Diagonal, DiscreteDifference, Identity
+from acquisitionmodels import asacquisitionmodel, Diagonal, DiscreteDifference, Identity, Masking
 from datatypes import Map, Tod
 from unit import Quantity, UnitError
 from utils import create_fitsheader
@@ -17,6 +17,8 @@ def mapper_naive(tod, model, unit=None):
     by construction, the unit of the output map is the same, it is advisable to 
     have the TOD in unit of surface brightness.
     """
+
+    model = Masking(tod.mask) * model
     mymap = Map(model.transpose(tod), copy=False)
     unity = tod.copy()
     unity[:] = 1.
