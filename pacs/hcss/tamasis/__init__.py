@@ -113,6 +113,18 @@ def _run_command(cmd):
     if py_tmp is not None:
         os.putenv('PYTHONPATH', py_tmp)
 
+def _cleanup(files):
+    for file in files:
+        try:
+            os.remove(file)
+            os.remove(file + '_tod.fits')
+        except:
+            pass
+    try:
+        os.remove(files[0] + '_map.fits')
+    except:
+        pass
+        
 class _InputFramesValidator(ParameterValidator):
     def validate(self, value):
         if isinstance(value, Frames):
@@ -177,11 +189,14 @@ class TamasisPreprocessor(JTask):
         
         cmd += ' --output-tod'
 
-        _run_command(cmd)
+        try:
+            _run_command(cmd)
+            map(_import_tod, files, frames)
+        except:
+            pass
 
-        map(_import_tod, files, frames)
+        _cleanup(files)
     
-
 
 class TamasisPhotProject(TamasisPreprocessor):
 
@@ -227,12 +242,18 @@ class TamasisPhotProject(TamasisPreprocessor):
 
         cmd += ' --output-map'
 
-        _run_command(cmd)
+        try:
+            _run_command(cmd)
         
-        if self.updateFrames:
-            map(_import_tod, files, frames)
+            if self.updateFrames:
+                map(_import_tod, files, frames)
 
-        self.result = _import_map(files[0] + '_map.fits')
+            self.result = _import_map(files[0] + '_map.fits')
+        except:
+            pass
 
+        _cleanup(files)
+
+        
 TaskToolRegistry.getInstance().register(TamasisPreprocessor(), [Category.PACS])
 TaskToolRegistry.getInstance().register(TamasisPhotProject(), [Category.PACS])
