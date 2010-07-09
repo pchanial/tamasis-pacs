@@ -115,6 +115,45 @@ def create_fitsheader(array, extname=None, crval=(0.,0.), crpix=None, ctype=('RA
 #-------------------------------------------------------------------------------
 
 
+class MaskPolicy(object):
+    def __init__(self, flags, values, description=None):
+        self.description = description
+        if _my_isscalar(flags):
+            if isinstance(flags, str):
+                flags = flags.split(',')
+            else:
+                flags = (flags,)
+        self.flags = tuple(flags)
+        if _my_isscalar(values):
+            values = (values,)
+        if len(flags) != len(values):
+            raise ValueError('The number of policy flags is different from the number of policies.')
+
+        conversion_policy = { 'keep':0, 'mask':1, 'remove':2 }
+        self._array = numpy.ndarray(len(flags), dtype='int')
+    
+        for i, (flag, value) in enumerate(zip(flags, values)):
+            try:
+                self._array[i] = conversion_policy[value.lower()]
+            except KeyError:
+                raise KeyError("Invalid policy "+flag+"='" + value + "'. Valid policies are 'keep', 'mask' or 'remove'.")
+
+    def __array__(self):
+        return self._array
+
+    def __str__(self):
+        str = self.description + ': ' if self.description is not None else ''
+        conversion = { 0:'keep', 1:'mask', 2:'remove' }
+        str_ = []
+        for i, flag in enumerate(self.flags):
+            str_.append(conversion[self._array[i]] + " '" + flag + "'")
+        str += ', '.join(str_)
+        return str
+
+    
+#-------------------------------------------------------------------------------
+
+
 # should use numpy's allclose instead
 def any_neq(a,b, precision):
     mask = numpy.isnan(a)

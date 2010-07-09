@@ -1,12 +1,12 @@
 program test_pacspointing
 
     use module_math,            only : NaN, neq_real
-    use module_pacsobservation, only : pacsobservation, maskarray
+    use module_pacsobservation, only : PacsObservation, MaskPolicy
     use module_precision,       only : p
     implicit none
 
     class(pacsobservation), allocatable :: obs
-    type(maskarray)             :: maskarray_policy
+    type(MaskPolicy)            :: policy
     character(len=*), parameter :: filename(1) = 'tests/frames_blue.fits'
     integer                     :: i, index
     real*8                      :: time(12), ra(12), dec(12), pa(12), chop(12)
@@ -22,7 +22,7 @@ program test_pacspointing
     integer                     :: status
 
     allocate(obs)
-    call obs%init(filename, maskarray_policy, status)
+    call obs%init(filename, policy, status)
     if (status /= 0) stop 'FAILED: init_pacsobservation'
 
     index = 0

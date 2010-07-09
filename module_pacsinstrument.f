@@ -551,7 +551,7 @@ contains
             do itime = 1, obs%slice(islice)%nsamples * sampling_factor
 
                 isample = (itime - 1) / sampling_factor + 1
-                if (obs%slice(islice)%p(isample)%invalid .and. obs%policy%remove_invalid) cycle
+                if (obs%slice(islice)%p(isample)%removed) cycle
 
                 call obs%get_position_index(islice, itime, sampling_factor, ra, dec, pa, chop)
                 hull = this%uv2yz(hull_uv, this%distortion_yz, chop)
@@ -622,15 +622,11 @@ contains
             first = chunksize * sampling_factor * omp_get_thread_num() + 1
             last = min(first + chunksize - 1, nsamples) * sampling_factor
 
-            if (obs%policy%remove_invalid) then
-                offset = count(obs%slice(islice)%p(:(first-1)/sampling_factor)%invalid) * sampling_factor
-            else
-                offset = 0
-            end if
+            offset = count(obs%slice(islice)%p(:(first-1)/sampling_factor)%removed) * sampling_factor
 
             do itime = first, last
                 isample = (itime - 1) / sampling_factor + 1
-                if (obs%slice(islice)%p(isample)%invalid .and. obs%policy%remove_invalid) then
+                if (obs%slice(islice)%p(isample)%removed) then
                     offset = offset + 1
                     cycle
                 end if
@@ -708,7 +704,7 @@ contains
         ! loop over the PACS observations
         dest = 1
         do iobs = 1, nobs
-            call this%read_one(obs%slice(iobs), obs%policy%remove_invalid, signal(dest:dest+obs%slice(iobs)%nvalids-1,:),          &
+            call this%read_one(obs%slice(iobs), signal(dest:dest+obs%slice(iobs)%nvalids-1,:),                                     &
                  mask(dest:dest+obs%slice(iobs)%nvalids-1,:), status)
             if (status /= 0) return
             dest = dest + obs%slice(iobs)%nvalids
@@ -735,18 +731,17 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine read_one(this, obs, remove_invalid, signal, mask, status)
+    subroutine read_one(this, obs, signal, mask, status)
 
         class(pacsinstrument), intent(in)   :: this
 !!$        class(observationslice), intent(in) :: obs
         class(pacsobservationslice), intent(in) :: obs
-        logical, intent(in)                 :: remove_invalid
-        real*8, intent(inout)               :: signal(:,:)
-        logical*1, intent(inout)            :: mask  (:,:)
+        real*8, intent(out)                 :: signal(:,:)
+        logical*1, intent(out)              :: mask  (:,:)
         integer, intent(out)                :: status
 
         integer                :: p, q
-        integer                :: idetector, unit, length
+        integer                :: idetector, ndetectors, unit, length
         integer, allocatable   :: imageshape(:)
         logical                :: mask_found
         integer*4, allocatable :: maskcompressed(:)
@@ -757,10 +752,15 @@ contains
         real(dp)               :: signal_(obs%nsamples)
         logical*1              :: mask_(obs%nsamples)
 
+        ndetectors = size(signal, 2)
+
+        ! set mask from policy
+        mask = spread(pack(obs%p%masked, .not. obs%p%removed), 2, ndetectors)
+
         ! old style file format
         length = len_trim(obs%filename)
         if (obs%filename(length-4:length) /= '.fits') then
-            call this%read_oldstyle(obs, remove_invalid, signal, mask, status)
+            call this%read_oldstyle(obs, signal, mask, status)
             return
         end if
 
@@ -768,7 +768,7 @@ contains
         call ft_open_image(trim(obs%filename) // '[Signal]', unit, 3, imageshape, status)
         if (status /= 0) return
 
-        do idetector = 1, size(signal,2)
+        do idetector = 1, ndetectors
 
             p = this%pq(1,idetector)
             q = this%pq(2,idetector)
@@ -776,11 +776,7 @@ contains
             call ft_read_slice(unit, obs%first, obs%last, q+1, p+1, imageshape, signal_, status)
             if (status /= 0) return
 
-            if (remove_invalid) then
-                signal(:, idetector) = pack(signal_, .not. obs%p%invalid)
-            else
-                signal(:, idetector) = signal_
-            end if
+            signal(:,idetector) = pack(signal_, .not. obs%p%removed)
 
         end do
 
@@ -836,11 +832,7 @@ contains
 
             end do
             
-            if (remove_invalid) then
-                mask(:,idetector) = mask(:,idetector) .or. pack(mask_, .not. obs%p%invalid)
-            else
-                mask(:,idetector) = mask(:,idetector) .or. mask_ .or. obs%p%invalid
-            end if
+            mask(:,idetector) = mask(:,idetector) .or. pack(mask_, .not. obs%p%removed)
 
         end do
 
@@ -852,12 +844,11 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine read_oldstyle(this, obs, remove_invalid, signal, mask, status)
+    subroutine read_oldstyle(this, obs, signal, mask, status)
 
         class(pacsinstrument), intent(in)   :: this
 !!$        class(observationslice), intent(in) :: obs
         class(pacsobservationslice), intent(in) :: obs
-        logical, intent(in)                 :: remove_invalid
         real*8, intent(inout)               :: signal(:,:)
         logical*1, intent(inout)            :: mask(:,:)
         integer, intent(out)                :: status
@@ -879,11 +870,7 @@ contains
             call ft_read_slice(unit, obs%first, obs%last, q+1, p+1, imageshape, signal_, status)
             if (status /= 0) return
 
-            if (remove_invalid) then
-                signal(:, idetector) = pack(signal_, .not. obs%p%invalid)
-            else
-                signal(:, idetector) = signal_
-            end if
+            signal(:, idetector) = pack(signal_, .not. obs%p%removed)
 
         end do
 
@@ -902,11 +889,7 @@ contains
             call ft_read_slice(unit, obs%first, obs%last, q+1, p+1, imageshape, mask_, status)
             if (status /= 0) return
 
-            if (remove_invalid) then
-                mask(:, idetector) = pack(mask_, .not. obs%p%invalid)
-            else
-                mask(:, idetector) = mask_ .or. obs%p%invalid
-            end if
+            mask(:, idetector) = pack(mask_, .not. obs%p%removed)
 
         end do
 

@@ -3,20 +3,20 @@ program pacs_photproject
     use iso_fortran_env,        only : ERROR_UNIT, OUTPUT_UNIT
     use module_fitstools,       only : ft_header2str, ft_read_keyword, ft_write_image
     use module_deglitching,     only : deglitch_l2b
-    use module_optionparser,    only : optionparser
-    use module_pacsinstrument,  only : pacsinstrument
-    use module_pacsobservation, only : pacsobservation, maskarray
-    use module_pointingmatrix,  only : backprojection_weighted, pointingelement
+    use module_optionparser,    only : OptionParser
+    use module_pacsinstrument,  only : PacsInstrument
+    use module_pacsobservation, only : PacsObservation, MaskPolicy
+    use module_pointingmatrix,  only : backprojection_weighted, PointingElement
     use module_preprocessor,    only : divide_vectordim2, median_filtering, subtract_meandim1
     use module_string,          only : strlowcase
     use module_tamasis,         only : init_tamasis
     implicit none
 
-    class(pacsinstrument), allocatable :: pacs
-    class(pacsobservation), allocatable:: obs
-    type(maskarray)                    :: maskarray_policy
-    type(pointingelement), allocatable :: pmatrix(:,:,:)
-    class(optionparser), allocatable   :: parser
+    class(PacsInstrument), allocatable :: pacs
+    class(PacsObservation), allocatable:: obs
+    type(MaskPolicy)                   :: policy
+    type(PointingElement), allocatable :: pmatrix(:,:,:)
+    class(OptionParser), allocatable   :: parser
     real*8, allocatable                :: signal(:,:)
     logical*1, allocatable             :: mask(:,:)
     real*8, allocatable                :: map1d(:), weight1d(:)
@@ -53,7 +53,7 @@ program pacs_photproject
     if (status == -1) stop
     if (status /=  0) go to 999
 
-    outfile = parser%get_option('o') !XXX status gfortran bug
+    outfile            = parser%get_option('o') !XXX status gfortran bug
     headerfile         = parser%get_option('header')
     resolution         = parser%get_option_as_real('resolution')
     npixels_per_sample = parser%get_option_as_integer('npixels-per-sample')
@@ -84,7 +84,7 @@ program pacs_photproject
     allocate(obs)
     call parser%get_arguments(infile, status)
     if (status /= 0) go to 999
-    call obs%init(infile, maskarray_policy, status, verbose=.true.)
+    call obs%init(infile, policy, status, verbose=.true.)
     if (status /= 0) go to 999
     nsamples = obs%nsamples
 

@@ -3,9 +3,9 @@ program test_ngc6946_bpj
     use iso_fortran_env,        only : ERROR_UNIT, OUTPUT_UNIT
     use module_fitstools,       only : ft_read_keyword
     use module_math,            only : pInf, neq_real, sum_kahan
-    use module_pacsinstrument,  only : ndims, nvertices, pacsinstrument
-    use module_pacsobservation, only : pacsobservation, maskarray
-    use module_pointingmatrix,  only : pointingelement, pmatrix_direct, pmatrix_transpose
+    use module_pacsinstrument,  only : ndims, nvertices, PacsInstrument
+    use module_pacsobservation, only : PacsObservation, MaskPolicy
+    use module_pointingmatrix,  only : PointingElement, pmatrix_direct, pmatrix_transpose
     use module_preprocessor,    only : subtract_meandim1, divide_vectordim2
     use module_projection,      only : surface_convex_polygon
     use module_string,          only : strinteger
@@ -14,9 +14,9 @@ program test_ngc6946_bpj
     use omp_lib
     implicit none
 
-    class(pacsinstrument), allocatable  :: pacs
-    class(pacsobservation), allocatable :: obs
-    type(maskarray)                     :: maskarray_policy
+    class(PacsInstrument), allocatable  :: pacs
+    class(PacsObservation), allocatable :: obs
+    type(MaskPolicy)                    :: policy
     character(len=*), parameter         :: inputdir    = '/home/pchanial/work/pacs/data/transparent/NGC6946/'
 !!$    character(len=*), parameter         :: filename(1) = inputdir // '1342184520_blue[12001:86000]'
     character(len=*), parameter         :: filename(1) = inputdir // '1342184520_blue[12001:16000]'
@@ -41,7 +41,7 @@ program test_ngc6946_bpj
 
     ! initialise observation
     allocate(obs)
-    call obs%init(filename, maskarray_policy, status, verbose=.true.)
+    call obs%init(filename, policy, status, verbose=.true.)
     if (status /= 0) stop 'FAILED: pacsobservation%init'
     nsamples = obs%slice(1)%nsamples
 

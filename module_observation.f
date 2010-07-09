@@ -14,31 +14,43 @@ module module_observation
     implicit none
     private
 
-    public :: maskarray
+    public :: KEEP, MASK, REMOVE
+    public :: MaskPolicy
     public :: observation
 !!$    public :: observationslice
 public :: pacsobservationslice
 public :: pacsobservation    
     public :: pointing
 
-    type maskarray
-        logical :: remove_invalid = .true.
-        logical :: off_scan = .true.
-        logical :: off_target = .false.
-        logical :: wrong_time = .true.
-    end type maskarray
+    integer, parameter :: KEEP = 0
+    integer, parameter :: MASK = 1
+    integer, parameter :: REMOVE = 2
 
-    type pointing
-        real(dp) :: time
-        real(dp) :: ra
-        real(dp) :: dec
-        real(dp) :: pa
-        real(dp) :: chop
-        logical  :: invalid
-        logical  :: off_scan
-        logical  :: off_target
-        logical  :: wrong_time
-    end type pointing
+    type MaskPolicy
+        integer :: inscan = KEEP
+        integer :: turnaround = KEEP
+        integer :: other = REMOVE
+        integer :: invalid = MASK
+    end type MaskPolicy
+
+    type Pointing
+        real(dp)  :: time
+        real(dp)  :: ra
+        real(dp)  :: dec
+        real(dp)  :: pa
+        real(dp)  :: chop
+
+        logical*1 :: inscan
+        logical*1 :: turnaround
+        logical*1 :: other      ! not inscan and not turnaround
+        logical*1 :: invalid    ! wrong finetime, undef. band
+
+        logical*1 :: removed
+        logical*1 :: masked
+
+        logical*1 :: notused1
+        logical*1 :: notused2
+    end type Pointing
 
 !!$    type observationslice
 !!$        integer            :: first, last, nsamples
@@ -68,7 +80,7 @@ public :: pacsobservation
         procedure :: set_channel
         procedure :: set_compression_mode
         procedure :: set_filename
-        procedure :: set_invalid
+        procedure :: set_policy
         procedure :: set_observing_mode
         procedure :: set_astrometry
         procedure :: set_unit
@@ -80,12 +92,12 @@ public :: pacsobservation
 
     type :: observation
         integer           :: nslices
-        integer           :: nsamples   ! number of pointings
-        integer           :: nvalids    ! number of pointings for which the signal and mask should be read
+        integer           :: nsamples  ! number of pointings
+        integer           :: nvalids   ! number of non-removed pointings, to be included in tod & pmatrix
         character         :: channel
         character(len=70) :: observing_mode
         character(len=70) :: unit
-        type(maskarray)   :: policy
+        type(MaskPolicy)  :: policy
         type(pacsobservationslice), allocatable :: slice(:)
     contains
         procedure :: compute_center
@@ -223,7 +235,7 @@ contains
             !$omp parallel do default(shared) reduction(+:n180, nvalids,ra0,dec0)           &
             !$omp reduction(.or.:zero_minus,zero_plus) private(isample, ra, dec)
             do isample=1, this%slice(islice)%nsamples
-                if (this%slice(islice)%p(isample)%invalid) cycle
+                if (this%slice(islice)%p(isample)%removed) cycle
                 ra  = this%slice(islice)%p(isample)%ra
                 dec = this%slice(islice)%p(isample)%dec
                 zero_minus = zero_minus .or. ra > 270.d0
@@ -371,10 +383,10 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine set_invalid(this, policy, first, last, status)
+    subroutine set_policy(this, policy, first, last, status)
 
         class(pacsobservationslice), intent(inout) :: this
-        type(maskarray), intent(in)                :: policy
+        type(MaskPolicy), intent(in)               :: policy
         integer, intent(in)                        :: first, last
         integer, intent(out)                       :: status
 
@@ -383,32 +395,23 @@ contains
 
         status = 0
 
-        ! set invalid flag according to the mask policy
-        if (policy%off_scan) then
-            where (this%p%off_scan)
-                this%p%invalid = .true.
-            end where
-        end if
+        this%p%masked  = (policy%inscan     == MASK)   .and. this%p%inscan     .or. &
+                         (policy%turnaround == MASK)   .and. this%p%turnaround .or. &
+                         (policy%other      == MASK)   .and. this%p%other      .or. &
+                         (policy%invalid    == MASK)   .and. this%p%invalid
 
-        if (policy%off_target) then
-            where (this%p%off_target)
-                this%p%invalid = .true.
-            end where
-        end if
-
-        if (policy%wrong_time) then
-            where (this%p%wrong_time)
-                this%p%invalid = .true.
-            end where
-        end if
+        this%p%removed = (policy%inscan     == REMOVE) .and. this%p%inscan     .or. &
+                         (policy%turnaround == REMOVE) .and. this%p%turnaround .or. &
+                         (policy%other      == REMOVE) .and. this%p%other      .or. &
+                         (policy%invalid    == REMOVE) .and. this%p%invalid
         
-        ! if a slice is specified, mask its complement otherwise, search for it
+        ! if a slice is specified, remove its complement otherwise, search for it
         this%first = first
         if (first /= 0) then
-            this%p(1:first-1)%invalid = .true.
+            this%p(1:first-1)%removed = .true.
         else
             do isample = 1, size(this%p)
-                if (.not. this%p(isample)%invalid) exit
+                if (.not. this%p(isample)%removed) exit
             end do
             this%first = isample
         end if
@@ -421,10 +424,10 @@ contains
                      this%nsamples, "'."
                 return
             end if
-            this%p(last+1:)%invalid = .true.
+            this%p(last+1:)%removed = .true.
         else
             do isample = size(this%p), 1, -1
-                if (.not. this%p(isample)%invalid) exit
+                if (.not. this%p(isample)%removed) exit
             end do
             this%last = isample
         end if
@@ -438,15 +441,10 @@ contains
         this%nsamples = this%last - this%first + 1
         allocate (p_(this%nsamples))
         p_ = this%p(this%first:this%last)
-        call move_alloc (p_, this%p)
+        call move_alloc(p_, this%p)
+        this%nvalids = count(.not. this%p%removed)
 
-        if (policy%remove_invalid) then
-            this%nvalids = count(.not. this%p%invalid)
-        else
-            this%nvalids = this%nsamples
-        end if
-
-    end subroutine set_invalid
+    end subroutine set_policy
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
@@ -626,8 +624,8 @@ contains
         class(pacsobservationslice), intent(inout) :: this
         integer, intent(out)                       :: status
 
-        logical(1), allocatable :: off_target(:)
-        logical(1), allocatable :: off_scan(:)
+        logical(1), allocatable :: inscan(:)
+        logical(1), allocatable :: turnaround(:)
         integer                 :: length
         integer                 :: unit
         integer                 :: isample, itarget
@@ -681,31 +679,31 @@ contains
             end if
         end if
 
-        allocate (off_target(this%nsamples))
-        allocate (off_scan(this%nsamples))
+        allocate (inscan(this%nsamples))
+        allocate (turnaround(this%nsamples))
 
-        off_target = bbid /= z'cd2'
-        off_scan = bbid /= z'cd2' .and. bbid /= z'4000'
+        inscan = bbid == z'cd2'
+        turnaround = bbid == z'4000'
 
-        ! search for the first on-target sample
+        ! search for the first inscan sample
         do itarget = 1, this%nsamples
-            if (.not. off_target(itarget)) exit
+            if (inscan(itarget)) exit
         end do
         if (itarget <= this%nsamples) then
-            ! backward search first off-scan sample
+            ! backward search first non turnaround sample
             do isample = itarget-1, 1, -1
-                if (off_scan(isample)) exit
+                if (.not. turnaround(isample)) exit
             end do
-            ! mask as off-scan all samples before the last 0x4000 block
-            off_scan(1:isample) = .true.
+            ! mask as off-scan all samples before the 0x4000 block that precedes the first inscan block
+            turnaround(1:isample) = .false.
         end if
         
         if (allocated(this%p)) deallocate (this%p)
         allocate (this%p(this%nsamples))
         this%p%invalid = .false.
-        this%p%off_scan = off_scan
-        this%p%off_target = off_target
-        this%p%wrong_time = .false.
+        this%p%inscan = inscan
+        this%p%turnaround = turnaround
+        this%p%other = .not. inscan .and. .not. turnaround
 
     end subroutine set_flags
 
@@ -861,7 +859,7 @@ contains
                     end if
                 end if
                 njumps = njumps + 1
-                this%p(isample)%wrong_time = .true.
+                this%p(isample)%invalid = .true.
                 this%p(isample)%time = this%p(isample-1)%time + this%sampling_interval
                 this%p(isample)%ra   = this%p(isample-1)%ra  
                 this%p(isample)%dec  = this%p(isample-1)%dec 
@@ -873,7 +871,7 @@ contains
         if (njumps > 0) then
             if (verbose) then
                 write (OUTPUT_UNIT,'(a,i0,a)') 'Warning: The pointing fine time has ', njumps, ' negative jump(s). The affected fra&
-                     &mes have been masked.'
+                     &mes have been marked as invalid.'
             end if
             delta = this%p(2:this%nsamples)%time - this%p(1:this%nsamples-1)%time
         end if
@@ -915,7 +913,7 @@ contains
 
         class(pacsobservation), intent(inout) :: this
         character(len=*), intent(in)          :: filename(:)
-        type(maskarray), intent(in)           :: policy
+        type(MaskPolicy), intent(in)          :: policy
         integer, intent(out)                  :: status
         logical, intent(in), optional         :: verbose
         integer                               :: first, last
@@ -969,7 +967,7 @@ contains
             call this%slice(islice)%set_sampling_interval(status, verbose_)
             if (status /= 0) return
 
-            call this%slice(islice)%set_invalid(this%policy, first, last, status)
+            call this%slice(islice)%set_policy(this%policy, first, last, status)
             if (status /= 0) return
 
         end do
@@ -1072,7 +1070,7 @@ contains
         this%nsamples = nsamples
         this%channel      = ' '
         this%observing_mode = 'Unknown'
-        this%policy = maskarray(wrong_time=.true., off_target=.true.)
+        this%policy = MaskPolicy()
 
         allocate (this%slice(1))
         this%slice(1)%first    = 1
@@ -1091,15 +1089,57 @@ contains
         this%slice(1)%p%pa         = pa
         this%slice(1)%p%chop       = chop
         this%slice(1)%p%invalid    = .false.
-        this%slice(1)%p%wrong_time = .false.
-        this%slice(1)%p%off_target = .false.
+        this%slice(1)%p%inscan     = .true.
+        this%slice(1)%p%turnaround = .false.
 
         call this%slice(1)%set_sampling_interval(status, verbose_)
         if (status /= 0) return
 
-        call this%slice(1)%set_invalid(this%policy, 1, nsamples, status)
+        call this%slice(1)%set_policy(this%policy, 1, nsamples, status)
 
     end subroutine init_sim
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    pure function strpolicy_len(policy)
+        
+        integer, intent(in) :: policy
+        integer             :: strpolicy_len
+
+        select case (policy)
+            case (KEEP)
+                strpolicy_len = 4
+            case (MASK)
+                strpolicy_len = 6
+            case (REMOVE)
+                strpolicy_len = 7
+            case default
+                strpolicy_len = 0
+        end select
+
+    end function strpolicy_len
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    function strpolicy(policy)
+
+        integer, intent(in)                  :: policy
+        character(len=strpolicy_len(policy)) :: strpolicy
+
+        select case (policy)
+            case (KEEP)
+                strpolicy = 'kept'
+            case (MASK)
+                strpolicy = 'masked'
+            case (REMOVE)
+                strpolicy = 'removed'
+        end select
+
+    end function strpolicy
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
@@ -1109,9 +1149,7 @@ contains
 
         class(pacsobservation), intent(in) :: this
 
-        integer                :: islice, nrejected, nsamples
-        logical*1, allocatable :: invalid(:)
-        character(len=8)       :: mode
+        integer :: islice, nsamples
 
         write (*,*)
 
@@ -1146,44 +1184,15 @@ contains
             ! unit
             write (OUTPUT_UNIT,'(a)') '      Unit: ' // trim(this%slice(islice)%unit)
 
-            ! recompute invalid samples to 
-            allocate (invalid(nsamples))
-            invalid = .false.
-
-            ! print maskarray information
-
-            mode = strternary(this%policy%remove_invalid, 'Removed ', 'Masked ')
-            if (this%policy%off_scan) then
-                invalid = invalid .or. this%slice(islice)%p%off_scan
-                nrejected = count(this%slice(islice)%p%off_scan)
-                if (nrejected > 0) then
-                    write (OUTPUT_UNIT,'(3a,2(i0,a))') "      Mask 'off scan': ", trim(mode), ' ', nrejected, ' / ', nsamples, '.'
-                end if
-            end if
-
-            if (this%policy%off_target) then
-                invalid = invalid .or. this%slice(islice)%p%off_target
-                nrejected = count(this%slice(islice)%p%off_target)
-                if (nrejected > 0) then
-                    write (OUTPUT_UNIT,'(3a,2(i0,a))') "      Mask 'off target': ", trim(mode), ' ', nrejected, ' / ', nsamples, '.'
-                end if
-            end if
-
-            if (this%policy%wrong_time) then
-                invalid = invalid .or. this%slice(islice)%p%wrong_time
-                nrejected = count(this%slice(islice)%p%wrong_time)
-                if (nrejected > 0) then
-                    write (OUTPUT_UNIT,'(3a,2(i0,a))') "      Mask 'wrong time': ", trim(mode), ' ', nrejected, ' / ', nsamples, '.'
-                end if
-            end if
-
-            nrejected = count(invalid) - count(this%slice(islice)%p%invalid)
-            if (nrejected > 0) then
-                write (OUTPUT_UNIT,'(3a,2(i0,a))') "      Other: ", trim(mode), ' ', nrejected, ' / ', nsamples, '.'
-            end if
-
-            deallocate (invalid)
-
+            ! print mask information
+            write (OUTPUT_UNIT,'(a,i0,a)') '      In-scan:    ', count(this%slice(islice)%p%inscan),     ' ' //                    &
+                  strpolicy(this%policy%inscan)
+            write (OUTPUT_UNIT,'(a,i0,a)') '      Turnaround: ', count(this%slice(islice)%p%turnaround), ' ' //                    &
+                  strpolicy(this%policy%turnaround)
+            write (OUTPUT_UNIT,'(a,i0,a)') '      Other:      ', count(this%slice(islice)%p%other),      ' ' //                    &
+                  strpolicy(this%policy%other)
+            write (OUTPUT_UNIT,'(a,i0,a)') '      Invalid:    ', count(this%slice(islice)%p%invalid),    ' ' //                    &
+                  strpolicy(this%policy%invalid)
             write (*,*)
 
         end do

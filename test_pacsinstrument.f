@@ -3,15 +3,15 @@ program test_pacsinstrument
     use module_fitstools,       only : ft_read_keyword, ft_header2str
     use module_math,            only : mean, neq_real
     use module_pacsinstrument
-    use module_pacsobservation, only : pacsobservation, maskarray
+    use module_pacsobservation, only : PacsObservation, MaskPolicy
     use module_string,          only : strreal
     use module_tamasis,         only : init_tamasis
     use module_wcs,             only : init_astrometry, ad2xy_gnomonic
     implicit none
 
-    class(pacsinstrument), allocatable  :: pacs
-    class(pacsobservation), allocatable :: obs
-    type(maskarray)                     :: maskarray_policy
+    class(PacsInstrument), allocatable  :: pacs
+    class(PacsObservation), allocatable :: obs
+    type(MaskPolicy)                    :: policy
     character(len=*), parameter :: filename(1) = 'tests/frames_blue.fits'
     character(len=*), parameter :: filename_header = 'tests/header.fits'
 
@@ -29,7 +29,7 @@ program test_pacsinstrument
 
     ! initialise observation
     allocate(obs)
-    call obs%init(filename, maskarray_policy, status)
+    call obs%init(filename, policy, status)
     if (status /= 0) stop 'FAILED: init_pacsobservation'
 
     ! initialise pacs instrument

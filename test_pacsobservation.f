@@ -1,16 +1,16 @@
 program test_pacsobservation
 
-    use module_pacsinstrument,  only : pacsinstrument
-    use module_pacsobservation, only : maskarray, pacsobservation
-    use module_observation,     only : pointing
+    use module_pacsinstrument,  only : PacsInstrument
+    use module_pacsobservation, only : MaskPolicy, PacsObservation
+    use module_observation,     only : Pointing
     use module_string,          only : strsection
     use module_tamasis,         only : init_tamasis, get_tamasis_path
     implicit none
 
-    class(pacsobservation), allocatable :: obs
-    class(pacsinstrument), allocatable  :: pacs
-    type(pointing), allocatable         :: p_(:)
-    type(maskarray)                     :: policy
+    class(PacsObservation), allocatable :: obs
+    class(PacsInstrument), allocatable  :: pacs
+    type(Pointing), allocatable         :: p_(:)
+    type(MaskPolicy)                    :: policy
     character(len=*), parameter         :: filename = 'tests/frames_blue.fits'
     character(len=50), allocatable      :: afilename(:)
     integer                :: status, idetector
