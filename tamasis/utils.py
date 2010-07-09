@@ -134,12 +134,12 @@ class MaskPolicy(object):
     
         for i, (flag, value) in enumerate(zip(flags, values)):
             try:
-                self._array[i] = conversion_policy[value.lower()]
+                self._array[i] = conversion_policy[str(value).lower()]
             except KeyError:
                 raise KeyError("Invalid policy "+flag+"='" + value + "'. Valid policies are 'keep', 'mask' or 'remove'.")
 
     def __array__(self):
-        return self._array
+        return numpy.array(self._array, dtype='int32')
 
     def __str__(self):
         str = self.description + ': ' if self.description is not None else ''
