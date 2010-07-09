@@ -2,6 +2,7 @@
 *.mod
 *~
 *pyc
+*$py.class
 *__genmod.f90
 
 .cproject
