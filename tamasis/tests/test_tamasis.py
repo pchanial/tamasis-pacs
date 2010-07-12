@@ -25,6 +25,7 @@ model = projection
 print model
 
 # naive map
+tod.mask[:] = 0
 backmap = model.transpose(tod)
 unity = Tod.ones(tod.shape, nsamples=tod.nsamples)
 weights = model.transpose(unity)
