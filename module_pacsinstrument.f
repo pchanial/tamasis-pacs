@@ -283,6 +283,7 @@ contains
 
 
     function get_calfile(filename)
+
         character(len=*), intent(in)                     :: filename
         character(len=tamasis_path_len+10+len(filename)) :: get_calfile
 
@@ -409,14 +410,15 @@ contains
 
 
     function uv2yz(uv, distortion_yz, chop) result(yz)
+
         real*8, intent(in) :: uv(:,:)
         real*8, intent(in) :: distortion_yz(ndims, distortion_degree, distortion_degree, distortion_degree)
         real*8, intent(in) :: chop ! chop angle in degree
         real*8             :: yz(ndims, size(uv,2))
 
-        real*8             :: a_pow, ratio
-        integer            :: n, i, j, k, l
-        real*8             :: u_pow(size(uv,2)), v_pow(size(uv,2))
+        real*8  :: a_pow, ratio
+        integer :: n, i, j, k, l
+        real*8  :: u_pow(size(uv,2)), v_pow(size(uv,2))
 
         yz = 0
         n = size(uv,2)
@@ -462,8 +464,8 @@ contains
         real*8, intent(in) :: ra0, dec0, pa0
         real*8             :: ad(ndims,size(yz,2))
 
-        integer            :: i
-        real*8             :: cospa, sinpa
+        integer :: i
+        real*8  :: cospa, sinpa
 
 
         cospa =  cos(pa0*DEG2RAD)
@@ -525,10 +527,12 @@ contains
 
     ! find minimum and maximum pixel coordinates in maps
     subroutine find_minmax(this, obs, oversampling, xmin, xmax, ymin, ymax)
+
         class(pacsinstrument), intent(in)  :: this
         class(pacsobservation), intent(in) :: obs
         logical, intent(in)                :: oversampling
         real*8, intent(out)                :: xmin, xmax, ymin, ymax
+
         real*8               :: ra, dec, pa, chop
         real*8, allocatable  :: hull_uv(:,:), hull(:,:)
         integer, allocatable :: ihull(:)
@@ -584,6 +588,7 @@ contains
 
 
     subroutine compute_projection_sharp_edges(this, obs, oversampling, header, nx, ny, pmatrix, status)
+
         class(pacsinstrument), intent(in)  :: this
         class(pacsobservation), intent(in) :: obs
         logical, intent(in)                :: oversampling
@@ -1017,12 +1022,14 @@ contains
 
 
     subroutine multiplexing_direct(signal, sampled_signal, sampling, ij)
+
         real*8, intent(in)  :: signal(:,:)
         integer, intent(in) :: sampling
         real*8, intent(out) :: sampled_signal(size(signal,1)/sampling,size(signal,2))
         integer, intent(in) :: ij(2,size(signal,2))
-        integer             :: ndetectors, idetector, isample, j
-        real*8              :: frac
+
+        integer :: ndetectors, idetector, isample, j
+        real*8  :: frac
 
         ndetectors = size(signal, 2)
         if (sampling == 16) then
@@ -1054,12 +1061,14 @@ contains
 
 
     subroutine multiplexing_transpose(sampled_signal, signal, sampling, ij)
+
         real*8, intent(in)  :: sampled_signal(:,:)
         integer, intent(in) :: sampling
         real*8, intent(out) :: signal(size(sampled_signal,1)*sampling,size(sampled_signal,2))
         integer, intent(in) :: ij(2,size(sampled_signal,2))
-        integer             :: ndetectors, isample, idetector, j
-        real*8              :: frac
+
+        integer :: ndetectors, isample, idetector, j
+        real*8  :: frac
 
         ndetectors = size(sampled_signal, 2)
         if (sampling == 16) then
