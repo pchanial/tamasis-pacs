@@ -119,7 +119,7 @@ contains
         integer, intent(in)                  :: fine_sampling_factor
         integer, intent(in)                  :: detector_policy
         logical, intent(in)                  :: reject_bad_line
-        logical*1, intent(in), optional      :: detector_mask(:,:) ! if all bad, read the mask from calibration files
+        logical*1, intent(in), optional      :: detector_mask(:,:) ! if all bad, use the calibration mask
         integer, intent(out)                 :: status
 
         logical                              :: user_mask
@@ -149,9 +149,9 @@ contains
         if (status /= 0) return
 
         if (present(detector_mask)) then
-           user_mask = any(.not. detector_mask)
+            user_mask = count(.not. detector_mask) /= 0 !IFORT 11.1 bug: any(.not. detector_mask)=T if all detectors are bad
         else
-           user_mask = .false.
+            user_mask = .false.
         end if
 
         if (user_mask) then
@@ -191,7 +191,7 @@ contains
            this%mask_green(12,17:32) = .true.
 
         end if
-        
+
         call this%filter_detectors()
 
     end subroutine init
