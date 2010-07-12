@@ -1,11 +1,11 @@
 #!/usr/bin/env python2.6
 #
-# NAME: pacs_photproject
+# NAME: tamasis_photproject
 # 
 # DESCRIPTION: create a map from a set of PACS observations, by backprojecting 
 # the timelines onto the sky map, and by dividing it by the weights, which are
 # the backprojection of 1.
-# The routine is meant to replicate HCSS' photproject
+# The routine is meant to replicate HCSS' photproject using TAMASIS' tools
 #
 # Author: P. Chanial
 
@@ -70,7 +70,7 @@ if options.npixels_per_sample is not None:
     options.npixels_per_sample = int(options.npixels_per_sample)
 
 # Set up the PACS observation(s)
-obs = PacsObservation(filename, keep_bad_detectors=True, frame_policy_inscan=options.frame_policy_inscan, frame_policy_turnaround=options.frame_policy_turnaround, frame_policy_other=options.frame_policy_other, frame_policy_invalid=options.frame_policy_invalid)
+obs = PacsObservation(filename, frame_policy_inscan=options.frame_policy_inscan, frame_policy_turnaround=options.frame_policy_turnaround, frame_policy_other=options.frame_policy_other, frame_policy_invalid=options.frame_policy_invalid, detector_policy='mask')
 
 # Read the timeline
 tod = obs.get_tod(flatfielding=options.do_flatfielding, subtraction_mean=options.do_subtraction_mean, unit='Jy/arcsec^2')
