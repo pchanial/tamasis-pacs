@@ -7,6 +7,12 @@ module module_tamasis
     public :: init_tamasis
     public :: get_tamasis_path
     public :: tamasis_path_len
+    public :: POLICY_KEEP, POLICY_MASK, POLICY_REMOVE
+
+
+    integer, parameter :: POLICY_KEEP = 0
+    integer, parameter :: POLICY_MASK = 1
+    integer, parameter :: POLICY_REMOVE = 2
 
     character(len=255) :: tamasis_path     ! Tamasis installation directory
     integer            :: tamasis_path_len ! length of the path to the tamasis installation directory

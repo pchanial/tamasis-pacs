@@ -10,7 +10,7 @@ module module_pacsinstrument
     use module_precision,       only : dp, p
     use module_projection,      only : convex_hull, surface_convex_polygon
     use module_string,          only : strinteger
-    use module_tamasis,         only : get_tamasis_path, tamasis_path_len
+    use module_tamasis,         only : get_tamasis_path, tamasis_path_len, POLICY_KEEP, POLICY_MASK, POLICY_REMOVE
     use module_wcs,             only : init_astrometry, ad2xy_gnomonic, ad2xy_gnomonic_vect
     use omp_lib
     implicit none
@@ -60,11 +60,11 @@ module module_pacsinstrument
         integer              :: fine_sampling_factor
         character            :: channel
         logical              :: transparent_mode
-        logical              :: keep_bad_detectors
-        logical              :: mask_bad_line
+        integer              :: detector_policy
+        logical              :: reject_bad_line
 
-        logical*1, allocatable :: mask(:,:) ! .true. if the detector has been filtered out in the flattened list of detectors
-        logical*1, allocatable :: bad(:,:)  ! .true. if the detector is flagged as bad (same as mask if keep_bad_detector is false)
+        logical*1, allocatable :: bad(:,:)  ! .true. for bad detectors
+        logical*1, allocatable :: mask(:,:) ! .true. if the bad detector has been filtered out in the flattened list of detectors
         integer, allocatable   :: ij(:,:)
         integer, allocatable   :: pq(:,:)
 
@@ -111,16 +111,18 @@ module module_pacsinstrument
 contains
 
 
-    subroutine init(this, channel, transparent_mode, fine_sampling_factor, keep_bad_detectors, mask_bad_line, status,              &
-                    bad_detector_mask)
+    subroutine init(this, channel, transparent_mode, fine_sampling_factor, detector_policy, reject_bad_line, detector_mask, status)
+
         class(pacsinstrument), intent(inout) :: this
         character, intent(in)                :: channel
         logical, intent(in)                  :: transparent_mode
         integer, intent(in)                  :: fine_sampling_factor
-        logical, intent(in)                  :: keep_bad_detectors
-        logical, intent(in)                  :: mask_bad_line
+        integer, intent(in)                  :: detector_policy
+        logical, intent(in)                  :: reject_bad_line
+        logical*1, intent(in), optional      :: detector_mask(:,:) ! if all bad, read the mask from calibration files
         integer, intent(out)                 :: status
-        logical*1, intent(in), optional      :: bad_detector_mask(:,:)
+
+        logical                              :: user_mask
 
         ! check channel
         if (index('rgb', channel) == 0) then
@@ -140,40 +142,53 @@ contains
         this%channel              = channel
         this%fine_sampling_factor = fine_sampling_factor
         this%transparent_mode     = transparent_mode
-        this%keep_bad_detectors   = keep_bad_detectors
-        this%mask_bad_line        = mask_bad_line
+        this%detector_policy      = detector_policy
+        this%reject_bad_line      = reject_bad_line
 
         call this%read_calibration_files(status)
         if (status /= 0) return
 
-        if (present(bad_detector_mask)) then
+        if (present(detector_mask)) then
+           user_mask = any(.not. detector_mask)
+        else
+           user_mask = .false.
+        end if
+
+        if (user_mask) then
 
             select case (this%channel)
                 case ('b')
-                    if (any(shape(bad_detector_mask) /= shape_blue)) then
+                    if (any(shape(detector_mask) /= shape_blue)) then
                         status = 1
                         write (ERROR_UNIT,'(a)') 'INIT: input blue bad detector mask has invalid size.'
                         return
                     end if
-                    this%mask_blue = bad_detector_mask
+                    this%mask_blue = detector_mask
                 case ('g')
-                    if (any(shape(bad_detector_mask) /= shape_blue)) then
+                    if (any(shape(detector_mask) /= shape_blue)) then
                         status = 1
                         write (ERROR_UNIT,'(a)') 'INIT: input green bad detector mask has invalid size.'
                         return
                     end if
-                    this%mask_green = bad_detector_mask
+                    this%mask_green = detector_mask
                 case ('r')
-                    if (any(shape(bad_detector_mask) /= shape_red)) then
+                    if (any(shape(detector_mask) /= shape_red)) then
                         status = 1
                         write (ERROR_UNIT,'(a)') 'INIT: input red bad detector mask has invalid size.'
                         return
                     end if
-                    this%mask_red = bad_detector_mask
+                    this%mask_red = detector_mask
                 case default
                     status = 1
                     write (ERROR_UNIT,'(a)') "INIT: invalid channel: '" // this%channel // "'."
             end select
+
+        ! mask erratic line
+        else if (reject_bad_line .and. this%channel == 'b') then
+           this%mask_blue(12,17:32) = .true.
+
+        else if (reject_bad_line .and. this%channel == 'g') then
+           this%mask_green(12,17:32) = .true.
 
         end if
         
@@ -190,13 +205,13 @@ contains
         class(pacsinstrument), intent(inout) :: this
         integer, intent(out)                 :: status
 
-        integer,          parameter :: hdu_blue(4) = [8, 12, 16, 20]
-        integer,          parameter :: hdu_red (4) = [6, 10, 14, 18]
+        integer, parameter     :: hdu_blue(4) = [8, 12, 16, 20]
+        integer, parameter     :: hdu_red (4) = [6, 10, 14, 18]
 
-        integer                     :: ivertex
-        logical*1, allocatable      :: tmplogical(:,:)
-        real*8, allocatable         :: tmp2(:,:)
-        real*8, allocatable         :: tmp3(:,:,:)
+        integer                :: ivertex
+        logical*1, allocatable :: tmplogical(:,:)
+        real*8, allocatable    :: tmp2(:,:)
+        real*8, allocatable    :: tmp3(:,:,:)
 
         ! read bad pixel mask
 
@@ -311,8 +326,8 @@ contains
         real*8, intent(in)                   :: flatfield(:,:)
         character(len=*), intent(in)         :: channel
 
-        integer   :: idetector, p, q, status, unit
-        real*8    :: center(2,2)
+        integer :: idetector, p, q, status, unit
+        real*8  :: center(2,2)
 
         this%nrows    = size(mask, 1)
         this%ncolumns = size(mask, 2)
@@ -334,12 +349,7 @@ contains
             end if
         end if
 
-        ! mask erratic line
-        if (this%mask_bad_line .and. this%channel /= 'r') then
-            this%bad(12,17:32) = .true.
-        end if
-        
-        if (this%keep_bad_detectors) then
+        if (this%detector_policy /= POLICY_REMOVE) then
             this%mask = .false.
         else
             this%mask = this%bad
@@ -711,7 +721,7 @@ contains
         end do
 
         ! mask bad detectors if they haven't been filtered out
-        if (this%keep_bad_detectors) then
+        if (this%detector_policy == POLICY_MASK) then
             do idetector = 1, this%ndetectors
                 if (this%bad(this%pq(1,idetector)+1,this%pq(2,idetector)+1)) then
                     signal(:,idetector) = 0.d0

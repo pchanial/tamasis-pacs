@@ -122,8 +122,7 @@ class PacsObservation(_Pacs):
     - ij(2,ndetectors)   : the row and column number (starting from 0) of the detectors
     Author: P. Chanial
     """
-    def __init__(self, filename, fine_sampling_factor=1, bad_detector_mask=None, keep_bad_detectors=False, mask_bad_line=False, \
-                 frame_policy_inscan='keep', frame_policy_turnaround='keep', frame_policy_other='remove', frame_policy_invalid='mask'):
+    def __init__(self, filename, fine_sampling_factor=1, detector_policy='remove', detector_mask=None, reject_bad_line=False, frame_policy_inscan='keep', frame_policy_turnaround='keep', frame_policy_other='remove', frame_policy_invalid='mask'):
 
         filename_, nfilenames = self._files2tmf(filename)
 
@@ -132,19 +131,21 @@ class PacsObservation(_Pacs):
 
         nrows, ncolumns = (16,32) if channel == 'r' else (32,64)
 
-        if bad_detector_mask is not None:
-            if bad_detector_mask.shape != (nrows, ncolumns):
-                raise ValueError('Invalid shape of the input '+('red' if channel == 'r' else 'blue')+' bad detector mask: '+str(bad_detector_mask.shape)+'.')
-            bad_detector_mask = numpy.array(bad_detector_mask, dtype='int8', copy=False)
+        if detector_mask is not None:
+            if detector_mask.shape != (nrows, ncolumns):
+                raise ValueError('Invalid shape of the input '+('red' if channel == 'r' else 'blue')+' detector mask: '+str(detector_mask.shape)+'.')
+            detector_mask = numpy.array(detector_mask, dtype='int8', copy=False)
 
         else:
-            bad_detector_mask = numpy.ones((nrows,ncolumns), dtype='int8')
+            detector_mask = numpy.ones((nrows,ncolumns), dtype='int8')
 
+        # detector policy
+        detector_policy_ = MaskPolicy('bad', detector_policy, 'Detector Policy')
         # frame policy
         frame_policy = MaskPolicy('inscan,turnaround,other,invalid'.split(','), (frame_policy_inscan, frame_policy_turnaround, frame_policy_other, frame_policy_invalid), 'Frame Policy')
 
         # retrieve information from the observations
-        ndetectors, bad_detector_mask, transparent_mode, compression_factor, nsamples, unit, responsivity, detector_area, dflat, oflat, status = tmf.pacs_info(tamasis_dir, filename_, nfilenames, fine_sampling_factor, keep_bad_detectors, numpy.asfortranarray(bad_detector_mask), mask_bad_line, numpy.array(frame_policy))
+        ndetectors, detector_bad, transparent_mode, compression_factor, nsamples, unit, responsivity, detector_area, dflat, oflat, status = tmf.pacs_info(tamasis_dir, filename_, nfilenames, fine_sampling_factor, numpy.array(frame_policy), numpy.array(detector_policy_)[0], reject_bad_line, numpy.asfortranarray(detector_mask))
         if status != 0: raise RuntimeError()
 
         self.filename = filename
@@ -157,12 +158,12 @@ class PacsObservation(_Pacs):
         self.nsamples = tuple(nsamples)
         self.nfinesamples = tuple(nsamples * compression_factor * fine_sampling_factor)
         self.ndetectors = ndetectors
-        self.keep_bad_detectors = keep_bad_detectors
-        self.bad = numpy.ascontiguousarray(bad_detector_mask)
-        self.mask = self.bad.copy()
-        if self.keep_bad_detectors:
-            self.mask[:] = 0
-        self.mask_bad_line = mask_bad_line
+        self.detector_policy = detector_policy_
+        self.detector_bad = numpy.ascontiguousarray(detector_bad)
+        self.detector_mask = self.detector_bad.copy()
+        if detector_policy != 'remove':
+            self.detector_mask[:] = 0
+        self.reject_bad_line = reject_bad_line
         self.frame_policy = frame_policy
         self.fine_sampling_factor = fine_sampling_factor
         self.transparent_mode = transparent_mode
@@ -180,7 +181,7 @@ class PacsObservation(_Pacs):
         if resolution is None:
             resolution = self.default_resolution
         filename_, nfilenames = self._files2tmf(self.filename)
-        header, status = tmf.pacs_map_header(tamasis_dir, filename_, nfilenames, oversampling, self.fine_sampling_factor, self.keep_bad_detectors, numpy.asfortranarray(self.bad), self.mask_bad_line, numpy.array(self.frame_policy), resolution)
+        header, status = tmf.pacs_map_header(tamasis_dir, filename_, nfilenames, oversampling, self.fine_sampling_factor, numpy.array(self.frame_policy), numpy.array(self.detector_policy)[0], numpy.asfortranarray(self.detector_bad), resolution)
         if status != 0: raise RuntimeError()
         header = _str2fitsheader(header)
         return header
@@ -190,7 +191,7 @@ class PacsObservation(_Pacs):
         Returns the signal and mask timelines.
         """
         filename_, nfilenames = self._files2tmf(self.filename)
-        signal, mask, status = tmf.pacs_timeline(tamasis_dir, filename_, self.nobservations, numpy.sum(self.nsamples), self.ndetectors, self.keep_bad_detectors, numpy.asfortranarray(self.bad), self.mask_bad_line, numpy.array(self.frame_policy), flatfielding, subtraction_mean)
+        signal, mask, status = tmf.pacs_timeline(tamasis_dir, filename_, self.nobservations, numpy.sum(self.nsamples), self.ndetectors, numpy.array(self.frame_policy), numpy.array(self.detector_policy)[0], numpy.asfortranarray(self.detector_bad), flatfielding, subtraction_mean)
         if status != 0: raise RuntimeError()
        
         tod = Tod(signal.T, mask.T, nsamples=self.nsamples, unit=self.unit)
@@ -208,7 +209,7 @@ class PacsObservation(_Pacs):
         newunit = Quantity(1., unit)
         newunit_si = newunit.SI._unit
         if 'sr' in newunit_si and newunit_si['sr'] == -1:
-            area = self.detector_area[self.mask == 0].reshape((self.ndetectors,1))
+            area = self.detector_area[self.detector_mask == 0].reshape((self.ndetectors,1))
             tod /= area
            
         if 'V' in tod._unit and tod._unit['V'] == 1 and 'V' not in newunit_si:
@@ -231,7 +232,7 @@ class PacsObservation(_Pacs):
         print 'Info: Allocating '+str(sizeofpmatrix/2.**17)+' MiB for the pointing matrix.'
         pmatrix = numpy.zeros(sizeofpmatrix, dtype=numpy.int64)
         
-        status = tmf.pacs_pointing_matrix_filename(tamasis_dir, filename_, self.nobservations, oversampling, self.fine_sampling_factor, npixels_per_sample, numpy.sum(nsamples), self.ndetectors, self.keep_bad_detectors, numpy.asfortranarray(self.bad), self.mask_bad_line, numpy.array(self.frame_policy), str(header).replace('\n', ''), pmatrix)
+        status = tmf.pacs_pointing_matrix_filename(tamasis_dir, filename_, self.nobservations, oversampling, self.fine_sampling_factor, npixels_per_sample, numpy.sum(nsamples), self.ndetectors, numpy.array(self.frame_policy), numpy.array(self.detector_policy)[0], numpy.asfortranarray(self.detector_bad), str(header).replace('\n', ''), pmatrix)
         if status != 0: raise RuntimeError()
 
         return pmatrix, header, self.ndetectors, nsamples, npixels_per_sample
@@ -243,7 +244,7 @@ class PacsObservation(_Pacs):
         ncorrelations, status = tmf.pacs_read_filter_calibration_ncorrelations(tamasis_dir, self.channel)
         if status != 0: raise RuntimeError()
 
-        data, status = tmf.pacs_read_filter_calibration(tamasis_dir, self.channel, ncorrelations, self.ndetectors, numpy.asfortranarray(self.mask))
+        data, status = tmf.pacs_read_filter_calibration(tamasis_dir, self.channel, ncorrelations, self.ndetectors, numpy.asfortranarray(self.detector_mask))
         if status != 0: raise RuntimeError()
 
         return data.T

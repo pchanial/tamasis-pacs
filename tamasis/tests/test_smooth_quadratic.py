@@ -11,7 +11,7 @@ datadir = os.getenv('PACS_DATA')+'/transpScan/'
 pacs = PacsObservation(filename=[datadir+'1342184598_blue_PreparedFrames.fits[6065:]',
                                  datadir+'1342184599_blue_PreparedFrames.fits[6066:]'],
                        fine_sampling_factor=1,
-                       keep_bad_detectors=False)
+                       detector_policy='remove')
 
 telescope    = Identity('Telescope PSF')
 projection   = Projection(pacs, resolution=3.2, npixels_per_sample=5)

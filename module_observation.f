@@ -11,10 +11,10 @@ module module_observation
     use module_math,      only : NaN, median, neq_real
     use module_precision, only : dp, p
     use module_string,    only : strinteger, strlowcase, strreal, strsection, strternary
+    use module_tamasis,   only : POLICY_KEEP, POLICY_MASK, POLICY_REMOVE
     implicit none
     private
 
-    public :: KEEP, MASK, REMOVE
     public :: MaskPolicy
     public :: observation
 !!$    public :: observationslice
@@ -22,15 +22,11 @@ public :: pacsobservationslice
 public :: pacsobservation    
     public :: pointing
 
-    integer, parameter :: KEEP = 0
-    integer, parameter :: MASK = 1
-    integer, parameter :: REMOVE = 2
-
     type MaskPolicy
-        integer :: inscan = KEEP
-        integer :: turnaround = KEEP
-        integer :: other = REMOVE
-        integer :: invalid = MASK
+        integer :: inscan = POLICY_KEEP
+        integer :: turnaround = POLICY_KEEP
+        integer :: other = POLICY_REMOVE
+        integer :: invalid = POLICY_MASK
     end type MaskPolicy
 
     type Pointing
@@ -395,15 +391,15 @@ contains
 
         status = 0
 
-        this%p%masked  = (policy%inscan     == MASK)   .and. this%p%inscan     .or. &
-                         (policy%turnaround == MASK)   .and. this%p%turnaround .or. &
-                         (policy%other      == MASK)   .and. this%p%other      .or. &
-                         (policy%invalid    == MASK)   .and. this%p%invalid
+        this%p%masked  = (policy%inscan     == POLICY_MASK)   .and. this%p%inscan     .or. &
+                         (policy%turnaround == POLICY_MASK)   .and. this%p%turnaround .or. &
+                         (policy%other      == POLICY_MASK)   .and. this%p%other      .or. &
+                         (policy%invalid    == POLICY_MASK)   .and. this%p%invalid
 
-        this%p%removed = (policy%inscan     == REMOVE) .and. this%p%inscan     .or. &
-                         (policy%turnaround == REMOVE) .and. this%p%turnaround .or. &
-                         (policy%other      == REMOVE) .and. this%p%other      .or. &
-                         (policy%invalid    == REMOVE) .and. this%p%invalid
+        this%p%removed = (policy%inscan     == POLICY_REMOVE) .and. this%p%inscan     .or. &
+                         (policy%turnaround == POLICY_REMOVE) .and. this%p%turnaround .or. &
+                         (policy%other      == POLICY_REMOVE) .and. this%p%other      .or. &
+                         (policy%invalid    == POLICY_REMOVE) .and. this%p%invalid
         
         ! if a slice is specified, remove its complement otherwise, search for it
         this%first = first
@@ -1109,11 +1105,11 @@ contains
         integer             :: strpolicy_len
 
         select case (policy)
-            case (KEEP)
+            case (POLICY_KEEP)
                 strpolicy_len = 4
-            case (MASK)
+            case (POLICY_MASK)
                 strpolicy_len = 6
-            case (REMOVE)
+            case (POLICY_REMOVE)
                 strpolicy_len = 7
             case default
                 strpolicy_len = 0
@@ -1131,11 +1127,11 @@ contains
         character(len=strpolicy_len(policy)) :: strpolicy
 
         select case (policy)
-            case (KEEP)
+            case (POLICY_KEEP)
                 strpolicy = 'kept'
-            case (MASK)
+            case (POLICY_MASK)
                 strpolicy = 'masked'
-            case (REMOVE)
+            case (POLICY_REMOVE)
                 strpolicy = 'removed'
         end select
 

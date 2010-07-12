@@ -6,7 +6,7 @@ from scipy.sparse.linalg import LinearOperator, cgs
 
 pacs = PacsObservation(filename=tamasis_dir+'tests/frames_blue.fits',
                        fine_sampling_factor=1,
-                       keep_bad_detectors=False)
+                       detector_policy='remove')
 
 tod = pacs.get_tod()
 
