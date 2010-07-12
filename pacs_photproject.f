@@ -9,7 +9,7 @@ program pacs_photproject
     use module_pointingmatrix,  only : backprojection_weighted, PointingElement
     use module_preprocessor,    only : divide_vectordim2, median_filtering, subtract_meandim1
     use module_string,          only : strlowcase
-    use module_tamasis,         only : init_tamasis
+    use module_tamasis,         only : init_tamasis, POLICY_KEEP, POLICY_MASK, POLICY_REMOVE
     implicit none
 
     class(PacsInstrument), allocatable :: pacs
@@ -26,7 +26,7 @@ program pacs_photproject
     real*8                             :: resolution
     integer                            :: npixels_per_sample
     logical                            :: do_flatfield
-    logical                            :: mask_bad_line
+    logical                            :: reject_bad_line
     character(len=256)                 :: filtering_method, deglitching_method
     integer*8                          :: nsamples, idetector
     integer                            :: nobs, iobs, nx, ny, start
@@ -47,7 +47,7 @@ program pacs_photproject
     call parser%add_option('length', 'l', 'Filtering length',  has_value=.true., default='200')
     call parser%add_option('deglitching', 'd', 'Timeline deglitching (l2std|l2mad|none)', has_value=.true., default='none')
     call parser%add_option('nsigma', '', 'N-sigma for deglitching',             has_value=.true., default='5.')
-    call parser%add_option('mask-bad-line', '', 'Reject erratic line on the blue array', action='store true')
+    call parser%add_option('reject-bad-line', '', 'Reject erratic line on the blue array', action='store true')
 
     call parser%parse(status)
     if (status == -1) stop
@@ -62,7 +62,7 @@ program pacs_photproject
     filtering_length   = parser%get_option_as_integer('length')
     deglitching_method = strlowcase(parser%get_option('deglitching'))
     deglitching_nsigma = parser%get_option_as_real('nsigma')
-    mask_bad_line      = parser%get_option_as_logical('mask-bad-line')
+    reject_bad_line    = parser%get_option_as_logical('reject-bad-line')
 
     if (filtering_method /= 'none' .and. filtering_method /= 'median') then
         write (ERROR_UNIT) "Invalid filtering method '" // filtering_method // "'. The only valid method is 'median'."
@@ -104,7 +104,7 @@ program pacs_photproject
 
     ! initialise pacs instrument
     allocate(pacs)
-    call pacs%init(obs%channel, obs%observing_mode == 'Transparent', 1, .false., mask_bad_line, status)
+    call pacs%init(obs%channel, obs%observing_mode == 'Transparent', 1, POLICY_REMOVE, reject_bad_line, status=status)
     if (status /= 0) go to 999
 
     ! get FITS header

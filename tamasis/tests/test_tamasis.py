@@ -8,7 +8,7 @@ class TestFailure(Exception): pass
 datadir = tamasis_dir + 'tests/'
 obs = PacsObservation(datadir+'frames_blue.fits',
                       fine_sampling_factor=1, 
-                      keep_bad_detectors=False)
+                      detector_policy='remove')
 
 tod = obs.get_tod()
 

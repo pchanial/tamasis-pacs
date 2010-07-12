@@ -46,9 +46,9 @@ end subroutine pacs_info_channel
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine pacs_info(tamasis_dir, filename, nfilenames, fine_sampling_factor, keep_bad_detectors, bad_detector_mask,               &
-                     nrows, ncolumns, mask_bad_line, policy_int, ndetectors, output_mask, transparent_mode, compression_factor,    &
-                     nsamples, unit, responsivity, detector_area, flatfield_detector, flatfield_optical, status)
+subroutine pacs_info(tamasis_dir, filename, nfilenames, fine_sampling_factor, frame_policy, detector_policy, reject_bad_line,      &
+                     detector_mask, nrows, ncolumns, ndetectors, output_mask, transparent_mode, compression_factor, nsamples, unit,&
+                     responsivity, detector_area, flatfield_detector, flatfield_optical, status)
 
     use module_pacsinstrument,  only : PacsInstrument
     use module_pacsobservation, only : PacsObservation, MaskPolicy
@@ -60,12 +60,12 @@ subroutine pacs_info(tamasis_dir, filename, nfilenames, fine_sampling_factor, ke
     !f2py intent(in)   filename
     !f2py intent(in)   nfilenames
     !f2py intent(in)   fine_sampling_factor
-    !f2py intent(in)   keep_bad_detectors
-    !f2py intent(in)   bad_detector_mask
+    !f2py intent(in)   frame_policy
+    !f2py intent(in)   detector_policy
+    !f2py intent(in)   reject_bad_line
+    !f2py intent(in)   detector_mask
     !f2py intent(hide) nrows = shape(bad_detector_mask,0)
     !f2py intent(hide) ncolumns = shape(bad_detector_mask,1)
-    !f2py intent(in)   mask_bad_line
-    !f2py intent(in)   policy_int
     !f2py intent(out)  ndetectors
     !f2py intent(out)  output_mask
     !f2py intent(out)  transparent_mode
@@ -82,11 +82,11 @@ subroutine pacs_info(tamasis_dir, filename, nfilenames, fine_sampling_factor, ke
     character(len=*), intent(in)   :: filename
     integer, intent(in)            :: nfilenames
     integer, intent(in)            :: fine_sampling_factor
-    logical, intent(in)            :: keep_bad_detectors
-    logical*1, intent(in)          :: bad_detector_mask(nrows,ncolumns)
+    integer, intent(in)            :: frame_policy(4)
+    integer, intent(in)            :: detector_policy
+    logical, intent(in)            :: reject_bad_line
+    logical*1, intent(in)          :: detector_mask(nrows,ncolumns)
     integer, intent(in)            :: nrows, ncolumns
-    logical, intent(in)            :: mask_bad_line
-    integer, intent(in)            :: policy_int(4)
     integer, intent(out)           :: ndetectors
     logical*1, intent(out)         :: output_mask(nrows,ncolumns)
     logical, intent(out)           :: transparent_mode
@@ -118,7 +118,7 @@ subroutine pacs_info(tamasis_dir, filename, nfilenames, fine_sampling_factor, ke
     end do
 
     ! initialise policy
-    policy = MaskPolicy(inscan=policy_int(1), turnaround=policy_int(2), other=policy_int(3), invalid=policy_int(4))
+    policy = MaskPolicy(inscan=frame_policy(1), turnaround=frame_policy(2), other=frame_policy(3), invalid=frame_policy(4))
 
     allocate(obs)
     call obs%init(filename_, policy, status, verbose=.true.)
@@ -129,12 +129,7 @@ subroutine pacs_info(tamasis_dir, filename, nfilenames, fine_sampling_factor, ke
 
     transparent_mode = obs%slice(1)%observing_mode == 'Transparent'
     allocate(pacs)
-    if (count(.not. bad_detector_mask) /= 0) then
-        call pacs%init(obs%channel, transparent_mode, fine_sampling_factor, keep_bad_detectors, mask_bad_line, status,             &
-             bad_detector_mask)
-    else
-        call pacs%init(obs%channel, transparent_mode, fine_sampling_factor, keep_bad_detectors, mask_bad_line, status)
-    end if
+    call pacs%init(obs%channel, transparent_mode, fine_sampling_factor, detector_policy, reject_bad_line, detector_mask, status)
     if (status /= 0) return
 
     ndetectors  = pacs%ndetectors
@@ -233,8 +228,8 @@ end subroutine pacs_read_filter_calibration
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine pacs_map_header(tamasis_dir, filename, nfilenames, oversampling, fine_sampling_factor, keep_bad_detectors,              &
-                           bad_detector_mask, nrows, ncolumns, mask_bad_line, policy_int, resolution, header, status)
+subroutine pacs_map_header(tamasis_dir, filename, nfilenames, oversampling, fine_sampling_factor, frame_policy, detector_policy,   &
+                           detector_mask, nrows, ncolumns, resolution, header, status)
 
     use module_pacsinstrument,  only : PacsInstrument
     use module_pacsobservation, only : PacsObservation, MaskPolicy
@@ -247,12 +242,11 @@ subroutine pacs_map_header(tamasis_dir, filename, nfilenames, oversampling, fine
     !f2py intent(in)   nfilenames
     !f2py intent(in)   oversampling
     !f2py intent(in)   fine_sampling_factor
-    !f2py intent(in)   keep_bad_detectors
-    !f2py intent(in)   bad_detector_mask
+    !f2py intent(in)   frame_policy
+    !f2py intent(in)   detector_policy
+    !f2py intent(in)   detector_mask
     !f2py intent(hide) nrows = shape(bad_detector_mask,0)
     !f2py intent(hide) ncolumns = shape(bad_detector_mask,1)
-    !f2py intent(in)   mask_bad_line
-    !f2py intent(in)   policy_int
     !f2py intent(in)   resolution
     !f2py intent(out)  header
     !f2py intent(out)  status
@@ -262,11 +256,10 @@ subroutine pacs_map_header(tamasis_dir, filename, nfilenames, oversampling, fine
     integer, intent(in)          :: nfilenames
     logical, intent(in)          :: oversampling
     integer, intent(in)          :: fine_sampling_factor
-    logical, intent(in)          :: keep_bad_detectors
-    logical*1, intent(in)        :: bad_detector_mask(nrows,ncolumns)
+    integer, intent(in)          :: frame_policy(4)
+    integer, intent(in)          :: detector_policy
+    logical*1, intent(in)        :: detector_mask(nrows,ncolumns)
     integer, intent(in)          :: nrows, ncolumns
-    logical, intent(in)          :: mask_bad_line
-    integer, intent(in)          :: policy_int(4)
     real*8, intent(in)           :: resolution
     character(len=2880), intent(out) :: header
     integer, intent(out)             :: status
@@ -290,15 +283,15 @@ subroutine pacs_map_header(tamasis_dir, filename, nfilenames, oversampling, fine
     end do
 
     ! initialise policy
-    policy = MaskPolicy(inscan=policy_int(1), turnaround=policy_int(2), other=policy_int(3), invalid=policy_int(4))
+    policy = MaskPolicy(inscan=frame_policy(1), turnaround=frame_policy(2), other=frame_policy(3), invalid=frame_policy(4))
 
     allocate(obs)
     call obs%init(filename_, policy, status)
     if (status /= 0) go to 999
 
     allocate(pacs)
-    call pacs%init(obs%channel, obs%slice(1)%observing_mode == 'Transparent', fine_sampling_factor, keep_bad_detectors,        &
-         mask_bad_line, status, bad_detector_mask)
+    call pacs%init(obs%channel, obs%slice(1)%observing_mode == 'Transparent', fine_sampling_factor, detector_policy, .false.,      &
+         detector_mask, status)
     if (status /= 0) go to 999
     
     call pacs%compute_map_header(obs, oversampling, resolution, header, status)
@@ -311,8 +304,8 @@ end subroutine pacs_map_header
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine pacs_timeline(tamasis_dir, filename, nfilenames, nsamples, ndetectors, keep_bad_detectors, bad_detector_mask, nrow,     &
-                         ncol, mask_bad_line, policy_int, do_flatfielding, do_subtraction_mean, signal, mask, status)
+subroutine pacs_timeline(tamasis_dir, filename, nfilenames, nsamples, ndetectors, frame_policy, detector_policy, detector_mask,    &
+                         nrow, ncol, do_flatfielding, do_subtraction_mean, signal, mask, status)
 
     use iso_fortran_env,        only : ERROR_UNIT
     use module_pacsinstrument,  only : PacsInstrument
@@ -327,12 +320,11 @@ subroutine pacs_timeline(tamasis_dir, filename, nfilenames, nsamples, ndetectors
     !f2py intent(in)   :: nfilenames
     !f2py intent(in)   :: nsamples
     !f2py intent(in)   :: ndetectors
-    !f2py intent(in)   :: keep_bad_detectors
-    !f2py intent(in)   :: bad_detector_mask
+    !f2py intent(in)   :: frame_policy
+    !f2py intent(in)   :: detector_policy
+    !f2py intent(in)   :: detector_mask
     !f2py intent(hide) :: nrow = shape(bad_detector_mask,0)
     !f2py intent(hide) :: ncol = shape(bad_detector_mask,1)
-    !f2py intent(in)   :: mask_bad_line
-    !f2py intent(in)   :: policy_int
     !f2py intent(in)   :: do_flatfielding
     !f2py intent(in)   :: do_subtraction_mean
     !f2py intent(out)  :: signal
@@ -344,11 +336,10 @@ subroutine pacs_timeline(tamasis_dir, filename, nfilenames, nsamples, ndetectors
     integer, intent(in)          :: nfilenames
     integer, intent(in)          :: nsamples
     integer, intent(in)          :: ndetectors
-    logical, intent(in)          :: keep_bad_detectors
-    logical*1, intent(in)        :: bad_detector_mask(nrow,ncol)
+    integer, intent(in)          :: frame_policy(4)
+    integer, intent(in)          :: detector_policy
+    logical*1, intent(in)        :: detector_mask(nrow,ncol)
     integer, intent(in)          :: nrow, ncol
-    logical, intent(in)          :: mask_bad_line
-    integer, intent(in)          :: policy_int(4)
     logical, intent(in)          :: do_flatfielding, do_subtraction_mean
     real*8, intent(out)          :: signal(nsamples, ndetectors)
     logical*1, intent(out)       :: mask(nsamples, ndetectors)
@@ -373,7 +364,7 @@ subroutine pacs_timeline(tamasis_dir, filename, nfilenames, nsamples, ndetectors
     end do
 
     ! initialise policy
-    policy = MaskPolicy(inscan=policy_int(1), turnaround=policy_int(2), other=policy_int(3), invalid=policy_int(4))
+    policy = MaskPolicy(inscan=frame_policy(1), turnaround=frame_policy(2), other=frame_policy(3), invalid=frame_policy(4))
 
     ! initialise observations
     allocate(obs)
@@ -382,8 +373,7 @@ subroutine pacs_timeline(tamasis_dir, filename, nfilenames, nsamples, ndetectors
 
     ! initialise pacs instrument
     allocate(pacs)
-    call pacs%init(obs%channel, obs%observing_mode == 'Transparent', 1, keep_bad_detectors, mask_bad_line, status,                 &
-         bad_detector_mask)
+    call pacs%init(obs%channel, obs%slice(1)%observing_mode == 'Transparent', 1, detector_policy, .false., detector_mask, status)
     if (status /= 0) go to 999
 
     ! read timeline
@@ -414,8 +404,8 @@ end subroutine pacs_timeline
 
 
 subroutine pacs_pointing_matrix_filename(tamasis_dir, filename, nfilenames, oversampling, fine_sampling_factor,                    &
-                                         npixels_per_sample, nsamples, ndetectors, keep_bad_detectors, bad_detector_mask, nrow,    &
-                                         ncol, mask_bad_line, policy_int, header, pmatrix, status)
+                                         npixels_per_sample, nsamples, ndetectors, frame_policy, detector_policy, detector_mask,   &
+                                         nrow, ncol, header, pmatrix, status)
 
     use iso_fortran_env,        only : ERROR_UNIT
     use module_fitstools,       only : ft_read_keyword
@@ -434,12 +424,11 @@ subroutine pacs_pointing_matrix_filename(tamasis_dir, filename, nfilenames, over
     !f2py intent(in)   :: npixels_per_sample
     !f2py intent(in)   :: nsamples
     !f2py intent(in)   :: ndetectors
-    !f2py intent(in)   :: keep_bad_detectors
-    !f2py intent(in)   :: bad_detector_mask
+    !f2py intent(in)   :: frame_policy
+    !f2py intent(in)   :: detector_policy
+    !f2py intent(in)   :: detector_mask
     !f2py intent(hide) :: nrow = shape(bad_detector_mask,0)
     !f2py intent(hide) :: ncol = shape(bad_detector_mask,1)
-    !f2py intent(in)   :: mask_bad_line
-    !f2py intent(in)   :: policy_int
     !f2py intent(in)   :: header
     !f2py integer*8, intent(inout) :: pmatrix(npixels_per_sample*nsamples*ndetectors)
     !f2py intent(out)  :: status
@@ -452,11 +441,10 @@ subroutine pacs_pointing_matrix_filename(tamasis_dir, filename, nfilenames, over
     integer, intent(in)          :: npixels_per_sample
     integer*8, intent(in)        :: nsamples
     integer, intent(in)          :: ndetectors
-    logical, intent(in)          :: keep_bad_detectors
-    logical*1, intent(in)        :: bad_detector_mask(nrow,ncol)
+    integer, intent(in)          :: frame_policy(4)
+    integer, intent(in)          :: detector_policy
+    logical*1, intent(in)        :: detector_mask(nrow,ncol)
     integer, intent(in)          :: nrow, ncol
-    logical, intent(in)          :: mask_bad_line
-    integer, intent(in)          :: policy_int(4)
     character(len=*), intent(in) :: header
     type(PointingElement), intent(inout) :: pmatrix(npixels_per_sample,nsamples,ndetectors)
     integer, intent(out)         :: status
@@ -480,7 +468,7 @@ subroutine pacs_pointing_matrix_filename(tamasis_dir, filename, nfilenames, over
     end do
 
     ! initialise policy
-    policy = MaskPolicy(inscan=policy_int(1), turnaround=policy_int(2), other=policy_int(3), invalid=policy_int(4))
+    policy = MaskPolicy(inscan=frame_policy(1), turnaround=frame_policy(2), other=frame_policy(3), invalid=frame_policy(4))
 
     ! initialise observations
     allocate(obs)
@@ -489,8 +477,8 @@ subroutine pacs_pointing_matrix_filename(tamasis_dir, filename, nfilenames, over
 
     ! initialise pacs instrument
     allocate(pacs)
-    call pacs%init(obs%channel, obs%slice(1)%observing_mode == 'Transparent', fine_sampling_factor, keep_bad_detectors,            &
-                   mask_bad_line, status, bad_detector_mask)
+    call pacs%init(obs%channel, obs%slice(1)%observing_mode == 'Transparent', fine_sampling_factor, detector_policy, .false.,      &
+         detector_mask, status)
     if (status /= 0) return
 
     ! check number of detectors
@@ -524,154 +512,6 @@ subroutine pacs_pointing_matrix_filename(tamasis_dir, filename, nfilenames, over
     call pacs%compute_projection_sharp_edges(obs, oversampling, header, nx, ny, pmatrix, status)
 
 end subroutine pacs_pointing_matrix_filename
-
-
-!-----------------------------------------------------------------------------------------------------------------------------------!!$
-!!$
-!!$subroutine pacs_map_header(array, time, ra, dec, pa, chop, npointings,         &
-!!$                           finetime, nfinesamples, transparent_mode,           &
-!!$                           keep_bad_detectors, bad_detector_mask, nrow, ncol,  &
-!!$                           resolution, header)
-!!$
-!!$    use, intrinsic :: ISO_FORTRAN_ENV, only : ERROR_UNIT
-!!$    use module_pacsinstrument, only : PacsInstrument
-!!$    use module_pacspointing, only : pacspointing
-!!$    implicit none
-!!$
-!!$    !f2py threadsafe
-!!$    !f2py intent(in)   :: array
-!!$    !f2py intent(in)   :: time, ra, dec, pa, chop
-!!$    !f2py intent(hide) :: npointings = size(time)
-!!$    !f2py intent(in)   :: finetime
-!!$    !f2py intent(hide) :: nfinesamples = size(finetime)
-!!$    !f2py intent(in)   :: transparent_mode
-!!$    !f2py intent(in)   :: keep_bad_detectors
-!!$    !f2py intent(in)   :: bad_detector_mask
-!!$    !f2py intent(hide), depend(bad_detector_mask) :: nrow = shape(bad_detector_mask,0), ncol = shape(bad_detector_mask,1)
-!!$    !f2py intent(in)   :: resolution
-!!$    !f2py intent(out)  :: header
-!!$
-!!$    character(len=*), intent(in)     :: array
-!!$    real*8, intent(in)               :: time(npointings), ra(npointings), dec(npointings), pa(npointings), chop(npointings)
-!!$    integer, intent(in)              :: npointings
-!!$    real*8, intent(in)               :: finetime(nfinesamples)
-!!$    integer, intent(in)              :: nfinesamples
-!!$    logical, intent(in)              :: transparent_mode
-!!$    logical, intent(in)              :: keep_bad_detectors
-!!$    logical*1, intent(in)            :: bad_detector_mask(nrow,ncol)
-!!$    integer, intent(in)              :: nrow, ncol
-!!$    real*8, intent(in)               :: resolution
-!!$    character(len=2880), intent(out) :: header
-!!$    integer, intent(out)             :: status
-!!$
-!!$    class(PacsInstrument), allocatable :: pacs
-!!$    class(pacspointing), allocatable   :: pointing
-!!$
-!!$    ! read pointing information
-!!$    allocate(pointing)
-!!$    call pointing%init_sim(time, ra, dec, pa, chop, status)
-!!$    if (status /= 0) go to 999
-!!$
-!!$    ! get the pacs instance, read the calibration files
-!!$    allocate(pacs)
-!!$    call pacs%init(array(1:1), transparent_mode, keep_bad_detectors, status,   &
-!!$                   bad_detector_mask)
-!!$    if (status /= 0) go to 999
-!!$
-!!$    if (any(pacs%bad .neqv. bad_detector_mask)) then
-!!$        write (*,'(a)') "Info: using user's bad detector mask."
-!!$    end if
-!!$
-!!$    call pacs%compute_map_header(pointing, .true., resolution, header, status)
-!!$    if (status == 0) return
-!!$
-!!$999 deallocate(obs)
-!!$    if (allocated(pointing)) deallocate(pointing)
-!!$    if (allocate(pacs))      deallocate(pacs)
-!!$
-!!$end subroutine pacs_map_header
-!!$
-!!$
-!-----------------------------------------------------------------------------------------------------------------------------------!!$
-!!$
-!!$subroutine pacs_pointing_matrix(array, time, ra, dec, pa, chop, npointings,    &
-!!$                                finetime, nfinesamples, npixels_per_sample,    &
-!!$                                ndetectors, transparent_mode,                  &
-!!$                                keep_bad_detectors, bad_detector_mask,         &
-!!$                                nrow, ncol, header, pmatrix)
-!!$
-!!$    use, intrinsic :: ISO_FORTRAN_ENV
-!!$    use module_fitstools, only : ft_read_keyword
-!!$    use module_pacsinstrument, only : PacsInstrument
-!!$    use module_pacspointing, only : pacspointing
-!!$    use module_pointingmatrix, only : PointingElement
-!!$    implicit none
-!!$
-!!$    !f2py threadsafe
-!!$    !f2py intent(in)   :: array
-!!$    !f2py intent(in)   :: time, ra, dec, pa, chop
-!!$    !f2py intent(hide) :: npointings = size(time)
-!!$    !f2py intent(in)   :: finetime
-!!$    !f2py intent(hide) :: nfinesamples = size(finetime)
-!!$    !f2py intent(in)   :: npixels_per_sample
-!!$    !f2py intent(in)   :: ndetectors
-!!$    !f2py intent(in)   :: transparent_mode
-!!$    !f2py intent(in)   :: keep_bad_detectors
-!!$    !f2py intent(in)   :: bad_detector_mask
-!!$    !f2py intent(hide), depend(bad_detector_mask) :: nrow = shape(bad_detector_mask,0), ncol = shape(bad_detector_mask,1)
-!!$    !f2py intent(in)   :: header
-!!$    !f2py integer*8, dimension(npixels_per_sample*nfinesamples*ndetectors), intent(inout) :: pmatrix
-!!$
-!!$    character(len=*), intent(in)         :: array
-!!$    real*8, intent(in)                   :: time(npointings), ra(npointings), dec(npointings), pa(npointings), chop(npointings)
-!!$    integer, intent(in)                  :: npointings
-!!$    real*8, intent(in)                   :: finetime(nfinesamples)
-!!$    integer, intent(in)                  :: nfinesamples
-!!$    integer, intent(in)                  :: npixels_per_sample
-!!$    integer, intent(in)                  :: ndetectors
-!!$    logical, intent(in)                  :: transparent_mode
-!!$    logical, intent(in)                  :: keep_bad_detectors
-!!$    logical*1, intent(in)                :: bad_detector_mask(nrow,ncol)
-!!$    integer, intent(in)                  :: nrow, ncol
-!!$    character(len=*), intent(in)         :: header
-!!$    type(PointingElement), intent(inout) :: pmatrix(npixels_per_sample, nfinesamples, ndetectors)
-!!$
-!!$    class(PacsInstrument), allocatable   :: pacs
-!!$    class(pacspointing), allocatable     :: pointing
-!!$    integer                              :: status,  count1, count2, count_rate, count_max, nx, ny
-!!$
-!!$    ! read pointing information
-!!$    allocate(pointing)
-!!$    call pointing%load_array(time, ra, dec, pa, chop, status)
-!!$    if (status /= 0) go to 999
-!!$
-!!$    ! get the pacs instance, read the calibration files
-!!$    allocate(pacs)
-!!$    call pacs%init(array(1:1), transparent_mode, keep_bad_detectors, status,   &
-!!$                   bad_detector_mask)
-!!$    if (status /= 0) go to 999
-!!$
-!!$    if (any(pacs%bad .neqv. bad_detector_mask)) then
-!!$        write (*,'(a)') "Info: using user's bad pixel mask."
-!!$    end if
-!!$
-!!$    call ft_read_keyword(header, 'naxis1', nx, status=status)
-!!$    if (status /= 0) return
-!!$    call ft_read_keyword(header, 'naxis2', ny, status=status)
-!!$    if (status /= 0) return
-!!$
-!!$    ! compute the projector
-!!$    write(*,'(a)', advance='no') 'Info: computing the projector... '
-!!$    call system_clock(count1, count_rate, count_max)
-!!$    call pacs%compute_projection_sharp_edges(pointing, finetime, header, nx, ny, pmatrix, status)
-!!$    call system_clock(count2, count_rate, count_max)
-!!$    write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
-!!$
-!!$    return
-!!$
-!!$999 write(ERROR_UNIT,'(a)') 'Aborting.'
-!!$
-!!$end subroutine pacs_pointing_matrix
 
 
 !-----------------------------------------------------------------------------------------------------------------------------------

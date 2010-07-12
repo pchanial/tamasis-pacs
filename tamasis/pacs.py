@@ -12,102 +12,8 @@ from utils import MaskPolicy
 
 __all__ = [ 'PacsObservation', 'pacs_status' ]
 
-class _Pacs():
 
-    """
-    Base class which encapsulates handy information about the PACS instrument and the processed
-    observation. See subclasses PacsObservation and PacsSimulation for details.
-    - observing_mode      : 'prime', 'parallel' or 'transparent'
-    - fine_sampling_factor : number of frames to be processed during the 0.025s period.
-    - compression_factor  : number of frames which are collapsed during the compression stage
-    - array              : 'blue', 'green' or 'red' array name
-    - ndetectors         : number of detectors involved in the processing
-    methods:
-        - get_tod
-        - get_pointing_matrix
-        - get_filter_uncorrelated
-    Author: P. Chanial
-    """
-
-    sampling = 0.025 # 40 Hz sampling xXX not exact value! rather 0.024996
-
-    def __init__(self, array, pointing_time, ra, dec, pa, chop, fine_time, npixels_per_sample, observing_mode, fine_sampling_factor, compression_factor, bad_detector_mask, keep_bad_detectors):
-
-        from os import getenv
-        from os.path import join
-
-        if array.lower() not in ('blue', 'green', 'red'):
-            raise ValueError("The input array is not 'blue', 'green' nor 'red'.")
-
-        if observing_mode is not None:
-            observing_mode = observing_mode.lower()
-
-        if observing_mode not in (None, 'prime', 'parallel', 'transparent'):
-            raise ValueError("Observing mode is not 'prime', 'parallel' nor 'transparent'.")
-
-        if compression_factor is None:
-            if observing_mode is None:
-                raise ValueError('The compression factor is not specified.')
-            compression_factor = {'prime':4, 'parallel':8, 'transparent':1}[observing_mode]
-
-        self.transparent_mode = observing_mode == 'transparent'
-
-        if (fine_sampling_factor not in (1,2,4,8,16)):
-            raise ValueError('Invalid fine sampling factor. It may be 1, 2, 4, 8 or 16')
-
-        # 'blue', 'green' or 'red' array
-        self.array = array.lower()
-
-        # astrometry
-        if pointing_time is None or ra is None or dec is None or pa is None or chop is None:
-            raise ValueError('The simulated scan astrometry is not defined.')
-        shape = pointing_time.shape
-        if ra.shape != shape or dec.shape != shape or pa.shape != shape or chop.shape != shape:
-            raise ValueError('The input time, ra, dec, pa, chope do not have the same shape.')
-        self.pointing_time = pointing_time
-        self.ra = ra
-        self.dec = dec
-        self.pa = pa
-        self.chop = chop
-        self.header = None
-
-        # sampling information
-        self.fine_time = fine_time
-        self.nfinesamples = fine_time.size
-        self.npixels_per_sample = npixels_per_sample
-        self.fine_sampling_factor = fine_sampling_factor
-        self.compression_factor = compression_factor
-       
-        if bad_detector_mask is None:
-            bad_detector_maskFile = join(getenv('TAMASIS_DIR'),'data','PCalPhotometer_BadPixelMask_FM_v3.fits')
-            bad_detector_mask = numpy.array(pyfits.fitsopen(bad_detector_maskFile)[self.array].data, dtype='int8')
-        else:
-            array_shapes = {'blue':(32,64), 'green':(32,64), 'red':(16,32)}
-            if bad_detector_mask.shape != array_shapes[self.array]:
-                raise ValueError('Input bad pixel mask has incorrect shape '+str(bad_detector_mask.shape)+' instead of '+str(array_shapes[self.array]))
-            bad_detector_mask = numpy.array(bad_detector_mask, dtype='int8', copy=False)
-        self.bad = bad_detector_mask
-        if self.transparent_mode:
-            self.bad[:,0:16] = True
-            self.bad[16:32,16:32] = True
-            self.bad[:,32:] = True
-        self.keep_bad_detectors = keep_bad_detectors
-        self.mask = self.bad.copy()
-        if self.keep_bad_detectors:
-            self.mask[:] = 0
-
-        self.ndetectors = self.bad.size
-        if not self.keep_bad_detectors:
-            self.ndetectors -= int(numpy.sum(self.bad))
-       
-        #XXX NOT IMPLEMENTED!
-        self.ij = None
-
-
-#-------------------------------------------------------------------------------
-
-
-class PacsObservation(_Pacs):
+class PacsObservation(object):
     """
     Class which encapsulates handy information about the PACS instrument and the processed
     observation.
@@ -122,8 +28,7 @@ class PacsObservation(_Pacs):
     - ij(2,ndetectors)   : the row and column number (starting from 0) of the detectors
     Author: P. Chanial
     """
-    def __init__(self, filename, fine_sampling_factor=1, bad_detector_mask=None, keep_bad_detectors=False, mask_bad_line=False, \
-                 frame_policy_inscan='keep', frame_policy_turnaround='keep', frame_policy_other='remove', frame_policy_invalid='mask'):
+    def __init__(self, filename, fine_sampling_factor=1, detector_policy='remove', detector_mask=None, reject_bad_line=False, frame_policy_inscan='keep', frame_policy_turnaround='keep', frame_policy_other='remove', frame_policy_invalid='mask'):
 
         filename_, nfilenames = self._files2tmf(filename)
 
@@ -132,19 +37,21 @@ class PacsObservation(_Pacs):
 
         nrows, ncolumns = (16,32) if channel == 'r' else (32,64)
 
-        if bad_detector_mask is not None:
-            if bad_detector_mask.shape != (nrows, ncolumns):
-                raise ValueError('Invalid shape of the input '+('red' if channel == 'r' else 'blue')+' bad detector mask: '+str(bad_detector_mask.shape)+'.')
-            bad_detector_mask = numpy.array(bad_detector_mask, dtype='int8', copy=False)
+        if detector_mask is not None:
+            if detector_mask.shape != (nrows, ncolumns):
+                raise ValueError('Invalid shape of the input '+('red' if channel == 'r' else 'blue')+' detector mask: '+str(detector_mask.shape)+'.')
+            detector_mask = numpy.array(detector_mask, dtype='int8', copy=False)
 
         else:
-            bad_detector_mask = numpy.ones((nrows,ncolumns), dtype='int8')
+            detector_mask = numpy.ones((nrows,ncolumns), dtype='int8')
 
+        # detector policy
+        detector_policy_ = MaskPolicy('bad', detector_policy, 'Detector Policy')
         # frame policy
         frame_policy = MaskPolicy('inscan,turnaround,other,invalid'.split(','), (frame_policy_inscan, frame_policy_turnaround, frame_policy_other, frame_policy_invalid), 'Frame Policy')
 
         # retrieve information from the observations
-        ndetectors, bad_detector_mask, transparent_mode, compression_factor, nsamples, unit, responsivity, detector_area, dflat, oflat, status = tmf.pacs_info(tamasis_dir, filename_, nfilenames, fine_sampling_factor, keep_bad_detectors, numpy.asfortranarray(bad_detector_mask), mask_bad_line, numpy.array(frame_policy))
+        ndetectors, detector_bad, transparent_mode, compression_factor, nsamples, unit, responsivity, detector_area, dflat, oflat, status = tmf.pacs_info(tamasis_dir, filename_, nfilenames, fine_sampling_factor, numpy.array(frame_policy), numpy.array(detector_policy_)[0], reject_bad_line, numpy.asfortranarray(detector_mask))
         if status != 0: raise RuntimeError()
 
         self.filename = filename
@@ -157,12 +64,12 @@ class PacsObservation(_Pacs):
         self.nsamples = tuple(nsamples)
         self.nfinesamples = tuple(nsamples * compression_factor * fine_sampling_factor)
         self.ndetectors = ndetectors
-        self.keep_bad_detectors = keep_bad_detectors
-        self.bad = numpy.ascontiguousarray(bad_detector_mask)
-        self.mask = self.bad.copy()
-        if self.keep_bad_detectors:
-            self.mask[:] = 0
-        self.mask_bad_line = mask_bad_line
+        self.detector_policy = detector_policy_
+        self.detector_bad = numpy.ascontiguousarray(detector_bad)
+        self.detector_mask = self.detector_bad.copy()
+        if detector_policy != 'remove':
+            self.detector_mask[:] = 0
+        self.reject_bad_line = reject_bad_line
         self.frame_policy = frame_policy
         self.fine_sampling_factor = fine_sampling_factor
         self.transparent_mode = transparent_mode
@@ -180,7 +87,7 @@ class PacsObservation(_Pacs):
         if resolution is None:
             resolution = self.default_resolution
         filename_, nfilenames = self._files2tmf(self.filename)
-        header, status = tmf.pacs_map_header(tamasis_dir, filename_, nfilenames, oversampling, self.fine_sampling_factor, self.keep_bad_detectors, numpy.asfortranarray(self.bad), self.mask_bad_line, numpy.array(self.frame_policy), resolution)
+        header, status = tmf.pacs_map_header(tamasis_dir, filename_, nfilenames, oversampling, self.fine_sampling_factor, numpy.array(self.frame_policy), numpy.array(self.detector_policy)[0], numpy.asfortranarray(self.detector_bad), resolution)
         if status != 0: raise RuntimeError()
         header = _str2fitsheader(header)
         return header
@@ -190,7 +97,7 @@ class PacsObservation(_Pacs):
         Returns the signal and mask timelines.
         """
         filename_, nfilenames = self._files2tmf(self.filename)
-        signal, mask, status = tmf.pacs_timeline(tamasis_dir, filename_, self.nobservations, numpy.sum(self.nsamples), self.ndetectors, self.keep_bad_detectors, numpy.asfortranarray(self.bad), self.mask_bad_line, numpy.array(self.frame_policy), flatfielding, subtraction_mean)
+        signal, mask, status = tmf.pacs_timeline(tamasis_dir, filename_, self.nobservations, numpy.sum(self.nsamples), self.ndetectors, numpy.array(self.frame_policy), numpy.array(self.detector_policy)[0], numpy.asfortranarray(self.detector_bad), flatfielding, subtraction_mean)
         if status != 0: raise RuntimeError()
        
         tod = Tod(signal.T, mask.T, nsamples=self.nsamples, unit=self.unit)
@@ -208,7 +115,7 @@ class PacsObservation(_Pacs):
         newunit = Quantity(1., unit)
         newunit_si = newunit.SI._unit
         if 'sr' in newunit_si and newunit_si['sr'] == -1:
-            area = self.detector_area[self.mask == 0].reshape((self.ndetectors,1))
+            area = self.detector_area[self.detector_mask == 0].reshape((self.ndetectors,1))
             tod /= area
            
         if 'V' in tod._unit and tod._unit['V'] == 1 and 'V' not in newunit_si:
@@ -231,7 +138,7 @@ class PacsObservation(_Pacs):
         print 'Info: Allocating '+str(sizeofpmatrix/2.**17)+' MiB for the pointing matrix.'
         pmatrix = numpy.zeros(sizeofpmatrix, dtype=numpy.int64)
         
-        status = tmf.pacs_pointing_matrix_filename(tamasis_dir, filename_, self.nobservations, oversampling, self.fine_sampling_factor, npixels_per_sample, numpy.sum(nsamples), self.ndetectors, self.keep_bad_detectors, numpy.asfortranarray(self.bad), self.mask_bad_line, numpy.array(self.frame_policy), str(header).replace('\n', ''), pmatrix)
+        status = tmf.pacs_pointing_matrix_filename(tamasis_dir, filename_, self.nobservations, oversampling, self.fine_sampling_factor, npixels_per_sample, numpy.sum(nsamples), self.ndetectors, numpy.array(self.frame_policy), numpy.array(self.detector_policy)[0], numpy.asfortranarray(self.detector_bad), str(header).replace('\n', ''), pmatrix)
         if status != 0: raise RuntimeError()
 
         return pmatrix, header, self.ndetectors, nsamples, npixels_per_sample
@@ -243,7 +150,7 @@ class PacsObservation(_Pacs):
         ncorrelations, status = tmf.pacs_read_filter_calibration_ncorrelations(tamasis_dir, self.channel)
         if status != 0: raise RuntimeError()
 
-        data, status = tmf.pacs_read_filter_calibration(tamasis_dir, self.channel, ncorrelations, self.ndetectors, numpy.asfortranarray(self.mask))
+        data, status = tmf.pacs_read_filter_calibration(tamasis_dir, self.channel, ncorrelations, self.ndetectors, numpy.asfortranarray(self.detector_mask))
         if status != 0: raise RuntimeError()
 
         return data.T
@@ -259,62 +166,6 @@ class PacsObservation(_Pacs):
         for f in filename:
             filename_ += f + (length-len(f))*' '
         return filename_, nfilenames
-
-
-#-------------------------------------------------------------------------------
-
-
-class PacsSimulation(_Pacs):
-    """
-    Class which encapsulates handy information describing the simulation and the setting of the PACS instrument.
-    It contains the following attributes:
-    - time               : time vector. time[0] is the time of the first sky projection
-    - ra                 : boresight right ascension vector
-    - dec                : boresight declination vector
-    - pa                 : position Angle vector
-    - chop               : chop angle vector
-    - header             : pyfits header of the input sky map
-    - ndetectors         : number of detectors involved in the processing
-    - npixels_per_sample   : number of sky pixels which intersect a PACS detector
-    - observing_mode      : 'prime', 'parallel' or 'transparent'
-    - fine_sampling_factor : number of frames to be processed during the 1/40Hz period.
-    - compression_factor  : number of frames which are collapsed during the compression stage
-    - array              : 'blue', 'green' or 'red' array name
-    - ndetectors         : number of detectors involved in the processing
-    - bad_detector_mask  : (nx,ny) mask of int8 values (0 or 1). 1 means dead pixel.
-    - keep_bad_detectors : if set to True, force the processing to include all pixels
-    - ij(2,ndetectors)   : the row and column number (starting from 0) of the detectors
-    Author: P. Chanial
-    """
-    def __init__(self, inputmap, time=None, ra=None, pa=None, chop=None, array='blue', npixels_per_sample=9, observing_mode='prime', fine_sampling_factor=1, compression_factor=None, bad_detector_mask=None, keep_bad_detectors=False):
-
-        if not isinstance(inputmap, Map):
-            raise TypeError('The input is not a Map.')
-
-        if inputmap.header is None:
-            raise TypeError('The input map header is not known.')
-
-        fine_time = numpy.arange(time[0], floor((time[-1] - time[0]) / pacs.sampling) * fine_sampling_factor, _Pacs.sampling/fine_sampling_factor)
-
-        _Pacs.__init__(self, array, time, ra, dec, pa, chop, fine_time, npixels_per_sample, observing_mode, fine_sampling_factor, compression_factor, bad_detector_mask, keep_bad_detectors)
-
-        self.inputmap
-        self.header = inputmap.header
-
-    def get_tod(self, model, noise=None):
-        """
-        Returns simulated signal and mask (=None) timelines.
-        """
-        signal = model.direct(self.inputmap)
-        if self.keep_bad_detectors:
-            mask = numpy.zeros(signal.shape, dtype='int8')
-            for idetector, badpixel in enumerate(self.mask.flat):
-                if badpixel != 0:
-                    mask[idetector,:] = 1
-        else:
-            mask = None
-
-        return Tod(signal, mask=mask, nsamples=self.nsamples)
 
    
 #-------------------------------------------------------------------------------

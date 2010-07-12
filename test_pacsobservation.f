@@ -4,7 +4,7 @@ program test_pacsobservation
     use module_pacsobservation, only : MaskPolicy, PacsObservation
     use module_observation,     only : Pointing
     use module_string,          only : strsection
-    use module_tamasis,         only : init_tamasis, get_tamasis_path
+    use module_tamasis,         only : init_tamasis, get_tamasis_path, POLICY_REMOVE
     implicit none
 
     class(PacsObservation), allocatable :: obs
@@ -76,8 +76,8 @@ program test_pacsobservation
     call obs%init([filename], policy, status)
     if (status /= 0) stop 'FAILED: init_pacsobservation loop'
 
-    allocate(pacs)
-    call pacs%init(obs%channel, obs%observing_mode == 'Transparent', 1, .false., .false., status)
+    allocate (pacs)
+    call pacs%init(obs%channel, obs%observing_mode == 'Transparent', 1, POLICY_REMOVE, .false., status=status)
     if (status /= 0 .or. pacs%channel /= 'b' .or. pacs%transparent_mode) stop 'FAILED: pacs%init'
 
     allocate(signal(obs%slice(1)%nsamples,pacs%ndetectors))

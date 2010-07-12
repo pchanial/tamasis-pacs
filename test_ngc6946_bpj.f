@@ -9,7 +9,7 @@ program test_ngc6946_bpj
     use module_preprocessor,    only : subtract_meandim1, divide_vectordim2
     use module_projection,      only : surface_convex_polygon
     use module_string,          only : strinteger
-    use module_tamasis,         only : init_tamasis
+    use module_tamasis,         only : init_tamasis, POLICY_KEEP, POLICY_MASK, POLICY_REMOVE
     use module_wcs,             only : init_astrometry, ad2xy_gnomonic
     use omp_lib
     implicit none
@@ -17,7 +17,7 @@ program test_ngc6946_bpj
     class(PacsInstrument), allocatable  :: pacs
     class(PacsObservation), allocatable :: obs
     type(MaskPolicy)                    :: policy
-    character(len=*), parameter         :: inputdir    = '/home/pchanial/work/pacs/data/transparent/NGC6946/'
+    character(len=*), parameter         :: inputdir = '/home/pchanial/work/pacs/data/transparent/NGC6946/'
 !!$    character(len=*), parameter         :: filename(1) = inputdir // '1342184520_blue[12001:86000]'
     character(len=*), parameter         :: filename(1) = inputdir // '1342184520_blue[12001:16000]'
     integer, parameter                  :: npixels_per_sample = 6
@@ -49,7 +49,7 @@ program test_ngc6946_bpj
 
     ! initialise pacs instrument
     allocate(pacs)
-    call pacs%init(obs%channel, obs%observing_mode == 'Transparent', 1, .false., .false., status)
+    call pacs%init(obs%channel, obs%observing_mode == 'Transparent', 1, POLICY_REMOVE, .false., status=status)
     if (status /= 0) stop 'FAILED: pacsinstrument%init'
 
     ! get header map

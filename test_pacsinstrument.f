@@ -5,7 +5,7 @@ program test_pacsinstrument
     use module_pacsinstrument
     use module_pacsobservation, only : PacsObservation, MaskPolicy
     use module_string,          only : strreal
-    use module_tamasis,         only : init_tamasis
+    use module_tamasis,         only : init_tamasis, POLICY_KEEP, POLICY_MASK, POLICY_REMOVE
     use module_wcs,             only : init_astrometry, ad2xy_gnomonic
     implicit none
 
@@ -34,7 +34,7 @@ program test_pacsinstrument
 
     ! initialise pacs instrument
     allocate(pacs)
-    call pacs%init(obs%channel, obs%observing_mode == 'Transparent', 1, .false., .false., status)
+    call pacs%init(obs%channel, obs%observing_mode == 'Transparent', 1, POLICY_REMOVE, .false., status=status)
     if (status /= 0) stop 'FAILED: pacsinstrument%init'
 
     allocate(time(obs%nsamples))
@@ -160,21 +160,21 @@ program test_pacsinstrument
     write(*,'(a)') 'yz2ad: ' // strreal(real(count2-count1,kind=8)/count_rate,4) // 's'
     call pacs%destroy()
 
-    call pacs%init('r', .true., 1, .false., .false., status)
+    call pacs%init('r', .true., 1, POLICY_REMOVE, .false., status=status)
     if (status /= 0) stop 'FAILED: pacs%init 1'
     call pacs%destroy()
 
-    call pacs%init('g', .true., 1, .false., .false., status)
+    call pacs%init('g', .true., 1, POLICY_REMOVE, .false., status=status)
     if (status /= 0) stop 'FAILED: pacs%init 2'
     call pacs%destroy()
 
-    call pacs%init('b', .true., 1, .false., .false., status)
+    call pacs%init('b', .true., 1, POLICY_REMOVE, .false., status=status)
     if (status /= 0) stop 'FAILED: pacs%init 3'
     call pacs%destroy()
 
-    call pacs%init('x', .true., 1, .false., .false., status)
+    call pacs%init('x', .true., 1, POLICY_REMOVE, .false., status=status)
     if (status == 0) stop 'FAILED: pacs%init 4'
-    call pacs%init('b', .true., 3, .false., .false., status)
+    call pacs%init('b', .true., 3, POLICY_REMOVE, .false., status=status)
     if (status == 0) stop 'FAILED: pacs%init 5'
 
     stop "OK."
