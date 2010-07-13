@@ -558,10 +558,10 @@ contains
                sampling_factor = 1
             end if
 
-            !XXX bug IFORT
-            !!$omp parallel do default(shared) reduction(min:xmin,ymin) &
-            !!$omp reduction(max:xmax,ymax) &
-            !!$omp private(itime,ra,dec,pa,chop,hull) firstprivate(index)
+#ifndef IFORT
+            !$omp parallel do default(shared) reduction(min:xmin,ymin) reduction(max:xmax,ymax) &
+            !$omp private(itime,isample,ra,dec,pa,chop,hull)
+#endif
             do itime = 1, obs%slice(islice)%nsamples * sampling_factor
 
                 isample = (itime - 1) / sampling_factor + 1
@@ -577,7 +577,9 @@ contains
                 ymax = max(ymax, maxval(hull(2,:)))
 
              end do
-             !!$omp end parallel do
+#ifndef IFORT
+             !$omp end parallel do
+#endif
 
         end do
 
