@@ -602,10 +602,10 @@ contains
         real*8  :: coords(ndims,this%ndetectors*nvertices), coords_yz(ndims,this%ndetectors*nvertices)
         real*8  :: ra, dec, pa, chop, chop_old
         integer :: roi(ndims,2,this%ndetectors)
-        integer :: isample, islice, itime, nsamples, npixels_per_sample, sampling_factor, dest
-        integer :: chunksize, first, last, offset
+        integer :: ifine, isample, islice, itime, ivalid, nsamples, npixels_per_sample, nvalids, sampling_factor, dest
         integer :: count1, count2, count_rate, count_max
         logical :: out
+        integer, allocatable :: valids(:)
 
         write(*,'(a)', advance='no') 'Info: Computing the projector... '
         call system_clock(count1, count_rate, count_max)
@@ -621,6 +621,8 @@ contains
         do islice = 1, obs%nslices
 
             nsamples = obs%slice(islice)%nsamples
+            nvalids  = obs%slice(islice)%nvalids
+            
             chop_old = pInf
 
             ! check if it is required to interpolate pointing positions
@@ -630,36 +632,39 @@ contains
                sampling_factor = 1
             end if
 
-            chunksize = ceiling(real(nsamples) / omp_get_max_threads())
+            allocate (valids(nvalids))
+            ivalid = 1
+            do isample = 1, nsamples
+                if (obs%slice(islice)%p(isample)%removed) cycle
+                valids(ivalid) = isample
+                ivalid = ivalid + 1
+            end do
 
-            !$omp parallel default(shared) firstprivate(chop_old)   &
-            !$omp private(itime, ra, dec, pa, chop, coords, coords_yz, roi, offset, first, last) &
+            !$omp parallel do default(shared) firstprivate(chop_old)   &
+            !$omp private(ifine, itime, ra, dec, pa, chop, coords, coords_yz, roi) &
             !$omp reduction(max : npixels_per_sample) reduction(.or. : out)
             
-            first = chunksize * sampling_factor * omp_get_thread_num() + 1
-            last = min(first + chunksize - 1, nsamples) * sampling_factor
-
-            offset = count(obs%slice(islice)%p(:(first-1)/sampling_factor)%removed) * sampling_factor
-
-            do itime = first, last
-                isample = (itime - 1) / sampling_factor + 1
-                if (obs%slice(islice)%p(isample)%removed) then
-                    offset = offset + 1
-                    cycle
-                end if
-                call obs%get_position_index(islice, itime, sampling_factor, ra, dec, pa, chop)
-                if (abs(chop-chop_old) > 1.d-2) then
-                    coords_yz = this%uv2yz(this%corners_uv, this%distortion_yz, chop)
-                    chop_old = chop
-                 end if
-                 coords = this%yz2ad(coords_yz, ra, dec, pa)
-                 coords = ad2xy_gnomonic(coords)
-                 roi    = xy2roi(coords, nvertices)
-                 call roi2pmatrix(roi, nvertices, coords, nx, ny, itime + dest - offset, npixels_per_sample, out, pmatrix)
+            ! loop over the samples which have not been removed
+            do ivalid = 1, nvalids
+                isample = valids(ivalid)
+                do ifine = 1, sampling_factor
+                     itime = (isample - 1) * sampling_factor + ifine
+                     call obs%get_position_index(islice, itime, sampling_factor, ra, dec, pa, chop)
+                     if (abs(chop-chop_old) > 1.d-2) then
+                         coords_yz = this%uv2yz(this%corners_uv, this%distortion_yz, chop)
+                         chop_old = chop
+                     end if
+                     coords = this%yz2ad(coords_yz, ra, dec, pa)
+                     coords = ad2xy_gnomonic(coords)
+                     roi    = xy2roi(coords, nvertices)
+                     call roi2pmatrix(roi, nvertices, coords, nx, ny, (ivalid-1) * sampling_factor + ifine + dest,                 &
+                          npixels_per_sample, out, pmatrix)
+                 end do
              end do
 
-             !$omp end parallel
-             dest = dest + obs%slice(islice)%nvalids * sampling_factor
+             !$omp end parallel do
+             dest = dest + nvalids * sampling_factor
+             deallocate (valids)
 
         end do
 
