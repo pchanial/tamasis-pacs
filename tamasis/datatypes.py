@@ -485,11 +485,9 @@ def combine_sliced_shape(shape, nsamples):
     else:
         shape = list(shape) # list makes a shallow copy
     if _my_isscalar(nsamples):
-        nsamples = int(nsamples)
+        nsamples = (int(nsamples),)
     else:
         nsamples = tuple(nsamples)
-        if len(nsamples) == 1:
-            nsamples = nsamples[0]
     shape.append(nsamples)
     return tuple(shape)
 
