@@ -36,7 +36,7 @@ class FitsArray(Quantity):
                 if header.has_key('bunit'):
                     unit = header['bunit']
                 elif header.has_key('QTTY____'):
-                    unit = header('QTTY____') # HCSS crap
+                    unit = header['QTTY____'] # HCSS crap
 
         # get a new FitsArray instance (or a subclass if subok is True)
         result = Quantity(data, unit, dtype, copy, order, True, ndmin)
