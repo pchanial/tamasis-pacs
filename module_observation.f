@@ -452,8 +452,9 @@ contains
         class(pacsobservationslice), intent(inout) :: this
         integer, intent(out)                       :: status
 
-        integer                       :: length, unit, ivalid, nsamples
+        integer                       :: isample, length, nbs, nbl, nr, nu, nmax, nsamples, unit
         character(len=5), allocatable :: channels(:)
+        character(len=5)              :: channel
 
         this%channel = ' '
 
@@ -485,38 +486,72 @@ contains
         if (status /= 0) return
 
         ! get first defined BAND
-        do ivalid=1, nsamples
-            if (channels(ivalid) /= 'UNDEF') exit
+        do isample=1, nsamples
+            if (channels(isample) /= 'UNDEF') exit
+        end do
+
+        nbs = 0
+        nbl = 0
+        nr  = 0
+        nu  = 0
+        do isample=1, nsamples
+            select case (channels(isample))
+                case ('BS')
+                    nbs = nbs + 1
+                case ('BL')
+                    nbl = nbl + 1
+                case ('R')
+                    nr = nr + 1
+                case ('UNDEF')
+                    nu = nu + 1
+                case default
+                    status = 1
+                    write (ERROR_UNIT, '(a)') "Invalid channel '" // channels(isample) // "'."
+                    return
+            end select
         end do
 
         ! check that there is at least one defind BAND
-        if (ivalid > nsamples) then
+        if (nu == nsamples) then
             status = 1
             write (ERROR_UNIT, '(a)') 'All observation samples have UNDEF band.'
             return
         end if
 
-        ! check the observation only has one BAND
-        if (any(channels /= channels(ivalid) .and. channels /= 'UNDEF')) then
+        
+        ! check observation mostly has one BAND
+        nmax = max(nbs, nbl, nr)
+        if (real(nmax)/(nsamples-nu) < 0.99) then
             status = 1
-            write (ERROR_UNIT,'(a)') 'Observation is BANDSWITCH.'
+            write (ERROR_UNIT, '(a)') 'Observation is BANDSWITCH.'
             return
         end if
 
-        ! mark UNDEF BAND as invalid
-        this%p%invalid = this%p%invalid .or. channels == 'UNDEF'
+        ! mark other BAND as invalid
+        if (nmax == nbs) then
+            channel = 'BS'
+        else if (nmax == nbl) then
+            channel = 'BL'
+        else
+            channel = 'R'
+        end if
+        this%p%invalid = this%p%invalid .or. channels /= channel
 
-        select case (channels(ivalid))
-        case ('BS')
-            this%channel = 'b'
-        case ('BL')
-            this%channel = 'g'
-        case ('R')
-            this%channel = 'r'
-        case default
-            status = 1
-            write (ERROR_UNIT,'(a)') 'Invalid array BAND value: ' // channels(ivalid)
-        end select
+        ! get channel
+        if (nmax == nbs) then
+            channel = 'blue'
+        else if (nmax == nbl) then
+            channel = 'green'
+        else
+            channel = 'red'
+        end if
+        this%channel = channel(1:1)
+
+        ! check observation only has one band
+        if (nsamples /= nmax + nu) then
+            write (OUTPUT_UNIT, '(a)') "Warning: some samples do not come from the '" // trim(channel) //                          &
+                  "' channel. They have been marked as invalid."
+        end if
 
     end subroutine set_channel
 
