@@ -7,6 +7,7 @@ module module_filtering
 
     public :: FilterUncorrelated
     public :: create_filter_uncorrelated
+    public :: fft_tod
 
     include 'fftw3.f'
 
@@ -94,6 +95,30 @@ contains
         status = 0
 
     end subroutine create_filter_uncorrelated
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine fft_tod(plan, data)
+        integer*8, intent(in) :: plan
+        real*8, intent(inout) :: data(:,:)
+
+        integer :: idetector, ndetectors
+        real*8  :: out(size(data,1))
+
+        ndetectors = size(data, 2)
+
+        !$omp parallel do default(shared) private(idetector, out)
+        do idetector = 1, ndetectors
+        
+            call dfftw_execute_r2r(plan, data(:,idetector), out)
+            data(:,idetector) = out
+        
+        end do
+        !$omp end parallel do
+        
+    end subroutine fft_tod
 
 
 end module module_filtering

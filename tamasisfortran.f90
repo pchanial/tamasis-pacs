@@ -91,7 +91,7 @@ subroutine pacs_info(tamasis_dir, filename, nfilenames, fine_sampling_factor, fr
     logical*1, intent(out)         :: output_mask(nrows,ncolumns)
     logical, intent(out)           :: transparent_mode
     integer, intent(out)           :: compression_factor(nfilenames)
-    integer, intent(out)           :: nsamples(nfilenames)
+    integer*8, intent(out)         :: nsamples(nfilenames)
     character(len=70), intent(out) :: unit
     real*8, intent(out)            :: responsivity
     real*8, intent(out)            :: detector_area(nrows,ncolumns)
@@ -618,7 +618,7 @@ subroutine pacs_multiplexing_direct(signal, multiplexed, fine_sampling_factor, i
     !f2py intent(hide)    :: nsamples = shape(signal,0)
     !f2py intent(hide)    :: ndetectors = shape(signal,1)
 
-    integer, intent(in)   :: nsamples, ndetectors
+    integer*8, intent(in) :: nsamples, ndetectors
     real*8, intent(in)    :: signal(nsamples, ndetectors)
     integer, intent(in)   :: fine_sampling_factor, ij(2, ndetectors)
     real*8, intent(inout) :: multiplexed(nsamples/fine_sampling_factor, ndetectors)
@@ -1162,6 +1162,42 @@ subroutine fft_filter_uncorrelated(data, nsamples, nsamples_tot, ncorrelations, 
     if (status /= 0) return
 
 end subroutine fft_filter_uncorrelated
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine fft_plan(data, nsamples, nslices, plan, nsamples_tot, ndetectors)
+
+    use module_filtering, only : fft_tod
+    implicit none
+
+    !f2py threadsafe
+    !f2py intent(inout) :: data
+    !f2py intent(in)    :: nsamples
+    !f2py intent(hide)  :: nslices = size(nsamples)
+    !f2py intent(in)    :: plan
+    !f2py intent(hide)  :: nsamples_tot = size(data,2)
+    !f2py intent(hide)  :: ndetectors = size(data,1)
+
+    real*8, intent(inout) :: data(nsamples_tot,ndetectors)
+    integer*8, intent(in) :: nsamples(nslices)
+    integer, intent(in)   :: nslices
+    integer*8, intent(in) :: plan(nslices)
+    integer, intent(in)   :: nsamples_tot
+    integer, intent(in)   :: ndetectors
+
+    integer               :: islice, dest
+
+    dest = 1
+    do islice = 1, nslices
+       
+        call fft_tod(plan(islice), data(dest:dest+nsamples(islice)-1,:))
+        dest = dest + nsamples(islice)
+
+    end do
+
+end subroutine fft_plan
 
 
 !-----------------------------------------------------------------------------------------------------------------------------------

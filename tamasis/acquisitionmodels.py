@@ -1067,10 +1067,6 @@ class Fft(AcquisitionModel):
     """
     def __init__(self, nsamples, description=None):
         AcquisitionModel.__init__(self, description)
-        if fftw3.planning.lib_threads is None:
-            ncpus = 1
-        else:
-            ncpus = multiprocessing.cpu_count()
         self.nsamples = tuple(numpy.array(nsamples, ndmin=1))
         self.tarray = []
         self.farray = []
@@ -1081,8 +1077,8 @@ class Fft(AcquisitionModel):
             farray = numpy.empty(n, dtype='float64')
             self.tarray.append(tarray)
             self.farray.append(farray)
-            self.forward_plan.append(fftw3.Plan(tarray, farray, direction='forward', flags=['measure'], realtypes=['halfcomplex r2c'], nthreads=ncpus))
-            self.backward_plan.append(fftw3.Plan(farray, tarray, direction='backward', flags=['measure'], realtypes=['halfcomplex c2r'], nthreads=ncpus))
+            self.forward_plan.append(fftw3.Plan(tarray, farray, direction='forward', flags=['measure'], realtypes=['halfcomplex r2c'], nthreads=1))
+            self.backward_plan.append(fftw3.Plan(farray, tarray, direction='backward', flags=['measure'], realtypes=['halfcomplex c2r'], nthreads=1))
 
     def direct(self, array, reusein=False, reuseout=False):
         array = self.validate_input(Tod, array)
@@ -1090,13 +1086,9 @@ class Fft(AcquisitionModel):
         # cast to ndarray to speed up computation
         output_ = output.view(numpy.ndarray)
         output_ = _smart_reshape(output_, (numpy.product(array.shape[:-1]), array.shape[-1]))
-        dest = 0
-        for iobs, n in enumerate(self.nsamples):
-            for i in range(output_.shape[0]):
-                self.tarray[iobs][:] = output_[i,dest:dest+n]
-                fftw3.execute(self.forward_plan[iobs])
-                output_[i,dest:dest+n] = self.farray[iobs]
-            dest += n
+        nsamples = numpy.array(self.nsamples)
+        plans = numpy.array([self.forward_plan[islice]._get_parameter() for islice in range(len(self.nsamples))])
+        tmf.fft_plan(output_.T, nsamples, plans)
         return output
 
     def transpose(self, array, reusein=False, reuseout=False):
@@ -1104,12 +1096,11 @@ class Fft(AcquisitionModel):
         output = self.validate_output(array, reusein and reuseout)
         output_ = output.view(numpy.ndarray)
         output_ = _smart_reshape(output_, (numpy.product(array.shape[:-1]), array.shape[-1]))
+        nsamples = numpy.array(self.nsamples)
+        plans = numpy.array([self.backward_plan[islice]._get_parameter() for islice in range(len(self.nsamples))])
+        tmf.fft_plan(output_.T, nsamples, plans)
         dest = 0
-        for iobs, n in enumerate(self.nsamples):
-            for i in range(output_.shape[0]):
-                self.farray[iobs][:] = output_[i,dest:dest+n]
-                fftw3.execute(self.backward_plan[iobs])
-                output_[i,dest:dest+n] = self.tarray[iobs]
+        for n in self.nsamples:
             output_[:,dest:dest+n] /= n
             dest += n
         return output
