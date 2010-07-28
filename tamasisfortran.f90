@@ -1288,6 +1288,7 @@ subroutine masking(input, ninputs, mask, nmasks, status)
         write (ERROR_UNIT,'(a,2(i0,a))') "The data array has a size incompatible with the mask ('", ninputs, "' instead of '",     &
               nmasks, "')."
         status = 1
+        return
     end if
 
     !$omp parallel workshare
