@@ -74,7 +74,9 @@ class PacsObservation(object):
         self.fine_sampling_factor = fine_sampling_factor
         self.transparent_mode = transparent_mode
         self.compression_factor = compression_factor
-        self.unit = unit.strip() + ' / detector'
+        self.unit = unit.strip()
+        if self.unit.find('/') == -1:
+            self.unit += ' / detector'
         self.responsivity = Quantity(responsivity, 'V/Jy')
         self.detector_area = Map(detector_area, unit='arcsec^2/detector')
         self.flatfield = {
