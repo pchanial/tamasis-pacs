@@ -44,16 +44,16 @@ program test_pacsinstrument
     if (size(time) /= 360) stop 'FAILED: nsamples'
     if (any(shape(pacs%corners_uv) /= [2,4*pacs%ndetectors])) stop 'FAILED: shape corners_uv'
 
-    i = count(.not. pacs%mask_blue(1,:))
+    i = count(.not. pacs%mask(1,:))
 
     if (any(pacs%pq(:,2)   /= [0,1])) stop 'FAILED pq1'
     if (any(pacs%pq(:,1+i) /= [1,0])) stop 'FAILED pq2'
     if (any(pacs%ij(:,2)   /= [0,1])) stop 'FAILED ij1'
     if (any(pacs%ij(:,1+i) /= [1,0])) stop 'FAILED ij2'
 
-    if (any(pacs%corners_uv(:,5:8) /= pacs%corners_uv_blue(:,:,1,2)))          &
+    if (any(pacs%corners_uv(:,5:8) /= pacs%corners_uv_all(:,:,1,2)))          &
         stop 'FAILED uv1'
-    if (any(pacs%corners_uv(:,i*4+1:i*4+4) /= pacs%corners_uv_blue(:,:,2,1)))  &
+    if (any(pacs%corners_uv(:,i*4+1:i*4+4) /= pacs%corners_uv_all(:,:,2,1)))  &
         stop 'FAILED uv2'
 
     allocate(yz(ndims, size(pacs%corners_uv,2)))
@@ -67,7 +67,7 @@ program test_pacsinstrument
     index = 0
     call obs%get_position_time(1, time(1), ra, dec, pa, chop, index)
 
-    yz = pacs%uv2yz(pacs%corners_uv, pacs%distortion_yz_blue, chop)
+    yz = pacs%uv2yz(pacs%corners_uv, pacs%distortion_yz, chop)
 
     do i=1, 1
        write (*,*) 'Y: ', i, (yz(1, (i-1)*4+j), j = 1,4)
@@ -123,7 +123,7 @@ program test_pacsinstrument
     call system_clock(count1, count_rate, count_max)
     do i = 1, size(time)
         call obs%get_position_time(1, time(i), ra, dec, pa, chop, index)
-        yz = pacs%uv2yz(pacs%corners_uv, pacs%distortion_yz_blue, chop)
+        yz = pacs%uv2yz(pacs%corners_uv, pacs%distortion_yz, chop)
         ad = pacs%yz2ad(yz, ra, dec, pa)
         xy = ad2xy_gnomonic(ad)
         if (any(xy(1,:) < 0.5d0 .or. xy(1,:) > nx+0.5d0 .or. xy(2,:) < 0.5d0 .or. xy(2,:) > ny+0.5d0)) then

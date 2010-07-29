@@ -4,7 +4,7 @@ program pacs_photproject
     use module_fitstools,       only : ft_header2str, ft_read_keyword, ft_write_image
     use module_deglitching,     only : deglitch_l2b
     use module_optionparser,    only : OptionParser
-    use module_pacsinstrument,  only : PacsInstrument
+    use module_pacsinstrument,  only : SHARP_EDGES, PacsInstrument
     use module_pacsobservation, only : PacsObservation, MaskPolicy
     use module_pointingmatrix,  only : backprojection_weighted, PointingElement
     use module_preprocessor,    only : divide_vectordim2, median_filtering, subtract_meandim1
@@ -126,7 +126,7 @@ program pacs_photproject
 
     ! compute the projector
     allocate (pmatrix(npixels_per_sample,nsamples,pacs%ndetectors))
-    call pacs%compute_projection_sharp_edges(obs, .false., header,  nx, ny, pmatrix, status)
+    call pacs%compute_projection(SHARP_EDGES, obs, .false., header,  nx, ny, pmatrix, status)
     if (status /= 0) go to 999
 
     ! read the signal file

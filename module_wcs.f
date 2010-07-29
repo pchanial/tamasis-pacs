@@ -20,8 +20,10 @@ module module_wcs
     public :: init_gnomonic
     public :: ad2xy_gnomonic
     public :: ad2xy_gnomonic_vect
+    public :: ad2xys_gnomonic
     public :: init_rotation
     public :: xy2xy_rotation
+    public :: refpix_area
     public :: init_wcslib
     public :: ad2xy_wcslib
     public :: free_wcslib
@@ -218,6 +220,37 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
+    pure subroutine ad2xys_gnomonic(ad, x, y, scale)
+
+        real*8, intent(in)  :: ad(:,:)          ! R.A. and declination in degrees
+        real*8, intent(out) :: x(size(ad,2))
+        real*8, intent(out) :: y(size(ad,2))
+        real*8, intent(out) :: scale(size(ad,2))
+
+        real*8  :: lambda, phi, invcosc, xsi, eta
+        integer :: i
+        real*8  :: lambda0          ! crval[0] in rad
+        real*8  :: cosphi1, sinphi1 ! cos and sin of crval[1]
+
+        common /gnomonic/ lambda0, cosphi1, sinphi1
+
+        do i = 1, size(ad,2)
+            lambda = ad(1,i) * DEG2RAD
+            phi = ad(2,i) * DEG2RAD
+            invcosc = 1.d0 / (sinphi1*sin(phi)+cosphi1*cos(phi)*cos(lambda-lambda0))
+            xsi = RAD2DEG * invcosc * cos(phi)*sin(lambda-lambda0)
+            eta = RAD2DEG * invcosc * (cosphi1*sin(phi)-sinphi1*cos(phi)*cos(lambda-lambda0))
+
+            call xy2xy_rotation(xsi, eta, x(i), y(i))
+            scale(i) = invcosc ** 3
+        end do
+
+    end subroutine ad2xys_gnomonic
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
     pure elemental subroutine ad2xy_gnomonic_vect(a, d, x, y)
 
         real*8, intent(in)  :: a, d             ! R.A. and declination in degrees
@@ -247,7 +280,7 @@ contains
         type(astrometry), intent(in) :: astr
 
         real*8 :: cdinv(2,2), crpix(2)
-        common /rotation/ cdinv,crpix
+        common /rotation/ cdinv, crpix
 
         cdinv = reshape([astr%cd(2,2), -astr%cd(2,1), -astr%cd(1,2), astr%cd(1,1)], [2,2]) / &
                 (astr%cd(1,1)*astr%cd(2,2) - astr%cd(2,1)*astr%cd(1,2))
@@ -272,6 +305,21 @@ contains
 
     end subroutine xy2xy_rotation
 
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    function refpix_area()
+
+        real*8 :: refpix_area
+
+        real*8 :: cdinv(2,2), crpix(2)
+        common /rotation/ cdinv, crpix
+        
+        refpix_area = 1.d0 / abs(cdinv(1,1) * cdinv(2,2) - cdinv(1,2) * cdinv(2,1)) * 3600d0**2
+
+    end function refpix_area
 
     !-------------------------------------------------------------------------------------------------------------------------------
 

@@ -74,7 +74,7 @@ def _import_tod(file, frame):
     signal = frame.get('Signal')
     d1 = tod['PrimaryImage'].data.dimensions
     d2 = signal.getData().dimensions
-    if not d1 == d2:
+    if d1 != d2:
         raise ValueError('The dimension of the cube '+str(tuple(d1))+' imported from Tamasis is incompatible with the input one '+str(tuple(d2))+" in '"+file+"'.")
     signal.setData(tod['PrimaryImage'].data)
     signal.setUnit(herschel.share.unit.Unit.parse(tod.meta['BUNIT'].string))

@@ -41,7 +41,7 @@ class MadMap1Observation(object):
         self.nfinesamples = tuple(nsamples)
         self.nsamples = tuple(nsamples)
 
-    def get_pointing_matrix(self, header, resolution, npixels_per_sample, oversampling=False):
+    def get_pointing_matrix(self, header, resolution, npixels_per_sample, method=None, oversampling=False):
         if npixels_per_sample is not None and npixels_per_sample != self.npixels_per_sample:
             raise ValueError('The npixels_per_sample value is incompatible with the MADMAP1 file.')
         if header is not None:

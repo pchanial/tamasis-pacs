@@ -138,7 +138,7 @@ subroutine pacs_info(tamasis_dir, filename, nfilenames, fine_sampling_factor, fr
     nsamples = obs%slice%nvalids
     unit = obs%unit
     responsivity = pacs%responsivity
-    detector_area = pacs%detector_area
+    detector_area = pacs%detector_area_all
     flatfield_detector = pacs%flatfield_detector
     flatfield_optical = pacs%flatfield_optical
 
@@ -403,13 +403,13 @@ end subroutine pacs_timeline
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine pacs_pointing_matrix_filename(tamasis_dir, filename, nfilenames, oversampling, fine_sampling_factor,                    &
+subroutine pacs_pointing_matrix_filename(tamasis_dir, filename, nfilenames, method, oversampling, fine_sampling_factor,            &
                                          npixels_per_sample, nsamples, ndetectors, frame_policy, detector_policy, detector_mask,   &
                                          nrow, ncol, header, pmatrix, status)
 
     use iso_fortran_env,        only : ERROR_UNIT
     use module_fitstools,       only : ft_read_keyword
-    use module_pacsinstrument,  only : PacsInstrument
+    use module_pacsinstrument,  only : PacsInstrument, NEAREST_NEIGHBOUR, SHARP_EDGES
     use module_pacsobservation, only : PacsObservation, MaskPolicy
     use module_pointingmatrix,  only : PointingElement
     use module_tamasis,         only : init_tamasis
@@ -419,6 +419,7 @@ subroutine pacs_pointing_matrix_filename(tamasis_dir, filename, nfilenames, over
     !f2py intent(in)   :: tamasis_dir
     !f2py intent(in)   :: filename
     !f2py intent(in)   :: nfilenames
+    !f2py intent(in)   :: method
     !f2py intent(in)   :: oversampling
     !f2py intent(in)   :: fine_sampling_factor
     !f2py intent(in)   :: npixels_per_sample
@@ -436,6 +437,7 @@ subroutine pacs_pointing_matrix_filename(tamasis_dir, filename, nfilenames, over
     character(len=*), intent(in) :: tamasis_dir
     character(len=*), intent(in) :: filename
     integer, intent(in)          :: nfilenames
+    character(len=*), intent(in) :: method
     logical, intent(in)          :: oversampling
     integer, intent(in)          :: fine_sampling_factor
     integer, intent(in)          :: npixels_per_sample
@@ -453,7 +455,7 @@ subroutine pacs_pointing_matrix_filename(tamasis_dir, filename, nfilenames, over
     class(PacsObservation), allocatable :: obs
     class(PacsInstrument), allocatable  :: pacs
     type(MaskPolicy)                    :: policy
-    integer                             :: iobs, nx, ny, nsamples_expected
+    integer                             :: iobs, nx, ny, nsamples_expected, method_
 
     ! initialise tamasis
     call init_tamasis(tamasis_dir)
@@ -508,8 +510,24 @@ subroutine pacs_pointing_matrix_filename(tamasis_dir, filename, nfilenames, over
     call ft_read_keyword(header, 'naxis2', ny, status=status)
     if (status /= 0) return
 
+    ! get method id
+    select case (method)
+
+        case ('nearest neighbour')
+            method_ = NEAREST_NEIGHBOUR
+
+        case ('sharp edges')
+            method_ = SHARP_EDGES
+
+        case default
+            write (ERROR_UNIT, '(a)') 'Unknown projection method ' // method
+            status = 1
+            return
+    
+    end select
+
     ! compute the projector
-    call pacs%compute_projection_sharp_edges(obs, oversampling, header, nx, ny, pmatrix, status)
+    call pacs%compute_projection(method_, obs, oversampling, header, nx, ny, pmatrix, status)
 
 end subroutine pacs_pointing_matrix_filename
 

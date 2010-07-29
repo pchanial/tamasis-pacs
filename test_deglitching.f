@@ -222,7 +222,7 @@ contains
             xy(2,4) = yc(itime)+h
 
             roi = xy2roi(xy,4)
-            call roi2pmatrix(roi, 4, xy, nx, ny, itime, npixels_per_sample, out, pmatrix)
+            call roi2pmatrix(roi, 4, xy, nx, ny, npixels_per_sample, out, pmatrix(:,itime,:))
         end do
 
         if (npixels_per_sample > size(pmatrix,1)) then

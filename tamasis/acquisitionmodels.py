@@ -117,6 +117,8 @@ class AcquisitionModel(object):
         if model.shapein is not None and model.shapein != (shape[1],):
             reshape = Reshaping(shape[1], model.shapein)
             unpacking = unpacking * reshape
+            print 'model.shape', model.shape
+            print 'reshape.shape', reshape.shape
             model = model * reshape
         if model.shapeout is not None and model.shapeout != (shape[0],):
             reshape = Reshaping(model.shapeout, shape[0])
@@ -688,10 +690,10 @@ class Projection(AcquisitionModel):
         - npixels_per_sample: maximum number of sky map pixels that can be intercepted by a detector
     Author: P. Chanial
     """
-    def __init__(self, observation, header=None, resolution=None, npixels_per_sample=None, oversampling=True, description=None):
+    def __init__(self, observation, method=None, header=None, resolution=None, npixels_per_sample=None, oversampling=True, description=None):
         AcquisitionModel.__init__(self, description)
         self._pmatrix, self.header, ndetectors, nsamples, self.npixels_per_sample = \
-            observation.get_pointing_matrix(header, resolution, npixels_per_sample, oversampling=oversampling)
+            observation.get_pointing_matrix(header, resolution, npixels_per_sample, method=method, oversampling=oversampling)
         self.shapein = tuple([self.header['naxis'+str(i+1)] for i in reversed(range(self.header['naxis']))])
         self.pmatrix = self._pmatrix.view(dtype=[('weight', 'f4'), ('pixel', 'i4')])
         self.pmatrix.resize((observation.ndetectors, numpy.sum(nsamples), self.npixels_per_sample))
@@ -1142,6 +1144,7 @@ class InterpolationLinear(Square):
     def direct(self, data, reusein=False, reuseout=False):
         data.mask = self.mask
         return interpolate_linear(data)
+
 
 #-------------------------------------------------------------------------------
 

@@ -74,7 +74,7 @@ class PacsObservation(object):
         self.fine_sampling_factor = fine_sampling_factor
         self.transparent_mode = transparent_mode
         self.compression_factor = compression_factor
-        self.unit = unit.strip()+' / detector'
+        self.unit = unit.strip() + ' / detector'
         self.responsivity = Quantity(responsivity, 'V/Jy')
         self.detector_area = Map(detector_area, unit='arcsec^2/detector')
         self.flatfield = {
@@ -124,10 +124,16 @@ class PacsObservation(object):
         tod.unit = newunit._unit
         return tod
 
-    def get_pointing_matrix(self, header, resolution, npixels_per_sample, oversampling=True):
+    def get_pointing_matrix(self, header, resolution, npixels_per_sample, method=None, oversampling=True):
+        if method is None:
+            method = 'sharp edges'
+        method = method.lower().replace('_', ' ').strip()
+        if method not in ('nearest neighbour', 'sharp edges'):
+            raise ValueError("Invalid method '" + method + "'. Valids methods are 'nearest neighbour' or 'sharp edges'")
+
         nsamples = self.nfinesamples if oversampling else self.nsamples
         if npixels_per_sample is None:
-            npixels_per_sample = self.default_npixels_per_sample
+            npixels_per_sample = self.default_npixels_per_sample if method != 'nearest neighbour' else 1
         if header is None:
             header = self.get_map_header(resolution, oversampling)
         elif isinstance(header, str):
@@ -138,7 +144,7 @@ class PacsObservation(object):
         print 'Info: Allocating '+str(sizeofpmatrix/2.**17)+' MiB for the pointing matrix.'
         pmatrix = numpy.zeros(sizeofpmatrix, dtype=numpy.int64)
         
-        status = tmf.pacs_pointing_matrix_filename(tamasis_dir, filename_, self.nobservations, oversampling, self.fine_sampling_factor, npixels_per_sample, numpy.sum(nsamples), self.ndetectors, numpy.array(self.frame_policy), numpy.array(self.detector_policy)[0], numpy.asfortranarray(self.detector_bad), str(header).replace('\n', ''), pmatrix)
+        status = tmf.pacs_pointing_matrix_filename(tamasis_dir, filename_, self.nobservations, method, oversampling, self.fine_sampling_factor, npixels_per_sample, numpy.sum(nsamples), self.ndetectors, numpy.array(self.frame_policy), numpy.array(self.detector_policy)[0], numpy.asfortranarray(self.detector_bad), str(header).replace('\n', ''), pmatrix)
         if status != 0: raise RuntimeError()
 
         return pmatrix, header, self.ndetectors, nsamples, npixels_per_sample

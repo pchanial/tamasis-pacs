@@ -6,18 +6,19 @@ module module_pacsinstrument
                                        ft_read_image, ft_read_keyword_hcss, ft_read_slice, ft_test_extension
     use module_math,            only : DEG2RAD, pInf, mInf, mean, nint_down, nint_up
     use module_pacsobservation, only : pacsobservationslice, pacsobservation
-    use module_pointingmatrix,  only : pointingelement, xy2roi, roi2pmatrix
+    use module_pointingmatrix,  only : pointingelement, xy2pmatrix, xy2roi, roi2pmatrix
     use module_precision,       only : dp, p
     use module_projection,      only : convex_hull, surface_convex_polygon
     use module_string,          only : strinteger
     use module_tamasis,         only : get_tamasis_path, tamasis_path_len, POLICY_KEEP, POLICY_MASK, POLICY_REMOVE
-    use module_wcs,             only : init_astrometry, ad2xy_gnomonic, ad2xy_gnomonic_vect
+    use module_wcs,             only : init_astrometry, ad2xy_gnomonic, ad2xy_gnomonic_vect, ad2xys_gnomonic, refpix_area
     use omp_lib
     implicit none
     private
 
     public :: ndims
     public :: nvertices
+    public :: NEAREST_NEIGHBOUR, SHARP_EDGES
     public :: pacsinstrument
     public :: multiplexing_direct
     public :: multiplexing_transpose
@@ -25,11 +26,12 @@ module module_pacsinstrument
     public :: read_filter_calibration
     public :: read_filter_filename
 
-
     integer, parameter :: ndims = 2
     integer, parameter :: nvertices = 4
     integer, parameter :: shape_blue(2) = [32, 64]
     integer, parameter :: shape_red (2) = [16, 32]
+    integer, parameter :: NEAREST_NEIGHBOUR = 0
+    integer, parameter :: SHARP_EDGES = 1
     integer, parameter :: distortion_degree = 3
     real*8,  parameter :: sampling = 0.025d0
 
@@ -46,19 +48,11 @@ module module_pacsinstrument
 
     type pacsinstrument
  
-        logical*1            :: mask_blue (shape_blue(1), shape_blue(2))
-        logical*1            :: mask_green(shape_blue(1), shape_blue(2))
-        logical*1            :: mask_red  (shape_red (1), shape_red (2))
-
-        real*8               :: flatfield_blue (shape_blue(1), shape_blue(2))
-        real*8               :: flatfield_green(shape_blue(1), shape_blue(2))
-        real*8               :: flatfield_red  (shape_red (1), shape_red (2))
-
-        integer              :: ndetectors
+        character            :: channel
         integer              :: nrows
         integer              :: ncolumns
+        integer              :: ndetectors
         integer              :: fine_sampling_factor
-        character            :: channel
         logical              :: transparent_mode
         integer              :: detector_policy
         logical              :: reject_bad_line
@@ -72,19 +66,17 @@ module module_pacsinstrument
         real*8, allocatable  :: flatfield_total(:,:)
         real*8, allocatable  :: flatfield_detector(:,:)
         real*8, allocatable  :: flatfield_optical(:,:)
-        real*8, allocatable  :: detector_area(:,:)
 
-        real*8               :: corners_uv_blue(ndims, nvertices, shape_blue(1), shape_blue(2))
-        real*8               :: corners_uv_red (ndims, nvertices, shape_red (1), shape_red (2))
+        real*8, allocatable  :: centers_uv_all(:,:,:)
+        real*8, allocatable  :: centers_uv(:,:)
+
+        real*8, allocatable  :: corners_uv_all(:,:,:,:)
         real*8, allocatable  :: corners_uv(:,:)
 
-        real*8               :: corners_yz_blue(ndims, nvertices, shape_blue(1), shape_blue(2))
-        real*8               :: corners_yz_red (ndims, nvertices, shape_red (1), shape_red (2))
-        real*8, allocatable  :: corners_yz(:,:)
+        real*8, allocatable  :: detector_area_all(:,:)
+        real*8, allocatable  :: detector_area(:)
 
-        real*8               :: distortion_yz_blue(ndims, distortion_degree, distortion_degree, distortion_degree)
-        real*8               :: distortion_yz_red (ndims, distortion_degree, distortion_degree, distortion_degree)
-        real*8               :: distortion_yz     (ndims, distortion_degree, distortion_degree, distortion_degree)
+        real*8               :: distortion_yz(ndims, distortion_degree, distortion_degree, distortion_degree)
 
     contains
 
@@ -92,18 +84,19 @@ module module_pacsinstrument
         procedure, public :: init
         procedure, public :: compute_map_header
         procedure, public :: find_minmax
-        procedure, public :: compute_projection_sharp_edges
+        procedure, public :: compute_projection
         procedure, public :: destroy
         procedure, public :: read
 
         procedure, nopass, public :: uv2yz
         procedure, nopass, public :: yz2ad
 
+        procedure :: compute_projection_nearest_neighbour
+        procedure :: compute_projection_sharp_edges
+        procedure :: filter_detectors
         procedure :: read_one
         procedure :: read_oldstyle
         procedure :: read_calibration_files
-        procedure :: filter_detectors
-        procedure :: filter_detectors_array
 
     end type pacsinstrument
 
@@ -145,6 +138,14 @@ contains
         this%detector_policy      = detector_policy
         this%reject_bad_line      = reject_bad_line
 
+        if (channel /= 'r') then
+            this%nrows = shape_blue(1)
+            this%ncolumns = shape_blue(2)
+        else
+            this%nrows = shape_red(1)
+            this%ncolumns = shape_red(2)
+        end if
+
         call this%read_calibration_files(status)
         if (status /= 0) return
 
@@ -155,40 +156,16 @@ contains
         end if
 
         if (user_mask) then
-
-            select case (this%channel)
-                case ('b')
-                    if (any(shape(detector_mask) /= shape_blue)) then
-                        status = 1
-                        write (ERROR_UNIT,'(a)') 'INIT: input blue bad detector mask has invalid size.'
-                        return
-                    end if
-                    this%mask_blue = detector_mask
-                case ('g')
-                    if (any(shape(detector_mask) /= shape_blue)) then
-                        status = 1
-                        write (ERROR_UNIT,'(a)') 'INIT: input green bad detector mask has invalid size.'
-                        return
-                    end if
-                    this%mask_green = detector_mask
-                case ('r')
-                    if (any(shape(detector_mask) /= shape_red)) then
-                        status = 1
-                        write (ERROR_UNIT,'(a)') 'INIT: input red bad detector mask has invalid size.'
-                        return
-                    end if
-                    this%mask_red = detector_mask
-                case default
-                    status = 1
-                    write (ERROR_UNIT,'(a)') "INIT: invalid channel: '" // this%channel // "'."
-            end select
+            if (any(shape(detector_mask) /= [this%nrows,this%ncolumns])) then
+                status = 1
+                write (ERROR_UNIT,'(a)') 'INIT: the input bad detector mask has an invalid size.'
+                return
+            end if
+            this%bad = detector_mask
 
         ! mask erratic line
-        else if (reject_bad_line .and. this%channel == 'b') then
-           this%mask_blue(12,17:32) = .true.
-
-        else if (reject_bad_line .and. this%channel == 'g') then
-           this%mask_green(12,17:32) = .true.
+        else if (reject_bad_line .and. this%channel /= 'r') then
+           this%bad(12,17:32) = .true.
 
         end if
 
@@ -208,73 +185,120 @@ contains
         integer, parameter     :: hdu_blue(4) = [8, 12, 16, 20]
         integer, parameter     :: hdu_red (4) = [6, 10, 14, 18]
 
-        integer                :: ivertex
+        character(len=5)       :: channel_name
+        integer                :: ivertex, unit
         logical*1, allocatable :: tmplogical(:,:)
         real*8, allocatable    :: tmp2(:,:)
         real*8, allocatable    :: tmp3(:,:,:)
 
-        ! read bad pixel mask
+        allocate (this%flatfield_total(this%nrows,this%ncolumns))
+        select case (this%channel)
 
-        call ft_read_image(get_calfile(filename_bpm) // '[blue]', tmplogical, status)
-        if (status /= 0) return
-        this%mask_blue = transpose(tmplogical)
+            case ('b')
+                channel_name = 'blue'
+                call ft_read_image(get_calfile(filename_ff) // '+12',  tmp2, status)
+                if (status /= 0) return
+                this%flatfield_total = transpose(tmp2)
 
-        call ft_read_image(get_calfile(filename_bpm) // '[green]', tmplogical, status)
-        if (status /= 0) return
-        this%mask_green = transpose(tmplogical)
+            case ('g')
+                channel_name = 'green'
+                call ft_read_image(get_calfile(filename_ff) // '+7',  tmp2, status)
+                if (status /= 0) return
+                this%flatfield_total = transpose(tmp2)
 
-        call ft_read_image(get_calfile(filename_bpm) // '[red]', tmplogical, status)
-        if (status /= 0) return
-        this%mask_red = transpose(tmplogical)
+            case ('r')
+                channel_name = 'red'
+                call ft_read_image(get_calfile(filename_ff) // '+2',  tmp2, status)
+                if (status /= 0) return
+                this%flatfield_total = transpose(tmp2)
 
+        end select
 
-        ! read flat fields
+        allocate (this%centers_uv_all(ndims,this%nrows,this%ncolumns))
+        allocate (this%corners_uv_all(ndims,nvertices,this%nrows,this%ncolumns))
+        if (this%channel /= 'r') then
 
-        call ft_read_image(get_calfile(filename_ff) // '+12',  tmp2, status)
-        if (status /= 0) return
-        this%flatfield_blue = transpose(tmp2)
-        call ft_read_image(get_calfile(filename_ff) // '+7', tmp2, status)
-        if (status /= 0) return
-        this%flatfield_green = transpose(tmp2)
-        call ft_read_image(get_calfile(filename_ff) // '+2',   tmp2, status)
-        if (status /= 0) return
-        this%flatfield_red = transpose(tmp2)
-
-
-        ! read detector corners in the (u,v) plane
-
-        do ivertex=1, nvertices
-
-            call ft_read_image(get_calfile(filename_saa), tmp2, status, hdu_blue(ivertex)  )
+            ! UV centers
+            call ft_read_image(get_calfile(filename_saa) // '[ublue]', tmp2, status)
             if (status /= 0) return
-            this%corners_uv_blue(1,ivertex,:,:) = transpose(tmp2)
-            call ft_read_image(get_calfile(filename_saa), tmp2, status, hdu_blue(ivertex)+1)
+            this%centers_uv_all(1,:,:) = transpose(tmp2)
+            call ft_read_image(get_calfile(filename_saa) // '[vblue]', tmp2, status)
             if (status /= 0) return
-            this%corners_uv_blue(2,ivertex,:,:) = transpose(tmp2)
-            call ft_read_image(get_calfile(filename_saa), tmp2, status, hdu_red (ivertex)  )
+            this%centers_uv_all(2,:,:) = transpose(tmp2)
+
+            ! UV corners
+            do ivertex=1, nvertices
+                call ft_read_image(get_calfile(filename_saa), tmp2, status, hdu_blue(ivertex)  )
+                if (status /= 0) return
+                this%corners_uv_all(1,ivertex,:,:) = transpose(tmp2)
+                call ft_read_image(get_calfile(filename_saa), tmp2, status, hdu_blue(ivertex)+1)
+                if (status /= 0) return
+                this%corners_uv_all(2,ivertex,:,:) = transpose(tmp2)
+            end do
+
+            ! Distortion coefficients in the (y,z) plane
+            call ft_read_image(get_calfile(filename_ai) // '[ycoeffblue]', tmp3, status)
             if (status /= 0) return
-            this%corners_uv_red (1,ivertex,:,:) = transpose(tmp2)
-            call ft_read_image(get_calfile(filename_saa), tmp2, status, hdu_red (ivertex)+1)
+            this%distortion_yz(1,:,:,:) = tmp3
+            call ft_read_image(get_calfile(filename_ai) // '[zcoeffblue]', tmp3, status)
             if (status /= 0) return
-            this%corners_uv_red (2,ivertex,:,:) = transpose(tmp2)
+            this%distortion_yz(2,:,:,:) = tmp3
 
-        end do
+        else
 
+            ! UV centers
+            call ft_read_image(get_calfile(filename_saa) // '[ured]', tmp2, status)
+            if (status /= 0) return
+            this%centers_uv_all(1,:,:) = tmp2
+            call ft_read_image(get_calfile(filename_saa) // '[vred]', tmp2, status)
+            if (status /= 0) return
+            this%centers_uv_all(2,:,:) = tmp2
 
-        ! read the distortion coefficients in the (y,z) plane
+            ! UV corners
+            do ivertex=1, nvertices
+                call ft_read_image(get_calfile(filename_saa), tmp2, status, hdu_red (ivertex)  )
+                if (status /= 0) return
+                this%corners_uv_all(1,ivertex,:,:) = transpose(tmp2)
+                call ft_read_image(get_calfile(filename_saa), tmp2, status, hdu_red (ivertex)+1)
+                if (status /= 0) return
+                this%corners_uv_all(2,ivertex,:,:) = transpose(tmp2)
+            end do
 
-        call ft_read_image(get_calfile(filename_ai) // '[ycoeffblue]', tmp3, status)
+            ! Distortion coefficients in the (y,z) plane
+            call ft_read_image(get_calfile(filename_ai) // '[ycoeffred]', tmp3, status)
+            if (status /= 0) return
+            this%distortion_yz(1,:,:,:) = tmp3
+            call ft_read_image(get_calfile(filename_ai) // '[zcoeffred]', tmp3, status)
+            if (status /= 0) return
+            this%distortion_yz(2,:,:,:) = tmp3
+
+        end if
+
+        ! Bad pixel mask
+        allocate (this%bad(this%nrows,this%ncolumns))
+        call ft_read_image(get_calfile(filename_bpm) // '[' // trim(channel_name) // ']', tmplogical, status)
         if (status /= 0) return
-        this%distortion_yz_blue(1,:,:,:) = tmp3
-        call ft_read_image(get_calfile(filename_ai) // '[zcoeffblue]', tmp3, status)
+        this%bad = transpose(tmplogical)
+        ! mask detectors rejected in transparent mode
+        if (this%transparent_mode) then
+            if (this%channel /= 'r') then
+                this%bad(1:16,1:16) = .true.
+                this%bad(1:16,33:)  = .true.
+                this%bad(17:,:)     = .true.
+            else
+                this%bad(1:8,1:8) = .true.
+                this%bad(1:8,17:) = .true.
+                this%bad(9:,:)    = .true.
+            end if
+        end if
+
+        ! Responsivity
+        call ft_open(get_calfile(filename_res) // '[' // trim(channel_name) // ']', unit, status)
         if (status /= 0) return
-        this%distortion_yz_blue(2,:,:,:) = tmp3
-        call ft_read_image(get_calfile(filename_ai) // '[ycoeffred]', tmp3, status)
+        call ft_read_keyword_hcss(unit, 'Responsivity', this%responsivity, status=status)
         if (status /= 0) return
-        this%distortion_yz_red (1,:,:,:) = tmp3
-        call ft_read_image(get_calfile(filename_ai) // '[zcoeffred]', tmp3, status)
+        call ft_close(unit, status)
         if (status /= 0) return
-        this%distortion_yz_red (2,:,:,:) = tmp3
 
     end subroutine read_calibration_files
 
@@ -295,61 +319,16 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
+    ! a flattened array of detector values is travelled through columns and then through rows
     subroutine filter_detectors(this)
 
-        class(pacsinstrument), intent(inout)   :: this
-
-        select case (this%channel)
-           case ('r')
-              call this%filter_detectors_array(this%mask_red,   this%corners_uv_red,  this%distortion_yz_red,                      &
-                                               this%flatfield_red, 'red')
-           case ('g')
-              call this%filter_detectors_array(this%mask_green, this%corners_uv_blue, this%distortion_yz_blue,                     &
-                                               this%flatfield_green, 'green')
-           case ('b')
-              call this%filter_detectors_array(this%mask_blue,  this%corners_uv_blue, this%distortion_yz_blue,                     &
-                                               this%flatfield_blue, 'blue')
-        end select
-
-    end subroutine filter_detectors
-
-
-    !-------------------------------------------------------------------------------------------------------------------------------
-
-
-    ! a flatten array of detector values is travelled through columns and then through rows
-    subroutine filter_detectors_array(this, mask, uv, distortion, flatfield, channel)
-
         class(pacsinstrument), intent(inout) :: this
-        logical*1, intent(in)                :: mask(:,:)
-        real*8, intent(in)                   :: uv(:,:,:,:)
-        real*8, intent(in)                   :: distortion(:,:,:,:)
-        real*8, intent(in)                   :: flatfield(:,:)
-        character(len=*), intent(in)         :: channel
 
-        integer :: idetector, p, q, status, unit
+        integer :: idetector, p, q
         real*8  :: center(2,2)
 
-        this%nrows    = size(mask, 1)
-        this%ncolumns = size(mask, 2)
-
-        allocate(this%mask(this%nrows, this%ncolumns))
-        allocate(this%bad (this%nrows, this%ncolumns))
-        this%bad = mask
-
-        ! mask detectors rejected in transparent mode
-        if (this%transparent_mode) then
-            if (this%channel /= 'r') then
-                this%bad(1:16,1:16) = .true.
-                this%bad(1:16,33:)  = .true.
-                this%bad(17:,:)     = .true.
-            else
-                this%bad(1:8,1:8) = .true.
-                this%bad(1:8,17:) = .true.
-                this%bad(9:,:)    = .true.
-            end if
-        end if
-
+        ! get the mask, which indicates if a detected is included in the flattened list of detectors
+        allocate (this%mask(this%nrows, this%ncolumns))
         if (this%detector_policy /= POLICY_REMOVE) then
             this%mask = .false.
         else
@@ -361,49 +340,42 @@ contains
 
         allocate (this%ij(ndims, this%ndetectors))
         allocate (this%pq(ndims, this%ndetectors))
-        allocate (this%corners_uv(ndims, nvertices * this%ndetectors))
-        allocate (this%corners_yz(ndims, nvertices * this%ndetectors))
-        allocate (this%flatfield_total(this%nrows, this%ncolumns))
         allocate (this%flatfield_detector(this%nrows, this%ncolumns))
         allocate (this%flatfield_optical(this%nrows, this%ncolumns))
-        allocate (this%detector_area(this%nrows, this%ncolumns))
-        this%distortion_yz = distortion
+        allocate (this%centers_uv(ndims, this%ndetectors))
+        allocate (this%corners_uv(ndims, nvertices * this%ndetectors))
+        allocate (this%detector_area_all(this%nrows, this%ncolumns))
+        allocate (this%detector_area(this%ndetectors))
 
         idetector = 1
 
         do p = 1, this%nrows
             do q = 1, this%ncolumns
-                this%detector_area(p,q) = abs(surface_convex_polygon(this%uv2yz(uv(:,:,p,q), distortion, 0.d0))) * 3600.d0**2
+                this%detector_area_all(p,q) = abs(surface_convex_polygon(this%uv2yz(this%corners_uv_all(:,:,p,q),                  &
+                    this%distortion_yz, 0.d0))) * 3600.d0**2
                 if (this%mask(p,q)) cycle
-                this%pq(1, idetector) = p-1
-                this%pq(2, idetector) = q-1
-                this%ij(1, idetector) = mod(p-1, 16)
-                this%ij(2, idetector) = mod(q-1, 16)
-                this%corners_uv(:,nvertices * (idetector-1)+1:nvertices*idetector) = uv(:,:,p,q)
+                this%pq(1,idetector) = p-1
+                this%pq(2,idetector) = q-1
+                this%ij(1,idetector) = mod(p-1, 16)
+                this%ij(2,idetector) = mod(q-1, 16)
+                this%centers_uv(:,idetector) = this%centers_uv_all(:,p,q)
+                this%corners_uv(:,nvertices * (idetector-1)+1:nvertices*idetector) = this%corners_uv_all(:,:,p,q)
+                this%detector_area(idetector) = this%detector_area_all(p,q)
                 idetector = idetector + 1
             end do
         end do
         
-        center = this%detector_area(this%nrows/2:this%nrows/2+1,this%ncolumns/2:this%ncolumns/2+1)
-        this%flatfield_optical = this%detector_area / mean(reshape(center,[4]))
-        this%flatfield_total = flatfield
+        center = this%detector_area_all(this%nrows/2:this%nrows/2+1,this%ncolumns/2:this%ncolumns/2+1)
+        this%flatfield_optical = this%detector_area_all / mean(reshape(center,[4]))
         this%flatfield_detector = this%flatfield_total / this%flatfield_optical
 
-        where (mask)
+        where (this%bad)
             this%flatfield_total    = 1
             this%flatfield_detector = 1
             this%flatfield_optical  = 1
         end where
 
-        ! Responsivity
-        call ft_open(get_calfile(filename_res) // '[' // channel // ']', unit, status)
-        if (status /= 0) return
-        call ft_read_keyword_hcss(unit, 'Responsivity', this%responsivity, status=status)
-        if (status /= 0) return
-        call ft_close(unit, status)
-        if (status /= 0) return
-
-    end subroutine filter_detectors_array
+    end subroutine filter_detectors
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
@@ -589,9 +561,10 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine compute_projection_sharp_edges(this, obs, oversampling, header, nx, ny, pmatrix, status)
+    subroutine compute_projection(this, method, obs, oversampling, header, nx, ny, pmatrix, status)
 
         class(pacsinstrument), intent(in)  :: this
+        integer, intent(in)                :: method
         class(pacsobservation), intent(in) :: obs
         logical, intent(in)                :: oversampling
         character(len=*), intent(in)       :: header
@@ -599,19 +572,144 @@ contains
         type(pointingelement), intent(out) :: pmatrix(:,:,:)
         integer, intent(out)               :: status
 
-        real*8  :: coords(ndims,this%ndetectors*nvertices), coords_yz(ndims,this%ndetectors*nvertices)
-        real*8  :: ra, dec, pa, chop, chop_old
-        integer :: roi(ndims,2,this%ndetectors)
-        integer :: ifine, isample, islice, itime, ivalid, nsamples, npixels_per_sample, nvalids, sampling_factor, dest
+        integer :: npixels_per_sample
         integer :: count1, count2, count_rate, count_max
         logical :: out
-        integer, allocatable :: valids(:)
 
         write(*,'(a)', advance='no') 'Info: Computing the projector... '
         call system_clock(count1, count_rate, count_max)
 
         call init_astrometry(header, status=status)
         if (status /= 0) return
+
+        select case (method)
+
+            case (NEAREST_NEIGHBOUR)
+                call this%compute_projection_nearest_neighbour(obs, oversampling, nx, ny, pmatrix, npixels_per_sample, out)
+            
+            case (SHARP_EDGES)
+               call this%compute_projection_sharp_edges(obs, oversampling, nx, ny, pmatrix, npixels_per_sample, out)
+
+        end select
+
+        call system_clock(count2, count_rate, count_max)
+        write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
+
+        if (npixels_per_sample > size(pmatrix,1)) then
+            status = 1
+            write(ERROR_UNIT,'(a,i0,a)') 'Error: Please update npixels_per_sample to ', npixels_per_sample, '.'
+        else if (npixels_per_sample < size(pmatrix,1)) then
+            write(OUTPUT_UNIT,'(a,i0,a)') 'Warning: You may update npixels_per_sample to ', npixels_per_sample, '.'
+        end if
+
+        if (out) then
+            write (OUTPUT_UNIT,'(a)') 'Warning: Some detectors fall outside the map.'
+        end if
+
+    end subroutine compute_projection
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine compute_projection_nearest_neighbour(this, obs, oversampling, nx, ny, pmatrix, npixels_per_sample, out)
+
+        class(pacsinstrument), intent(in)  :: this
+        class(pacsobservation), intent(in) :: obs
+        logical, intent(in)                :: oversampling
+        integer, intent(in)                :: nx, ny
+        type(pointingelement), intent(out) :: pmatrix(:,:,:)
+        integer, intent(out)               :: npixels_per_sample
+        logical, intent(out)               :: out
+
+        real*8  :: coords(ndims,this%ndetectors), coords_yz(ndims,this%ndetectors)
+        real*8  :: x(this%ndetectors), y(this%ndetectors), s(this%ndetectors)
+        real*8  :: ra, dec, pa, chop, chop_old, reference_area
+        integer :: ifine, isample, islice, itime, ivalid, nsamples, nvalids, sampling_factor, dest
+        integer, allocatable :: valids(:)
+
+        npixels_per_sample = 1
+        reference_area = refpix_area()
+
+        dest = 0
+        out = .false.
+
+        ! loop over the observations
+        do islice = 1, obs%nslices
+
+            nsamples = obs%slice(islice)%nsamples
+            nvalids  = obs%slice(islice)%nvalids
+            
+            chop_old = pInf
+
+            ! check if it is required to interpolate pointing positions
+            if (oversampling) then
+               sampling_factor = this%fine_sampling_factor * obs%slice(islice)%compression_factor
+            else
+               sampling_factor = 1
+            end if
+
+            allocate (valids(nvalids))
+            ivalid = 1
+            do isample = 1, nsamples
+                if (obs%slice(islice)%p(isample)%removed) cycle
+                valids(ivalid) = isample
+                ivalid = ivalid + 1
+            end do
+
+            !$omp parallel do default(shared) firstprivate(chop_old)          &
+            !$omp private(ifine, itime, ra, dec, pa, chop, coords, coords_yz, x, y, s) &
+            !$omp reduction(max : npixels_per_sample) reduction(.or. : out)
+            
+            ! loop over the samples which have not been removed
+            do ivalid = 1, nvalids
+                isample = valids(ivalid)
+                do ifine = 1, sampling_factor
+                     itime = (isample - 1) * sampling_factor + ifine
+                     call obs%get_position_index(islice, itime, sampling_factor, ra, dec, pa, chop)
+                     if (abs(chop-chop_old) > 1.d-2) then
+                         coords_yz = this%uv2yz(this%centers_uv, this%distortion_yz, chop)
+                         chop_old = chop
+                     end if
+                     itime  = (ivalid-1) * sampling_factor + ifine + dest
+                     coords = this%yz2ad(coords_yz, ra, dec, pa)
+                     call ad2xys_gnomonic(coords, x, y, s)
+                     s = s * this%detector_area / reference_area
+                     call xy2pmatrix(x, y, nx, ny, out, pmatrix(1,itime,:))
+                     pmatrix(1,itime,:)%weight = s
+                 end do
+             end do
+
+             !$omp end parallel do
+             dest = dest + nvalids * sampling_factor
+             deallocate (valids)
+
+        end do
+
+        pmatrix(2:,:,:)%pixel  = -1
+        pmatrix(2:,:,:)%weight = 0
+
+    end subroutine compute_projection_nearest_neighbour
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine compute_projection_sharp_edges(this, obs, oversampling, nx, ny, pmatrix, npixels_per_sample, out)
+
+        class(pacsinstrument), intent(in)  :: this
+        class(pacsobservation), intent(in) :: obs
+        logical, intent(in)                :: oversampling
+        integer, intent(in)                :: nx, ny
+        type(pointingelement), intent(out) :: pmatrix(:,:,:)
+        integer, intent(out)               :: npixels_per_sample
+        logical, intent(out)               :: out
+
+        real*8  :: coords(ndims,this%ndetectors*nvertices), coords_yz(ndims,this%ndetectors*nvertices)
+        real*8  :: ra, dec, pa, chop, chop_old
+        integer :: roi(ndims,2,this%ndetectors)
+        integer :: ifine, isample, islice, itime, ivalid, nsamples, nvalids, sampling_factor, dest
+        integer, allocatable :: valids(:)
 
         npixels_per_sample = 0
         dest = 0
@@ -654,11 +752,11 @@ contains
                          coords_yz = this%uv2yz(this%corners_uv, this%distortion_yz, chop)
                          chop_old = chop
                      end if
+                     itime  = (ivalid-1) * sampling_factor + ifine + dest
                      coords = this%yz2ad(coords_yz, ra, dec, pa)
                      coords = ad2xy_gnomonic(coords)
                      roi    = xy2roi(coords, nvertices)
-                     call roi2pmatrix(roi, nvertices, coords, nx, ny, (ivalid-1) * sampling_factor + ifine + dest,                 &
-                          npixels_per_sample, out, pmatrix)
+                     call roi2pmatrix(roi, nvertices, coords, nx, ny, npixels_per_sample, out, pmatrix(:,itime,:))
                  end do
              end do
 
@@ -667,20 +765,6 @@ contains
              deallocate (valids)
 
         end do
-
-        call system_clock(count2, count_rate, count_max)
-        write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
-
-        if (npixels_per_sample > size(pmatrix,1)) then
-            status = 1
-            write(ERROR_UNIT,'(a,i0,a)') 'Error: Please update npixels_per_sample to ', npixels_per_sample, '.'
-        else if (npixels_per_sample < size(pmatrix,1)) then
-            write(OUTPUT_UNIT,'(a,i0,a)') 'Warning: You may update npixels_per_sample to ', npixels_per_sample, '.'
-        end if
-
-        if (out) then
-            write (OUTPUT_UNIT,'(a)') 'Warning: Some detectors fall outside the map.'
-        end if
 
     end subroutine compute_projection_sharp_edges
 
@@ -1119,9 +1203,12 @@ contains
         deallocate (this%flatfield_total)
         deallocate (this%flatfield_detector)
         deallocate (this%flatfield_optical)
-        deallocate (this%detector_area)
+        deallocate (this%centers_uv_all)
+        deallocate (this%centers_uv)
+        deallocate (this%corners_uv_all)
         deallocate (this%corners_uv)
-        deallocate (this%corners_yz)
+        deallocate (this%detector_area_all)
+        deallocate (this%detector_area)
 
     end subroutine destroy
 

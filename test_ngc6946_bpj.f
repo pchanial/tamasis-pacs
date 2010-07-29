@@ -3,7 +3,7 @@ program test_ngc6946_bpj
     use iso_fortran_env,        only : ERROR_UNIT, OUTPUT_UNIT
     use module_fitstools,       only : ft_read_keyword
     use module_math,            only : pInf, neq_real, sum_kahan
-    use module_pacsinstrument,  only : ndims, nvertices, PacsInstrument
+    use module_pacsinstrument,  only : NDIMS, NVERTICES, NEAREST_NEIGHBOUR, SHARP_EDGES, PacsInstrument
     use module_pacsobservation, only : PacsObservation, MaskPolicy
     use module_pointingmatrix,  only : PointingElement, pmatrix_direct, pmatrix_transpose
     use module_preprocessor,    only : subtract_meandim1, divide_vectordim2
@@ -40,7 +40,7 @@ program test_ngc6946_bpj
     call init_tamasis
 
     ! initialise observation
-    allocate(obs)
+    allocate (obs)
     call obs%init(filename, policy, status, verbose=.true.)
     if (status /= 0) stop 'FAILED: pacsobservation%init'
     nsamples = obs%slice(1)%nsamples
@@ -48,7 +48,7 @@ program test_ngc6946_bpj
     call obs%print()
 
     ! initialise pacs instrument
-    allocate(pacs)
+    allocate (pacs)
     call pacs%init(obs%channel, obs%observing_mode == 'Transparent', 1, POLICY_REMOVE, .false., status=status)
     if (status /= 0) stop 'FAILED: pacsinstrument%init'
 
@@ -62,49 +62,45 @@ program test_ngc6946_bpj
     if (status /= 0) stop 'FAILED: compute_map_header 3.'
 
     ! allocate memory for the map
-    allocate(map1d(0:nx*ny-1))
+    allocate (map1d(0:nx*ny-1))
 
     ! read the signal file
-    write(*,'(a)', advance='no') 'Reading tod file... '
+    write (*,'(a)', advance='no') 'Reading tod file... '
     call system_clock(count1, count_rate, count_max)
-    allocate(signal(nsamples, pacs%ndetectors))
-    allocate(mask  (nsamples, pacs%ndetectors))
+    allocate (signal(nsamples, pacs%ndetectors))
+    allocate (mask  (nsamples, pacs%ndetectors))
     call pacs%read(obs, signal, mask, status)
     if (status /= 0) stop 'FAILED: read_tod'
     call system_clock(count2, count_rate, count_max)
-    write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
+    write (*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
 
     ! remove flat field
-    write(*,'(a)') 'Flat-fielding... '
+    write (*,'(a)') 'Flat-fielding... '
     call divide_vectordim2(signal, pack(pacs%flatfield_detector, .not. pacs%mask))
 
     ! remove mean value in timeline
-    write(*,'(a)') 'Removing mean value... '
+    write (*,'(a)') 'Removing mean value... '
     call subtract_meandim1(signal)
 
     ! compute the projector
-    write(*,'(a)', advance='no') 'Computing the projector... '
-    allocate(pmatrix(npixels_per_sample,nsamples,pacs%ndetectors))
-    call system_clock(count1, count_rate, count_max)
-    call pacs%compute_projection_sharp_edges(obs, .false., header, nx, ny, pmatrix, status)
+    allocate (pmatrix(npixels_per_sample,nsamples,pacs%ndetectors))
+    call pacs%compute_projection(SHARP_EDGES, obs, .false., header, nx, ny, pmatrix, status)
     if (status /= 0) stop 'FAILED: compute_projection_sharp_edges.'
-    call system_clock(count2, count_rate, count_max)
-    write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
 
     ! check flux conservation during backprojection
-    write(*,'(a)', advance='no') 'Testing flux conservation...'
+    write (*,'(a)', advance='no') 'Testing flux conservation...'
     call system_clock(count1, count_rate, count_max)
-    allocate(surface1(nsamples, pacs%ndetectors))
-    allocate(surface2(nsamples, pacs%ndetectors))
-    allocate(coords(ndims, pacs%ndetectors*nvertices))
-    allocate(coords_yz(ndims, pacs%ndetectors*nvertices))
+    allocate (surface1(nsamples, pacs%ndetectors))
+    allocate (surface2(nsamples, pacs%ndetectors))
+    allocate (coords(NDIMS, pacs%ndetectors*NVERTICES))
+    allocate (coords_yz(NDIMS, pacs%ndetectors*NVERTICES))
 
     call init_astrometry(header, status=status)
     if (status /= 0) stop 'FAILED: init_astrometry'
 
     chop_old = pInf
 
-    write(*,*) 'surfaces:'
+    write (*,*) 'surfaces:'
     !XXX IFORT bug
     !!$omp parallel do default(shared) firstprivate(chop_old) private(isample, ra, dec, pa, chop, coords, coords_yz)
     do isample = 1, nsamples
@@ -116,27 +112,27 @@ program test_ngc6946_bpj
         coords = pacs%yz2ad(coords_yz, ra, dec, pa)
         coords = ad2xy_gnomonic(coords)
         do idetector = 1, pacs%ndetectors
-            surface1(isample,idetector) = abs(surface_convex_polygon(coords(:,(idetector-1)*nvertices+1:idetector*nvertices)))
+            surface1(isample,idetector) = abs(surface_convex_polygon(coords(:,(idetector-1)*NVERTICES+1:idetector*NVERTICES)))
             surface2(isample,idetector) = sum_kahan(real(pmatrix(:,isample,idetector)%weight, kind=8))
         end do
     end do
     !!$omp end parallel do
 
     call system_clock(count2, count_rate, count_max)
-    write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
-    write(*,*) 'Difference: ', maxval(abs((surface1-surface2)/surface1))
-    write(*,*) 'Sum surfaces: ', sum_kahan(surface1), sum_kahan(surface2), nx, ny
-    write(*,*) 'Sum pmatrix weight: ', sum(pmatrix%weight), 'max:', maxval(pmatrix%weight)
-    write(*,*) 'Sum pmatrix pixel: ', sum(int(pmatrix%pixel,kind=8)), 'max:', maxval(pmatrix%pixel)
-    write(*,*) 'Sum signal: ', sum_kahan(signal), 'max:', maxval(signal)
+    write (*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
+    write (*,*) 'Difference: ', maxval(abs((surface1-surface2)/surface1))
+    write (*,*) 'Sum surfaces: ', sum_kahan(surface1), sum_kahan(surface2), nx, ny
+    write (*,*) 'Sum pmatrix weight: ', sum(pmatrix%weight), 'max:', maxval(pmatrix%weight)
+    write (*,*) 'Sum pmatrix pixel: ', sum(int(pmatrix%pixel,kind=8)), 'max:', maxval(pmatrix%pixel)
+    write (*,*) 'Sum signal: ', sum_kahan(signal), 'max:', maxval(signal)
 
     ! back project the timeline
-    write(*,'(a)', advance='no') 'Computing the back projection... '
+    write (*,'(a)', advance='no') 'Computing the back projection... '
     signal = 1.d0 / surface1
     call system_clock(count1, count_rate, count_max)
     call pmatrix_transpose(pmatrix, signal, map1d)
     call system_clock(count2, count_rate, count_max)
-    write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
+    write (*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
 
     ! test the back projected map
     write (OUTPUT_UNIT,*) 'Sum in map is ', sum_kahan(map1d), ' ...instead of ',&
@@ -146,12 +142,12 @@ program test_ngc6946_bpj
     end if
 
     ! project the map
-    write(*,'(a)', advance='no') 'Computing the forward projection... '
+    write (*,'(a)', advance='no') 'Computing the forward projection... '
     map1d = 1.d0
     call system_clock(count1, count_rate, count_max)
     call pmatrix_direct(pmatrix, map1d, signal)
     call system_clock(count2, count_rate, count_max)
-    write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
+    write (*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
 
     ! test the back projected map
     if (any(neq_real(signal, surface1, 5))) then
@@ -160,7 +156,7 @@ program test_ngc6946_bpj
     end if
 
     call system_clock(count2, count_rate, count_max)
-    write(*,'(a,f6.2,a)') 'Total elapsed time: ', real(count2-count0)/count_rate, 's'
+    write (*,'(a,f6.2,a)') 'Total elapsed time: ', real(count2-count0)/count_rate, 's'
 
     flush(OUTPUT_UNIT)
     stop "OK."

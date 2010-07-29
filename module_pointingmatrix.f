@@ -11,6 +11,7 @@ module module_pointingmatrix
     public :: pmatrix_transpose
     public :: pmatrix_ptp
     public :: xy2roi
+    public :: xy2pmatrix
     public :: roi2pmatrix
     public :: backprojection_weighted
     public :: backprojection_weighted_roi
@@ -250,21 +251,53 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine roi2pmatrix(roi, nvertices, coords, nx, ny, itime, nroi, out, pmatrix)
-        integer, intent(in)                  :: roi(:,:,:)
-        integer, intent(in)                  :: nvertices
-        real*8, intent(in)                   :: coords(:,:)
-        type(pointingelement), intent(inout) :: pmatrix(:,:,:)
-        integer, intent(in)                  :: nx, ny, itime
-        integer, intent(inout)               :: nroi
-        logical, intent(inout)               :: out
-        real*8                               :: polygon(size(roi,1),nvertices)
+    subroutine xy2pmatrix(x, y, nx, ny, out, pmatrix)
 
-        integer                              :: npixels_per_sample, idetector, ix, iy, iroi
-        real*4                               :: weight
+        real*8, intent(in)                 :: x(:), y(:)
+        integer, intent(in)                :: nx, ny
+        logical, intent(inout)             :: out
+        type(pointingelement), intent(out) :: pmatrix(:)
+
+        integer                            :: idetector, ix, iy
+
+        do idetector = 1, size(pmatrix)
+
+            ix = nint_up(x(idetector))
+            iy = nint_up(y(idetector))
+            if (ix < 1 .or. ix > nx .or. iy < 1 .or. iy > ny) then
+               out = .true.
+               pmatrix(idetector)%pixel  = -1
+               pmatrix(idetector)%weight = 0
+               cycle
+            end if
+
+            pmatrix(idetector)%pixel  = ix - 1 + (iy - 1) * nx
+            pmatrix(idetector)%weight = 1.
+
+        end do
+
+    end subroutine xy2pmatrix
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine roi2pmatrix(roi, nvertices, coords, nx, ny, nroi, out, pmatrix)
+
+        integer, intent(in)                :: roi(:,:,:)
+        integer, intent(in)                :: nvertices
+        real*8, intent(in)                 :: coords(:,:)
+        integer, intent(in)                :: nx, ny
+        integer, intent(inout)             :: nroi
+        logical, intent(inout)             :: out
+        type(pointingelement), intent(out) :: pmatrix(:,:)
+
+        real*8  :: polygon(size(roi,1),nvertices)
+        integer :: npixels_per_sample, idetector, ix, iy, iroi
+        real*4  :: weight
 
         npixels_per_sample = size(pmatrix, 1)
-        do idetector = 1, size(pmatrix,3)
+        do idetector = 1, size(pmatrix, 2)
 
             if (roi(2,1,idetector) < 1 .or. roi(2,2,idetector) > ny .or. roi(1,1,idetector) < 1 .or. roi(1,2,idetector) > nx) then
                out = .true.
@@ -280,8 +313,8 @@ contains
                     weight = abs(intersection_polygon_unity_square(polygon, nvertices))
                     if (weight <= 0) cycle
                     if (iroi <= npixels_per_sample) then
-                        pmatrix(iroi,itime,idetector)%pixel  = ix - 1 + (iy - 1) * nx
-                        pmatrix(iroi,itime,idetector)%weight = weight
+                        pmatrix(iroi,idetector)%pixel  = ix - 1 + (iy - 1) * nx
+                        pmatrix(iroi,idetector)%weight = weight
                     end if
                     iroi = iroi + 1
 
@@ -290,8 +323,8 @@ contains
             end do
 
             ! fill the rest of the pointing matrix
-            pmatrix(iroi:,itime,idetector)%pixel  = -1
-            pmatrix(iroi:,itime,idetector)%weight = 0
+            pmatrix(iroi:,idetector)%pixel  = -1
+            pmatrix(iroi:,idetector)%weight = 0
             nroi = max(nroi, iroi-1)
 
         end do
