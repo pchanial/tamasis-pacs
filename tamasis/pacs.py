@@ -4,13 +4,15 @@ import pyfits
 import re
 import tamasisfortran as tmf
 
-from acquisitionmodels import AcquisitionModel, ValidationError
+from acquisitionmodels import AcquisitionModel, CompressionAverage, Masking, Projection, ValidationError
 from config import tamasis_dir
 from datatypes import *
+from mappers import mapper_naive
+from processing import deglitch_l2mad, filter_median
 from unit import Quantity
 from utils import MaskPolicy
 
-__all__ = [ 'PacsObservation', 'pacs_status' ]
+__all__ = [ 'PacsObservation', 'pacs_preprocess', 'pacs_status' ]
 
 
 class PacsObservation(object):
@@ -72,7 +74,7 @@ class PacsObservation(object):
         self.reject_bad_line = reject_bad_line
         self.frame_policy = frame_policy
         self.fine_sampling_factor = fine_sampling_factor
-        self.transparent_mode = transparent_mode
+        self.transparent_mode = False if transparent_mode == 0 else True
         self.compression_factor = compression_factor
         self.unit = unit.strip()
         if self.unit.find('/') == -1:
@@ -270,6 +272,48 @@ class pacs_status(object):
         names.insert(3, 'time')
         names.insert(3, 'velocity')
         return 'PACS status: ' + str(names)
+        
+
+#-------------------------------------------------------------------------------
+
+
+def pacs_preprocess(obs, projection_method='sharp edges', oversampling=True, deglitching_hf_length=20, compression_factor=1, nsigma=5., hf_length=30000):
+    """
+    deglitch, filter and potentially compress if the observation is in transparent mode
+    """
+    projection = Projection(obs, method='sharp edges', oversampling=False)
+    tod = obs.get_tod()
+    tod.mask[:] = 0
+    tod_filtered = filter_median(tod, deglitching_hf_length)
+    tod.mask = deglitch_l2mad(tod_filtered, projection, nsigma=nsigma)
+    tod = filter_median(tod, hf_length)
+    masking = Masking(tod.mask)
+    tod = masking(tod)
+    
+    # get the proper projector
+    if projection_method != 'sharp edges' or oversampling and numpy.any(obs.compression_factor * obs.fine_sampling_factor > 1):
+        projection = Projection(obs, method=projection_method, oversampling=oversampling)
+
+    # bail out if not in transparent mode
+    if not obs.transparent_mode or compression_factor == 1:
+        model = CompressionAverage(obs.compression_factor) * projection
+        map_mask = model.T(numpy.asarray(tod.mask, 'float64'))
+        model = masking * model
+        return tod, model, mapper_naive(tod, model), map_mask
+
+    # compress the transparent observation
+    compression = CompressionAverage(compression_factor)
+    todc = compression(tod)
+    mask = compression(numpy.asarray(tod.mask, 'float64'))
+    mask[mask != 0] = 1.
+    todc.mask = numpy.array(mask, dtype='int8')
+    maskingc = Masking(todc.mask)
+
+    model = compression * projection
+    map_mask = model.T(numpy.asarray(tod.mask, 'float64'))
+    model = masking * model
+
+    return todc, model, mapper_naive(todc, model), map_mask
         
 
 #-------------------------------------------------------------------------------
