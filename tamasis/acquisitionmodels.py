@@ -117,8 +117,6 @@ class AcquisitionModel(object):
         if model.shapein is not None and model.shapein != (shape[1],):
             reshape = Reshaping(shape[1], model.shapein)
             unpacking = unpacking * reshape
-            print 'model.shape', model.shape
-            print 'reshape.shape', reshape.shape
             model = model * reshape
         if model.shapeout is not None and model.shapeout != (shape[0],):
             reshape = Reshaping(model.shapeout, shape[0])
@@ -970,9 +968,9 @@ class Reshaping(AcquisitionModel):
     """
     def __init__(self, shapein, shapeout, description=None):
         AcquisitionModel.__init__(self, description)
-        self.shapein  = flatten_sliced_shape(shapein)
-        self.shapeout = flatten_sliced_shape(shapeout)
-        if numpy.product(self.shapein) != numpy.product(self.shapeout):
+        self.shapein  = shapein
+        self.shapeout = shapeout
+        if numpy.product(flatten_sliced_shape(self.shapein)) != numpy.product(flatten_sliced_shape(self.shapeout)):
             raise ValueError('The number of elements of the input and output of the Reshaping operator are incompatible.')
 
     def direct(self, array, reusein=False, reuseout=False):
