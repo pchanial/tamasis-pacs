@@ -249,10 +249,10 @@ contains
             ! UV centers
             call ft_read_image(get_calfile(filename_saa) // '[ured]', tmp2, status)
             if (status /= 0) return
-            this%centers_uv_all(1,:,:) = tmp2
+            this%centers_uv_all(1,:,:) = transpose(tmp2)
             call ft_read_image(get_calfile(filename_saa) // '[vred]', tmp2, status)
             if (status /= 0) return
-            this%centers_uv_all(2,:,:) = tmp2
+            this%centers_uv_all(2,:,:) = transpose(tmp2)
 
             ! UV corners
             do ivertex=1, nvertices
