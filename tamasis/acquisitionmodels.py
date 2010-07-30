@@ -1067,38 +1067,28 @@ class Fft(AcquisitionModel):
     """
     def __init__(self, nsamples, description=None):
         AcquisitionModel.__init__(self, description)
-        self.nsamples = tuple(numpy.array(nsamples, ndmin=1))
-        self.tarray = []
-        self.farray = []
-        self.forward_plan = []
-        self.backward_plan = []
-        for n in self.nsamples:
+        self.nsamples = numpy.array(nsamples, ndmin=1, dtype='int64')
+        self.forward_plan = numpy.empty(self.nsamples.size, dtype='int64')
+        self.backward_plan = numpy.empty(self.nsamples.size, dtype='int64')
+        nsamples_max = numpy.max(self.nsamples)
+        for i, n in enumerate(self.nsamples):
             tarray = numpy.empty(n, dtype='float64')
             farray = numpy.empty(n, dtype='float64')
-            self.tarray.append(tarray)
-            self.farray.append(farray)
-            self.forward_plan.append(fftw3.Plan(tarray, farray, direction='forward', flags=['measure'], realtypes=['halfcomplex r2c'], nthreads=1))
-            self.backward_plan.append(fftw3.Plan(farray, tarray, direction='backward', flags=['measure'], realtypes=['halfcomplex c2r'], nthreads=1))
+            self.forward_plan[i] = fftw3.Plan(tarray, farray, direction='forward', flags=['measure'], realtypes=['halfcomplex r2c'], nthreads=1)._get_parameter()
+            self.backward_plan[i] = fftw3.Plan(farray, tarray, direction='backward', flags=['measure'], realtypes=['halfcomplex c2r'], nthreads=1)._get_parameter()
 
     def direct(self, array, reusein=False, reuseout=False):
         array = self.validate_input(Tod, array)
         output = self.validate_output(array, reusein and reuseout)
-        # cast to ndarray to speed up computation
-        output_ = output.view(numpy.ndarray)
-        output_ = _smart_reshape(output_, (numpy.product(array.shape[:-1]), array.shape[-1]))
-        nsamples = numpy.array(self.nsamples)
-        plans = numpy.array([self.forward_plan[islice]._get_parameter() for islice in range(len(self.nsamples))])
-        tmf.fft_plan(output_.T, nsamples, plans)
+        output_ = _smart_reshape(output, (numpy.product(array.shape[:-1]), array.shape[-1]))
+        tmf.fft_plan(output_.T, self.nsamples, self.forward_plan)
         return output
 
     def transpose(self, array, reusein=False, reuseout=False):
         array = self.validate_input(Tod, array)
         output = self.validate_output(array, reusein and reuseout)
-        output_ = output.view(numpy.ndarray)
-        output_ = _smart_reshape(output_, (numpy.product(array.shape[:-1]), array.shape[-1]))
-        nsamples = numpy.array(self.nsamples)
-        plans = numpy.array([self.backward_plan[islice]._get_parameter() for islice in range(len(self.nsamples))])
-        tmf.fft_plan(output_.T, nsamples, plans)
+        output_ = _smart_reshape(output, (numpy.product(array.shape[:-1]), array.shape[-1]))
+        tmf.fft_plan(output_.T, self.nsamples, self.backward_plan)
         dest = 0
         for n in self.nsamples:
             output_[:,dest:dest+n] /= n
