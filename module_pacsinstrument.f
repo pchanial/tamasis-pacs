@@ -593,7 +593,7 @@ contains
         end select
 
         call system_clock(count2, count_rate, count_max)
-        write(*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
+        write(*,'(f7.2,a)') real(count2-count1)/count_rate, 's'
 
         if (npixels_per_sample > size(pmatrix,1)) then
             status = 1
