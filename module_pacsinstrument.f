@@ -16,10 +16,12 @@ module module_pacsinstrument
     implicit none
     private
 
+    public :: filename_bpm
     public :: ndims
     public :: nvertices
     public :: NEAREST_NEIGHBOUR, SHARP_EDGES
     public :: pacsinstrument
+    public :: get_calfile
     public :: multiplexing_direct
     public :: multiplexing_transpose
     public :: read_filter_calibration_ncorrelations
@@ -54,8 +56,6 @@ module module_pacsinstrument
         integer              :: ndetectors
         integer              :: fine_sampling_factor
         logical              :: transparent_mode
-        integer              :: detector_policy
-        logical              :: reject_bad_line
 
         logical*1, allocatable :: bad(:,:)  ! .true. for bad detectors
         logical*1, allocatable :: mask(:,:) ! .true. if the bad detector has been filtered out in the flattened list of detectors
@@ -104,18 +104,14 @@ module module_pacsinstrument
 contains
 
 
-    subroutine init(this, channel, transparent_mode, fine_sampling_factor, detector_policy, reject_bad_line, detector_mask, status)
+    subroutine init(this, channel, transparent_mode, fine_sampling_factor, detector_mask, status)
 
         class(pacsinstrument), intent(inout) :: this
         character, intent(in)                :: channel
         logical, intent(in)                  :: transparent_mode
         integer, intent(in)                  :: fine_sampling_factor
-        integer, intent(in)                  :: detector_policy
-        logical, intent(in)                  :: reject_bad_line
         logical*1, intent(in), optional      :: detector_mask(:,:) ! if all bad, use the calibration mask
         integer, intent(out)                 :: status
-
-        logical                              :: user_mask
 
         ! check channel
         if (index('rgb', channel) == 0) then
@@ -135,8 +131,6 @@ contains
         this%channel              = channel
         this%fine_sampling_factor = fine_sampling_factor
         this%transparent_mode     = transparent_mode
-        this%detector_policy      = detector_policy
-        this%reject_bad_line      = reject_bad_line
 
         if (channel /= 'r') then
             this%nrows = shape_blue(1)
@@ -150,23 +144,12 @@ contains
         if (status /= 0) return
 
         if (present(detector_mask)) then
-            user_mask = count(.not. detector_mask) /= 0 !IFORT 11.1 bug: any(.not. detector_mask)=T if all detectors are bad
-        else
-            user_mask = .false.
-        end if
-
-        if (user_mask) then
             if (any(shape(detector_mask) /= [this%nrows,this%ncolumns])) then
                 status = 1
                 write (ERROR_UNIT,'(a)') 'INIT: the input bad detector mask has an invalid size.'
                 return
             end if
-            this%bad = detector_mask
-
-        ! mask erratic line
-        else if (reject_bad_line .and. this%channel /= 'r') then
-           this%bad(12,17:32) = .true.
-
+            this%mask = detector_mask
         end if
 
         call this%filter_detectors()
@@ -275,20 +258,21 @@ contains
         end if
 
         ! Bad pixel mask
-        allocate (this%bad(this%nrows,this%ncolumns))
+        allocate (this%mask(this%nrows,this%ncolumns))
         call ft_read_image(get_calfile(filename_bpm) // '[' // trim(channel_name) // ']', tmplogical, status)
         if (status /= 0) return
-        this%bad = transpose(tmplogical)
+        this%mask = transpose(tmplogical)
+
         ! mask detectors rejected in transparent mode
         if (this%transparent_mode) then
             if (this%channel /= 'r') then
-                this%bad(1:16,1:16) = .true.
-                this%bad(1:16,33:)  = .true.
-                this%bad(17:,:)     = .true.
+                this%mask(1:16,1:16) = .true.
+                this%mask(1:16,33:)  = .true.
+                this%mask(17:,:)     = .true.
             else
-                this%bad(1:8,1:8) = .true.
-                this%bad(1:8,17:) = .true.
-                this%bad(9:,:)    = .true.
+                this%mask(1:8,1:8) = .true.
+                this%mask(1:8,17:) = .true.
+                this%mask(9:,:)    = .true.
             end if
         end if
 
@@ -327,14 +311,6 @@ contains
         integer :: idetector, p, q
         real*8  :: center(2,2)
 
-        ! get the mask, which indicates if a detected is included in the flattened list of detectors
-        allocate (this%mask(this%nrows, this%ncolumns))
-        if (this%detector_policy /= POLICY_REMOVE) then
-            this%mask = .false.
-        else
-            this%mask = this%bad
-        end if
-
         ! get the number of detectors
         this%ndetectors = count(.not. this%mask)
 
@@ -369,7 +345,7 @@ contains
         this%flatfield_optical = this%detector_area_all / mean(reshape(center,[4]))
         this%flatfield_detector = this%flatfield_total / this%flatfield_optical
 
-        where (this%bad)
+        where (this%mask)
             this%flatfield_total    = 1
             this%flatfield_detector = 1
             this%flatfield_optical  = 1
@@ -782,7 +758,7 @@ contains
         logical, intent(in), optional      :: verbose
 
         integer :: dest
-        integer :: iobs, idetector, nobs
+        integer :: iobs, nobs
         integer :: count1, count2, count_rate, count_max
         logical :: verbose_
 
@@ -815,16 +791,6 @@ contains
             if (status /= 0) return
             dest = dest + obs%slice(iobs)%nvalids
         end do
-
-        ! mask bad detectors if they haven't been filtered out
-        if (this%detector_policy == POLICY_MASK) then
-            do idetector = 1, this%ndetectors
-                if (this%bad(this%pq(1,idetector)+1,this%pq(2,idetector)+1)) then
-                    signal(:,idetector) = 0.d0
-                    mask  (:,idetector) = .true.
-                end if
-            end do
-        end if
 
         call system_clock(count2, count_rate, count_max)
         if (verbose_) then
@@ -1196,7 +1162,6 @@ contains
 
         class(pacsinstrument), intent(inout) :: this
 
-        deallocate (this%bad)
         deallocate (this%mask)
         deallocate (this%ij)
         deallocate (this%pq)

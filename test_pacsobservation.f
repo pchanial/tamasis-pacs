@@ -77,7 +77,7 @@ program test_pacsobservation
     if (status /= 0) stop 'FAILED: init_pacsobservation loop'
 
     allocate (pacs)
-    call pacs%init(obs%channel, obs%observing_mode == 'Transparent', 1, POLICY_REMOVE, .false., status=status)
+    call pacs%init(obs%channel, obs%observing_mode == 'Transparent', 1, status=status)
     if (status /= 0 .or. pacs%channel /= 'b' .or. pacs%transparent_mode) stop 'FAILED: pacs%init'
 
     allocate(signal(obs%slice(1)%nsamples,pacs%ndetectors))

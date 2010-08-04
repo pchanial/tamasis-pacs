@@ -8,6 +8,7 @@ from acquisitionmodels import AcquisitionModel, CompressionAverage, Masking, Pro
 from config import tamasis_dir
 from datatypes import *
 from mappers import mapper_naive
+from mpi4py import MPI
 from processing import deglitch_l2mad, filter_median
 from unit import Quantity
 from utils import MaskPolicy
@@ -26,51 +27,60 @@ class PacsObservation(object):
                            the type. Example: '1342184520_blue'.
     - npixels_per_sample : number of sky pixels which intersect a PACS detector
     - keep_bad_detectors : if set to True, force the processing to include all pixels
-    - bad_detector_mask  : (nx,ny) mask of uint8 values (0 or 1). 1 means dead pixel.
+    - detector_mask  : (nrows,ncolumns) mask of uint8 values (0 or 1). 1 means dead pixel.
     - ij(2,ndetectors)   : the row and column number (starting from 0) of the detectors
     Author: P. Chanial
     """
-    def __init__(self, filename, fine_sampling_factor=1, detector_policy='remove', detector_mask=None, reject_bad_line=False, frame_policy_inscan='keep', frame_policy_turnaround='keep', frame_policy_other='remove', frame_policy_invalid='mask'):
+    def __init__(self, filename, fine_sampling_factor=1, detector_mask=None, reject_bad_line=False, frame_policy_inscan='keep', frame_policy_turnaround='keep', frame_policy_other='remove', frame_policy_invalid='mask'):
 
-        filename_, nfilenames = self._files2tmf(filename)
+        if type(filename) == str:
+            filename = (filename,)
+        filename_, nfilenames = _files2tmf(filename)
 
-        channel, status = tmf.pacs_info_channel(filename_, nfilenames)
-        if status != 0: raise RuntimeError()
+        channel, transparent_mode, status = tmf.pacs_info_channel(filename_, nfilenames)
+        if status != 0: raise Runtimerror()
+        channel = channel.strip()
 
-        nrows, ncolumns = (16,32) if channel == 'r' else (32,64)
+        nrows, ncolumns = (16,32) if channel == 'Red' else (32,64)
 
+        # get the detector mask, before distributing to the processors
         if detector_mask is not None:
             if detector_mask.shape != (nrows, ncolumns):
-                raise ValueError('Invalid shape of the input '+('red' if channel == 'r' else 'blue')+' detector mask: '+str(detector_mask.shape)+'.')
+                raise ValueError('Invalid shape of the input detector mask: ' + str(detector_mask.shape) + ' for the ' + channel + ' channel.')
             detector_mask = numpy.array(detector_mask, dtype='int8', copy=False)
 
         else:
-            detector_mask = numpy.ones((nrows,ncolumns), dtype='int8')
+            detector_mask, status = tmf.pacs_info_bad_detector_mask(tamasis_dir, channel, transparent_mode, reject_bad_line, nrows, ncolumns)
+            if status != 0: raise RuntimeError()
+            detector_mask = numpy.ascontiguousarray(detector_mask)
+        print int(numpy.sum(detector_mask == 0))
 
-        # detector policy
-        detector_policy_ = MaskPolicy('bad', detector_policy, 'Detector Policy')
+        # get the observations and detector mask for the current processor
+        slice_observation, slice_detector = _split_observation(nfilenames, int(numpy.sum(detector_mask == 0)))
+        filename = filename[slice_observation]
+        igood = numpy.where(detector_mask.flat == 0)[0]
+        detector_mask = numpy.ones(detector_mask.shape, dtype='int8')
+        detector_mask.flat[igood[slice_detector]] = 0
+        filename_, nfilenames = _files2tmf(filename)
+
         # frame policy
         frame_policy = MaskPolicy('inscan,turnaround,other,invalid'.split(','), (frame_policy_inscan, frame_policy_turnaround, frame_policy_other, frame_policy_invalid), 'Frame Policy')
 
         # retrieve information from the observations
-        ndetectors, detector_bad, transparent_mode, compression_factor, nsamples, unit, responsivity, detector_area, dflat, oflat, status = tmf.pacs_info(tamasis_dir, filename_, nfilenames, fine_sampling_factor, numpy.array(frame_policy), numpy.array(detector_policy_)[0], reject_bad_line, numpy.asfortranarray(detector_mask))
+        compression_factor, nsamples, unit, responsivity, detector_area, dflat, oflat, status = tmf.pacs_info(tamasis_dir, filename_, nfilenames, transparent_mode, fine_sampling_factor, numpy.array(frame_policy), numpy.asfortranarray(detector_mask))
         if status != 0: raise RuntimeError()
 
         self.filename = filename
         self.channel = channel
         self.nrows = nrows
         self.ncolumns = ncolumns
-        self.default_npixels_per_sample = 11 if channel == 'r' else 6
-        self.default_resolution = 6.4 if channel == 'r' else 3.2
+        self.default_npixels_per_sample = 11 if channel == 'Red' else 6
+        self.default_resolution = 6.4 if channel == 'Red' else 3.2
         self.nobservations = nfilenames
         self.nsamples = tuple(nsamples)
         self.nfinesamples = tuple(nsamples * compression_factor * fine_sampling_factor)
-        self.ndetectors = ndetectors
-        self.detector_policy = detector_policy_
-        self.detector_bad = numpy.ascontiguousarray(detector_bad)
-        self.detector_mask = self.detector_bad.copy()
-        if detector_policy != 'remove':
-            self.detector_mask[:] = 0
+        self.ndetectors = int(numpy.sum(detector_mask == 0))
+        self.detector_mask = detector_mask
         self.reject_bad_line = reject_bad_line
         self.frame_policy = frame_policy
         self.fine_sampling_factor = fine_sampling_factor
@@ -90,8 +100,8 @@ class PacsObservation(object):
     def get_map_header(self, resolution=None, oversampling=True):
         if resolution is None:
             resolution = self.default_resolution
-        filename_, nfilenames = self._files2tmf(self.filename)
-        header, status = tmf.pacs_map_header(tamasis_dir, filename_, nfilenames, oversampling, self.fine_sampling_factor, numpy.array(self.frame_policy), numpy.array(self.detector_policy)[0], numpy.asfortranarray(self.detector_bad), resolution)
+        filename_, nfilenames = _files2tmf(self.filename)
+        header, status = tmf.pacs_map_header(tamasis_dir, filename_, nfilenames, oversampling, self.fine_sampling_factor, numpy.array(self.frame_policy), numpy.asfortranarray(self.detector_mask), resolution)
         if status != 0: raise RuntimeError()
         header = _str2fitsheader(header)
         return header
@@ -100,8 +110,8 @@ class PacsObservation(object):
         """
         Returns the signal and mask timelines.
         """
-        filename_, nfilenames = self._files2tmf(self.filename)
-        signal, mask, status = tmf.pacs_timeline(tamasis_dir, filename_, self.nobservations, numpy.sum(self.nsamples), self.ndetectors, numpy.array(self.frame_policy), numpy.array(self.detector_policy)[0], numpy.asfortranarray(self.detector_bad), flatfielding, subtraction_mean)
+        filename_, nfilenames = _files2tmf(self.filename)
+        signal, mask, status = tmf.pacs_timeline(tamasis_dir, filename_, self.nobservations, numpy.sum(self.nsamples), self.ndetectors, numpy.array(self.frame_policy), numpy.asfortranarray(self.detector_mask), flatfielding, subtraction_mean)
         if status != 0: raise RuntimeError()
        
         tod = Tod(signal.T, mask.T, nsamples=self.nsamples, unit=self.unit)
@@ -139,16 +149,18 @@ class PacsObservation(object):
         if npixels_per_sample is None:
             npixels_per_sample = self.default_npixels_per_sample if method != 'nearest neighbour' else 1
         if header is None:
+            if MPI.COMM_WORLD.Get_size() > 1:
+                raise ValueError('In parallel mode, the map header must be speficied.')
             header = self.get_map_header(resolution, oversampling)
         elif isinstance(header, str):
             header = _str2fitsheader(header)
 
-        filename_, nfilenames = self._files2tmf(self.filename)
+        filename_, nfilenames = _files2tmf(self.filename)
         sizeofpmatrix = npixels_per_sample * numpy.sum(nsamples) * self.ndetectors
         print 'Info: Allocating '+str(sizeofpmatrix/2.**17)+' MiB for the pointing matrix.'
         pmatrix = numpy.zeros(sizeofpmatrix, dtype=numpy.int64)
         
-        status = tmf.pacs_pointing_matrix_filename(tamasis_dir, filename_, self.nobservations, method, oversampling, self.fine_sampling_factor, npixels_per_sample, numpy.sum(nsamples), self.ndetectors, numpy.array(self.frame_policy), numpy.array(self.detector_policy)[0], numpy.asfortranarray(self.detector_bad), str(header).replace('\n', ''), pmatrix)
+        status = tmf.pacs_pointing_matrix_filename(tamasis_dir, filename_, self.nobservations, method, oversampling, self.fine_sampling_factor, npixels_per_sample, numpy.sum(nsamples), self.ndetectors, numpy.array(self.frame_policy), numpy.asfortranarray(self.detector_mask), str(header).replace('\n', ''), pmatrix)
         if status != 0: raise RuntimeError()
 
         return pmatrix, header, self.ndetectors, nsamples, npixels_per_sample
@@ -164,18 +176,6 @@ class PacsObservation(object):
         if status != 0: raise RuntimeError()
 
         return data.T
-
-    @staticmethod
-    def _files2tmf(filename):
-        if isinstance(filename, str):
-            return filename, 1
-
-        nfilenames = len(filename)
-        length = max(len(f) for f in filename)
-        filename_ = ''
-        for f in filename:
-            filename_ += f + (length-len(f))*' '
-        return filename_, nfilenames
 
    
 #-------------------------------------------------------------------------------
@@ -314,6 +314,67 @@ def pacs_preprocess(obs, projection_method='sharp edges', oversampling=True, deg
     model = masking * model
 
     return todc, model, mapper_naive(todc, model), map_mask
+
+
+#-------------------------------------------------------------------------------
+
+
+def _files2tmf(filename):
+    nfilenames = len(filename)
+    length = max(len(f) for f in filename)
+    filename_ = ''
+    for f in filename:
+        filename_ += f + (length-len(f))*' '
+    return filename_, nfilenames
+
+
+#-------------------------------------------------------------------------------
+
+
+def _split_observation(nobservations, ndetectors):
+    nnodes  = MPI.COMM_WORLD.Get_size()
+    nthreads = tmf.pacs_info_nthreads()
+
+    # number of observations. They should approximatively be of the same length
+    nx = nobservations
+
+    # number of detectors, grouped by the number of cpu cores
+    ny = int(numpy.ceil(float(ndetectors) / nthreads))
+
+    # we start with the miminum blocksize and increase it until we find a configuration that covers all the observations
+    blocksize = int(numpy.ceil(float(nx * ny) / nnodes))
+    while True:
+        # by loop over x first, we favor larger number of detectors and fewer number of observation per processor, to minimise inter-processor communication in case of correlations between detectors
+        for xblocksize in range(1, blocksize+1):
+            if float(blocksize) / xblocksize != blocksize // xblocksize:
+                continue
+            yblocksize = int(blocksize // xblocksize)
+            nx_block = int(numpy.ceil(float(nx) / xblocksize))
+            ny_block = int(numpy.ceil(float(ny) / yblocksize))
+            if nx_block * ny_block <= nnodes:
+                break
+        if nx_block * ny_block <= nnodes:
+            break
+        blocksize += 1
+
+    print 'block: ', xblocksize, 'x', yblocksize
+    print 'nx, nx_block', nx, nx_block
+    print 'ny, ny_block', ny, ny_block
+
+    rank = MPI.COMM_WORLD.Get_rank()
+
+    ix = rank // ny_block
+    iy = rank %  ny_block
+
+    # check that the processor has something to do
+    if ix >= nx_block:
+        iobservation = slice(0,0)
+        idetector = slice(0,0)
+    else:
+        iobservation = slice(ix * xblocksize, (ix+1) * xblocksize)
+        idetector    = slice(iy * yblocksize * nthreads, (iy+1) * yblocksize * nthreads)
+
+    return iobservation, idetector
         
 
 #-------------------------------------------------------------------------------

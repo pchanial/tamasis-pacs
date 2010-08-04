@@ -64,6 +64,12 @@ program pacs_photproject
     deglitching_nsigma = parser%get_option_as_real('nsigma')
     reject_bad_line    = parser%get_option_as_logical('reject-bad-line')
 
+    !XXX
+    if (reject_bad_line) then
+        write (ERROR_UNIT,'(a)') 'Reject_bad_line not implemented...'
+        go to 999
+    end if
+
     if (filtering_method /= 'none' .and. filtering_method /= 'median') then
         write (ERROR_UNIT) "Invalid filtering method '" // filtering_method // "'. The only valid method is 'median'."
         go to 999
@@ -104,7 +110,7 @@ program pacs_photproject
 
     ! initialise pacs instrument
     allocate(pacs)
-    call pacs%init(obs%channel, obs%observing_mode == 'Transparent', 1, POLICY_REMOVE, reject_bad_line, status=status)
+    call pacs%init(obs%channel, obs%observing_mode == 'Transparent', 1, status=status)
     if (status /= 0) go to 999
 
     ! get FITS header

@@ -5,6 +5,11 @@ try:
 except:
     print 'Warning: Library PyFFTW3 is not installed.'
 
+try:
+    from mpi4py import MPI
+except:
+    print 'Warning: Library mpi4py is not installed.'
+
 import multiprocessing
 import numpy
 import scipy.sparse.linalg
@@ -19,7 +24,7 @@ __all__ = ['AcquisitionModel', 'AcquisitionModelTranspose', 'Composition',
            'Addition', 'Square', 'Symmetric', 'Diagonal', 'Scalar', 'Identity',
            'DiscreteDifference', 'Projection', 'Compression', 
            'CompressionAverage', 'DownSampling', 'Masking', 'Masking2', 'Unpacking', 'Unpacking2',  
-           'Reshaping', 'Padding', 'Fft', 'InvNtt', 'InterpolationLinear', 'ValidationError', 
+           'Reshaping', 'Padding', 'Fft', 'InvNtt', 'InterpolationLinear', 'Broadcast', 'ValidationError', 
            'asacquisitionmodel']
 
 
@@ -39,7 +44,7 @@ class AcquisitionModel(object):
     they return M.x (submodels are applied in right-to-left order) and transpose(M).y.
     Author: P. Chanial
     """
-    def __init__(self, description):
+    def __init__(self, description=None):
         if description is None:
             description = self.__class__.__name__
         self.description = description
@@ -1132,6 +1137,17 @@ class InterpolationLinear(Square):
     def direct(self, data, reusein=False, reuseout=False):
         data.mask = self.mask
         return interpolate_linear(data)
+
+
+#-------------------------------------------------------------------------------
+
+
+class Broadcast(Square):
+
+    def direct(self, data, reusein=False, reuseout=False):
+        return data
+    def transpose(self, data, reusein=False, reuseout=False, op=MPI.SUM):
+        return MPI.COMM_WORLD.allreduce(data, op=MPI.SUM)
 
 
 #-------------------------------------------------------------------------------

@@ -2,8 +2,9 @@ import numpy
 import scipy
 import time
 
-from acquisitionmodels import asacquisitionmodel, Diagonal, DiscreteDifference, Identity, Masking
+from acquisitionmodels import asacquisitionmodel, Diagonal, DiscreteDifference, Identity, Masking, Broadcast
 from datatypes import Map, Tod
+from mpi4py import MPI
 from unit import Quantity, UnitError
 from utils import create_fitsheader
 
@@ -18,7 +19,7 @@ def mapper_naive(tod, model, unit=None):
     have the TOD in unit of surface brightness.
     """
 
-    model = Masking(tod.mask) * model
+    model = Masking(tod.mask) * model * Broadcast()
     mymap = Map(model.transpose(tod), copy=False)
     unity = tod.copy()
     unity[:] = 1.
@@ -66,11 +67,12 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None, tol=
 
     C = model.T * weight * model
 
-    if hyper != 0:
+    if hyper != 0 and MPI.COMM_WORLD.Get_rank() == 0:
         dX = DiscreteDifference(axis=1)
         dY = DiscreteDifference(axis=0)
         C += hyper * ( dX.T * dX + dY.T * dY )
 
+    C = Broadcast().T * C
     C = C.aslinearoperator(unpacking=unpacking)
 
     if M is None:
@@ -83,7 +85,7 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None, tol=
         M = asacquisitionmodel(M)
     M0 = M.aslinearoperator(C.shape, unpacking=unpacking)
 
-    rhs = C.packing * model.T * weight * tod
+    rhs = C.packing * Broadcast().T * model.T * weight * tod
     if not numpy.all(numpy.isfinite(rhs)):
         raise ValueError('RHS contains not finite values.')
     if rhs.shape != C.shape[1]:
@@ -106,7 +108,7 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None, tol=
             self.residual = parent_locals['resid']
             if self.residual < tol:
                 self.niterations += 1
-            if verbose: 
+            if verbose and MPI.COMM_WORLD.Get_rank() == 0: 
                 print 'Iteration ' + str(self.niterations) + ': ' + str(self.residual)
 
     callback = PcgCallback()
