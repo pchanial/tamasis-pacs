@@ -183,8 +183,8 @@ def _strunit(unit):
 class Quantity(numpy.ndarray):
     """
     Represent a quantity, i.e. a scalar or array associated with a unit.
-    if dtype is not specified, the quantity is upcasted to float64 or 
-    complex128.
+    if dtype is not specified, the quantity is upcasted to float64 if its dtype
+    is not real nor complex
 
     Examples
     --------
@@ -240,13 +240,9 @@ class Quantity(numpy.ndarray):
 
         if dtype is None:
             if isinstance(data, numpy.ndarray):
-                if data.dtype.type in (numpy.complex64, numpy.complex128):
-                    dtype = numpy.complex128
-                else:
+                if data.dtype.type not in (numpy.float32, numpy.complex64, numpy.complex128):
                     dtype = numpy.float64
-            elif type(data) in (complex, numpy.complex64, numpy.complex128):
-                dtype = numpy.complex128
-            else:
+            elif type(data) not in (numpy.float32, complex, numpy.complex64, numpy.complex128):
                 dtype = numpy.float64
 
         # get a new Quantity instance (or a subclass if subok is True)
