@@ -1,3 +1,5 @@
+import glob
+import matplotlib
 import numpy
 import os
 import pyfits
