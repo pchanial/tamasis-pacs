@@ -7,8 +7,7 @@ class TestFailure(Exception): pass
 
 datadir = tamasis_dir + 'tests/'
 obs = PacsObservation(datadir+'frames_blue.fits',
-                      fine_sampling_factor=1, 
-                      detector_policy='remove')
+                      fine_sampling_factor=1)
 
 tod = obs.get_tod()
 
@@ -51,20 +50,3 @@ relerror = abs(std_naive-std_ref) / std_ref
 if relerror > 0.025: raise TestFailure('Tncompatibility with HCSS photproject: ' + str(relerror*100)+'%.')
 
 print 'OK.'
-
-#ra0  = 20.
-#dec0 = 0.1
-#time = numpy.arange(0.,100., 1./40)
-#simulation = PacsSimulation(inputmap           = 
-#                            time               = time \
-#                            ra                 = numpy.linspace(ra0, ra0+0.1, nsamples)   \
-#                            dec                = numpy.linspace(dec0, dec0+0.1, nsamples) \
-#                            pa                 = numpy.zeros(nsamples) \
-#                            chop               = numpy.zeros(nsamples) \
-#                            array              = 'blue'        \
-#                            npixelsPerSample   = 9             \
-#                            observingMode      = 'transparent' \
-#                            fineSamplingFactor = 1             \
-#                            compressionFactor  = 1             \
-#                            keepBadDetectors   = True)
-

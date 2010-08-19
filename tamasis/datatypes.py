@@ -11,13 +11,13 @@ except:
 from unit import Quantity
 from utils import create_fitsheader, _my_isscalar
 
-__all__ = [ 'FitsArray', 'Map', 'Tod' ]
+__all__ = [ 'FitsArray', 'Map', 'Tod', 'distance' ]
 
 
 class FitsArray(Quantity):
 
     __slots__ = ('_header', '__dict__')
-    def __new__(cls, data, header=None, unit=None, dtype=numpy.float64, copy=True, order='C', subok=False, ndmin=0):
+    def __new__(cls, data, header=None, unit=None, dtype=None, copy=True, order='C', subok=False, ndmin=0):
 
         if type(data) is str:
             ihdu = 0
@@ -46,8 +46,15 @@ class FitsArray(Quantity):
         # copy header attribute
         if header is not None:
             result.header = header
-        elif copy and hasattr(data, '_header') and data._header.__class__ is pyfits.Header:
-            result.header = data._header.copy()
+        elif hasattr(data, '_header') and data._header.__class__ is pyfits.Header:
+            if copy:
+                result._header = data._header.copy()
+            else:
+                result._header = data._header
+        elif str(result.dtype) not in ('complex64', 'complex128'):
+            result._header = create_fitsheader(result)
+        else:
+            result._header = None
 
         return result
 
@@ -93,10 +100,7 @@ class FitsArray(Quantity):
         If the same file already exist it overwrites it.
         """
 
-        if self.header is None:
-            header = create_fitsheader(self)
-        else:
-            header = self.header
+        header = self.header.copy()
        
         unit = self.unit
         if unit != '':
@@ -138,6 +142,8 @@ class FitsArray(Quantity):
             mask = numpy.logical_or(mask, ~numpy.isfinite(self))
 
         data = numpy.ma.MaskedArray(self, mask=mask, copy=False)
+        if str(data.dtype) in ('complex64', 'complex128'):
+            data = abs(data)
         mean   = numpy.mean(data)
         stddev = numpy.std(data)
         # casting to float because of a bug numpy1.4 + matplotlib
@@ -236,7 +242,7 @@ class Map(FitsArray):
     """
     Represent a map, complemented with unit and FITS header.
     """
-    def __new__(cls, data, coverage=None, error=None, header=None, unit=None, dtype=numpy.float64, copy=True, order='C', subok=False, ndmin=0):
+    def __new__(cls, data, coverage=None, error=None, header=None, unit=None, dtype=None, copy=True, order='C', subok=False, ndmin=0):
 
         # get a new Map instance (or a subclass if subok is True)
         result = FitsArray(data, header, unit, dtype, copy, order, True, ndmin)
@@ -326,7 +332,7 @@ class Tod(FitsArray):
 
     __slots__ = ('mask', 'nsamples')
 
-    def __new__(cls, data, mask=None, nsamples=None, header=None, unit=None, dtype=numpy.float64, copy=True, order='C', subok=False, ndmin=0):
+    def __new__(cls, data, mask=None, nsamples=None, header=None, unit=None, dtype=None, copy=True, order='C', subok=False, ndmin=0):
 
         # get a new Tod instance (or a subclass if subok is True)
         result = FitsArray(data, header, unit, dtype, copy, order, True, ndmin)
@@ -466,6 +472,43 @@ class Tod(FitsArray):
         header = create_fitsheader(mask, extname='Mask')
         pyfits.append(filename, mask, header)
    
+
+#-------------------------------------------------------------------------------
+
+
+def distance(shape, origin=None, resolution=1., dtype='float64'):
+    """
+    Returns an array whose values are the distances to a given origin
+    
+    Parameters
+    ----------
+    shape : tuple of integer
+        dimensions of the output array. For a 2d array, the first integer
+        is for the Y-axis and the second one for the X-axis.
+    origin : array-like
+        coordinates of the origin, for which the output array value is
+        zero. Default value is the array center
+    resolution : inter-pixel distance
+    dtype : type of the output array
+
+    Example
+    -------
+    nx, ny = 3, 3
+    print distance((ny,nx))
+    [[ 1.41421356  1.          1.41421356]
+    [ 1.          0.          1.        ]
+    [ 1.41421356  1.          1.41421356]]
+    """
+    if type(shape) is not tuple and type(shape) is not list:
+        shape = (shape,)
+    if origin is None:
+        origin = (numpy.array(shape) - 1) / 2.
+    dim = []
+    for length, c in zip(reversed(shape), reversed(origin)):
+        dim.append((numpy.arange(length) - c) * resolution)
+    return Map(numpy.sqrt(numpy.sum(numpy.square(numpy.meshgrid(*dim)), axis=0)))
+        
+
 #-------------------------------------------------------------------------------
 
 

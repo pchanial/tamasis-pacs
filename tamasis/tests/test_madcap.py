@@ -9,7 +9,7 @@ observation = MadMap1Observation(tamasis_dir+'tests/madmap1/todSpirePsw_be', tam
 tod = observation.get_tod()
 tod.unit = 'Jy/beam'
 invNtt = InvNtt(len(tod.nsamples)*(1024,), observation.get_filter_uncorrelated())
-fft = Fft(len(tod.nsamples)*(1024,))
+fft = FftHalfComplex(len(tod.nsamples)*(1024,))
 padding = Padding(left=invNtt.ncorrelations, right=1024-numpy.array(tod.nsamples)-invNtt.ncorrelations)
 projection = Projection(observation)
 packing = Unpacking(observation.mapmask, field=numpy.nan).T

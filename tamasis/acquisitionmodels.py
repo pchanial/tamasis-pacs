@@ -17,14 +17,15 @@ import tamasisfortran as tmf
 import utils
 
 from config import __verbose__
-from datatypes import Map, Tod, combine_sliced_shape, flatten_sliced_shape, validate_sliced_shape
+from datatypes import Map, Tod, combine_sliced_shape, distance, flatten_sliced_shape, validate_sliced_shape
 from processing import interpolate_linear
 
 __all__ = ['AcquisitionModel', 'AcquisitionModelTranspose', 'Composition', 
            'Addition', 'Square', 'Symmetric', 'Diagonal', 'Scalar', 'Identity',
            'DiscreteDifference', 'Projection', 'Compression', 
-           'CompressionAverage', 'DownSampling', 'Masking', 'Masking2', 'Unpacking', 'Unpacking2',  
-           'Reshaping', 'Padding', 'Fft', 'InvNtt', 'InterpolationLinear', 'Broadcast', 'ValidationError', 
+           'CompressionAverage', 'DownSampling', 'Masking', 'Unpacking', 'Unpacking2',  
+           'Reshaping', 'Padding', 'Fft', 'FftHalfComplex', 'InvNtt', 'InterpolationLinear', 'Broadcast', 'CircularShift', 'ValidationError', 
+           'aperture_circular', 'phasemask_fourquadrant',
            'asacquisitionmodel']
 
 
@@ -128,7 +129,7 @@ class AcquisitionModel(object):
             packing = reshape * packing
             model = reshape * model
 
-        operator = scipy.sparse.linalg.interface.LinearOperator(shape, matvec=model.direct, rmatvec=model.transpose, dtype='float64')
+        operator = scipy.sparse.linalg.interface.LinearOperator(shape, matvec=model.direct, rmatvec=model.transpose)
         operator.packing   = packing
         operator.unpacking = unpacking
         return operator
@@ -854,8 +855,9 @@ class Scalar(Diagonal):
 
 class Masking(Symmetric):
     """
-    Apply a mask. 
-    Where the mask is non-null or True, the input values are set to zero
+    Apply a mask.
+    Applying a boolean (or int8) mask sets to zero values whose mask is
+    True (non-null). Otherwise, the input is multiplied by the mask.
     """
     def __init__(self, mask, description=None):
         AcquisitionModel.__init__(self, description)
@@ -870,8 +872,13 @@ class Masking(Symmetric):
         output = self.validate_output(data, reusein and reuseout)
         if self.mask is None:
             return output
-        status = tmf.masking(output.T, self.mask.T)
-        if status != 0: raise RuntimeError()
+        if self.mask.dtype.type is numpy.int8:
+            status = tmf.masking(output.T, self.mask.T)
+            if status != 0: raise RuntimeError()
+        elif self.mask.dtype.type is numpy.bool_:
+            output[self.mask] = 0
+        else:
+            output *= self.mask
         return output
 
     @property
@@ -885,30 +892,10 @@ class Masking(Symmetric):
             return
         if not utils._my_issctype(numpy.asarray(mask).dtype):
             raise TypeError("Invalid type for the mask: '" + utils.get_type(mask) + "'.")
-        self._mask = numpy.asarray(mask, dtype='int8')
-        if numpy.rank(self._mask) == 0:
+        mask = numpy.asanyarray(mask)
+        if numpy.rank(mask) == 0:
             raise TypeError('The input mask should not be scalar.')
-
-
-#-------------------------------------------------------------------------------
-
-
-class Masking2(Symmetric):
-    """
-    Apply a mask. 
-    Where the mask is non-null or True, the input values are set to zero
-    """
-    def __init__(self, mask, description=None):
-        AcquisitionModel.__init__(self, description)
         self._mask = mask
-
-    def direct(self, data, reusein=False, reuseout=False):
-        data[self._mask] = 0.
-        return data
-
-    @property
-    def mask(self):
-        return self._mask
 
 
 #-------------------------------------------------------------------------------
@@ -1066,7 +1053,67 @@ class Padding(AcquisitionModel):
 #-------------------------------------------------------------------------------
 
 
+class CircularShift(Square):
+    
+    def __init__(self, n, axes=None, description=None):
+        Square.__init__(self, description)
+        if utils._my_isscalar(n):
+            n = (n,)
+        if axes is None:
+            axes = tuple(numpy.arange(-len(n), 0))
+        elif utils._my_isscalar(axes):
+            axes = (axes,)
+        self.n = tuple(map(int, n))
+        self.axes = tuple(map(int, axes))
+
+    def direct(self, array, reusein=False, reuseout=False):
+        for axis, n in zip(self.axes, self.n):
+            array = numpy.roll(array, -n, axis=axis)
+        return array
+
+    def transpose(self, array, reusein=False, reuseout=False):
+        for axis, n in zip(self.axes, self.n):
+            array = numpy.roll(array, n, axis=axis)
+        return array
+
+
+#-------------------------------------------------------------------------------
+
+
 class Fft(AcquisitionModel):
+    """
+    Performs complex fft
+    """
+    def __init__(self, shape, axes=None, flags=['estimate'], description=None):
+        AcquisitionModel.__init__(self, description)
+        if fftw3.planning.lib_threads is None:
+            nthreads = 1
+        else:
+            nthreads = tmf.info_nthreads()
+        self._shapein = shape
+        self._shapeout = shape
+        self.n = numpy.product(shape)
+        self.axes = axes
+        self._in  = numpy.zeros(shape, dtype=complex)
+        self._out = numpy.zeros(shape, dtype=complex)
+        self.forward_plan = fftw3.Plan(self._in, self._out, direction='forward', flags=flags, nthreads=nthreads)
+        self.backward_plan = fftw3.Plan(self._in, self._out, direction='backward', flags=flags, nthreads=nthreads)
+
+    def direct(self, array, reusein=False, reuseout=False):
+        self._in[:] = array
+        fftw3.execute(self.forward_plan)
+        return Map(self._out)
+
+    def transpose(self, array, reusein=False, reuseout=False):
+        self._in[:] = array
+        fftw3.execute(self.backward_plan)
+        return Map(self._out / self.n, copy=False)
+
+
+#-------------------------------------------------------------------------------
+
+
+class FftHalfComplex(AcquisitionModel):
     """
     Performs real-to-half-complex fft
     """
@@ -1137,6 +1184,8 @@ class InterpolationLinear(Square):
     def direct(self, data, reusein=False, reuseout=False):
         data.mask = self.mask
         return interpolate_linear(data)
+    def transpose(self, data, reusein=False, reuseout=False):
+        raise NotImplementedError()
 
 
 #-------------------------------------------------------------------------------
@@ -1144,10 +1193,34 @@ class InterpolationLinear(Square):
 
 class Broadcast(Square):
 
-    def direct(self, data, reusein=False, reuseout=False):
-        return data
-    def transpose(self, data, reusein=False, reuseout=False, op=MPI.SUM):
-        return MPI.COMM_WORLD.allreduce(data, op=MPI.SUM)
+    def direct(self, array, reusein=False, reuseout=False):
+        array = self.validate_output(array, reusein and reuseout)
+        return array
+    def transpose(self, array, reusein=False, reuseout=False, op=MPI.SUM):
+        array = self.validate_output(array, reusein and reuseout)
+        array[:] = MPI.COMM_WORLD.allreduce(array, op=MPI.SUM)
+        return array
+
+
+#-------------------------------------------------------------------------------
+
+
+def aperture_circular(shape, diameter, origin=None, resolution=1., dtype='float64'):
+    array = distance(shape, origin=origin, resolution=resolution, dtype=dtype)
+    m = array > diameter / 2.
+    array[ m] = 0
+    array[~m] = 1
+    return array
+
+
+#-------------------------------------------------------------------------------
+
+
+def phasemask_fourquadrant(shape, phase=-1):
+    array = Map.ones(shape, dtype=complex)
+    array[0:shape[0]//2,shape[1]//2:] = phase
+    array[shape[0]//2:,0:shape[1]//2] = phase
+    return array
 
 
 #-------------------------------------------------------------------------------
@@ -1171,14 +1244,15 @@ def asacquisitionmodel(operator, description=None):
 #-------------------------------------------------------------------------------
 
 
-def _toacquisitionmodel(model, cls):
+def _toacquisitionmodel(model, cls, description=None):
     import copy
     if model.__class__ == cls:
         return model
+    if description is None:
+        description = cls.__name__
     model2 = copy.copy(model)
     model.__class__ = cls
-    model.__dict__ = {'blocks': model.blocks, 'description': model.description}
-    model.blocks = [model2]
+    model.__dict__ = {'blocks': [model2], 'description': description}
 
 
 #-------------------------------------------------------------------------------

@@ -14,7 +14,7 @@ tod = Tod(numpy.ndarray((2,15)), nsamples=(10,5))
 tod[0,:] = [1,1,1,1,1,3,3,3,3,3,4,4,4,4,4]
 tod[1,:] = [1,2,1.,0.5,0.5,5,0,0,0,0,1,2,1,2,1.5]
 compression = CompressionAverage(5)
-tod2 = compression.direct(tod)
+tod2 = compression(tod)
 if tod2.shape != (2,3): raise TestFailure('compAvg1')
 if tuple(tod2.ravel()) != (1.,3.,4.,1.,1.,1.5): raise TestFailure('compAvg2')
 if tod2.nsamples != (2,1): raise TestFailure('compAvg3')
@@ -25,7 +25,7 @@ if tod3.nsamples != (10,5): raise TestFailure('compAvg3t')
 
 tod = Tod(numpy.ndarray((2,15)), nsamples=(11,4))
 try:
-    tod2 = compression.direct(tod)
+    tod2 = compression(tod)
 except ValidationError:
     pass
 
@@ -65,50 +65,51 @@ if mask(3) != 3:
     raise TestFailure('Masking(None)(data)')
 
 try:
-    junk = mask.direct('str')
+    junk = mask('str')
 except TypeError:
     pass
 else: 
     raise TestFailure('mask None wrong type str')
 
-junk = mask.direct(32)
+junk = mask(32)
 try:
-    junk = mask.direct(object)
+    junk = mask(object)
 except TypeError:
     pass
 else: 
     raise TestFailure('mask None wrong type object')
 
-a = numpy.array([0, 0., 1., 1., 0., 1])
-mask = Masking(a)
 b = numpy.array([3., 4., 1., 0., 3., 2.])
 c = numpy.array([3., 4., 0., 0., 3., 0.])
-if id(b) == id(c):
-    raise TestFailure('mask 1d copy')
-if numpy.any(mask.direct(b) != c):
-    raise TestFailure('mask 1d direct')
-if numpy.any(mask.transpose(b) != c):
-    raise TestFailure('mask 1d transpose')
 
-a = numpy.array([[0, 0.], [1., 1.], [0., 1.]])
-mask = Masking(a)
+mask = Masking(numpy.array([0, 0., 1., 1., 0., 1], dtype='int8'))
+if numpy.any(mask(b) != c): raise TestFailure('mask 1d direct1')
+mask = Masking(numpy.array([1, 1., 0., 0., 1., 0]))
+if numpy.any(mask(b) != c): raise TestFailure('mask 1d direct2')
+mask = Masking(numpy.array([False, False, True, True, False, True]))
+if numpy.any(mask(b) != c): raise TestFailure('mask 1d direct3')
+
 b = numpy.array([[3., 4.], [1., 0.], [3., 2.]])
 c = numpy.array([[3., 4.], [0., 0.], [3., 0.]])
-if numpy.any(mask.direct(b) != c):
-    raise TestFailure('mask 2d direct')
-if numpy.any(mask.transpose(b) != c):
-    raise TestFailure('mask 2d transpose')
 
-a = numpy.array([[[0, 0.], [1., 1.]], [[0., 1], [1, 1]]])
-mask = Masking(a)
+mask = Masking(numpy.array([[0, 0.], [1., 1.], [0., 1.]], dtype='int8'))
+if numpy.any(mask(b) != c): raise TestFailure('mask 2d direct1')
+mask = Masking(numpy.array([[1, 1.], [0., 0.], [1., 0.]]))
+if numpy.any(mask(b) != c): raise TestFailure('mask 2d direct2')
+mask = Masking(numpy.array([[False, False], [True, True], [False, True]]))
+if numpy.any(mask(b) != c): raise TestFailure('mask 2d direct3')
+
 b = numpy.array([[[3, 4.], [1., 0.]], [[3., 2], [-1, 9]]])
 c = numpy.array([[[3, 4.], [0., 0.]], [[3., 0], [0, 0]]])
-if numpy.any(mask.direct(b) != c):
-    raise TestFailure('mask 3d direct')
-if numpy.any(mask.transpose(b) != c):
-    raise TestFailure('mask 3d transpose')
 
-c = mask.direct(b, reusein=True, reuseout=True)
+mask = Masking(numpy.array([[[0, 0.], [1., 1.]], [[0., 1], [1, 1]]], dtype='int8'))
+if numpy.any(mask(b) != c): raise TestFailure('mask 3d direct')
+mask = Masking(numpy.array([[[1, 1], [0., 0]], [[1, 0], [0, 0]]]))
+if numpy.any(mask(b) != c): raise TestFailure('mask 3d direct')
+mask = Masking(numpy.array([[[False, False], [True, True]], [[False, True], [True, True]]]))
+if numpy.any(mask(b) != c): raise TestFailure('mask 3d direct')
+
+c = mask(b, reusein=True, reuseout=True)
 if id(b) != id(c):
     raise TestFailure('mask no copy')
 
@@ -119,7 +120,7 @@ if id(b) != id(c):
 
 padding = Padding(left=1,right=20)
 tod = Tod(numpy.ndarray((10,15)))
-tod2 = padding.direct(tod)
+tod2 = padding(tod)
 if tod2.shape != (10,36):          raise TestFailure('padding shapea')
 if any_neq(tod2[:,0:1], 0, 15):    raise TestFailure('padding left')
 if any_neq(tod2[:,1:16], tod, 15): raise TestFailure('padding middle')
@@ -130,7 +131,7 @@ if any_neq(tod3,tod,15): raise TestFailure('padding end')
 
 padding = Padding(left=1,right=(4,20))
 tod = Tod.ones((10,(12,3)))
-tod2 = padding.direct(tod)
+tod2 = padding(tod)
 if tod2.shape != (10,41):          raise TestFailure('padding shapea')
 if tod2.nsamples != (17,24):       raise TestFailure('padding nsamples')
 if any_neq(tod2[:,0:1], 0, 15):    raise TestFailure('padding left2')
@@ -149,7 +150,7 @@ if any_neq(tod3,tod,15): raise TestFailure('padding end')
 #-----
 
 n = 100
-fft = Fft(n)
+fft = FftHalfComplex(n)
 a = numpy.random.random(n)+1
 b = fft.transpose(fft.direct(a))
 if any_neq(a, b, 14): raise TestFailure('fft1')
@@ -159,12 +160,12 @@ b = fft.transpose(fft.direct(a))
 if any_neq(a, b, 14): raise TestFailure('fft2')
 
 tod = Tod(numpy.random.random((10,1000))+1)
-fft = Fft(tod.nsamples)
+fft = FftHalfComplex(tod.nsamples)
 tod2 = fft.transpose(fft.direct(tod))
 if any_neq(tod, tod2,14): raise TestFailure('fft3')
 
 tod = Tod(numpy.random.random((10,1000))+1, nsamples=(100,300,5,1000-100-300-5))
-fft = Fft(tod.nsamples)
+fft = FftHalfComplex(tod.nsamples)
 tod2 = fft.transpose(fft.direct(tod))
 if any_neq(tod, tod2,14): raise TestFailure('fft4')
 
