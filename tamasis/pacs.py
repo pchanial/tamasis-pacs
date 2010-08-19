@@ -13,7 +13,7 @@ from processing import deglitch_l2mad, filter_median
 from unit import Quantity
 from utils import MaskPolicy
 
-__all__ = [ 'PacsObservation', 'pacs_preprocess', 'pacs_status' ]
+__all__ = [ 'PacsObservation', 'pacs_plot_scan', 'pacs_preprocess', 'pacs_status' ]
 
 
 class PacsObservation(object):
@@ -38,7 +38,7 @@ class PacsObservation(object):
         filename_, nfilenames = _files2tmf(filename)
 
         channel, transparent_mode, status = tmf.pacs_info_channel(filename_, nfilenames)
-        if status != 0: raise Runtimerror()
+        if status != 0: raise RuntimeError()
         channel = channel.strip()
 
         nrows, ncolumns = (16,32) if channel == 'Red' else (32,64)
@@ -227,6 +227,25 @@ class PacsMultiplexing(AcquisitionModel):
 #-------------------------------------------------------------------------------
 
 
+def pacs_plot_scan(patterns):
+    if type(patterns) not in (tuple, list):
+        patterns = (patterns,)
+
+    files = []
+    for pattern in patterns:
+        files.extend(glob.glob(pattern))
+
+    for file in files:
+        try:
+            status = pacs_status(file)
+        except IOError as error:
+            raise IOError("Cannot extract status from file '"+file+"': "+str(error))
+        matplotlib.pyplot.plot(status['ra'], status['dec'])
+
+
+#-------------------------------------------------------------------------------
+
+
 class pacs_status(object):
     def __init__(self, filename):
         hdu = pyfits.open(filename)[2]
@@ -333,7 +352,7 @@ def _files2tmf(filename):
 
 def _split_observation(nobservations, ndetectors):
     nnodes  = MPI.COMM_WORLD.Get_size()
-    nthreads = tmf.pacs_info_nthreads()
+    nthreads = tmf.info_nthreads()
 
     # number of observations. They should approximatively be of the same length
     nx = nobservations

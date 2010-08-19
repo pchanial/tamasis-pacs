@@ -2,7 +2,7 @@
 !
 ! Author: P. Chanial
 
-subroutine pacs_info_nthreads(nthreads)
+subroutine info_nthreads(nthreads)
 
     use omp_lib, only : omp_get_max_threads
 
@@ -12,7 +12,7 @@ subroutine pacs_info_nthreads(nthreads)
     
     nthreads = omp_get_max_threads()
 
-end subroutine pacs_info_nthreads
+end subroutine info_nthreads
 
 
 !-----------------------------------------------------------------------------------------------------------------------------------
