@@ -90,9 +90,9 @@ def create_fitsheader(array, extname=None, crval=(0.,0.), crpix=None, ctype=('RA
     if ctype.size != 2:
         raise ValueError('CTYPE does not have two elements.')
 
-    cunit = numpy.asarray(cunit, dtype=numpy.string_)
     if _my_isscalar(cunit):
         cunit = (cunit, cunit)
+    cunit = numpy.asarray(cunit, dtype=numpy.string_)
     if cunit.size != 2:
         raise ValueError('CUNIT does not have two elements.')
 
