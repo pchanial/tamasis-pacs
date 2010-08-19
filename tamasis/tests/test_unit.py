@@ -178,4 +178,15 @@ b = numpy.var(a, axis=0)
 if b != numpy.var(a.view(numpy.ndarray), axis=0): raise TestFailure()
 if b.unit != 'Jy^2': raise TestFailure()
 
+# test upcasting
+if Quantity(1).dtype.type is not numpy.float64: raise TestFailure()
+if Quantity(numpy.float32(1.)).dtype.type is not numpy.float64: raise TestFailure()
+if Quantity(1.).dtype.type is not numpy.float64: raise TestFailure()
+if Quantity(complex(1,0)).dtype.type is not numpy.complex128: raise TestFailure()
+if Quantity(numpy.complex64(1.)).dtype.type is not numpy.complex128: raise TestFailure()
+if Quantity(numpy.complex128(1.)).dtype.type is not numpy.complex128: raise TestFailure()
+if Quantity(numpy.array(complex(1,0))).dtype.type is not numpy.complex128: raise TestFailure()
+if Quantity(numpy.array(numpy.complex64(1.))).dtype.type is not numpy.complex128: raise TestFailure()
+if Quantity(numpy.array(numpy.complex128(1.))).dtype.type is not numpy.complex128: raise TestFailure()
+
 print 'OK.'
