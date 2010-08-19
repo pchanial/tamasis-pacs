@@ -18,7 +18,7 @@ def create_fitsheader(array, extname=None, crval=(0.,0.), crpix=None, ctype=('RA
         by FITS convention, the dimension along X is the second value 
         of the array shape and that the dimension along the Y axis is 
         the first one.
-    extname: None or string
+    extname : None or string
         if a string is specified ('' can be used), the returned header
         type will be an Image HDU (otherwise a Primary HDU)
     crval : 2 element array, optional
