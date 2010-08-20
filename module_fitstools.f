@@ -56,7 +56,8 @@ module module_fitstools
     end interface ft_read_slice
 
     interface ft_write_image
-        module procedure ft_write_image_double_1d, ft_write_image_double_2d, ft_write_image_double_3d
+        module procedure ft_write_image_int4_1d, ft_write_image_int4_2d, ft_write_image_int4_3d,                                   &
+                         ft_write_image_double_1d, ft_write_image_double_2d, ft_write_image_double_3d
     end interface ft_write_image
 
     interface ft_read_keyword
@@ -1026,6 +1027,169 @@ contains
         end if
 
     end function check_duplicate_keywords
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine ft_write_image_int4_1d(filename, data, header, status)
+
+        character(len=*), intent(in)    :: filename
+        integer*4, intent(in)           :: data(:)
+        character(len=*), intent(in), optional :: header
+        integer, intent(out)            :: status
+
+        integer           :: irec, unit, blocksize, bitpix, naxis, naxes(1)
+        logical           :: simple, extend
+        character(len=80) :: record
+
+        ! delete file if it exists
+        open(10, file=filename, status='unknown')
+        close(10, status='delete')
+
+        ! open and initialise the fits file
+        status = 0
+        call ftgiou(unit, status)
+        if (ft_check_error_cfitsio(status, filename=filename)) return
+
+        call ftinit(unit, filename, blocksize, status)
+        if (ft_check_error_cfitsio(status, unit, filename)) return
+
+        simple = .true.
+        bitpix = 32
+        naxis  = 1
+        naxes  = [ size(data) ]
+        extend = .true.
+        call FTPHPR(unit, simple, bitpix, naxis, naxes, 0, 1, extend, status)
+        if (ft_check_error_cfitsio(status, unit, filename)) return
+
+        ! write the astrometry keywords
+        if (present(header)) then
+            do irec=1, len(header) / 80
+                record = header((irec-1)*80+1:irec*80)
+                if (check_duplicate_keywords(record(1:8))) cycle
+                call FTPREC(unit,header((irec-1)*80+1:irec*80), status)
+            end do
+            if (ft_check_error_cfitsio(status, unit, filename)) return
+        end if
+
+        ! write the image data
+        call FTPPRJ(unit, GROUP, 1, size(data), data, status)
+        if (ft_check_error_cfitsio(status, unit, filename)) return
+
+        ! close the fits file
+        call ft_close(unit, status)
+
+    end subroutine ft_write_image_int4_1d
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine ft_write_image_int4_2d(filename, data, header, status)
+
+        character(len=*), intent(in)    :: filename
+        integer*4, intent(in)           :: data(:,:)
+        character(len=*), intent(in), optional :: header
+        integer, intent(out)            :: status
+
+        integer           :: irec, unit, blocksize, bitpix, naxis, naxes(2)
+        logical           :: simple, extend
+        character(len=80) :: record
+
+        ! delete file if it exists
+        open(10, file=filename, status='unknown')
+        close(10, status='delete')
+
+        ! open and initialise the fits file
+        status = 0
+        call ftgiou(unit, status)
+        if (ft_check_error_cfitsio(status, filename=filename)) return
+
+        call ftinit(unit, filename, blocksize, status)
+        if (ft_check_error_cfitsio(status, unit, filename)) return
+
+        simple = .true.
+        bitpix = 32
+        naxis  = 2
+        naxes  = [size(data,1), size(data,2)]
+        extend = .true.
+        call FTPHPR(unit, simple, bitpix, naxis, naxes, 0, 1, extend, status)
+        if (ft_check_error_cfitsio(status, unit, filename)) return
+
+        ! write the astrometry keywords
+        if (present(header)) then
+            do irec=1, len(header) / 80
+                record = header((irec-1)*80+1:irec*80)
+                if (check_duplicate_keywords(record(1:8))) cycle
+                call FTPREC(unit,header((irec-1)*80+1:irec*80), status)
+            end do
+            if (ft_check_error_cfitsio(status, unit, filename)) return
+        end if
+
+        ! write the image data
+        call FTPPRJ(unit, GROUP, 1, size(data), data, status)
+        if (ft_check_error_cfitsio(status, unit, filename)) return
+
+        ! close the fits file
+        call ft_close(unit, status)
+
+    end subroutine ft_write_image_int4_2d
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine ft_write_image_int4_3d(filename, data, header, status)
+
+        character(len=*), intent(in)    :: filename
+        integer*4, intent(in)           :: data(:,:,:)
+        character(len=*), intent(in), optional :: header
+        integer, intent(out)            :: status
+
+        integer           :: irec, unit, blocksize, bitpix, naxis
+        logical           :: simple, extend
+        character(len=80) :: record
+
+        ! delete file if it exists
+        open(10, file=filename, status='unknown')
+        close(10, status='delete')
+
+        ! open and initialise the fits file
+        status = 0
+        call ftgiou(unit, status)
+        if (ft_check_error_cfitsio(status, filename=filename)) return
+
+        call ftinit(unit, filename, blocksize, status)
+        if (ft_check_error_cfitsio(status, unit, filename)) return
+
+        simple = .true.
+        bitpix = 32
+        naxis  = 3
+        extend = .true.
+        call FTPHPR(unit, simple, bitpix, naxis, shape(data), 0, 1, extend, status)
+        if (ft_check_error_cfitsio(status, unit, filename)) return
+
+        ! write the astrometry keywords
+        if (present(header)) then
+            do irec=1, len(header) / 80
+                record = header((irec-1)*80+1:irec*80)
+                if (check_duplicate_keywords(record(1:8))) cycle
+                call FTPREC(unit,header((irec-1)*80+1:irec*80), status)
+            end do
+            if (ft_check_error_cfitsio(status, unit, filename)) return
+        end if
+
+        ! write the image data
+        call FTPPRJ(unit, GROUP, 1, size(data), data, status)
+        if (ft_check_error_cfitsio(status, unit, filename)) return
+
+        ! close the fits file
+        call ft_close(unit, status)
+
+    end subroutine ft_write_image_int4_3d
+
+
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
