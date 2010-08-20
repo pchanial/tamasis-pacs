@@ -11,6 +11,8 @@ program test_sort
     real*8, allocatable  :: table(:), timeline(:)
     integer, allocatable :: iuniq(:), hist(:)
     integer, allocatable :: order(:), isort(:)
+    integer              :: count
+    integer, allocatable :: i1(:), i2(:), i3(:)
 
     a = [ 2.d0, 4.d0, 2.d0, 1.3d0, -3.d0, 10.d0, 8.d0, 100.d0, 4.00000001d0, 7.d0 ]
     b = [ 2, 4, 2, 1, 3, -8, -203, 990, 0, 3]
@@ -86,6 +88,15 @@ program test_sort
             if (neq_real(timeline(isort(i)), timeline(isort(i-1)), precision)) stop 'FAILED: reorder =='
         end if
     end do
+
+    call where([.true., .false., .true., .true., .false., .false.], i1, count)
+    if (count /= 3 .or. any(i1 /= [1, 3, 4])) stop 'FAILED: where 1d'
+
+    call where(reshape([.true., .false., .true., .true., .false., .false.], [3,2]), i1, i2, count)
+    if (count /= 3 .or. any(i1 /= [1, 3, 1]) .or. any(i2 /= [1,1,2])) stop 'FAILED: where 2d'
+
+    call where(reshape([.true., .false., .true., .true., .false., .false.], [3,2,1]), i1, i2, i3, count)
+    if (count /= 3 .or. any(i1 /= [1, 3, 1]) .or. any(i2 /= [1,1,2]) .or. any(i3 /= [1,1,1])) stop 'FAILED: where 3d'
 
     stop 'OK.'
 

@@ -10,6 +10,7 @@ module module_sort
     public :: qsorti
     public :: qsortid
     public :: uniq
+    public :: where
 
     integer, pointer, private :: array_int(:) => null()
     real*8,  pointer, private :: array_double(:) => null()
@@ -30,6 +31,10 @@ module module_sort
     interface uniq
         module procedure uniq_double
     end interface uniq
+
+    interface where
+        module procedure where_1d, where_2d, where_3d
+    end interface where
 
 contains
 
@@ -469,7 +474,10 @@ contains
 
 
     subroutine reorder_double(array, index, nuniqs, table, precision)
-use iso_fortran_env, only : OUTPUT_UNIT
+
+        use iso_fortran_env, only : OUTPUT_UNIT
+        implicit none
+
         real*8, intent(in)               :: array(:)
         integer, intent(out)             :: index(size(array))
         integer, intent(out)             :: nuniqs
@@ -521,6 +529,102 @@ use iso_fortran_env, only : OUTPUT_UNIT
         end do
         
     end function histogram_int
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine where_1d(array, indices, count)
+        
+        logical, intent(in) :: array(:)
+        integer, intent(out), allocatable :: indices(:)
+        integer, intent(out), optional :: count
+
+        integer :: indices_(size(array))
+        integer :: i, count_
+
+        count_ = 0
+        do i = 1, size(array)
+            if (array(i)) then
+                count_ = count_ + 1
+                indices_(count_) = i
+            end if
+        end do
+        
+        allocate (indices(count_))
+        indices = indices_(1:count_)
+        if (present(count)) count = count_
+        
+    end subroutine where_1d
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine where_2d(array, i1, i2, count)
+        
+        logical, intent(in) :: array(:,:)
+        integer, intent(out), allocatable :: i1(:), i2(:)
+        integer, intent(out), optional :: count
+
+        integer :: i1_(size(array)), i2_(size(array))
+        integer :: i, j, count_
+
+        count_ = 0
+        do j = 1, size(array,2)
+            do i = 1, size(array,1)
+                if (array(i,j)) then
+                    count_ = count_ + 1
+                    i1_(count_) = i
+                    i2_(count_) = j
+                end if
+            end do
+        end do
+        
+        allocate (i1(count_))
+        allocate (i2(count_))
+        i1 = i1_(1:count_)
+        i2 = i2_(1:count_)
+        if (present(count)) count = count_
+        
+    end subroutine where_2d
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine where_3d(array, i1, i2, i3, count)
+        
+        logical, intent(in) :: array(:,:,:)
+        integer, intent(out), allocatable :: i1(:), i2(:), i3(:)
+        integer, intent(out), optional :: count
+
+        integer :: i1_(size(array)), i2_(size(array)), i3_(size(array))
+        integer :: i, j, k, count_
+
+        count_ = 0
+        do k = 1, size(array,3)
+            do j = 1, size(array,2)
+                do i = 1, size(array,1)
+                    if (array(i,j,k)) then
+                        count_ = count_ + 1
+                        i1_(count_) = i
+                        i2_(count_) = j
+                        i3_(count_) = k
+                    end if
+                end do
+            end do
+        end do
+
+        allocate (i1(count_))
+        allocate (i2(count_))
+        allocate (i3(count_))
+        i1 = i1_(1:count_)
+        i2 = i2_(1:count_)
+        i3 = i3_(1:count_)
+        if (present(count)) count = count_
+        
+    end subroutine where_3d
 
 
 end module module_sort
