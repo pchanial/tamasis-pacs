@@ -13,11 +13,13 @@ endif
 
 # set up compiler flags
 ifeq "$(FC)" "gfortran"
+    FFLAGS_MOD = -J
     FFLAGS_DEBUG = -g -fbacktrace -O3 -fcheck=all -ffree-form -fopenmp -Wall -fPIC -cpp -DGFORTRAN
     FFLAGS_RELEASE = -fbacktrace -O3 -ffree-form -fopenmp -Wall -fPIC -cpp -DGFORTRAN
     LDFLAGS = -lgomp $(shell pkg-config --libs cfitsio) $(shell pkg-config --libs wcslib) $(shell pkg-config --libs fftw3)
     FCOMPILER=gnu95
 else ifeq ($(FC),ifort)
+    FFLAGS_MOD = -module
     FFLAGS_DEBUG = -debug -fpp -O0 -static -fPIC -free -openmp -ftz -traceback -DIFORT -check all -ftrapuv
     FFLAGS_RELEASE = -fpp -fast -fPIC -free -openmp -ftz -DIFORT
     # for static linking: use -static -static-intel
@@ -118,13 +120,8 @@ include euclid/Makefile.mk
 	    $(MAKE) $< ;\
 	fi
 
-# .mod files are created in the top-level directory.
-# so, after their creation, we move them into their appropriate subdirectory
 %.o : %.f
-	$(FC) $(FFLAGS) $(INCLUDES) -c -o $@ $<
-	@if [ -f $(notdir $(@:.o=.mod)) ] && [ $(dir $@) != ./ ]; then \
-	    mv -f $(notdir $(@:.o=.mod)) $(dir $@); \
-	fi
+	$(FC) $(FFLAGS) $(FFLAGS_MOD) $(dir $@) $(INCLUDES) -c -o $@ $<
 
 %: %.o
 	$(FC) -o $@ $^ $(LDFLAGS)
