@@ -13,7 +13,7 @@ endif
 
 # set up compiler flags
 ifeq "$(FC)" "gfortran"
-    FFLAGS_DEBUG = -g -fbacktrace -O0 -fcheck=all -ffree-form -fopenmp -Wall -fPIC -cpp -DGFORTRAN
+    FFLAGS_DEBUG = -g -fbacktrace -O3 -fcheck=all -ffree-form -fopenmp -Wall -fPIC -cpp -DGFORTRAN
     FFLAGS_RELEASE = -fbacktrace -O3 -ffree-form -fopenmp -Wall -fPIC -cpp -DGFORTRAN
     LDFLAGS = -lgomp $(shell pkg-config --libs cfitsio) $(shell pkg-config --libs wcslib) $(shell pkg-config --libs fftw3)
     FCOMPILER=gnu95
@@ -108,6 +108,8 @@ test_wcslibc = module_cfitsio module_wcslibc
 all : $(EXECS) tamasis/tamasisfortran.so
 #all : $(EXECS)
 
+include euclid/Makefile.mk
+
 # if %.mod doesn't exist, make %.o. It will create %.mod with the same 
 # timestamp. If it does, do nothing
 %.mod : %.o
@@ -116,8 +118,13 @@ all : $(EXECS) tamasis/tamasisfortran.so
 	    $(MAKE) $< ;\
 	fi
 
+# .mod files are created in the top-level directory.
+# so, after their creation, we move them into their appropriate subdirectory
 %.o : %.f
 	$(FC) $(FFLAGS) $(INCLUDES) -c -o $@ $<
+	@if [ -f $(notdir $(@:.o=.mod)) ] && [ $(dir $@) != ./ ]; then \
+	    mv -f $(notdir $(@:.o=.mod)) $(dir $@); \
+	fi
 
 %: %.o
 	$(FC) -o $@ $^ $(LDFLAGS)
@@ -133,8 +140,9 @@ tamasis/tamasisfortran.so: tamasisfortran.f90 $(MODULES:.f=.o)
 # /opt/core-3.1-amd64/ifc/11.1/lib/intel64/libiomp5.a /opt/core-3.1-amd64/ifc/11.1/lib/intel64/libifport.a /opt/core-3.1-amd64/ifc/11.1/lib/intel64/libifcore.a /opt/core-3.1-amd64/ifc/11.1/lib/intel64/libimf.a /opt/core-3.1-amd64/ifc/11.1/lib/intel64/libsvml.a
 
 clean:
-	@rm -f *.o *.mod *.so *~ $(EXECS);\
-	find . -name "*pyc" -exec rm '{}' ';'
+	@rm -f $(EXECS);\
+	find . \( -name '*.o' -or -name "*.mod" -or -name "*.so" -or -name "*~" -or -name "*.pyc" \) -exec rm {} ';'
+
 
 tests: tests_fortran tests_python
 
