@@ -89,11 +89,18 @@ program test_sort
         end if
     end do
 
+    call uniq([2,2,3,4,4,5,8,8,9,9,9], isort)
+    if (size(isort) /= 6 .or. any(isort /= [2,3,5,6,8,11])) stop 'FAILED: uniq_int'
+
+
     call where([.true., .false., .true., .true., .false., .false.], i1, count)
     if (count /= 3 .or. any(i1 /= [1, 3, 4])) stop 'FAILED: where 1d'
 
     call where(reshape([.true., .false., .true., .true., .false., .false.], [3,2]), i1, i2, count)
     if (count /= 3 .or. any(i1 /= [1, 3, 1]) .or. any(i2 /= [1,1,2])) stop 'FAILED: where 2d'
+
+    call where(reshape([.true., .false., .true., .true., .false., .false.], [3,2]), i1, count)
+    if (count /= 3 .or. any(i1 /= [1, 3, 4])) stop 'FAILED: where 2d-1d'
 
     call where(reshape([.true., .false., .true., .true., .false., .false.], [3,2,1]), i1, i2, i3, count)
     if (count /= 3 .or. any(i1 /= [1, 3, 1]) .or. any(i2 /= [1,1,2]) .or. any(i3 /= [1,1,1])) stop 'FAILED: where 3d'

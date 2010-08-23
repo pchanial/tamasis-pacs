@@ -29,11 +29,11 @@ module module_sort
     end interface qsorti
 
     interface uniq
-        module procedure uniq_double
+        module procedure uniq_int, uniq_double
     end interface uniq
 
     interface where
-        module procedure where_1d, where_2d, where_3d
+        module procedure where_1d_1d, where_2d_1d, where_2d_2d, where_3d_3d
     end interface where
 
 contains
@@ -437,6 +437,50 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
+    subroutine uniq_int(array, outindex)
+
+        integer, intent(in)  :: array(:)
+        integer, intent(out), allocatable :: outindex(:)
+
+        integer :: i, count, n, val
+#ifdef GFORTRAN
+        integer, allocatable :: tmp(:)
+#endif
+
+        n = size(array)
+        if (n == 0) then
+            allocate (outindex(0))
+            return
+        end if
+
+        allocate (outindex(n))
+        count = 0
+        val = array(1)
+        do i = 2, n
+            if (array(i) /= val) then
+                count = count + 1
+                outindex(count) = i-1
+                val = array(i)
+            end if
+        end do
+        count = count + 1
+        outindex(count) = n
+
+#ifdef GFORTRAN
+        allocate (tmp(count))
+        tmp = outindex(1:count)
+        call move_alloc(tmp, outindex)
+#else
+        outindex = outindex(1:count)
+#endif
+
+    end subroutine uniq_int
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    ! fixme: algo different from uniq_int...
     subroutine uniq_double(array, inindex, outindex, precision)
 
         real*8, intent(in)  :: array(:)
@@ -534,7 +578,7 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine where_1d(array, indices, count)
+    subroutine where_1d_1d(array, indices, count)
         
         logical, intent(in) :: array(:)
         integer, intent(out), allocatable :: indices(:)
@@ -555,13 +599,33 @@ contains
         indices = indices_(1:count_)
         if (present(count)) count = count_
         
-    end subroutine where_1d
+    end subroutine where_1d_1d
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine where_2d(array, i1, i2, count)
+    subroutine where_2d_1d(mask, indices, n)
+        
+        logical, intent(in) :: mask(:,:)
+        integer, intent(out), allocatable :: indices(:)
+        integer, intent(out), optional :: n
+
+        integer :: i
+
+#ifdef GFORTRAN
+        allocate (indices(count(mask)))
+#endif
+        indices = pack([(i, i=1, size(mask))], reshape(mask,[size(mask)]))
+        n = size(indices)
+        
+    end subroutine where_2d_1d
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine where_2d_2d(array, i1, i2, count)
         
         logical, intent(in) :: array(:,:)
         integer, intent(out), allocatable :: i1(:), i2(:)
@@ -587,13 +651,13 @@ contains
         i2 = i2_(1:count_)
         if (present(count)) count = count_
         
-    end subroutine where_2d
+    end subroutine where_2d_2d
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine where_3d(array, i1, i2, i3, count)
+    subroutine where_3d_3d(array, i1, i2, i3, count)
         
         logical, intent(in) :: array(:,:,:)
         integer, intent(out), allocatable :: i1(:), i2(:), i3(:)
@@ -624,7 +688,7 @@ contains
         i3 = i3_(1:count_)
         if (present(count)) count = count_
         
-    end subroutine where_3d
+    end subroutine where_3d_3d
 
 
 end module module_sort
