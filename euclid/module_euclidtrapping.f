@@ -73,7 +73,7 @@ module module_euclidtrapping
 #else
     integer, parameter :: tottraps_ = sum(nt_)
 #endif
-    integer, parameter :: nstep = nint(int_time/time_int)
+    integer, parameter :: nstep = nint(int_time / time_int)
     
     ! pieges mode stochastique
     type TrapIn
@@ -102,19 +102,37 @@ module module_euclidtrapping
         integer  :: nc(ntraps, nstep+1)
     end type Trap
 
+    type Detector
+        integer :: nv
+        integer :: nc
+        logical :: filled(tottraps_)
+    end type Detector
+
+    type DetectorColumn
+        integer        :: ndetectors
+        integer        :: ntraps
+        real(p)        :: vth
+        real(p)        :: z(tottraps_)
+        real(p)        :: sig(tottraps_)
+        real(p)        :: proba_r(tottraps_)
+        type(Detector) :: detector(nlines)
+    end type DetectorColumn
+
     real(p) :: vth, nstates
     real(p), dimension(ntraps) :: sig, tau_r, e_traps
     integer :: nt(ntraps) !nt: nombre de pieges par volume de confinement (reel)
     integer :: tottraps, isig(ntraps)
     integer :: nt_debut(ntraps), nt_fin(ntraps)
-
+    type(DetectorColumn) :: column
+    
 
 contains
 
 
     subroutine init
 
-        integer :: itrap
+        integer :: itrap, idetector, status
+        real(p), allocatable :: coord_(:,:)
 
         !section efficace de capture
         sig = [1.092e-18_p, 1.179e-17_p, 1.029e-19_p]*1.e-4_p !m2
@@ -149,7 +167,42 @@ contains
             nt_fin(itrap) = nt_fin(itrap-1) + nt(itrap)
         end do
 
+        column%ndetectors = nlines
+        column%ntraps = sum(nt)
+        column%vth = vth
+
+        !generation des pieges dans le volume du buried channel
+        call ft_read_image('~/work/tamasis/tamasis-latest/euclid/data/coord_traps_integ_proba_comp_94.fits', coord_, status=status)
+        if (status /= 0) return
+        column%z = real(coord_(:,3), kind=p)
+
+        call fill_trap(column%sig, sig, nt_debut, nt_fin)
+        call fill_trap(column%proba_r, 1._p - exp(-time_int / tau_r), nt_debut, nt_fin)
+
+        column%detector%nv = sum(nt)
+        column%detector%nc = 0
+        do idetector = 1, column%ndetectors
+            column%detector(idetector)%filled = .false.
+        end do
+
     end subroutine init
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine fill_trap(dest, source, start, end)
+        real(p), intent(out) :: dest(:)
+        real(p), intent(in)  :: source(:)
+        integer, intent(in)  :: start(:), end(:)
+
+        integer :: itype
+
+        do itype = 1, size(source)
+            dest(start(itype):end(itype)) = source(itype)
+        end do
+
+    end subroutine
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
@@ -224,6 +277,38 @@ contains
         write (*,'(a,f7.2,a)') 'tirage_proba: ', real(count2-count1)/count_rate, 's'
 
     end subroutine tirage_proba_slow
+    subroutine tirage_proba_slow2(proba, ntirages, tirage)
+        !procedure de tirage d'un evenement ayant une certaine probabilite d'arriver
+        !proba: probabilite de l'evenement
+        !ntirages: nombre de tirages
+        !on cree un vecteur de "ntirages" tirages compose de 1 et 0 avec un rapport 1/0 egal a "proba"
+        !on reordonne aleatoirement ce vecteur
+        
+        real(p), intent(in) :: proba(:)
+        integer, intent(in) :: ntirages
+        integer, intent(out) :: tirage(size(proba),ntirages)
+
+        integer :: n_un(size(proba)), ordre(ntirages)
+        integer :: iline
+        real(p) :: rnd(ntirages)
+        integer :: count1, count2, count_rate, count_max
+
+        tirage = 0
+        n_un = nint(proba * ntirages)
+ 
+        call system_clock(count1, count_rate, count_max)
+        call notrandom_number(rnd)
+
+        call qsorti(rnd, ordre)
+
+        do iline = 1, nlines
+            tirage(iline,ordre(1:n_un(iline))) = 1
+        end do
+
+        call system_clock(count2, count_rate, count_max)
+        write (*,'(a,f7.2,a)') 'tirage_proba: ', real(count2-count1)/count_rate, 's'
+
+    end subroutine tirage_proba_slow2
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
@@ -249,7 +334,6 @@ contains
         integer, allocatable :: pixt(:), pixn(:), pixind(:), count(:)
         real(p), allocatable :: temp_conf_vol(:), temp_conf_z(:), temp_coord(:,:), alp(:), temp_tau_c(:), temp_proba_c(:), rnd(:)
         integer :: temp_itrap(nlines), flux(nlines,ncolumns)
-        real(p) :: junk(1)
 
         integer :: count1, count2, count_rate, count_max
         
@@ -526,6 +610,126 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
+    subroutine simul_integration(imain, time, tirage_photons, imaout)
+
+        integer, intent(in)  :: imain(nlines)
+        real(p), intent(out), allocatable :: time(:)
+        integer, intent(out), allocatable :: tirage_photons(:,:)
+        integer, intent(out), allocatable :: imaout(:,:)
+
+        real(p) :: model
+        integer :: nstep, i
+
+        integer :: flux(nlines)
+        real(p), dimension(tottraps_) :: alp, tau_c, proba_c, test
+        real(p), dimension(nlines) :: conf_vol, conf_z
+        real(p) :: rnd0
+        integer :: idetector, itrap, nc, ncaptures, nreleases
+
+        integer :: count1, count2, count_rate, count_max
+        
+        call init
+
+        !calcul du nombre d'e- rajoutes par effet photo-electrique a chaque pas de temps
+        !generation de la sequence temporelle d'arrivee des photons pendant l'integration
+        !nombre de pas d'integration
+        nstep = nint(int_time/time_int)
+        print *, 'nstep:', nstep
+        allocate (time(nstep+1))
+        time = linspace(0._p, nstep * time_int, nstep+1)
+        flux = imain / nstep !XXX check me
+
+        allocate (tirage_photons(nlines, nstep))
+        call tirage_proba_slow2(imain/real(nstep, kind=p)-flux, nstep, tirage_photons)
+
+        do i=1, nstep
+            tirage_photons(:,i) = tirage_photons(:,i) + flux
+        end do
+        
+        allocate (imaout(column%ndetectors, nstep+1))
+        imaout = 0
+        
+        !choix du modele density driven ou volume driven
+        if (mode == 'v') then
+            model = 1._p/3._p
+        else if (mode == 'd') then
+            model = 0_p
+        else
+            stop 'mode should be either d or v'
+        end if
+        
+        !integration de l'image
+        call system_clock(count1, count_rate, count_max)
+        
+        do i=1, nstep
+
+            if (i == (i/1000)*1000) print *, 'step:', i
+
+            !calcul du nombre d'electrons rajoutes a chaque pas d'integration
+            imaout(:,i) = imaout(:,i) + tirage_photons(:,i)
+
+            !calcul de la profondeur du volume de confinement des electrons libres
+            !origine en profondeur a z=0
+            conf_z = (imaout(:,i) / fwc_euclid)**model
+
+            !calcul du volume de confinement des electrons libres
+            conf_vol = conf_z * bc_vol
+
+            do idetector = 1, column%ndetectors
+
+                ! Capture
+                if (imaout(idetector,i) /= 0 .and. column%detector(idetector)%nv > 0) then
+                    
+                    !constante de temps de capture
+                    alp = (column%sig*vth) / conf_vol(idetector)
+                    tau_c = 1_p / (alp * imaout(idetector,i))
+
+                    !probabilite de capture
+                    proba_c = 1_p - exp(-time_int / tau_c)
+
+                    !on identifie les pieges vides de chaque pixel
+                    ncaptures = 0
+                    do itrap = 1, column%ntraps
+                        if (column%z(itrap) <= conf_z(idetector) .and. .not. column%detector(idetector)%filled(itrap)) then
+                            call random_number(rnd0)
+                            if (floor(rnd0 + proba_c(itrap)) == 1) then
+                                column%detector(idetector)%filled(itrap) = .true.
+                                ncaptures = ncaptures + 1
+                                if (ncaptures == imaout(idetector,i)) exit
+                            end if
+                        end if
+                    end do
+                    imaout(idetector,i) = imaout(idetector,i) - ncaptures
+
+                end if
+
+                ! Relache                
+                nc = count(column%detector(idetector)%filled)
+                where (column%detector(idetector)%filled)
+                    test = rand()
+                    column%detector(idetector)%filled = floor(test+column%proba_r) == 0
+                end where
+                nreleases = nc - count(column%detector(idetector)%filled)
+                imaout(idetector,i) = imaout(idetector,i) + nreleases
+                
+                column%detector(idetector)%nc = nc + nreleases
+                column%detector(idetector)%nv = column%ntraps - column%detector(idetector)%nc
+
+            end do
+
+            imaout(:,i+1)=imaout(:,i)
+            
+        end do
+
+        call system_clock(count2, count_rate, count_max)
+        write (*,'(a,f7.2,a)') 'proba_integration_full: ', real(count2-count1)/count_rate, 's'
+
+    end subroutine simul_integration
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
 !!$    subroutine simul_trapping_proba_parallel_full_bis, imaout, time, trapsout, imapar, trapspar, conf_z, imarem
 !!$
 !!$        integer, intent(out) :: imaout(:,:)
@@ -764,5 +968,6 @@ contains
         index = index + count
 
     end subroutine notrandom_number
+
 
 end module module_euclidtrapping
