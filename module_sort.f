@@ -443,7 +443,7 @@ contains
         integer, intent(out), allocatable :: outindex(:)
 
         integer :: i, count, n, val
-#ifdef GFORTRAN
+#if defined(GFORTRAN) || defined(IFORT)
         integer, allocatable :: tmp(:)
 #endif
 
@@ -466,7 +466,7 @@ contains
         count = count + 1
         outindex(count) = n
 
-#ifdef GFORTRAN
+#if defined(GFORTRAN) || defined(IFORT)
         allocate (tmp(count))
         tmp = outindex(1:count)
         call move_alloc(tmp, outindex)
@@ -613,7 +613,7 @@ contains
 
         integer :: i
 
-#ifdef GFORTRAN
+#if defined(GFORTRAN) || defined(IFORT)
         allocate (indices(count(mask)))
 #endif
         indices = pack([(i, i=1, size(mask))], reshape(mask,[size(mask)]))
