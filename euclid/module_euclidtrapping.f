@@ -28,6 +28,9 @@
 
 module module_euclidtrapping
 
+#ifdef IFORT
+    use ifport, only : rand
+#endif
     use module_fitstools, only : ft_read_image, ft_write_image
     use module_math,      only : PI, linspace
     use module_sort,      only : qsorti, uniq, where
@@ -40,7 +43,7 @@ module module_euclidtrapping
     real(p), parameter   :: time_par = 1.e-2_p
     character, parameter :: mode = 'd'
 
-    integer, parameter   :: npixal = 1024
+    integer, parameter   :: npixal = 256
     integer, parameter   :: npixac = 1
     integer, parameter   :: nlines = npixal
     integer, parameter   :: ncolumns = npixac
@@ -172,13 +175,14 @@ contains
         column%vth = vth
 
         !generation des pieges dans le volume du buried channel
-        call ft_read_image('~/work/tamasis/tamasis-latest/euclid/data/coord_traps_integ_proba_comp_94.fits', coord_, status=status)
+        call ft_read_image('~/work/tamasis/tamasis-unstable/euclid/data/coord_traps_integ_proba_comp_94.fits', coord_, status=status)
         if (status /= 0) return
         column%z = real(coord_(:,3), kind=p)
 
         call fill_trap(column%sig, sig, nt_debut, nt_fin)
         call fill_trap(column%proba_r, 1._p - exp(-time_int / tau_r), nt_debut, nt_fin)
 
+        ! we start with empty traps
         column%detector%nv = sum(nt)
         column%detector%nc = 0
         do idetector = 1, column%ndetectors
@@ -703,16 +707,25 @@ contains
 
                 end if
 
-                ! Relache                
-                nc = count(column%detector(idetector)%filled)
-                where (column%detector(idetector)%filled)
-                    test = rand()
-                    column%detector(idetector)%filled = floor(test+column%proba_r) == 0
-                end where
-                nreleases = nc - count(column%detector(idetector)%filled)
+                ! Relache
+                nreleases = 0
+                do itrap = 1, column%ntraps
+                    if (column%detector(idetector)%filled(itrap)) then
+                        column%detector(idetector)%filled(itrap) = floor(rand()+column%proba_r(itrap)) == 0
+                        if (.not. column%detector(idetector)%filled(itrap)) then
+                            nreleases = nreleases + 1
+                        end if
+                    end if
+                end do
+
+!!$                nc = count(column%detector(idetector)%filled)
+!!$                where (column%detector(idetector)%filled)
+!!$                    test = rand()
+!!$                    column%detector(idetector)%filled = floor(test+column%proba_r) == 0
+!!$                end where
                 imaout(idetector,i) = imaout(idetector,i) + nreleases
                 
-                column%detector(idetector)%nc = nc + nreleases
+                column%detector(idetector)%nc = column%detector(idetector)%nc - nreleases
                 column%detector(idetector)%nv = column%ntraps - column%detector(idetector)%nc
 
             end do
@@ -968,6 +981,5 @@ contains
         index = index + count
 
     end subroutine notrandom_number
-
 
 end module module_euclidtrapping
