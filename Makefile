@@ -16,14 +16,14 @@ ifeq "$(FC)" "gfortran"
     FFLAGS_MOD = -J
     FFLAGS_DEBUG = -g -fbacktrace -O3 -fcheck=all -ffree-form -fopenmp -Wall -fPIC -cpp -DGFORTRAN
     FFLAGS_RELEASE = -fbacktrace -O3 -ffree-form -fopenmp -Wall -fPIC -cpp -DGFORTRAN
-    LDFLAGS = -lgomp $(shell pkg-config --libs cfitsio) $(shell pkg-config --libs wcslib) $(shell pkg-config --libs fftw3)
+    LDFLAGS = -lgomp $(shell pkg-config --libs cfitsio) $(shell pkg-config --libs wcslib) $(shell pkg-config --libs fftw3) -lranlib -Lranlib -latlas -L/usr/lib/atlas
     FCOMPILER=gnu95
 else ifeq ($(FC),ifort)
     FFLAGS_MOD = -module
     FFLAGS_DEBUG = -debug -fpp -O0 -static -fPIC -free -openmp -ftz -traceback -DIFORT -check all -ftrapuv
     FFLAGS_RELEASE = -fpp -fast -fPIC -free -openmp -ftz -DIFORT
     # for static linking: use -static -static-intel
-    LDFLAGS = -liomp5 $(shell pkg-config --libs cfitsio) $(shell pkg-config --libs wcslib) $(shell pkg-config --libs fftw3)
+    LDFLAGS = -liomp5 $(shell pkg-config --libs cfitsio) $(shell pkg-config --libs wcslib) $(shell pkg-config --libs fftw3) -lranlib -Lranlib -latlas -L/usr/lib/atlas
     FCOMPILER = intelem
 else
     $(error Unsupported compiler '$(FC)'.)
@@ -40,11 +40,11 @@ else
 endif
 
 ifeq ($(PROF_GEN),1)
-    FFLAGS += -prof_gen -prof_dir/home/pchanial/profiles
+    FFLAGS_PROF = -prof_gen -prof_dir/home/pchanial/profiles
 endif
 
 ifeq ($(PROF_USE),1)
-    FFLAGS += -prof_use -prof_dir/home/pchanial/profiles
+    FFLAGS_PROF = -prof_use -prof_dir/home/pchanial/profiles
 endif
 
 INCLUDES = -Iinclude -Iinclude/wcslib-4.4.4-Fortran90
@@ -107,9 +107,10 @@ test_wcslib2 = module_fitstools module_math module_wcslib
 test_wcslibc = module_cfitsio module_wcslibc
 
 .PHONY : all tests
-all : $(EXECS) tamasis/tamasisfortran.so
+all : ranlib $(EXECS) tamasis/tamasisfortran.so
 #all : $(EXECS)
 
+include ranlib/Makefile.mk
 include euclid/Makefile.mk
 
 # if %.mod doesn't exist, make %.o. It will create %.mod with the same 
@@ -121,7 +122,7 @@ include euclid/Makefile.mk
 	fi
 
 %.o : %.f
-	$(FC) $(FFLAGS) $(FFLAGS_MOD) $(dir $@) $(INCLUDES) -c -o $@ $<
+	$(FC) $(FFLAGS) $(FFLAGS_PROF) $(FFLAGS_MOD) $(dir $@) $(INCLUDES) -c -o $@ $<
 
 %: %.o
 	$(FC) -o $@ $^ $(LDFLAGS)
