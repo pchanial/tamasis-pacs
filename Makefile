@@ -49,7 +49,7 @@ PYTHONSOURCES = $(wildcard */src/*.py)
 PYTHONTESTS = $(wildcard */test/test_*.py)
 INCLUDES := -Iinclude -Iinclude/wcslib-4.4.4-Fortran90
 
-.PHONY: all test test-fortran test-python clean python
+.PHONY: all test test-fortran test-python clean python loc
 all: lib/libtamasis.so tamasis/tamasisfortran.so python
 
 include $(patsubst %,%/Makefile.mk,$(DIRS))
@@ -97,3 +97,8 @@ clean: $(patsubst %,clean-%,$(DIRS))
 
 dist-clean: $(patsubst %,dist-clean-%,$(DIRS))
 	@rm -rf lib tamasis
+
+# return number of lines of code
+loc:
+	@find . \( -name .git -prune -or -name include -prune -or -name "Makefile*" -or -name "*f" -or -name "*f90" -or -name "*py" \) -and -not -type l -and -not -type d | sort;\
+	find . \( -name .git -prune -or -name include -prune -or -name "Makefile*" -or -name "*f" -or -name "*f90" -or -name "*py" \) -and -not -type l -and -not -type d | xargs cat | wc -l
