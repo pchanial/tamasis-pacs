@@ -43,7 +43,7 @@ test-core: $(TESTSOURCES:.f=)
 	done
 
 clean-core:
-	@find core \( -executable -and -type f -and -not -name "*py" \) -exec rm {} ';';\
+	@find core \( -perm /u=x -and -type f -and -not -name "*py" \) -exec rm {} ';';\
 	find core \( -name '*.o' -or -name "*.mod" -or -name "*~" -or -name "*pyc" \) -exec rm {} ';'
 
 dist-clean-core: clean-core

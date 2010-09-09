@@ -28,7 +28,7 @@ test-madcap: $(TESTSOURCES:.f=)
         done
 
 clean-madcap:
-	@find madcap \( -executable -and -type f -and -not -name "*py" \) -exec rm {} ';';\
+	@find madcap \( -perm /u=x -and -type f -and -not -name "*py" \) -exec rm {} ';';\
 	find madcap \( -name '*.o' -or -name "*.mod" -or -name "*~" -or -name "*pyc" \) -exec rm {} ';'
 
 dist-clean-madcap: clean-madcap

@@ -31,7 +31,7 @@ test-pacs: $(TESTSOURCES:.f=)
         done
 
 clean-pacs:
-	@find pacs \( -executable -and -type f -and -not -name "*py" \) -exec rm {} ';';\
+	@find pacs \( -perm /u=x -and -type f -and -not -name "*py" \) -exec rm {} ';';\
 	find pacs \( -name '*.o' -or -name "*.mod" -or -name "*~" -or -name "*pyc" \) -exec rm {} ';'
 
 dist-clean-pacs: clean-pacs
