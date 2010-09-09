@@ -15,6 +15,7 @@ Requirements:
 - ipython
 - PyFFTW3 0.2 with patches (https://launchpad.net/pyfftw)
 - pyfits 2.3 (http://www.stsci.edu/resources/software_hardware/pyfits)
+-mpi4py
 
 Recommended packages:
 =====================
