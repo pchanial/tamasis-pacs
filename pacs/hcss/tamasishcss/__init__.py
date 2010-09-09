@@ -30,7 +30,7 @@ def _get_filename():
 
 def _get_cmd_preprocessor(frames, options):
 
-    cmd = tamasis_dir + 'pacs/scripts/tamasis_photproject.py'
+    cmd = tamasis_dir + 'pacs/script/tamasis_photproject.py'
     
     # write frames to disk
     filename = _get_filename()+'_tod_'
