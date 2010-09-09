@@ -47,9 +47,9 @@ EXECS :=
 
 PYTHONSOURCES = $(wildcard */src/*.py)
 PYTHONTESTS = $(wildcard */test/test_*.py)
-INCLUDES := -Iinclude -Iinclude/wcslib-4.4.4-Fortran90
+INCLUDES = -Iinclude -Iinclude/wcslib-4.4.4-Fortran90
 
-.PHONY: all test test-fortran test-python clean python loc
+.PHONY: all test test-fortran test-python clean dist-clean python loc
 all: lib/libtamasis.so tamasis/tamasisfortran.so python
 
 include $(patsubst %,%/Makefile.mk,$(DIRS))
@@ -67,7 +67,7 @@ $(MODULES:.f=.o) $(EXECS:.f=.o):%.o: %.f $$(addsuffix .mod,$$(sort $$(call map,f
 	$(FC) $(FFLAGS) $(FFLAGS_PROF) $(FFLAGS_MOD) $(@D) $(INCLUDES) -c -o $@ $<
 
 # tamasisfortran.so should depend on libtamasis.so, but an address mapping problem occurs with the threadprivate variables in module_projection.f
-tamasis/tamasisfortran.so: tamasisfortran.f90 $(MODULES:.f=.o)
+tamasis/tamasisfortran.so: $(join $(DIRS),$(patsubst %,/src/tamasisfortran_%.f90,$(DIRS))) $(MODULES:.f=.o)
 	@if ! test -e tamasis; then mkdir tamasis; fi
 	unset LDFLAGS ; \
 	f2py --fcompiler=${FCOMPILER} --f90exec=$(FC) --f90flags="$(FFLAGS)" -DF2PY_REPORT_ON_ARRAY_COPY=1 -c $^ -m tamasisfortran $(INCLUDES) $(LDFLAGS); \

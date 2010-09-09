@@ -9,7 +9,7 @@ MODULES += $(MODULESOURCES)
 EXECS += $(TESTSOURCES)
 INCLUDES += -I$(SDIR)
 
-.PHONY: madcap test-madcap clean-madcap
+.PHONY: madcap test-madcap clean-madcap dist-clean-madcap
 madcap: core $(MODULESOURCES:.f=.mod) lib/libtamasismadcap.so
 
 lib/libtamasismadcap.so: lib/libtamasiscore.so $(MODULESOURCES:.f=.o)

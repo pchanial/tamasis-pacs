@@ -24,7 +24,7 @@ $(SDIR)/module_projection := $(SDIR)/module_precision $(SDIR)/module_sort $(SDIR
 $(SDIR)/module_sort := $(SDIR)/module_math
 $(SDIR)/module_wcs := $(SDIR)/module_fitstools $(SDIR)/module_math $(SDIR)/module_string $(SDIR)/module_wcslib
 
-.PHONY: core test-core clean-core
+.PHONY: core test-core clean-core dist-clean-core
 core: ranlib lib/libtamasiscore.so
 
 lib/libtamasiscore.so: $(MODULESOURCES:.f=.o)

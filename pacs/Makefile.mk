@@ -12,7 +12,7 @@ INCLUDES += -I$(SDIR)
 
 $(SDIR)/module_pacsinstrument := $(SDIR)/module_pacsobservation
 
-.PHONY: pacs test-pacs clean-pacs
+.PHONY: pacs test-pacs clean-pacs dist-clean-pacs
 pacs: core $(MODULESOURCES:.f=.mod) $(EXECSOURCES:.f=)
 
 lib/libtamasispacs.so: lib/libtamasiscore.so $(MODULESOURCES:.f=.o)
