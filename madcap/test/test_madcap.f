@@ -8,9 +8,9 @@ program test_madcap
     use module_precision,      only : p
     implicit none
 
-    character(len=*), parameter :: invnttfile1 = 'tests/madmap1/invntt_'
-    character(len=*), parameter :: todfile = 'tests/madmap1/todSpirePsw_be'
-    character(len=*), parameter :: invnttfile2 = 'tests/madmap1/invnttSpirePsw_be'
+    character(len=*), parameter :: invnttfile1 = 'madcap/test/data/madmap1/invntt_'
+    character(len=*), parameter :: todfile = 'madcap/test/data/madmap1/todSpirePsw_be'
+    character(len=*), parameter :: invnttfile2 = 'madcap/test/data/madmap1/invnttSpirePsw_be'
     type(FilterUncorrelated), allocatable :: filter_le(:), filter_be(:), filter(:)
     type(pointingelement), allocatable    :: pmatrix(:,:,:)
     integer                     :: status, ndetectors, npixels_per_sample, nx, ny
@@ -43,12 +43,12 @@ program test_madcap
     call read_tod(todfile, 'big_endian', nsamples, tod, pmatrix, status)
     if (status /= 0) stop 'FAILED: read_tod spire'
 
-    call ft_read_image('tests/madmap1/naivemapSpirePsw.fits[image]', map_ref, status)
+    call ft_read_image('madcap/test/data/madmap1/naivemapSpirePsw.fits[image]', map_ref, status)
     if (status /= 0) stop 'FAILED: ft_read_image image'
     nx = size(map_ref,1)
     ny = size(map_ref,2)
 
-    call ft_read_image('tests/madmap1/madmapSpirePsw.fits[coverage]', coverage, status)
+    call ft_read_image('madcap/test/data/madmap1/madmapSpirePsw.fits[coverage]', coverage, status)
     if (status /= 0) stop 'FAILED: ft_read_image coverage'
 
 #ifdef GFORTRAN

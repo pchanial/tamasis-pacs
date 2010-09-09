@@ -3,7 +3,7 @@ program test_fitstools
     use module_fitstools
     implicit none
 
-    character(len=*), parameter :: filename_header = 'tests/header.fits'
+    character(len=*), parameter :: filename_header = 'core/test/data/header.fits'
 
     integer                     :: status, unit
     character(len=2880*2)       :: header
@@ -151,7 +151,7 @@ program test_fitstools
     if (any(image /= image_)) stop 'FAILED: ft_read_image comparison'
 
     ! test reading keywords from unit
-    call ft_open('tests/header.fits', unit, status)
+    call ft_open(filename_header, unit, status)
     if (status /= 0) stop 'FAILED open read_keyword'
 
     call ft_read_keyword(unit, 'donotexist', ivalue, found, status)
@@ -171,23 +171,23 @@ program test_fitstools
 
     call ft_read_keyword(unit, 'donotexist', ivalue, status=status)
     if (status == 0) stop 'FAILED: unit,donotexist1b'
-    call ft_open('tests/header.fits', unit, status)
+    call ft_open(filename_header, unit, status)
 
     call ft_read_keyword(unit, 'donotexist', lvalue, status=status)
     if (status == 0) stop 'FAILED: unit,donotexist2b'
-    call ft_open('tests/header.fits', unit, status)
+    call ft_open(filename_header, unit, status)
 
     call ft_read_keyword(unit, 'donotexist', dvalue, status=status)
     if (status == 0) stop 'FAILED: unit,donotexist3b'
-    call ft_open('tests/header.fits', unit, status)
+    call ft_open(filename_header, unit, status)
 
     call ft_read_keyword(unit, 'donotexist', cvalue, status=status)
     if (status == 0) stop 'FAILED: unit,donotexist4b'
-    call ft_open('tests/header.fits', unit, status)
+    call ft_open(filename_header, unit, status)
 
     call ft_read_keyword(unit, 'donotexist', lvalue, status=status)
     if (status == 0) stop 'FAILED: unit,donotexist5b'
-    call ft_open('tests/header.fits', unit, status)
+    call ft_open(filename_header, unit, status)
 
     call ft_read_keyword(unit, 'naxis', ivalue, found, status)
     if (status /= 0 .or. ivalue /= 2) stop 'FAILED: unit,naxis'
@@ -251,19 +251,19 @@ program test_fitstools
 
     call ft_read_keyword(unit, 'testme4', bvalue, found, status)
     if (status == 0) stop 'FAILED: unit,testme4'
-    call ft_open('tests/header.fits', unit, status)
+    call ft_open(filename_header, unit, status)
 
     call ft_read_keyword(unit, 'testme5', ivalue, found, status)
     if (status == 0) stop 'FAILED: unit,testme5a'
-    call ft_open('tests/header.fits', unit, status)
+    call ft_open(filename_header, unit, status)
 
     call ft_read_keyword(unit, 'testme5', lvalue, found, status)
     if (status == 0) stop 'FAILED: unit,testme5b'
-    call ft_open('tests/header.fits', unit, status)
+    call ft_open(filename_header, unit, status)
 
     call ft_read_keyword(unit, 'testme6', dvalue, found, status)
     if (status == 0) stop 'FAILED: unit,testme6'
-    call ft_open('tests/header.fits', unit, status)
+    call ft_open(filename_header, unit, status)
 
     call ft_read_keyword(unit, 'testme7', cvalue, found, status)
     if (status /= 0 .or. cvalue /= "3''D") stop 'FAILED: unit,testme7'
@@ -295,23 +295,23 @@ program test_fitstools
 
     call ft_read_keyword_hcss(unit, 'donotexist', bvalue, status=status)
     if (status == 0) stop 'FAILED: hcss,donotexist1b'
-    call ft_open('tests/header.fits', unit, status)
+    call ft_open(filename_header, unit, status)
     
     call ft_read_keyword_hcss(unit, 'donotexist', ivalue, status=status)
     if (status == 0) stop 'FAILED: hcss,donotexist2b'
-    call ft_open('tests/header.fits', unit, status)
+    call ft_open(filename_header, unit, status)
 
     call ft_read_keyword_hcss(unit, 'donotexist', lvalue, status=status)
     if (status == 0) stop 'FAILED: hcss,donotexist3b'
-    call ft_open('tests/header.fits', unit, status)
+    call ft_open(filename_header, unit, status)
 
     call ft_read_keyword_hcss(unit, 'donotexist', dvalue, status=status)
     if (status == 0) stop 'FAILED: hcss,donotexist4b'
-    call ft_open('tests/header.fits', unit, status)
+    call ft_open(filename_header, unit, status)
 
     call ft_read_keyword_hcss(unit, 'donotexist', cvalue, status=status)
     if (status == 0) stop 'FAILED: hcss,donotexist5b'
-    call ft_open('tests/header.fits', unit, status)
+    call ft_open(filename_header, unit, status)
 
     call ft_read_keyword_hcss(unit, 'camBool', bvalue, found, status)
     if (status /= 0 .or. .not. found .or. .not. bvalue) stop 'FAILED: hcss,camBool'

@@ -8,7 +8,7 @@ program test_wcslib2
     implicit none
 
     integer, parameter          :: ncoords = 3
-    character(len=*), parameter :: filename = 'tests/header.fits'
+    character(len=*), parameter :: filename = 'core/test/data/header.fits'
     character(len=2880)         :: header
     integer                     :: wcs(WCSLEN), statfix(WCSFIX_NWCS), statproj(ncoords)
     integer                     :: alts(0:26)

@@ -7,9 +7,7 @@ program test_wcslibc
     use module_wcslibc
     implicit none
 
-    character(len=*), parameter       :: dir = '/home/pchanial/work/pacs/data/transparent/NGC6946/'
-    character(len=*), parameter       :: filename_signal = dir // '1342184520_blue_Signal.fits'
-    character(len=*), parameter       :: filename_header = '/home/pchanial/software/wcslib-4.4.4/C/pih.fits'
+    character(len=*), parameter       :: filename_header = 'core/test/data/pih.fits'
     integer                           :: status, i, iwcs, ifix
     integer(kind=C_INT)               :: alts(27), stat(NWCSFIX)
     integer(kind=C_INT)               :: nkeyrec, relax, ctrl, nreject, nwcs, status2

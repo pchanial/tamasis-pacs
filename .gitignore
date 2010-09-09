@@ -6,6 +6,9 @@
 *$py.class
 *__genmod.f90
 
+lib
+tamasis
+
 .cproject
 .project
 .settings/

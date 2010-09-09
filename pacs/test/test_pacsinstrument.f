@@ -12,8 +12,8 @@ program test_pacsinstrument
     class(PacsInstrument), allocatable  :: pacs
     class(PacsObservation), allocatable :: obs
     type(MaskPolicy)                    :: policy
-    character(len=*), parameter :: filename(1) = 'tests/frames_blue.fits'
-    character(len=*), parameter :: filename_header = 'tests/header.fits'
+    character(len=*), parameter :: filename(1) = 'pacs/test/data/frames_blue.fits'
+    character(len=*), parameter :: filename_header = 'core/test/data/header.fits'
 
     real*8, allocatable    :: yz(:,:), ad(:,:), xy(:,:), time(:)
     integer                :: status, i, j, nx, ny, index

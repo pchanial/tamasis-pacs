@@ -11,8 +11,8 @@ program test_pacsobservation
     class(PacsInstrument), allocatable  :: pacs
     type(Pointing), allocatable         :: p_(:)
     type(MaskPolicy)                    :: policy
-    character(len=*), parameter         :: filename = 'tests/frames_blue.fits'
-    character(len=50), allocatable      :: afilename(:)
+    character(len=*), parameter         :: filename = 'pacs/test/data/frames_blue.fits'
+    character(len=255), allocatable     :: afilename(:)
     integer                :: status, idetector
     real*8, allocatable    :: signal(:,:)
     logical*1, allocatable :: mask(:,:)
@@ -23,43 +23,56 @@ program test_pacsobservation
     ! initialise tamasis
     call init_tamasis
 
+    allocate (afilename(1))
     ! valid calls
     allocate(obs)
-    call obs%init([filename], policy, status)
+    afilename(1) = get_tamasis_path() // filename
+
+    call obs%init(afilename, policy, status)
     if (status /= 0 .or. obs%slice(1)%first /= 1 .or. obs%slice(1)%last /= 360) stop 'FAILED: init1'
 
-    call obs%init([filename // '[23:23]'], policy, status)
+    afilename(1) = get_tamasis_path() // filename // '[23:23]'
+    call obs%init(afilename, policy, status)
     if (status /= 0 .or. obs%slice(1)%first /= 23 .or. obs%slice(1)%last /= 23) stop 'FAILED: init2'
 
-    call obs%init([filename // '[200:]'], policy, status)
+    afilename(1) = get_tamasis_path() // filename // '[200:]'
+    call obs%init(afilename, policy, status)
     if (status /= 0 .or. obs%slice(1)%first /= 200 .or. obs%slice(1)%last /= 360) stop 'FAILED: init3'
 
-    call obs%init([filename // '[:130]'], policy, status)
+    afilename(1) = get_tamasis_path() // filename // '[:130]'
+    call obs%init(afilename, policy, status)
     if (status /= 0 .or. obs%slice(1)%first /= 1 .or. obs%slice(1)%last /= 130) stop 'FAILED: init4'
 
-    call obs%init([filename // '[:]'], policy, status)
+    afilename(1) = get_tamasis_path() // filename // '[:]'
+    call obs%init(afilename, policy, status)
     if (status /= 0 .or. obs%slice(1)%first /= 1 .or. obs%slice(1)%last /= 360) stop 'FAILED: init5'
 
-    call obs%init([filename // '[]'], policy, status)
+    afilename(1) = get_tamasis_path() // filename // '[]'
+    call obs%init(afilename, policy, status)
     if (status /= 0 .or. obs%slice(1)%first /= 1 .or. obs%slice(1)%last /= 360) stop 'FAILED: init6'
    
     ! invalid calls
-    call obs%init([filename // '[32:23]'], policy, status)
+    afilename(1) = get_tamasis_path() // filename // '[32:23]'
+    call obs%init(afilename, policy, status)
     if (status == 0) stop 'FAILED: badinit1'
 
-    call obs%init([filename // '[32:361]'], policy, status)
+    afilename(1) = get_tamasis_path() // filename // '[32:361]'
+    call obs%init(afilename, policy, status)
     if (status == 0) stop 'FAILED: badinit2'
 
-    call obs%init([filename // '[ljdf]'], policy, status)
+    afilename(1) = get_tamasis_path() // filename // '[ljdf]'
+    call obs%init(afilename, policy, status)
     if (status == 0) stop 'FAILED: badinit4'
 
-    call obs%init([filename // '[:l+]'], policy, status)
+    afilename(1) = get_tamasis_path() // filename // '[:l+]'
+    call obs%init(afilename, policy, status)
     if (status == 0) stop 'FAILED: badinit5'
+    deallocate (afilename)
 
     ! array
     allocate(afilename(2))
-    afilename(1) = trim(filename) // '[3:100]'
-    afilename(2) = trim(filename) // '[201:300]'
+    afilename(1) = get_tamasis_path() // filename // '[3:100]'
+    afilename(2) = get_tamasis_path() // filename // '[201:300]'
     call obs%init(afilename, policy, status)
     if (status /= 0 .or. sum(obs%slice%nsamples) /= 198 .or.                     &
         obs%slice(1)%first /= 3   .or. obs%slice(1)%last /= 100 .or.             &
@@ -71,10 +84,12 @@ program test_pacsobservation
     if (status == 0) stop 'FAILED: ainit2'
     deallocate(afilename)
 
-    
     ! test reading observation
-    call obs%init([filename], policy, status)
+    allocate (afilename(1))
+    afilename(1) = get_tamasis_path() // filename
+    call obs%init(afilename, policy, status)
     if (status /= 0) stop 'FAILED: init_pacsobservation loop'
+    deallocate (afilename)
 
     allocate (pacs)
     call pacs%init(obs%channel, obs%observing_mode == 'Transparent', 1, status=status)

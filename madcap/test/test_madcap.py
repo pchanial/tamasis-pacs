@@ -3,8 +3,9 @@ import pyfits
 
 from tamasis import *
 
-observation = MadMap1Observation(tamasis_dir+'tests/madmap1/todSpirePsw_be', tamasis_dir+'tests/madmap1/invnttSpirePsw_be', 
-                                 tamasis_dir+'tests/madmap1/madmapSpirePsw.fits[coverage]', 'big_endian', 135, missing_value=numpy.nan)
+path = tamasis_dir + 'madcap/test/data/madmap1/'
+observation = MadMap1Observation(path+'todSpirePsw_be', path+'invnttSpirePsw_be', 
+                                 path+'madmapSpirePsw.fits[coverage]', 'big_endian', 135, missing_value=numpy.nan)
 
 tod = observation.get_tod()
 tod.unit = 'Jy/beam'
@@ -15,7 +16,7 @@ projection = Projection(observation)
 packing = Unpacking(observation.mapmask, field=numpy.nan).T
 
 map_naive = mapper_naive(tod, projection*packing)
-map_ref = pyfits.fitsopen(tamasis_dir+'tests/madmap1/naivemapSpirePsw.fits')['image'].data
+map_ref = pyfits.fitsopen(path+'naivemapSpirePsw.fits')['image'].data
 if any_neq(map_naive,map_ref,15): print 'FAILED: mapper_naive madcap 1'
 
 map_naive_1d = mapper_naive(tod, projection)

@@ -5,7 +5,7 @@ program test_cfitsio
     use            :: module_cfitsio
     implicit none
 
-    character(len=*), parameter    :: filename = 'tests/pih.fits'
+    character(len=*), parameter    :: filename = 'core/test/data/pih.fits'
     character(len=80*1000+1,kind=C_CHAR), pointer :: header
     integer(kind=C_INT)            :: nkeyrec, status
     type(C_PTR)                    :: fptr, c_header

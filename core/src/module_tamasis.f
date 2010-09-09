@@ -73,8 +73,8 @@ contains
             tamasis_path = ''
             tamasis_path_len = 0
         else
-            tamasis_path = command(1:pos)
-            tamasis_path_len = pos
+            tamasis_path = command(1:pos) // '../../'
+            tamasis_path_len = pos + 6
         end if
 
     end subroutine

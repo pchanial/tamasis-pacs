@@ -7,7 +7,7 @@ program test_pacspointing
 
     class(pacsobservation), allocatable :: obs
     type(MaskPolicy)            :: policy
-    character(len=*), parameter :: filename(1) = 'tests/frames_blue.fits'
+    character(len=*), parameter :: filename(1) = 'pacs/test/data/frames_blue.fits'
     integer                     :: i, index
     real*8                      :: time(12), ra(12), dec(12), pa(12), chop(12)
     real*8, parameter           :: timetest(6) = [1634799159.471412_p, 1634799159.5713959_p, 1634799159.6713789_p,                 &

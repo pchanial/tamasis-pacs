@@ -5,7 +5,7 @@ from tamasis import *
 
 class TestFailure(Exception): pass
 
-datadir = tamasis_dir + 'tests/'
+datadir = tamasis_dir + 'pacs/test/data/'
 obs = PacsObservation(datadir+'frames_blue.fits',
                       fine_sampling_factor=1)
 

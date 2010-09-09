@@ -5,7 +5,7 @@ program test_wcs
     use module_wcs
     implicit none
 
-    character(len=*), parameter :: filename_header = 'tests/header.fits'
+    character(len=*), parameter :: filename_header = 'core/test/data/header.fits'
     integer                     :: n
 
     type(astrometry)            :: astr
@@ -22,10 +22,6 @@ program test_wcs
     d = [60.357773247484651d0, 60.357773247484651d0-10d0,     &
          60.357773247484651d0-10d0, 60.3577732474846510+10d0, &
          60.357773247484651d0+10d0]
-
-    ! header =headfits('tests/csh_header_ngc6946.fits')
-    ! adxy, header, a, d, x, y
-    ! print_text, x+1, y+1
 
     xref = [ 1.00000000000, 1555.78869806518, -7771.43047054905, &
              820.11316879919, -4084.69147364694 ]

@@ -24,7 +24,7 @@ program test_preprocessor
 
     deallocate (filtered)
 
-    call ft_read_image('tests/timeline_transparent_mode.fits', timeline, status)
+    call ft_read_image('core/test/data/timeline_transparent_mode.fits', timeline, status)
     if (status /= 0) stop 'FAILED ft_read_image'
 
     allocate (filtered(size(timeline)), reference(size(timeline)))

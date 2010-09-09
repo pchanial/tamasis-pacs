@@ -1,7 +1,7 @@
 from tamasis import *
 import numpy
 
-pacs = PacsObservation(tamasis_dir+'tests/frames_blue.fits')
+pacs = PacsObservation(tamasis_dir+'pacs/test/data/frames_blue.fits')
 tod = pacs.get_tod()
 
 telescope    = Identity('Telescope PSF')

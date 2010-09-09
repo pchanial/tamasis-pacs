@@ -75,7 +75,7 @@ program test_sort
        if (b(index(i-1)) > b(index(i))) stop "FAILED: qsorti_double."
     end do
 
-    call ft_read_image('tests/timeline_transparent_mode.fits', timeline, status)
+    call ft_read_image('core/test/data/timeline_transparent_mode.fits', timeline, status)
     if (status /= 0) stop 'FAILED ft_read_image'
 
     precision = 12
