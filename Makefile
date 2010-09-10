@@ -44,10 +44,10 @@ DIRS = core madcap pacs
 # lists of files which are updated in sub-directory Makefile.mk files
 MODULES :=
 EXECS :=
+INCLUDES := -Iinclude -Iinclude/wcslib-4.4.4-Fortran90
 
 PYTHONSOURCES = $(wildcard */src/*.py)
 PYTHONTESTS = $(wildcard */test/test_*.py)
-INCLUDES = -Iinclude -Iinclude/wcslib-4.4.4-Fortran90
 
 .PHONY: all test test-fortran test-python clean dist-clean python loc
 all: lib/libtamasis.so tamasis/tamasisfortran.so python
