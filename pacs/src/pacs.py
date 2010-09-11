@@ -298,11 +298,11 @@ class pacs_status(object):
 #-------------------------------------------------------------------------------
 
 
-def pacs_preprocess(obs, projection_method='sharp edges', oversampling=True, deglitching_hf_length=20, compression_factor=1, nsigma=5., hf_length=30000):
+def pacs_preprocess(obs, projection_method='sharp edges', oversampling=True, npixels_per_sample=None, deglitching_hf_length=20, compression_factor=1, nsigma=5., hf_length=30000):
     """
     deglitch, filter and potentially compress if the observation is in transparent mode
     """
-    projection = Projection(obs, method='sharp edges', oversampling=False)
+    projection = Projection(obs, method='sharp edges', oversampling=False, npixels_per_sample=npixels_per_sample)
     tod = obs.get_tod()
     tod.mask[:] = 0
     tod_filtered = filter_median(tod, deglitching_hf_length)
@@ -313,7 +313,7 @@ def pacs_preprocess(obs, projection_method='sharp edges', oversampling=True, deg
     
     # get the proper projector
     if projection_method != 'sharp edges' or oversampling and numpy.any(obs.compression_factor * obs.fine_sampling_factor > 1):
-        projection = Projection(obs, method=projection_method, oversampling=oversampling)
+        projection = Projection(obs, method=projection_method, oversampling=oversampling, npixels_per_sample=npixels_per_sample)
 
     # bail out if not in transparent mode
     if not obs.transparent_mode or compression_factor == 1:
