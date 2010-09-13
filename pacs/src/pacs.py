@@ -55,7 +55,6 @@ class PacsObservation(object):
             detector_mask, status = tmf.pacs_info_bad_detector_mask(tamasis_dir, channel, transparent_mode, reject_bad_line, nrows, ncolumns)
             if status != 0: raise RuntimeError()
             detector_mask = numpy.ascontiguousarray(detector_mask)
-        print int(numpy.sum(detector_mask == 0))
 
         # get the observations and detector mask for the current processor
         slice_observation, slice_detector = _split_observation(nfilenames, int(numpy.sum(detector_mask == 0)))
@@ -64,11 +63,14 @@ class PacsObservation(object):
         detector_mask = numpy.ones(detector_mask.shape, dtype='int8')
         detector_mask.flat[igood[slice_detector]] = 0
         filename_, nfilenames = _files2tmf(filename)
+        ndetectors = int(numpy.sum(detector_mask == 0))
 
         # frame policy
         frame_policy = MaskPolicy('inscan,turnaround,other,invalid'.split(','), (frame_policy_inscan, frame_policy_turnaround, frame_policy_other, frame_policy_invalid), 'Frame Policy')
 
         # retrieve information from the observations
+        nthreads = tmf.info_nthreads()
+        print 'Info: ' + MPI.Get_processor_name() + ', ' + str(nthreads) + ' core' + ('s' if nthreads > 1 else '') + ' (' + str(ndetectors) + ')'
         compression_factor, nsamples, unit, responsivity, detector_area, dflat, oflat, status = tmf.pacs_info(tamasis_dir, filename_, nfilenames, transparent_mode, fine_sampling_factor, numpy.array(frame_policy), numpy.asfortranarray(detector_mask))
         if status != 0: raise RuntimeError()
 
@@ -81,7 +83,7 @@ class PacsObservation(object):
         self.nobservations = nfilenames
         self.nsamples = tuple(nsamples)
         self.nfinesamples = tuple(nsamples * compression_factor * fine_sampling_factor)
-        self.ndetectors = int(numpy.sum(detector_mask == 0))
+        self.ndetectors = ndetectors
         self.detector_mask = detector_mask
         self.reject_bad_line = reject_bad_line
         self.frame_policy = frame_policy
@@ -318,7 +320,7 @@ def pacs_preprocess(obs, projection_method='sharp edges', oversampling=True, npi
     # bail out if not in transparent mode
     if not obs.transparent_mode or compression_factor == 1:
         model = CompressionAverage(obs.compression_factor) * projection
-        map_mask = model.T(numpy.asarray(tod.mask, 'float64'))
+        map_mask = model.T(Tod(tod.mask, dtype='float64', nsamples=tod.nsamples))
         model = masking * model
         return tod, model, mapper_naive(tod, model), map_mask
 
@@ -365,7 +367,7 @@ def _split_observation(nobservations, ndetectors):
     # we start with the miminum blocksize and increase it until we find a configuration that covers all the observations
     blocksize = int(numpy.ceil(float(nx * ny) / nnodes))
     while True:
-        # by loop over x first, we favor larger number of detectors and fewer number of observation per processor, to minimise inter-processor communication in case of correlations between detectors
+        # # by looping over x first, we favor larger number of detectors and fewer number of observations per processor, to minimise inter-processor communication in case of correlations between detectors
         for xblocksize in range(1, blocksize+1):
             if float(blocksize) / xblocksize != blocksize // xblocksize:
                 continue
@@ -377,10 +379,6 @@ def _split_observation(nobservations, ndetectors):
         if nx_block * ny_block <= nnodes:
             break
         blocksize += 1
-
-    print 'block: ', xblocksize, 'x', yblocksize
-    print 'nx, nx_block', nx, nx_block
-    print 'ny, ny_block', ny, ny_block
 
     rank = MPI.COMM_WORLD.Get_rank()
 

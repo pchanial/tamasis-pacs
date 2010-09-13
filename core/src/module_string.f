@@ -18,7 +18,7 @@ module module_string
     end interface
 
     interface strinteger
-        module procedure strinteger_int4, strinteger_int8
+        module procedure strinteger_int4, strinteger_int4_left, strinteger_int8
     end interface
 
     interface strsection
@@ -170,6 +170,21 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
+    pure function strinteger_int4_left(input, width) result(strinteger)
+
+        integer*4, intent(in) :: input
+        integer, intent(in)   :: width
+        character(len=width)  :: strinteger
+
+        write (strinteger, '(i0)') input
+        strinteger = adjustl(strinteger)
+      
+    end function strinteger_int4_left
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
     pure function strinteger_int8(input) result(strinteger)
 
         integer*8, intent(in)                     :: input
@@ -204,6 +219,21 @@ contains
     end function strinteger_int8_len
  
  
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    pure function strinteger_int8_left(input, width) result(strinteger)
+
+        integer*8, intent(in) :: input
+        integer, intent(in)   :: width
+        character(len=width)  :: strinteger
+
+        write (strinteger, '(i0)') input
+        strinteger = adjustl(strinteger)
+      
+    end function strinteger_int8_left
+
+
     !-------------------------------------------------------------------------------------------------------------------------------
 
 

@@ -180,9 +180,12 @@ subroutine pacs_info(tamasis_dir, filename, nfilenames, transparent_mode, fine_s
                      nrows, ncolumns, compression_factor, nsamples, unit, responsivity, detector_area, flatfield_detector,         &
                      flatfield_optical, status)
 
+    use iso_fortran_env,        only : OUTPUT_UNIT
     use module_pacsinstrument,  only : PacsInstrument
     use module_pacsobservation, only : PacsObservation, MaskPolicy
     use module_tamasis,         only : init_tamasis
+    use module_string,          only : strternary
+    use omp_lib,                only : omp_get_max_threads
     implicit none
 
     !f2py threadsafe
@@ -226,6 +229,7 @@ subroutine pacs_info(tamasis_dir, filename, nfilenames, transparent_mode, fine_s
     class(PacsInstrument), allocatable  :: pacs
     type(MaskPolicy)                    :: policy
     integer                             :: iobs
+    character(len=100)                  :: host
 
     ! initialise tamasis
     call init_tamasis(tamasis_dir)
@@ -246,12 +250,12 @@ subroutine pacs_info(tamasis_dir, filename, nfilenames, transparent_mode, fine_s
     call obs%init(filename_, policy, status, verbose=.true.)
     if (status /= 0) return
 
-    ! print some information about the observation
-    call obs%print()
-
     allocate(pacs)
     call pacs%init(obs%channel, transparent_mode, fine_sampling_factor, detector_mask, status)
     if (status /= 0) return
+
+    call obs%print()
+    write (OUTPUT_UNIT,*)
 
     compression_factor = obs%slice%compression_factor
     nsamples = obs%slice%nvalids

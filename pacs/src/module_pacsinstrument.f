@@ -239,10 +239,10 @@ contains
 
             ! UV corners
             do ivertex=1, nvertices
-                call ft_read_image(get_calfile(filename_saa), tmp2, status, hdu_red (ivertex)  )
+                call ft_read_image(get_calfile(filename_saa), tmp2, status, hdu_red(ivertex)  )
                 if (status /= 0) return
                 this%corners_uv_all(1,ivertex,:,:) = transpose(tmp2)
-                call ft_read_image(get_calfile(filename_saa), tmp2, status, hdu_red (ivertex)+1)
+                call ft_read_image(get_calfile(filename_saa), tmp2, status, hdu_red(ivertex)+1)
                 if (status /= 0) return
                 this%corners_uv_all(2,ivertex,:,:) = transpose(tmp2)
             end do

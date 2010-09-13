@@ -2,7 +2,7 @@ import numpy
 import scipy
 import time
 
-from acquisitionmodels import asacquisitionmodel, Diagonal, DiscreteDifference, Identity, Masking, Broadcast
+from acquisitionmodels import asacquisitionmodel, Diagonal, DiscreteDifference, Identity, Masking, AllReduce
 from datatypes import Map, Tod
 from mpi4py import MPI
 from unit import Quantity, UnitError
@@ -19,7 +19,7 @@ def mapper_naive(tod, model, unit=None):
     have the TOD in unit of surface brightness.
     """
 
-    model = Masking(tod.mask) * model * Broadcast()
+    model = Masking(tod.mask) * model * AllReduce().T
     mymap = Map(model.transpose(tod), copy=False)
     unity = tod.copy()
     unity[:] = 1.
@@ -67,12 +67,17 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None, tol=
 
     C = model.T * weight * model
 
-    if hyper != 0 and MPI.COMM_WORLD.Get_rank() == 0:
-        dX = DiscreteDifference(axis=1)
-        dY = DiscreteDifference(axis=0)
-        C += hyper * ( dX.T * dX + dY.T * dY )
+    if hyper != 0:
+        ntods = MPI.COMM_WORLD.allreduce(numpy.sum(tod.mask == 0), op=MPI.SUM)
+        nmaps = C.aslinearoperator(unpacking=unpacking).shape[0]
+        print 'mapper_rls: ', ntods, nmaps
+        if MPI.COMM_WORLD.Get_rank() == 0:
+            hyper = float(hyper * ntods / nmaps)
+            dX = DiscreteDifference(axis=1)
+            dY = DiscreteDifference(axis=0)
+            C += hyper * ( dX.T * dX + dY.T * dY )
 
-    C = Broadcast().T * C
+    C = AllReduce() * C
     C = C.aslinearoperator(unpacking=unpacking)
 
     if M is None:
@@ -85,7 +90,7 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None, tol=
         M = asacquisitionmodel(M)
     M0 = M.aslinearoperator(C.shape, unpacking=unpacking)
 
-    rhs = C.packing * Broadcast().T * model.T * weight * tod
+    rhs = C.packing * AllReduce() * model.T * weight * tod
     if not numpy.all(numpy.isfinite(rhs)):
         raise ValueError('RHS contains not finite values.')
     if rhs.shape != C.shape[1]:

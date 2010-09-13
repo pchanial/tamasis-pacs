@@ -24,7 +24,7 @@ __all__ = ['AcquisitionModel', 'AcquisitionModelTranspose', 'Composition',
            'Addition', 'Square', 'Symmetric', 'Diagonal', 'Scalar', 'Identity',
            'DiscreteDifference', 'Projection', 'Compression', 
            'CompressionAverage', 'DownSampling', 'Masking', 'Unpacking', 'Unpacking2',  
-           'Reshaping', 'Padding', 'Fft', 'FftHalfComplex', 'InvNtt', 'InterpolationLinear', 'Broadcast', 'CircularShift', 'ValidationError', 
+           'Reshaping', 'Padding', 'Fft', 'FftHalfComplex', 'InvNtt', 'InterpolationLinear', 'AllReduce', 'CircularShift', 'ValidationError', 
            'aperture_circular', 'phasemask_fourquadrant',
            'asacquisitionmodel']
 
@@ -1170,6 +1170,7 @@ class InvNtt(Diagonal):
             filter = numpy.resize(filter, (nslices, ndetectors, ncorrelations+1))
         tod_filter, status = tmf.fft_filter_uncorrelated(filter.T, nsamples, numpy.sum(nsamples))
         if status != 0: raise RuntimeError()
+        print tod_filter.shape
         Diagonal.__init__(self, tod_filter.T, nsamples, description)
         self.ncorrelations = ncorrelations
 
@@ -1191,14 +1192,14 @@ class InterpolationLinear(Square):
 #-------------------------------------------------------------------------------
 
 
-class Broadcast(Square):
+class AllReduce(Square):
 
-    def direct(self, array, reusein=False, reuseout=False):
-        array = self.validate_output(array, reusein and reuseout)
-        return array
-    def transpose(self, array, reusein=False, reuseout=False, op=MPI.SUM):
+    def direct(self, array, reusein=False, reuseout=False, op=MPI.SUM):
         array = self.validate_output(array, reusein and reuseout)
         array[:] = MPI.COMM_WORLD.allreduce(array, op=MPI.SUM)
+        return array
+    def transpose(self, array, reusein=False, reuseout=False):
+        array = self.validate_output(array, reusein and reuseout)
         return array
 
 

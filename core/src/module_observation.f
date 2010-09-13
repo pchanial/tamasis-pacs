@@ -1182,16 +1182,14 @@ contains
 
         integer :: islice, nsamples
 
-        write (*,*)
-
         do islice = 1, this%nslices
 
             nsamples = this%slice(islice)%nsamples
 
             ! observation number & file name
-            write (OUTPUT_UNIT,'(a)') 'Info: Observation' // strternary(this%nslices>1, ' ' // strinteger(islice), '') // ': ' //  &
+            write (OUTPUT_UNIT,'(a6,a)') strternary(this%nslices>1, '  #' // strinteger(islice,3), ''), 'Observation: ' //         &
                   trim(this%slice(islice)%filename)
-            write (OUTPUT_UNIT,'(a)') '      Section: [' // strsection(this%slice(islice)%first,this%slice(islice)%last) // ']'
+            write (OUTPUT_UNIT,'(6x,a)') 'Section: [' // strsection(this%slice(islice)%first,this%slice(islice)%last) // ']'
             
             ! channel
             write (OUTPUT_UNIT,'(a,$)') "      Channel: "
@@ -1224,7 +1222,6 @@ contains
                   strpolicy(this%policy%other)
             write (OUTPUT_UNIT,'(a,i0,a)') '      Invalid:    ', count(this%slice(islice)%p%invalid),    ' ' //                    &
                   strpolicy(this%policy%invalid)
-            write (*,*)
 
         end do
 
