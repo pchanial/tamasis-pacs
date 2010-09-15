@@ -283,7 +283,7 @@ subroutine pacs_read_filter_calibration_ncorrelations(tamasis_dir, channel, ncor
     !f2py intent(out)  status
     
     character(len=*), intent(in) :: tamasis_dir
-    character, intent(in)        :: channel
+    character(len=*), intent(in) :: channel
     integer, intent(out)         :: ncorrelations
     integer, intent(out)         :: status
     
@@ -316,7 +316,7 @@ subroutine pacs_read_filter_calibration(tamasis_dir, channel, ncorrelations, nde
     !f2py intent(out)  status
 
     character(len=*), intent(in) :: tamasis_dir
-    character, intent(in)        :: channel
+    character(len=*), intent(in) :: channel
     integer, intent(in)          :: ncorrelations
     integer, intent(in)          :: ndetectors
     logical*1, intent(in)        :: mask(nrows,ncolumns)

@@ -1170,9 +1170,9 @@ class InvNtt(Diagonal):
             filter = numpy.resize(filter, (nslices, ndetectors, ncorrelations+1))
         tod_filter, status = tmf.fft_filter_uncorrelated(filter.T, nsamples, numpy.sum(nsamples))
         if status != 0: raise RuntimeError()
-        print tod_filter.shape
         Diagonal.__init__(self, tod_filter.T, nsamples, description)
         self.ncorrelations = ncorrelations
+        #self.diagonal /= numpy.max(self.diagonal)
 
 
 #-------------------------------------------------------------------------------

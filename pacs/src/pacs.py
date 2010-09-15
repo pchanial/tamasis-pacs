@@ -300,21 +300,25 @@ class pacs_status(object):
 #-------------------------------------------------------------------------------
 
 
-def pacs_preprocess(obs, projection_method='sharp edges', oversampling=True, npixels_per_sample=None, deglitching_hf_length=20, compression_factor=1, nsigma=5., hf_length=30000):
+def pacs_preprocess(obs, projection_method='sharp edges', oversampling=True, npixels_per_sample=None, deglitching_hf_length=20, compression_factor=1, nsigma=5., hf_length=30000, tod=None):
     """
     deglitch, filter and potentially compress if the observation is in transparent mode
     """
-    projection = Projection(obs, method='sharp edges', oversampling=False, npixels_per_sample=npixels_per_sample)
-    tod = obs.get_tod()
-    tod.mask[:] = 0
-    tod_filtered = filter_median(tod, deglitching_hf_length)
-    tod.mask = deglitch_l2mad(tod_filtered, projection, nsigma=nsigma)
-    tod = filter_median(tod, hf_length)
-    masking = Masking(tod.mask)
-    tod = masking(tod)
+    if tod is None:
+        projection = Projection(obs, method='sharp edges', oversampling=False, npixels_per_sample=npixels_per_sample)
+        tod = obs.get_tod()
+        tod.mask[:] = 0
+        tod_filtered = filter_median(tod, deglitching_hf_length)
+        tod.mask = deglitch_l2mad(tod_filtered, projection, nsigma=nsigma)
+        tod = filter_median(tod, hf_length)
+        masking = Masking(tod.mask)
+        tod = masking(tod)
+    else:
+        projection = None
+        masking = Masking(tod.mask)
     
     # get the proper projector
-    if projection_method != 'sharp edges' or oversampling and numpy.any(obs.compression_factor * obs.fine_sampling_factor > 1):
+    if projection is None or projection_method != 'sharp edges' or oversampling and numpy.any(obs.compression_factor * obs.fine_sampling_factor > 1):
         projection = Projection(obs, method=projection_method, oversampling=oversampling, npixels_per_sample=npixels_per_sample)
 
     # bail out if not in transparent mode
@@ -367,7 +371,7 @@ def _split_observation(nobservations, ndetectors):
     # we start with the miminum blocksize and increase it until we find a configuration that covers all the observations
     blocksize = int(numpy.ceil(float(nx * ny) / nnodes))
     while True:
-        # # by looping over x first, we favor larger number of detectors and fewer number of observations per processor, to minimise inter-processor communication in case of correlations between detectors
+        # by looping over x first, we favor larger number of detectors and fewer number of observations per processor, to minimise inter-processor communication in case of correlations between detectors
         for xblocksize in range(1, blocksize+1):
             if float(blocksize) / xblocksize != blocksize // xblocksize:
                 continue

@@ -975,7 +975,7 @@ contains
 
     function read_filter_calibration_ncorrelations(channel, status) result (ncorrelations)
 
-        character, intent(in) :: channel
+        character(len=*), intent(in) :: channel
         integer, intent(out)  :: status
         integer               :: ncorrelations
 
@@ -983,11 +983,11 @@ contains
         character(len=70)     :: comment
 
         select case (channel)
-            case ('b')
+            case ('Blue')
                 call ft_open(get_calfile(filename_ib), unit, status)
-            case ('g')
+            case ('Green')
                 call ft_open(get_calfile(filename_ig), unit, status)
-            case ('r')
+            case ('Red')
                 call ft_open(get_calfile(filename_ir), unit, status)
             case default
                 status = 1
@@ -1010,17 +1010,17 @@ contains
 
     subroutine read_filter_calibration(channel, mask, filter, status)
 
-        character, intent(in)                 :: channel
+        character(len=*), intent(in)          :: channel
         logical*1, intent(in)                 :: mask(:,:)
         type(FilterUncorrelated), intent(out) :: filter
         integer, intent(out)                  :: status
 
         select case (channel)
-            case ('b')
+            case ('Blue')
                 call read_filter_filename(get_calfile(filename_ib), mask, filter, status)
-            case ('g')
+            case ('Green')
                 call read_filter_filename(get_calfile(filename_ig), mask, filter, status)
-            case ('r')
+            case ('Red')
                 call read_filter_filename(get_calfile(filename_ir), mask, filter, status)
             case default
                 status = 1
