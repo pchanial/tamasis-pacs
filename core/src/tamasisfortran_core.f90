@@ -5,6 +5,7 @@
 subroutine info_nthreads(nthreads)
 
     use omp_lib, only : omp_get_max_threads
+    implicit none
 
     !f2py intent(out) :: nthreads
 

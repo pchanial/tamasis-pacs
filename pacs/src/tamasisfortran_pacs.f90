@@ -184,8 +184,6 @@ subroutine pacs_info(tamasis_dir, filename, nfilenames, transparent_mode, fine_s
     use module_pacsinstrument,  only : PacsInstrument
     use module_pacsobservation, only : PacsObservation, MaskPolicy
     use module_tamasis,         only : init_tamasis
-    use module_string,          only : strternary
-    use omp_lib,                only : omp_get_max_threads
     implicit none
 
     !f2py threadsafe
@@ -229,7 +227,6 @@ subroutine pacs_info(tamasis_dir, filename, nfilenames, transparent_mode, fine_s
     class(PacsInstrument), allocatable  :: pacs
     type(MaskPolicy)                    :: policy
     integer                             :: iobs
-    character(len=100)                  :: host
 
     ! initialise tamasis
     call init_tamasis(tamasis_dir)
