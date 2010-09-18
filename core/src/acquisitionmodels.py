@@ -56,8 +56,10 @@ class AcquisitionModel(object):
         self._output_direct    = None
         # stores the input of the direct model. Its memory allocation is re-used as the output of the transpose model
         self._output_transpose = None
+        # dtype
+        self._dtype = None
         # Acquisition model components
-        self.blocks            = []
+        self.blocks = []
 
     def __call__(self, data, reusein=False, reuseout=False):
         return self.direct(data, reusein=reusein, reuseout=reuseout)
@@ -91,6 +93,15 @@ class AcquisitionModel(object):
     @shapeout.setter
     def shapeout(self, shape):
         self._shapeout = shape
+
+    @property
+    def dtype(self):
+        if self._dtype is not None:
+            return self._dtype
+        for block in self.blocks:
+            if block.dtype == numpy.dtype('complex128'):
+                return block.dtype
+        return numpy.dtype('float64')
 
     def aslinearoperator(self, shape=None, packing=None, unpacking=None):
         """Returns the AcquisitionModel as a LinearOperator"""
@@ -129,7 +140,7 @@ class AcquisitionModel(object):
             packing = reshape * packing
             model = reshape * model
 
-        operator = scipy.sparse.linalg.interface.LinearOperator(shape, matvec=model.direct, rmatvec=model.transpose)
+        operator = scipy.sparse.linalg.interface.LinearOperator(shape, matvec=model.direct, rmatvec=model.transpose, dtype=self.dtype)
         operator.packing   = packing
         operator.unpacking = unpacking
         return operator
@@ -626,6 +637,8 @@ class Diagonal(Symmetric):
     def __init__(self, diagonal, nsamples=None, description=None):
         AcquisitionModel.__init__(self, description)
         self.diagonal = numpy.asarray(diagonal)
+        if self.diagonal.dtype.name not in ('float64', 'complex128'):
+            self.diagonal = numpy.asarray(self.diagonal, dtype='float64')
         if not utils._my_isscalar(self.diagonal):
             self.shapein = validate_sliced_shape(self.diagonal.shape, nsamples)
 
@@ -634,6 +647,10 @@ class Diagonal(Symmetric):
         output = self.validate_output(data, reusein and reuseout)
         output *= self.diagonal
         return output
+
+    @property
+    def dtype(self):
+        return self.diagonal.dtype
 
 
 #-------------------------------------------------------------------------------
@@ -698,9 +715,9 @@ class Projection(AcquisitionModel):
         AcquisitionModel.__init__(self, description)
         self._pmatrix, self.header, ndetectors, nsamples, self.npixels_per_sample = \
             observation.get_pointing_matrix(header, resolution, npixels_per_sample, method=method, oversampling=oversampling)
-        self.shapein = tuple([self.header['naxis'+str(i+1)] for i in reversed(range(self.header['naxis']))])
         self.pmatrix = self._pmatrix.view(dtype=[('weight', 'f4'), ('pixel', 'i4')])
         self.pmatrix.resize((observation.ndetectors, numpy.sum(nsamples), self.npixels_per_sample))
+        self.shapein = tuple([self.header['naxis'+str(i+1)] for i in reversed(range(self.header['naxis']))])
         self.shapeout = combine_sliced_shape(observation.ndetectors, nsamples)
 
     def direct(self, map2d, reusein=False, reuseout=False):
@@ -843,7 +860,7 @@ class Scalar(Diagonal):
     """
     def __init__(self, value, description=None):
         if not numpy.iscomplex(value):
-            value = float(value)
+            value = float(numpy.real(value))
         Diagonal.__init__(self, value, description)
        
     def __str__(self):
@@ -896,6 +913,12 @@ class Masking(Symmetric):
         if numpy.rank(mask) == 0:
             raise TypeError('The input mask should not be scalar.')
         self._mask = mask
+
+    @property
+    def dtype(self):
+        if self.mask.dtype is numpy.dtype('complex128'):
+            return self.mask.dtype
+        return numpy.dtype('float64')
 
 
 #-------------------------------------------------------------------------------
@@ -1098,6 +1121,7 @@ class Fft(AcquisitionModel):
         self._out = numpy.zeros(shape, dtype=complex)
         self.forward_plan = fftw3.Plan(self._in, self._out, direction='forward', flags=flags, nthreads=nthreads)
         self.backward_plan = fftw3.Plan(self._in, self._out, direction='backward', flags=flags, nthreads=nthreads)
+        self._dtype = numpy.dtype('complex128')
 
     def direct(self, array, reusein=False, reuseout=False):
         self._in[:] = array
@@ -1253,7 +1277,7 @@ def _toacquisitionmodel(model, cls, description=None):
         description = cls.__name__
     model2 = copy.copy(model)
     model.__class__ = cls
-    model.__dict__ = {'blocks': [model2], 'description': description}
+    model.__dict__ = {'description': description, 'blocks': [model2], '_shapein': None, '_shapeout': None, '_dtype': None}
 
 
 #-------------------------------------------------------------------------------
