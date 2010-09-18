@@ -49,7 +49,7 @@ INCLUDES := -Iinclude -Iinclude/wcslib-4.4.4-Fortran90
 PYTHONSOURCES = $(wildcard */src/*.py)
 PYTHONTESTS = $(wildcard */test/test_*.py)
 
-.PHONY: all test test-fortran test-python clean dist-clean python loc
+.PHONY: all test test-fortran test-python clean distclean python loc
 all: lib/libtamasis.so tamasis/tamasisfortran.so python
 
 include $(patsubst %,%/Makefile.mk,$(DIRS))
@@ -95,7 +95,7 @@ test-python: tamasis/tamasisfortran.so
 # clean targets
 clean: $(patsubst %,clean-%,$(DIRS))
 
-dist-clean: $(patsubst %,dist-clean-%,$(DIRS))
+distclean: $(patsubst %,distclean-%,$(DIRS))
 	@rm -rf lib tamasis
 
 # return number of lines of code

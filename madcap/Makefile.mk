@@ -9,7 +9,7 @@ MODULES += $(MODULESOURCES)
 EXECS += $(TESTSOURCES)
 INCLUDES += -I$(SDIR)
 
-.PHONY: madcap test-madcap clean-madcap dist-clean-madcap
+.PHONY: madcap test-madcap clean-madcap distclean-madcap
 madcap: core $(MODULESOURCES:.f=.mod) lib/libtamasismadcap.so
 
 lib/libtamasismadcap.so: lib/libtamasiscore.so $(MODULESOURCES:.f=.o)
@@ -31,5 +31,5 @@ clean-madcap:
 	@find madcap \( -perm /u=x -and -type f -and -not -name "*py" \) -exec rm {} ';';\
 	find madcap \( -name '*.o' -or -name "*.mod" -or -name "*~" -or -name "*pyc" \) -exec rm {} ';'
 
-dist-clean-madcap: clean-madcap
+distclean-madcap: clean-madcap
 	@rm -f lib/libtamasismadcap.so
