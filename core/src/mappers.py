@@ -70,9 +70,8 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None, tol=
     if hyper != 0:
         ntods = MPI.COMM_WORLD.allreduce(numpy.sum(tod.mask == 0), op=MPI.SUM)
         nmaps = C.aslinearoperator(unpacking=unpacking).shape[0]
-        print 'mapper_rls: ', ntods, nmaps
         if MPI.COMM_WORLD.Get_rank() == 0:
-            #hyper = float(hyper * ntods / nmaps)
+            hyper = float(hyper * ntods / nmaps)
             dX = DiscreteDifference(axis=1)
             dY = DiscreteDifference(axis=0)
             C += hyper * ( dX.T * dX + dY.T * dY )
