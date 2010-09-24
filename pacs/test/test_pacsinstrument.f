@@ -100,7 +100,7 @@ program test_pacsinstrument
     ! minmax(dec) 59.980161       67.110813
 
     call obs%compute_center(ra0, dec0)
-    if (neq_real(ra0,  mean(obs%slice(1)%p%ra), 15) .or. neq_real(dec0, mean(obs%slice(1)%p%dec), 15)) stop 'FAILED: compute_center'
+    if (neq_real(ra0,  mean(obs%slice(1)%p%ra)) .or. neq_real(dec0, mean(obs%slice(1)%p%dec))) stop 'FAILED: compute_center'
 
     call pacs%find_minmax(obs, .false., xmin, xmax, ymin, ymax)
     write (*,*) 'Xmin: ', xmin, ', Xmax: ', xmax

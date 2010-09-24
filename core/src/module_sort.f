@@ -481,12 +481,12 @@ contains
 
 
     ! fixme: algo different from uniq_int...
-    subroutine uniq_double(array, inindex, outindex, precision)
+    subroutine uniq_double(array, inindex, outindex, rtol)
 
         real*8, intent(in)  :: array(:)
         integer, intent(in) :: inindex(size(array))
         integer, intent(out), allocatable :: outindex(:)
-        integer, intent(in) :: precision
+        real*8, intent(in)  :: rtol
 
         integer :: index(size(array)), nuniqs, n, i
         real*8  :: val
@@ -501,7 +501,7 @@ contains
         index(1) = inindex(1)
         val = array(inindex(1))
         do i = 2, n
-            if (neq_real(array(inindex(i)), val, precision)) then
+            if (neq_real(array(inindex(i)), val, rtol)) then
                 val = array(inindex(i))
                 nuniqs = nuniqs + 1
                 index(nuniqs) = inindex(i)
@@ -517,7 +517,7 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine reorder_double(array, index, nuniqs, table, precision)
+    subroutine reorder_double(array, index, nuniqs, table, rtol)
 
         use iso_fortran_env, only : OUTPUT_UNIT
         implicit none
@@ -526,7 +526,7 @@ contains
         integer, intent(out)             :: index(size(array))
         integer, intent(out)             :: nuniqs
         real*8, intent(out), allocatable :: table(:)
-        integer, intent(in)              :: precision
+        real*8, intent(in)               :: rtol
 
         integer :: isort(size(array)), ndata, i
         real*8  :: val, tmptable(size(array))
@@ -542,7 +542,7 @@ contains
         nuniqs = 0
         val = NaN
         do i = 1, ndata
-            if (neq_real(array(isort(i)), val, precision)) then
+            if (neq_real(array(isort(i)), val, rtol)) then
                 val = array(isort(i))
                 nuniqs = nuniqs + 1
                 tmptable(nuniqs) = val

@@ -38,8 +38,8 @@ program test_wcs
 
     do i=1,5
         call ad2xy_gnomonic_vect(a(i), d(i), x(i), y(i))
-        if (neq_real(x(i), xref(i), 7)) stop 'FAILED: ad2xy_gnomonic'
-        if (neq_real(y(i), yref(i), 7)) stop 'FAILED: ad2xy_gnomonic'
+        if (neq_real(x(i), xref(i), 1d-7)) stop 'FAILED: ad2xy_gnomonic'
+        if (neq_real(y(i), yref(i), 1d-7)) stop 'FAILED: ad2xy_gnomonic'
     end do
 
     n = 10000000

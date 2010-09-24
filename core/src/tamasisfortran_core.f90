@@ -538,3 +538,27 @@ subroutine masking(input, ninputs, mask, nmasks, status)
     status = 0
 
 end subroutine masking
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine mean_degrees(array, n, mean)
+
+    use module_math, only : mean_degrees_ => mean_degrees
+    implicit none
+
+    !f2py threadsafe
+    !f2py intent(in)   :: array
+    !f2py intent(hide) :: n = size(array)
+    !f2py intent(out)  :: mean
+
+    real*8, intent(in)  :: array(n)
+    integer, intent(in) :: n
+    real*8, intent(out) :: mean
+
+    mean = mean_degrees_(array)
+
+end subroutine mean_degrees
+
+

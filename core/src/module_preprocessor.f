@@ -1,5 +1,6 @@
 module module_preprocessor
 
+    use module_precision, only : p
     use module_math, only : median, sum_kahan
     use module_sort, only : histogram, reorder
     implicit none
@@ -26,8 +27,8 @@ contains
     ! Kahan sum
     subroutine subtract_meandim1(data)
 
-        real*8, intent(inout) :: data(:,:)
-        integer               :: nsamples, ndetectors, idetector
+        real(p), intent(inout) :: data(:,:)
+        integer                :: nsamples, ndetectors, idetector
 
         nsamples   = size(data,1)
         ndetectors = size(data,2)
@@ -45,9 +46,9 @@ contains
 
     subroutine subtract_meandim1_mask(data, mask)
 
-        real*8, intent(inout) :: data(:,:)
-        logical*1, intent(in) :: mask(:,:)
-        integer               :: nsamples, ndetectors, idetector
+        real(p), intent(inout) :: data(:,:)
+        logical*1, intent(in)  :: mask(:,:)
+        integer                :: nsamples, ndetectors, idetector
 
         ndetectors = size(data,2)
         !$omp parallel do
@@ -67,9 +68,9 @@ contains
     ! add a vector v(n) to a 2d array data(m,n)
     subroutine add_vectordim2(data, vector)
 
-        real*8, intent(inout) :: data(:,:)
-        real*8, intent(in)    :: vector(size(data,2))
-        integer               :: nsamples, ndetectors, idetector
+        real(p), intent(inout) :: data(:,:)
+        real(p), intent(in)    :: vector(size(data,2))
+        integer                :: nsamples, ndetectors, idetector
 
         nsamples   = size(data,1)
         ndetectors = size(data,2)
@@ -88,9 +89,9 @@ contains
     ! subtract a vector v(n) to a 2d array data(m,n)
     subroutine subtract_vectordim2(data, vector)
 
-        real*8, intent(inout) :: data(:,:)
-        real*8, intent(in)    :: vector(size(data,2))
-        integer               :: nsamples, ndetectors, idetector
+        real(p), intent(inout) :: data(:,:)
+        real(p), intent(in)    :: vector(size(data,2))
+        integer                :: nsamples, ndetectors, idetector
 
         nsamples   = size(data,1)
         ndetectors = size(data,2)
@@ -109,9 +110,9 @@ contains
     ! multiply a vector v(n) to a 2d array data(m,n)
     subroutine multiply_vectordim2(data, vector)
 
-        real*8, intent(inout) :: data(:,:)
-        real*8, intent(in)    :: vector(size(data,2))
-        integer               :: nsamples, ndetectors, idetector
+        real(p), intent(inout) :: data(:,:)
+        real(p), intent(in)    :: vector(size(data,2))
+        integer                :: nsamples, ndetectors, idetector
 
         nsamples   = size(data,1)
         ndetectors = size(data,2)
@@ -130,9 +131,9 @@ contains
     ! divide a vector v(n) to a 2d array data(m,n)
     subroutine divide_vectordim2(data, vector)
 
-        real*8, intent(inout) :: data(:,:)
-        real*8, intent(in)    :: vector(size(data,2))
-        integer               :: nsamples, ndetectors, idetector
+        real(p), intent(inout) :: data(:,:)
+        real(p), intent(in)    :: vector(size(data,2))
+        integer                :: nsamples, ndetectors, idetector
 
         nsamples   = size(data,1)
         ndetectors = size(data,2)
@@ -151,8 +152,8 @@ contains
     ! set to zero masked values
     subroutine apply_mask(data, mask)
 
-        real*8, intent(inout) :: data(:,:)
-        logical*1, intent(in) :: mask(:,:)
+        real(p), intent(inout) :: data(:,:)
+        logical*1, intent(in)  :: mask(:,:)
 
         !$omp parallel workshare
         where(mask)
@@ -170,13 +171,13 @@ contains
     ! the samples inside the window form an histogram which is updated as the window slides.
     subroutine median_filtering_1d_1d(data, length)
 
-        real*8, intent(inout) :: data(:)
-        integer, intent(in)   :: length
+        real(p), intent(inout) :: data(:)
+        integer, intent(in)    :: length
 
-        integer :: nbins, ndata, order(size(data)), i, old, new, half_minus, half_plus, ibin, irank
-        integer, allocatable :: hist(:)
-        real*8, allocatable  :: table(:)
-        logical :: even
+        integer                :: nbins, ndata, order(size(data)), i, old, new, half_minus, half_plus, ibin, irank
+        integer, allocatable   :: hist(:)
+        real(p), allocatable   :: table(:)
+        logical                :: even
 
         ndata = size(data)
 
@@ -185,7 +186,7 @@ contains
            return
         end if
 
-        call reorder(data, order, nbins, table, 12)
+        call reorder(data, order, nbins, table, 1e-12_p)
 
         allocate (hist(nbins))
         half_minus = min((length-1) / 2, ndata-1)
@@ -283,10 +284,10 @@ contains
 
     subroutine median_filtering_1d_2d(data, length)
 
-        real*8, intent(inout) :: data(:,:)
-        integer, intent(in)   :: length
+        real(p), intent(inout) :: data(:,:)
+        integer, intent(in)    :: length
 
-        integer               :: i
+        integer                :: i
 
         !$omp parallel do
         do i = 1, size(data, 2)

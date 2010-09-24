@@ -102,6 +102,8 @@ class PacsObservation(object):
             }
 
     def get_map_header(self, resolution=None, oversampling=True):
+        if MPI.COMM_WORLD.Get_size() > 1:
+            raise ErrorNotImplemented('The common map header should be specified if more than one job is running.')
         if resolution is None:
             resolution = self.default_resolution
         filename_, nfilenames = _files2tmf(self.filename)

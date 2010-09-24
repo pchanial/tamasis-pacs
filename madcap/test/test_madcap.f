@@ -22,15 +22,15 @@ program test_madcap
     if (status /= 0) stop 'FAILED: read_filter little_endian'
 
     if (size(filter_le) /= 3 .or. any(filter_le%ndetectors /= 2) .or. any(filter_le%ncorrelations /= 100)) stop 'FAILED:read_filter'
-    if (neq_real(filter_le(1)%data(1,1), 5597147.4155586753_p, 15)) stop 'FAILED: read_filter'
+    if (neq_real(filter_le(1)%data(1,1), 5597147.4155586753_p)) stop 'FAILED: read_filter'
 
     call read_filter(invnttfile1 // 'be', 'big_endian', 2, filter_be, nsamples, status)
     if (status /= 0) stop 'FAILED: read_filter big_endian'
 
     if (size(filter_be) /= 3 .or. any(filter_be%ndetectors /= 2) .or. any(filter_be%ncorrelations /= 100)) stop 'FAILED:read_filter'
-    if (any(neq_real(filter_le(1)%data, filter_be(1)%data, 15))) stop 'FAILED: read_filter data'
-    if (any(neq_real(filter_le(2)%data, filter_be(2)%data, 15))) stop 'FAILED: read_filter data'
-    if (any(neq_real(filter_le(3)%data, filter_be(3)%data, 15))) stop 'FAILED: read_filter data'
+    if (any(neq_real(filter_le(1)%data, filter_be(1)%data))) stop 'FAILED: read_filter data'
+    if (any(neq_real(filter_le(2)%data, filter_be(2)%data))) stop 'FAILED: read_filter data'
+    if (any(neq_real(filter_le(3)%data, filter_be(3)%data))) stop 'FAILED: read_filter data'
 
     ndetectors = 135
     call read_filter(invnttfile2, 'big_endian', ndetectors, filter, nsamples, status)
@@ -65,7 +65,7 @@ program test_madcap
     
     map = unpack(map1d, coverage == coverage, NaN)
 
-    if (any(neq_real(map, map_ref, 15))) stop 'FAILED: map_ref'
+    if (any(neq_real(map, map_ref))) stop 'FAILED: map_ref'
 
     deallocate (tod, pmatrix, map_ref, coverage, map, map1d, weight1d)
 

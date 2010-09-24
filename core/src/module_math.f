@@ -1,6 +1,6 @@
 module module_math
 
-    use module_precision, only : p, dp
+    use module_precision, only : p, sp, dp, qp
     implicit none
     private
 
@@ -15,6 +15,7 @@ module module_math
     public :: logspace
     public :: mad
     public :: mean
+    public :: mean_degrees
     public :: median
     public :: median_nocopy
     public :: moment
@@ -239,6 +240,52 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
+    function mean_degrees(array, mask)
+
+        real*8, intent(in)            :: array(:)
+        logical, optional, intent(in) :: mask(size(array))
+        real*8                        :: mean_degrees
+        
+        real*8  :: value
+        integer :: isample, n180, nvalids
+        logical :: zero_minus, zero_plus
+
+        mean_degrees = 0.0d0
+        zero_minus = .false.
+        zero_plus  = .false.
+        n180 = 0
+        nvalids = 0
+
+        !$omp parallel do default(shared) reduction(+:n180, nvalids,mean_degrees)           &
+        !$omp reduction(.or.:zero_minus,zero_plus) private(isample, value)
+        do isample=1, size(array)
+            if (present(mask)) then
+                if (mask(isample)) cycle
+            end if
+            value = modulo(array(isample), 360.d0)
+            if (value /= value) cycle
+            zero_minus = zero_minus .or. value > 270.d0
+            zero_plus  = zero_plus  .or. value <= 90.d0
+            if (value >= 180.d0) n180 = n180 + 1
+            mean_degrees = mean_degrees + value
+            nvalids = nvalids + 1
+        end do
+        !$omp end parallel do
+
+        if (zero_minus .and. zero_plus) mean_degrees = mean_degrees - 360.d0 * n180
+
+        if (nvalids > 0) then
+            mean_degrees = modulo(mean_degrees / nvalids, 360.d0)
+        else
+            mean_degrees = NaN
+        end if
+            
+    end function mean_degrees
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
     function linspace(min, max, n)
 
         real(kind=p)              :: linspace(n)
@@ -458,13 +505,13 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    elemental function eq_real(a, b, n)
+    elemental function eq_real(a, b, rtol)
 
-        logical                  :: eq_real
-        real(kind=p), intent(in) :: a, b
-        integer, intent(in)      :: n
+        logical                       :: eq_real
+        real(p), intent(in)           :: a, b
+        real(p), intent(in), optional :: rtol
 
-        real(kind=p)             :: epsilon
+        real(p) :: rtol_
 
         ! check for NaN values
         if (a /= a) then
@@ -476,8 +523,20 @@ contains
             return
         end if
 
-        epsilon = 10_p**(-real(n, kind=p))
-        eq_real = abs(a-b) <= epsilon * abs(max(a,b))
+        if (present(rtol)) then
+            rtol_ = rtol
+        else
+            select case (p)
+                case default
+                    rtol_ = 1.e-7_p
+                case (dp)
+                    rtol_ = 1.e-14_p
+                case (qp)
+                    rtol_ = 1.e-28_p
+            end select
+        end if
+
+        eq_real = abs(a-b) <= rtol_ * max(abs(a),abs(b))
 
     end function eq_real
 
@@ -485,14 +544,13 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    elemental function neq_real(a, b, n)
+    elemental function neq_real(a, b, rtol)
 
-        logical                  :: neq_real
-        real(kind=p), intent(in) :: a, b
-
-        integer, intent(in)      :: n
+        logical                       :: neq_real
+        real(p), intent(in)           :: a, b
+        real(p), intent(in), optional :: rtol
         
-        neq_real = .not. eq_real(a, b, n)
+        neq_real = .not. eq_real(a, b, rtol)
 
     end function neq_real
 

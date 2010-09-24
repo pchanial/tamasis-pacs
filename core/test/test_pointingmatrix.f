@@ -44,7 +44,7 @@ program test_pointingmatrix
         stop 'FAILED: roi2pmatrix1'
     end if
 
-    if (neq_real(sum_kahan(real(pmatrix%weight,kind=p)), surface_convex_polygon(xy(:,1:4))*ndetectors*ntimes, 8)) then
+    if (neq_real(sum_kahan(real(pmatrix%weight,kind=p)), surface_convex_polygon(xy(:,1:4))*ndetectors*ntimes, 1d-8)) then
         stop 'FAILED: roi2pmatrix2'
     end if
 

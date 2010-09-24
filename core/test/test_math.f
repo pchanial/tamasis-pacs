@@ -5,9 +5,9 @@ program test_math
     implicit none
 
     real(kind=p), parameter :: sample(5) = [0.204803265708662_p, 0.911376768702354_p,0.892714242396155_p,0.848272032735291_p,      &
-                                   0.232127193083888_p]
+                                            0.232127193083888_p]
     real(kind=p), parameter :: mresults(6) = [0.617858700525270_p, 0.133548079242052_p,-0.285146600004998_p,-2.246479349723560_p,  &
-                                   0.365442306311204_p,0.319514776903196_p]
+                                              0.365442306311204_p,0.319514776903196_p]
     real(kind=p) :: mean, variance, skewness, kurtosis, stddev, meandev
     real(kind=p), allocatable :: x(:)
     logical, allocatable      :: mask(:)
@@ -15,41 +15,41 @@ program test_math
 
     call moment(sample, mean, variance, skewness, kurtosis, stddev=stddev, meandev=meandev)
 
-    if (any(neq_real([mean,variance,skewness,kurtosis,stddev,meandev], mresults, 14))) then
+    if (any(neq_real([mean,variance,skewness,kurtosis,stddev,meandev], mresults))) then
         stop 'FAILED: moment 1'
     end if
 
     call moment([-100._p, sample(1:2), +200._p,sample(3:5), -20._p], mean, variance, skewness, kurtosis, stddev=stddev,            &
          meandev=meandev, mask=[.true., .false., .false., .true., .false., .false., .false., .true.])
 
-    if (any(neq_real([mean,variance,skewness,kurtosis,stddev,meandev], mresults, 14))) then
+    if (any(neq_real([mean,variance,skewness,kurtosis,stddev,meandev], mresults))) then
         stop 'FAILED: moment 1 with mask'
     end if
 
     !XXX no [] constructor?
     call moment(sample(1:0), mean, variance, skewness, kurtosis, stddev=stddev, meandev=meandev)
-    if (any(neq_real([mean,variance,skewness,kurtosis,stddev,meandev], NaN, 14))) then
+    if (any(neq_real([mean,variance,skewness,kurtosis,stddev,meandev], NaN))) then
         stop 'FAILED: moment 2'
     end if
 
     call moment([2.1_p], mean, variance, skewness, kurtosis, stddev=stddev, meandev=meandev)
-    if (any(neq_real([mean,variance,skewness,kurtosis,stddev,meandev], [2.1_p,NaN,NaN,NaN,NaN,0._p], 14))) then
+    if (any(neq_real([mean,variance,skewness,kurtosis,stddev,meandev], [2.1_p,NaN,NaN,NaN,NaN,0._p]))) then
         stop 'FAILED: moment 3'
     end if
 
     call moment([2.1_p,2.1_p], mean, variance, skewness, kurtosis, stddev=stddev, meandev=meandev)
-    if (any(neq_real([mean,variance,skewness,kurtosis,stddev,meandev], [2.1_p,0._p,NaN,NaN,0._p,0._p], 14))) then
+    if (any(neq_real([mean,variance,skewness,kurtosis,stddev,meandev], [2.1_p,0._p,NaN,NaN,0._p,0._p]))) then
         stop 'FAILED: moment 4'
     end if
 
     allocate(x(3))
     x = linspace(1._p, 2._p, 3)
-    if (any(neq_real(x, [(1._p+i/2._p, i=0,2)], 14))) then
+    if (any(neq_real(x, [(1._p+i/2._p, i=0,2)]))) then
         stop 'FAILED: linspace'
     end if
 
     x = logspace(1._p, 2._p, 3)
-    if (any(neq_real(x, [1._p, 1.41421356237309_p, 2._p], 14))) then
+    if (any(neq_real(x, [1._p, 1.41421356237309_p, 2._p]))) then
         stop 'FAILED: logspace'
     end if
     deallocate(x)

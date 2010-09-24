@@ -8,7 +8,7 @@ module module_observation
 
     use iso_fortran_env,  only : ERROR_UNIT, OUTPUT_UNIT
     use module_fitstools, only : ft_open, ft_open_bintable, ft_read_column, ft_read_image, ft_read_keyword_hcss, ft_close
-    use module_math,      only : NaN, median, neq_real
+    use module_math,      only : NaN, mean, mean_degrees, median, neq_real
     use module_precision, only : dp, p
     use module_string,    only : strinteger, strlowcase, strreal, strsection, strternary
     use module_tamasis,   only : POLICY_KEEP, POLICY_MASK, POLICY_REMOVE
@@ -216,39 +216,19 @@ contains
 
         class(observation), intent(in) :: this
         real*8, intent(out)            :: ra0, dec0
-        integer                        :: isample, islice, n180, nvalids
-        real*8                         :: ra, dec
-        logical                        :: zero_minus, zero_plus
 
-        ra0  = 0.0d0
-        dec0 = 0.0d0
-        zero_minus = .false.
-        zero_plus  = .false.
-        n180 = 0
-        nvalids = 0
+        real*8, allocatable            :: ra(:), dec(:)
+        integer                        :: islice
 
+        allocate (ra(this%nslices), dec(this%nslices))
         do islice = 1, this%nslices
-            !$omp parallel do default(shared) reduction(+:n180, nvalids,ra0,dec0)           &
-            !$omp reduction(.or.:zero_minus,zero_plus) private(isample, ra, dec)
-            do isample=1, this%slice(islice)%nsamples
-                if (this%slice(islice)%p(isample)%removed) cycle
-                ra  = this%slice(islice)%p(isample)%ra
-                dec = this%slice(islice)%p(isample)%dec
-                zero_minus = zero_minus .or. ra > 270.d0
-                zero_plus  = zero_plus  .or. ra <= 90.d0
-                if (ra >= 180.d0) n180 = n180 + 1
-                ra0  = ra0  + ra
-                dec0 = dec0 + dec
-                nvalids = nvalids + 1
-            end do
-            !$omp end parallel do
+            ra (islice) = mean_degrees(this%slice(islice)%p%ra,  logical(this%slice(islice)%p%removed))
+            dec(islice) = mean        (this%slice(islice)%p%dec, logical(this%slice(islice)%p%removed))
         end do
 
-        if (zero_minus .and. zero_plus) ra0 = ra0 - 360.d0 * n180
-
-        ra0  = ra0  / nvalids
-        dec0 = dec0 / nvalids
-            
+        ra0  = mean_degrees(ra)
+        dec0 = mean(dec)
+        
     end subroutine compute_center
 
 
@@ -909,7 +889,7 @@ contains
         
         ! check if there are gaps
         delta_max = maxval(abs(delta))
-        if (verbose .and. any(neq_real(delta, this%sampling_interval, 3))) then
+        if (verbose .and. any(neq_real(delta, this%sampling_interval, 1.d-3))) then
             write (*,'(a,$)') "Warning: In observation '" // trim(this%filename) //"', the pointing time is not evenly spaced."
             if (delta_max > 1.5_p * this%sampling_interval) then
                 write (*,'(a)') ' Largest gap is ' // strreal(delta_max*1000._p,1) // 'ms.'
@@ -920,7 +900,7 @@ contains
         
         ! check the compression factor from the data themselves
         compression_factor = nint(this%sampling_interval / 0.024996_dp)
-        if (neq_real(compression_factor * 0.024996_dp, this%sampling_interval, 2)) then
+        if (neq_real(compression_factor * 0.024996_dp, this%sampling_interval, 1e-2_p)) then
             write (*,'(a)') 'Error: The sampling time is not an integer number of PACS sampling time (40Hz).'
             return
         end if

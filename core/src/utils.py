@@ -5,7 +5,7 @@ import re
 import tamasisfortran as tmf
 import time
 
-__all__ = [ 'any_neq', 'create_fitsheader' ]
+__all__ = [ 'any_neq', 'create_fitsheader', 'mean_degrees' ]
 
 def create_fitsheader(array, extname=None, crval=(0.,0.), crpix=None, ctype=('RA---TAN','DEC--TAN'), cunit='deg', cd=None, cdelt=None):
     """
@@ -114,6 +114,15 @@ def create_fitsheader(array, extname=None, crval=(0.,0.), crpix=None, ctype=('RA
 
 #-------------------------------------------------------------------------------
 
+def mean_degrees(array):
+    """
+    Returns the mean value of an array, by taking into account the discrepancy
+    at 0 degrees
+    """
+    return tmf.mean_degrees(numpy.asarray(array, dtype='float64').ravel())
+
+#-------------------------------------------------------------------------------
+
 
 class MaskPolicy(object):
     def __init__(self, flags, values, description=None):
@@ -154,12 +163,32 @@ class MaskPolicy(object):
 #-------------------------------------------------------------------------------
 
 
-# should use numpy's allclose instead
-def any_neq(a,b, precision):
+def any_neq(a, b, rtol=None, atol=0.):
+    """
+    Returns True if two arrays are element-wise equal within a tolerance.
+    Differs from numpy.allclose in two aspects: the default rtol values (10^-7 
+    and 10^-14 for single and double floats or complex) and the treatment of 
+    NaN values (do not return False if the two arrays have element-wise
+    both NaN value)
+    """
+    a = numpy.asarray(a)
+    b = numpy.asarray(b)
+    doubletype = ('float64', 'complex128')
+    if rtol is None:
+        if str(a.dtype) in doubletype or str(b.dtype) in doubletype:
+            rtol = 1.e-14
+        else:
+            rtol = 1.e-7
     mask = numpy.isnan(a)
     if numpy.any(mask != numpy.isnan(b)):
         return True
-    return numpy.any((abs(a-b) > 10.**(-precision) * abs(a))[numpy.isnan(a).__neg__()])
+    if numpy.all(mask):
+        return False
+    result = abs(a-b) > rtol * numpy.maximum(abs(a), abs(b)) + atol
+    if numpy.isscalar(mask):
+        return result
+    else:
+        return numpy.any(result[~mask])
 
 
 #-------------------------------------------------------------------------------

@@ -29,10 +29,10 @@ program test_pacspointing
     do i = 1, 6
         call obs%get_position_time(1, timetest(i), ra(i), dec(i), pa(i), chop(i), index)
     end do
-    if (any(neq_real(ra  (1:6), ratest,   15))) stop 'FAILED: ra'
-    if (any(neq_real(dec (1:6), dectest,  15))) stop 'FAILED: dec'
-    if (any(neq_real(pa  (1:6), patest,   15))) stop 'FAILED: pa'
-    if (any(neq_real(chop(1:6), choptest, 15))) stop 'FAILED: chop'
+    if (any(neq_real(ra  (1:6), ratest  ))) stop 'FAILED: ra'
+    if (any(neq_real(dec (1:6), dectest ))) stop 'FAILED: dec'
+    if (any(neq_real(pa  (1:6), patest  ))) stop 'FAILED: pa'
+    if (any(neq_real(chop(1:6), choptest))) stop 'FAILED: chop'
 
     call obs%destructor()
 
@@ -46,9 +46,9 @@ program test_pacspointing
     do i = 1, size(time)
        call obs%get_position_time(1, time(i), ra(i), dec(i), pa(i), chop(i), index)
     end do
-    if (any(neq_real(ra,  [nan, nan,-1.0_p,-0.5_p, 0.0_p, 0.5_p, 1.0_p, 1.5_p, 2.0_p, nan, nan, nan], 10) .or.                     &
-            neq_real(dec, [nan, nan, 3.0_p, 3.0_p, 3.0_p, 3.0_p, 3.0_p, 3.0_p, 3.0_p, nan, nan, nan], 10) .or.                     &
-            neq_real(pa,  [nan, nan, 3.0_p, 2.5_p, 2.0_p, 1.5_p, 1.0_p, 0.5_p, 0.0_p, nan, nan, nan], 10)))                        &
+    if (any(neq_real(ra,  [nan, nan,-1.0_p,-0.5_p, 0.0_p, 0.5_p, 1.0_p, 1.5_p, 2.0_p, nan, nan, nan]) .or.                         &
+            neq_real(dec, [nan, nan, 3.0_p, 3.0_p, 3.0_p, 3.0_p, 3.0_p, 3.0_p, 3.0_p, nan, nan, nan]) .or.                         &
+            neq_real(pa,  [nan, nan, 3.0_p, 2.5_p, 2.0_p, 1.5_p, 1.0_p, 0.5_p, 0.0_p, nan, nan, nan])))                            &
         stop 'FAILED: get_position_time 1'
     call obs%destructor()
 
@@ -63,10 +63,10 @@ program test_pacspointing
     end do
 
     ! time starts from -1 to 4.5
-    if (any(neq_real(ra,  [nan, -1._p, -0.5_p, 0.0_p, 0.5_p, 1.0_p, 1.5_p, 2.0_p, 2.5_p, 3.0_p, nan, nan], 10) .or.                &
-            neq_real(dec, [nan,  3.0_p, 3.0_p, 3.0_p, 3.0_p, 3.0_p, 3.0_p, 3.0_p, 3.0_p, 3.0_p, nan, nan], 10) .or.                &
-            neq_real(pa,  [nan,  4.0_p, 3.5_p, 3.0_p, 2.5_p, 2.0_p, 1.5_p, 1.0_p, 0.5_p, 0.0_p, nan, nan], 10) .or.                &
-            neq_real(chop,[nan,  0.0_p, 0.0_p, 0.0_p, 0.0_p, 0.0_p, 0.0_p, 0.0_p, 1.0_p, 2.0_p, nan, nan], 10))) then
+    if (any(neq_real(ra,  [nan, -1._p, -0.5_p, 0.0_p, 0.5_p, 1.0_p, 1.5_p, 2.0_p, 2.5_p, 3.0_p, nan, nan]) .or.                    &
+            neq_real(dec, [nan,  3.0_p, 3.0_p, 3.0_p, 3.0_p, 3.0_p, 3.0_p, 3.0_p, 3.0_p, 3.0_p, nan, nan]) .or.                    &
+            neq_real(pa,  [nan,  4.0_p, 3.5_p, 3.0_p, 2.5_p, 2.0_p, 1.5_p, 1.0_p, 0.5_p, 0.0_p, nan, nan]) .or.                    &
+            neq_real(chop,[nan,  0.0_p, 0.0_p, 0.0_p, 0.0_p, 0.0_p, 0.0_p, 0.0_p, 1.0_p, 2.0_p, nan, nan]))) then
         stop 'FAILED: get_position_time 2'
     end if
 
@@ -74,10 +74,10 @@ program test_pacspointing
         call obs%get_position_index(1, i, 3, ra(i), dec(i), pa(i), chop(i))
     end do
 
-    if (any(neq_real(ra, [(0._p+i/3._p,i=0,2), (1._p+i/3._p,i=0,2), (2._p+0.5_p*i/3._p,i=0,2),(2.5_p+0.5_p*i/3._p,i=0,2)], 15)     &
-        .or. neq_real(dec, [(3.0_p,i=1,12)], 15)                                                                                   &
-        .or. neq_real(pa, [(3._p-i/3._p,i=0,2), (2._p-i/3._p,i=0,2), (1.-0.5_p*i/3._p,i=0,2), (0.5_p-0.5_p*i/3._p, i=0,2)],15)     &
-        .or. neq_real(chop, [(0.0_p, i=1,6), (0.0_p+i/3.0_p, i=0,5)], 15))) stop 'FAILED: get_position_index'
+    if (any(neq_real(ra, [(0._p+i/3._p,i=0,2), (1._p+i/3._p,i=0,2), (2._p+0.5_p*i/3._p,i=0,2),(2.5_p+0.5_p*i/3._p,i=0,2)])         &
+        .or. neq_real(dec, [(3.0_p,i=1,12)])                                                                                       &
+        .or. neq_real(pa, [(3._p-i/3._p,i=0,2), (2._p-i/3._p,i=0,2), (1.-0.5_p*i/3._p,i=0,2), (0.5_p-0.5_p*i/3._p, i=0,2)])        &
+        .or. neq_real(chop, [(0.0_p, i=1,6), (0.0_p+i/3.0_p, i=0,5)]))) stop 'FAILED: get_position_index'
 
     call obs%destructor()
 

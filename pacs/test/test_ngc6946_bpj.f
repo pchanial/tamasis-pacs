@@ -18,7 +18,6 @@ program test_ngc6946_bpj
     class(PacsObservation), allocatable :: obs
     type(MaskPolicy)                    :: policy
     character(len=*), parameter         :: inputdir = '/home/pchanial/work/pacs/data/transparent/NGC6946/'
-!!$    character(len=*), parameter         :: filename(1) = inputdir // '1342184520_blue[12001:86000]'
     character(len=*), parameter         :: filename(1) = inputdir // '1342184520_blue[12001:16000]'
     integer, parameter                  :: npixels_per_sample = 6
     real*8, allocatable                 :: signal(:,:), coords(:,:), coords_yz(:,:)
@@ -137,7 +136,7 @@ program test_ngc6946_bpj
     ! test the back projected map
     write (OUTPUT_UNIT,*) 'Sum in map is ', sum_kahan(map1d), ' ...instead of ',&
                          strinteger(int(pacs%ndetectors*nsamples, kind=4))
-    if (neq_real(sum_kahan(map1d), real(pacs%ndetectors*nsamples,kind=8), 6)) then
+    if (neq_real(sum_kahan(map1d), real(pacs%ndetectors*nsamples,kind=8), 1.d-6)) then
         stop 'FAILED.'
     end if
 
@@ -150,7 +149,7 @@ program test_ngc6946_bpj
     write (*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
 
     ! test the back projected map
-    if (any(neq_real(signal, surface1, 5))) then
+    if (any(neq_real(signal, surface1, 1d-5))) then
         write (ERROR_UNIT,*) 'Invalid signal.'
         stop 'FAILED.'
     end if

@@ -15,12 +15,12 @@ program test_preprocessor
     filtered = small
     call median_filtering(filtered, 3)
     !print(scipy.signalmedfilt(small, kernel_size=3))
-    if (any(neq_real(small-filtered,[1.2d0,5.d0,3.d0,4.d0,4.d0,4.d0,5.d0,10d0,22.d0,22.d0],15))) stop 'FAILED: medfilt1'
+    if (any(neq_real(small-filtered,[1.2d0,5.d0,3.d0,4.d0,4.d0,4.d0,5.d0,10d0,22.d0,22.d0]))) stop 'FAILED: medfilt1'
 
     filtered = small
     call median_filtering(filtered, 5)
     !print(scipy.signalmedfilt(small, kernel_size=3))
-    if (any(neq_real(small-filtered,[5.d0,3.d0,4.d0,4.d0,4.d0,4.d0,5.d0,10.d0,10.d0,22.d0],15))) stop 'FAILED: medfilt2'
+    if (any(neq_real(small-filtered,[5.d0,3.d0,4.d0,4.d0,4.d0,4.d0,5.d0,10.d0,10.d0,22.d0]))) stop 'FAILED: medfilt2'
 
     deallocate (filtered)
 
@@ -40,7 +40,7 @@ program test_preprocessor
     end do
 
     do i=1, size(timeline)
-        if (neq_real(reference(i), timeline(i)-filtered(i), 12)) then
+        if (neq_real(reference(i), timeline(i)-filtered(i))) then
             print *, 'FAILED:', i, reference(i), timeline(i)-filtered(i)
         end if
     end do

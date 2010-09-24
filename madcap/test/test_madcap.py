@@ -17,11 +17,11 @@ packing = Unpacking(observation.mapmask, field=numpy.nan).T
 
 map_naive = mapper_naive(tod, projection*packing)
 map_ref = pyfits.fitsopen(path+'naivemapSpirePsw.fits')['image'].data
-if any_neq(map_naive,map_ref,15): print 'FAILED: mapper_naive madcap 1'
+if any_neq(map_naive,map_ref): print 'FAILED: mapper_naive madcap 1'
 
 map_naive_1d = mapper_naive(tod, projection)
 map_naive_2d = packing.transpose(map_naive_1d)
-if any_neq(map_naive_2d,map_ref,15): print 'FAILED: mapper_naive madcap 2'
+if any_neq(map_naive_2d,map_ref): print 'FAILED: mapper_naive madcap 2'
 
 packing = Unpacking(observation.mapmask).T
 
