@@ -1,8 +1,8 @@
 program test_compression
 
     use module_compression
-    use module_math,      only : neq_real
-    use module_precision, only : p
+    use module_math,    only : neq_real
+    use module_tamasis, only : p
     implicit none
 
     integer, parameter :: factor = 5

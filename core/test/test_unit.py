@@ -179,14 +179,15 @@ if b != numpy.var(a.view(numpy.ndarray), axis=0): raise TestFailure()
 if b.unit != 'Jy^2': raise TestFailure()
 
 # test upcasting
-if Quantity(1).dtype.type is not numpy.float64: raise TestFailure()
-if Quantity(numpy.float32(1.)).dtype.type is not numpy.float32: raise TestFailure()
-if Quantity(1.).dtype.type is not numpy.float64: raise TestFailure()
+if Quantity(1).dtype.type is not get_default_dtype_float(): raise TestFailure()
+if Quantity(1, dtype='float32').dtype.type is not numpy.float32: raise TestFailure()
+if Quantity(1.).dtype.type is not get_default_dtype_float(): raise TestFailure()
 if Quantity(complex(1,0)).dtype.type is not numpy.complex128: raise TestFailure()
-if Quantity(numpy.complex64(1.)).dtype.type is not numpy.complex64: raise TestFailure()
-if Quantity(numpy.complex128(1.)).dtype.type is not numpy.complex128: raise TestFailure()
-if Quantity(numpy.array(complex(1,0))).dtype.type is not numpy.complex128: raise TestFailure()
-if Quantity(numpy.array(numpy.complex64(1.))).dtype.type is not numpy.complex64: raise TestFailure()
-if Quantity(numpy.array(numpy.complex128(1.))).dtype.type is not numpy.complex128: raise TestFailure()
+if Quantity(1., dtype=numpy.complex64).dtype.type is not numpy.complex64: raise TestFailure()
+if Quantity(1., dtype=numpy.complex128).dtype.type is not numpy.complex128: raise TestFailure()
+if Quantity(1., dtype=numpy.complex256).dtype.type is not numpy.complex256: raise TestFailure()
+if Quantity(numpy.array(complex(1,0))).dtype.type is not get_default_dtype_complex(): raise TestFailure()
+if Quantity(numpy.array(numpy.complex64(1.))).dtype.type is not get_default_dtype_complex(): raise TestFailure()
+if Quantity(numpy.array(numpy.complex128(1.))).dtype.type is not get_default_dtype_complex(): raise TestFailure()
 
 print 'OK.'

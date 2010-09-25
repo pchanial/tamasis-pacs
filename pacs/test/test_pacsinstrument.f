@@ -5,7 +5,7 @@ program test_pacsinstrument
     use module_pacsinstrument
     use module_pacsobservation, only : PacsObservation, MaskPolicy
     use module_string,          only : strreal
-    use module_tamasis,         only : init_tamasis, POLICY_KEEP, POLICY_MASK, POLICY_REMOVE
+    use module_tamasis,         only : init_tamasis, p, POLICY_KEEP, POLICY_MASK, POLICY_REMOVE
     use module_wcs,             only : init_astrometry, ad2xy_gnomonic
     implicit none
 
@@ -15,14 +15,14 @@ program test_pacsinstrument
     character(len=*), parameter :: filename(1) = 'pacs/test/data/frames_blue.fits'
     character(len=*), parameter :: filename_header = 'core/test/data/header.fits'
 
-    real*8, allocatable    :: yz(:,:), ad(:,:), xy(:,:), time(:)
-    integer                :: status, i, j, nx, ny, index
-    integer                :: count1, count2, count_rate, count_max
-    real*8                 :: ra, dec, pa, chop, xmin, xmax, ymin, ymax, ra0, dec0
-    character(len=2880*2)  :: header
+    real(p), allocatable :: yz(:,:), ad(:,:), xy(:,:), time(:)
+    integer              :: status, i, j, nx, ny, index
+    integer              :: count1, count2, count_rate, count_max
+    real(p)              :: ra, dec, pa, chop, xmin, xmax, ymin, ymax, ra0, dec0
+    character(len=2880*2):: header
 
-    real*8, allocatable    :: a_vect(:), d_vect(:), ad_vect(:,:)
-    integer                :: n
+    real(p), allocatable :: a_vect(:), d_vect(:), ad_vect(:,:)
+    integer              :: n
 
     ! initialise tamasis
     call init_tamasis
@@ -106,7 +106,7 @@ program test_pacsinstrument
     write (*,*) 'Xmin: ', xmin, ', Xmax: ', xmax
     write (*,*) 'Ymin: ', ymin, ', Ymax: ', ymax
 
-    call pacs%compute_map_header(obs, .false., 3.d0, header, status)
+    call pacs%compute_map_header(obs, .false., 3._p, header, status)
     if (status /= 0) stop 'FAILED: compute_map_header'
 
     call ft_read_keyword(header, 'naxis1', nx, status=status)
@@ -126,7 +126,7 @@ program test_pacsinstrument
         yz = pacs%uv2yz(pacs%corners_uv, pacs%distortion_yz, chop)
         ad = pacs%yz2ad(yz, ra, dec, pa)
         xy = ad2xy_gnomonic(ad)
-        if (any(xy(1,:) < 0.5d0 .or. xy(1,:) > nx+0.5d0 .or. xy(2,:) < 0.5d0 .or. xy(2,:) > ny+0.5d0)) then
+        if (any(xy(1,:) < 0.5_p .or. xy(1,:) > nx+0.5_p .or. xy(2,:) < 0.5_p .or. xy(2,:) > ny+0.5_p)) then
             write (*,'(3(a,i0))') 'sample:', i, ', nx: ', nx, ', ny: ', ny
             write (*,*) 'X: ', minval(xy(1,:)), maxval(xy(1,:))
             write (*,*) 'Y: ', minval(xy(2,:)), maxval(xy(2,:))
@@ -146,18 +146,18 @@ program test_pacsinstrument
     allocate(d_vect(n))
     allocate(ad_vect(2,n))
 
-    a_vect = [(2.3+(10.d0*i)/n, i=1,n)]
-    d_vect = [(3.8+(10.d0*i)/n, i=1,n)]
+    a_vect = [(2.3+(10._p*i)/n, i=1,n)]
+    d_vect = [(3.8+(10._p*i)/n, i=1,n)]
     ad_vect(1,:) = a_vect
     ad_vect(2,:) = d_vect
-    ra  = 12.3d0
-    dec = 60.3d0
-    pa  = 2.7d0
+    ra  = 12.3_p
+    dec = 60.3_p
+    pa  = 2.7_p
 
     call system_clock(count1, count_rate, count_max)
     ad_vect = pacs%yz2ad(ad_vect, ra, dec, pa)
     call system_clock(count2, count_rate, count_max)
-    write(*,'(a)') 'yz2ad: ' // strreal(real(count2-count1,kind=8)/count_rate,4) // 's'
+    write(*,'(a)') 'yz2ad: ' // strreal(real(count2-count1,p)/count_rate,4) // 's'
     call pacs%destroy()
 
     call pacs%init('r', .true., 1, status=status)

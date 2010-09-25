@@ -4,7 +4,7 @@ program test_deglitching
     use module_deglitching
     use module_math,           only : linspace
     use module_pointingmatrix, only : pointingelement, pmatrix_direct, xy2roi, roi2pmatrix
-    use module_precision,      only : p
+    use module_tamasis,        only : p
     implicit none
 
     type(pointingelement),allocatable :: pmatrix(:,:,:)
@@ -12,8 +12,8 @@ program test_deglitching
     integer                           :: ntimes, ndetectors, npixels_per_sample
     integer                           :: nrepeats
     integer                           :: nx, ny
-    real(kind=p), allocatable         :: xc(:), yc(:)
-    real(kind=p), allocatable         :: map(:), signal(:,:)
+    real(p), allocatable              :: xc(:), yc(:)
+    real(p), allocatable              :: map(:), signal(:,:)
     logical(kind=1), allocatable      :: mask(:,:)
     
     nrepeats = 6
@@ -31,9 +31,9 @@ program test_deglitching
 
     map = linspace(1._p, 2.25_p, nx*ny)
     do i=1,nrepeats
-        xc((i-1)*(nx-3)+1:i*(nx-3)) = linspace(1._p, real(nx-3, kind=p), nx-3)
+        xc((i-1)*(nx-3)+1:i*(nx-3)) = linspace(1._p, real(nx-3, p), nx-3)
     end do
-    yc = 1._p
+    yc = 1
 
 
     !----------------------------------------------------------------------
@@ -199,12 +199,12 @@ contains
     subroutine get_pmatrix(pmatrix, nx, ny, xc, yc, detectorsize)
         type(pointingelement), intent(inout) :: pmatrix(:,:,:)
         integer, intent(in)                  :: nx, ny
-        real(kind=p), intent(in)             :: xc(:), yc(:)
-        real(kind=p), intent(in)             :: detectorsize
-        real(kind=p) :: h, xy(2,4)
-        integer      :: roi(2,2,1)
-        integer      :: ntimes, npixels_per_sample, itime
-        logical      :: out
+        real(p), intent(in)                  :: xc(:), yc(:)
+        real(p), intent(in)                  :: detectorsize
+        real(p) :: h, xy(2,4)
+        integer :: roi(2,2,1)
+        integer :: ntimes, npixels_per_sample, itime
+        logical :: out
 
         npixels_per_sample = 0
         ntimes = size(xc)

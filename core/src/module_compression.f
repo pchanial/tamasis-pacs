@@ -1,5 +1,6 @@
 module module_compression
 
+    use module_tamasis, only : p
     implicit none
 
     public :: compression_average_direct
@@ -13,10 +14,10 @@ contains
 
     subroutine compression_average_direct(data, compressed, factor)
 
-        real*8, intent(in)  :: data(:,:)
-        integer, intent(in) :: factor
-        real*8, intent(out) :: compressed(size(data,1)/factor,size(data,2))
-        integer             :: nsamples, ndetectors, isample, idetector
+        real(p), intent(in)  :: data(:,:)
+        integer, intent(in)  :: factor
+        real(p), intent(out) :: compressed(size(data,1)/factor,size(data,2))
+        integer              :: nsamples, ndetectors, isample, idetector
 
         nsamples   = size(compressed,1)
         ndetectors = size(compressed,2)
@@ -36,10 +37,10 @@ contains
 
     subroutine compression_average_transpose(compressed, data, factor)
 
-        real*8, intent(in)  :: compressed(:,:)
-        integer, intent(in) :: factor
-        real*8, intent(out) :: data(size(compressed,1)*factor,size(compressed,2))
-        integer             :: nsamples, ndetectors, isample, idetector
+        real(p), intent(in)  :: compressed(:,:)
+        integer, intent(in)  :: factor
+        real(p), intent(out) :: data(size(compressed,1)*factor,size(compressed,2))
+        integer              :: nsamples, ndetectors, isample, idetector
 
         nsamples   = size(compressed,1)
         ndetectors = size(compressed,2)
@@ -59,9 +60,9 @@ contains
 
     subroutine downsampling_direct(data, compressed, factor)
 
-        real*8, intent(in)  :: data(:,:)
-        integer, intent(in) :: factor
-        real*8, intent(out) :: compressed(size(data,1)/factor,size(data,2))
+        real(p), intent(in)  :: data(:,:)
+        integer, intent(in)  :: factor
+        real(p), intent(out) :: compressed(size(data,1)/factor,size(data,2))
 
         !$omp parallel workshare
         compressed = data(::factor,:)
@@ -75,10 +76,10 @@ contains
 
     subroutine downsampling_transpose(compressed, data, factor)
 
-        real*8, intent(in)  :: compressed(:,:)
-        integer, intent(in) :: factor
-        real*8, intent(out) :: data(size(compressed,1)*factor,size(compressed,2))
-        integer             :: nsamples, ndetectors, isample, idetector
+        real(p), intent(in)  :: compressed(:,:)
+        integer, intent(in)  :: factor
+        real(p), intent(out) :: data(size(compressed,1)*factor,size(compressed,2))
+        integer              :: nsamples, ndetectors, isample, idetector
 
         nsamples   = size(compressed,1)
         ndetectors = size(compressed,2)

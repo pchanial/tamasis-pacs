@@ -5,7 +5,7 @@ program test_madcap
     use module_madcap
     use module_math,           only : NaN, neq_real
     use module_pointingmatrix, only : backprojection_weighted, pointingelement
-    use module_precision,      only : p
+    use module_tamasis,        only : p
     implicit none
 
     character(len=*), parameter :: invnttfile1 = 'madcap/test/data/madmap1/invntt_'

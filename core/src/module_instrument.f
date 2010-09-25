@@ -1,7 +1,7 @@
 module module_instrument
  
-    use module_precision, only : p
-    use module_string,    only : strcompress, strinteger, strlowcase, strsplit
+    use module_string,  only : strcompress, strinteger, strlowcase, strsplit
+    use module_tamasis, only : p
     implicit none
     private
 
@@ -38,7 +38,7 @@ module module_instrument
         integer                                      :: nvertices
         integer                                      :: offset_unit
         integer, dimension(:,:), allocatable         :: id
-        real(kind=p), dimension(:,:,:), allocatable  :: vertex
+        real(p), dimension(:,:,:), allocatable       :: vertex
         character(len=80), dimension(:), allocatable :: flag
         integer                                      :: nlevels
         character(len=80), dimension(nlevels_max)    :: level_name

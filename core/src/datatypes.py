@@ -7,7 +7,7 @@ try:
     _imported_ds9 = True
 except:
     _imported_ds9 = False
-    
+
 from unit import Quantity
 from utils import create_fitsheader, _my_isscalar
 
@@ -51,7 +51,7 @@ class FitsArray(Quantity):
                 result._header = data._header.copy()
             else:
                 result._header = data._header
-        elif str(result.dtype) not in ('complex64', 'complex128'):
+        elif str(result.dtype) not in ('complex64', 'complex128', 'complex256'):
             result._header = create_fitsheader(result)
         else:
             result._header = None
@@ -142,7 +142,7 @@ class FitsArray(Quantity):
             mask = numpy.logical_or(mask, ~numpy.isfinite(self))
 
         data = numpy.ma.MaskedArray(self, mask=mask, copy=False)
-        if str(data.dtype) in ('complex64', 'complex128'):
+        if str(data.dtype) in ('complex64', 'complex128', 'complex256'):
             data = abs(data)
         mean   = numpy.mean(data)
         stddev = numpy.std(data)
@@ -448,7 +448,10 @@ class Tod(FitsArray):
 
     def __str__(self):
         if numpy.rank(self) == 0:
-            return 'Tod ' + str(float(self))
+            if self.dtype.type in (numpy.complex64, numpy.complex128, numpy.complex256):
+                return 'Tod ' + str(complex(self))
+            else:
+                return 'Tod ' + str(float(self))
         output = 'Tod ['
         if numpy.rank(self) > 1:
             output += str(self.shape[-2])+' detector'
@@ -476,7 +479,7 @@ class Tod(FitsArray):
 #-------------------------------------------------------------------------------
 
 
-def distance(shape, origin=None, resolution=1., dtype='float64'):
+def distance(shape, origin=None, resolution=1., dtype=None):
     """
     Returns an array whose values are the distances to a given origin
     
@@ -506,7 +509,7 @@ def distance(shape, origin=None, resolution=1., dtype='float64'):
     dim = []
     for length, c in zip(reversed(shape), reversed(origin)):
         dim.append((numpy.arange(length) - c) * resolution)
-    return Map(numpy.sqrt(numpy.sum(numpy.square(numpy.meshgrid(*dim)), axis=0)))
+    return Map(numpy.sqrt(numpy.sum(numpy.square(numpy.meshgrid(*dim)), axis=0)), dtype=dtype)
         
 
 #-------------------------------------------------------------------------------

@@ -4,13 +4,12 @@ module module_pacsinstrument
     use module_filtering,       only : FilterUncorrelated
     use module_fitstools,       only : ft_check_error_cfitsio, ft_close, ft_create_header, ft_open, ft_open_image,                 &
                                        ft_read_image, ft_read_keyword_hcss, ft_read_slice, ft_test_extension
-    use module_math,            only : DEG2RAD, pInf, mInf, mean, nint_down, nint_up
+    use module_math,            only : DEG2RAD, mInf, pInf, mean, nint_down, nint_up
     use module_pacsobservation, only : pacsobservationslice, pacsobservation
     use module_pointingmatrix,  only : pointingelement, xy2pmatrix, xy2roi, roi2pmatrix
-    use module_precision,       only : dp, p
     use module_projection,      only : convex_hull, surface_convex_polygon
     use module_string,          only : strinteger
-    use module_tamasis,         only : get_tamasis_path, tamasis_path_len, POLICY_KEEP, POLICY_MASK, POLICY_REMOVE
+    use module_tamasis,         only : get_tamasis_path, tamasis_path_len, p, POLICY_KEEP, POLICY_MASK, POLICY_REMOVE
     use module_wcs,             only : init_astrometry, ad2xy_gnomonic, ad2xy_gnomonic_vect, ad2xys_gnomonic, refpix_area
     use omp_lib
     implicit none
@@ -35,8 +34,7 @@ module module_pacsinstrument
     integer, parameter :: NEAREST_NEIGHBOUR = 0
     integer, parameter :: SHARP_EDGES = 1
     integer, parameter :: distortion_degree = 3
-    real*8,  parameter :: sampling = 0.025d0
-
+    real(p), parameter :: sampling = 0.024996_p
 
     ! these calibration files are taken from HCSS 4.0.70
     character(len=*), parameter :: filename_saa = 'PCalPhotometer_SubArrayArray_FM_v5.fits'
@@ -50,33 +48,33 @@ module module_pacsinstrument
 
     type pacsinstrument
  
-        character            :: channel
-        integer              :: nrows
-        integer              :: ncolumns
-        integer              :: ndetectors
-        integer              :: fine_sampling_factor
-        logical              :: transparent_mode
+        character              :: channel
+        integer                :: nrows
+        integer                :: ncolumns
+        integer                :: ndetectors
+        integer                :: fine_sampling_factor
+        logical                :: transparent_mode
 
         logical*1, allocatable :: bad(:,:)  ! .true. for bad detectors
         logical*1, allocatable :: mask(:,:) ! .true. if the bad detector has been filtered out in the flattened list of detectors
         integer, allocatable   :: ij(:,:)
         integer, allocatable   :: pq(:,:)
 
-        real*8               :: responsivity ! Jy/V
-        real*8, allocatable  :: flatfield_total(:,:)
-        real*8, allocatable  :: flatfield_detector(:,:)
-        real*8, allocatable  :: flatfield_optical(:,:)
+        real(p)                :: responsivity ! Jy/V
+        real(p), allocatable   :: flatfield_total(:,:)
+        real(p), allocatable   :: flatfield_detector(:,:)
+        real(p), allocatable   :: flatfield_optical(:,:)
 
-        real*8, allocatable  :: centers_uv_all(:,:,:)
-        real*8, allocatable  :: centers_uv(:,:)
+        real(p), allocatable   :: centers_uv_all(:,:,:)
+        real(p), allocatable   :: centers_uv(:,:)
 
-        real*8, allocatable  :: corners_uv_all(:,:,:,:)
-        real*8, allocatable  :: corners_uv(:,:)
+        real(p), allocatable   :: corners_uv_all(:,:,:,:)
+        real(p), allocatable   :: corners_uv(:,:)
 
-        real*8, allocatable  :: detector_area_all(:,:)
-        real*8, allocatable  :: detector_area(:)
+        real(p), allocatable   :: detector_area_all(:,:)
+        real(p), allocatable   :: detector_area(:)
 
-        real*8               :: distortion_yz(ndims, distortion_degree, distortion_degree, distortion_degree)
+        real(p)                :: distortion_yz(ndims, distortion_degree, distortion_degree, distortion_degree)
 
     contains
 
@@ -171,8 +169,8 @@ contains
         character(len=5)       :: channel_name
         integer                :: ivertex, unit
         logical*1, allocatable :: tmplogical(:,:)
-        real*8, allocatable    :: tmp2(:,:)
-        real*8, allocatable    :: tmp3(:,:,:)
+        real(p), allocatable   :: tmp2(:,:)
+        real(p), allocatable   :: tmp3(:,:,:)
 
         allocate (this%flatfield_total(this%nrows,this%ncolumns))
         select case (this%channel)
@@ -308,8 +306,8 @@ contains
 
         class(pacsinstrument), intent(inout) :: this
 
-        integer :: idetector, p, q
-        real*8  :: center(2,2)
+        integer :: idetector, ip, iq
+        real(p) :: center(2,2)
 
         ! get the number of detectors
         this%ndetectors = count(.not. this%mask)
@@ -325,18 +323,18 @@ contains
 
         idetector = 1
 
-        do p = 1, this%nrows
-            do q = 1, this%ncolumns
-                this%detector_area_all(p,q) = abs(surface_convex_polygon(this%uv2yz(this%corners_uv_all(:,:,p,q),                  &
-                    this%distortion_yz, 0.d0))) * 3600.d0**2
-                if (this%mask(p,q)) cycle
-                this%pq(1,idetector) = p-1
-                this%pq(2,idetector) = q-1
-                this%ij(1,idetector) = mod(p-1, 16)
-                this%ij(2,idetector) = mod(q-1, 16)
-                this%centers_uv(:,idetector) = this%centers_uv_all(:,p,q)
-                this%corners_uv(:,nvertices * (idetector-1)+1:nvertices*idetector) = this%corners_uv_all(:,:,p,q)
-                this%detector_area(idetector) = this%detector_area_all(p,q)
+        do ip = 1, this%nrows
+            do iq = 1, this%ncolumns
+                this%detector_area_all(ip,iq) = abs(surface_convex_polygon(real(this%uv2yz(this%corners_uv_all(:,:,ip,iq),         &
+                    this%distortion_yz, 0._p), p))) * 3600._p**2
+                if (this%mask(ip,iq)) cycle
+                this%pq(1,idetector) = ip-1
+                this%pq(2,idetector) = iq-1
+                this%ij(1,idetector) = mod(ip-1, 16)
+                this%ij(2,idetector) = mod(iq-1, 16)
+                this%centers_uv(:,idetector) = this%centers_uv_all(:,ip,iq)
+                this%corners_uv(:,nvertices * (idetector-1)+1:nvertices*idetector) = this%corners_uv_all(:,:,ip,iq)
+                this%detector_area(idetector) = this%detector_area_all(ip,iq)
                 idetector = idetector + 1
             end do
         end do
@@ -359,14 +357,14 @@ contains
 
     function uv2yz(uv, distortion_yz, chop) result(yz)
 
-        real*8, intent(in) :: uv(:,:)
-        real*8, intent(in) :: distortion_yz(ndims, distortion_degree, distortion_degree, distortion_degree)
-        real*8, intent(in) :: chop ! chop angle in degree
-        real*8             :: yz(ndims, size(uv,2))
+        real(p), intent(in) :: uv(:,:)
+        real(p), intent(in) :: distortion_yz(ndims, distortion_degree, distortion_degree, distortion_degree)
+        real(p), intent(in) :: chop ! chop angle in degree
+        real(p)             :: yz(ndims, size(uv,2))
 
-        real*8  :: a_pow, ratio
+        real(p) :: a_pow, ratio
+        real(p) :: u_pow(size(uv,2)), v_pow(size(uv,2))
         integer :: n, i, j, k, l
-        real*8  :: u_pow(size(uv,2)), v_pow(size(uv,2))
 
         yz = 0
         n = size(uv,2)
@@ -374,19 +372,19 @@ contains
             if (k /= 1) then
                 u_pow = u_pow * uv(1,:)
             else
-                u_pow = 1.d0
+                u_pow = 1
             endif
             do j = 1, distortion_degree
               if (j /= 1) then
                   v_pow = v_pow * uv(2,:)
               else
-                  v_pow = 1.d0
+                  v_pow = 1
               end if
               do i = 1, distortion_degree
                   if (i /= 1) then
                       a_pow = a_pow * chop
                   else
-                      a_pow = 1.d0
+                      a_pow = 1
                   end if
                   do l = 1, n
                       ratio = - u_pow(l) * v_pow(l) * a_pow
@@ -398,7 +396,7 @@ contains
         end do
     
         ! convert from arcsecond to degrees
-        yz = - yz / 3600.d0
+        yz = - yz / 3600._p
 
     end function uv2yz
  
@@ -408,13 +406,12 @@ contains
 
     function yz2ad(yz, ra0, dec0, pa0) result (ad)
 
-        real*8, intent(in) :: yz(:,:) ! in degrees
-        real*8, intent(in) :: ra0, dec0, pa0
-        real*8             :: ad(ndims,size(yz,2))
+        real(p), intent(in) :: yz(:,:) ! in degrees
+        real(p), intent(in) :: ra0, dec0, pa0
+        real(p)             :: ad(ndims,size(yz,2))
 
+        real(p) :: cospa, sinpa
         integer :: i
-        real*8  :: cospa, sinpa
-
 
         cospa =  cos(pa0*DEG2RAD)
         sinpa = -sin(pa0*DEG2RAD)
@@ -437,18 +434,19 @@ contains
         class(pacsinstrument), intent(in)  :: this
         class(pacsobservation), intent(in) :: obs
         logical, intent(in)                :: oversampling
-        real*8, intent(in)                 :: resolution
+        real(p), intent(in)                :: resolution
         character(len=2880), intent(out)   :: header
         integer, intent(out)               :: status
 
         integer :: nx, ny
         integer :: ixmin, ixmax, iymin, iymax
-        real*8  :: ra0, dec0, xmin, xmax, ymin, ymax
+        real(p) :: ra0, dec0, xmin, xmax, ymin, ymax
 
 
         call obs%compute_center(ra0, dec0)
 
-        call ft_create_header(0, 0, [[-resolution/3600.d0, 0.d0], [0.d0, resolution/3600.d0]], ra0, dec0, 1.d0, 1.d0, header)
+        call ft_create_header(0, 0, [[-resolution/3600._p, 0._p], [0._p, resolution/3600._p]], ra0, dec0, 1._p, 1._p,  &
+             header)
 
         call init_astrometry(header, status=status)
         if (status /= 0) return
@@ -464,8 +462,8 @@ contains
         ny = iymax-iymin+1
 
         ! move the reference pixel (not the reference value!)
-        call ft_create_header(nx, ny, [[-resolution/3600.d0, 0.d0], [0.d0, resolution/3600.d0]], ra0, dec0, -ixmin+2.d0,           &
-             -iymin+2.d0, header)
+        call ft_create_header(nx, ny, [[-resolution/3600._p, 0._p], [0._p, resolution/3600._p]], ra0, dec0, -ixmin+2._p, &
+             -iymin+2._p, header)
 
     end subroutine compute_map_header
 
@@ -479,10 +477,10 @@ contains
         class(pacsinstrument), intent(in)  :: this
         class(pacsobservation), intent(in) :: obs
         logical, intent(in)                :: oversampling
-        real*8, intent(out)                :: xmin, xmax, ymin, ymax
+        real(p), intent(out)               :: xmin, xmax, ymin, ymax
 
-        real*8               :: ra, dec, pa, chop
-        real*8, allocatable  :: hull_uv(:,:), hull(:,:)
+        real(p)              :: ra, dec, pa, chop
+        real(p), allocatable :: hull_uv(:,:), hull(:,:)
         integer, allocatable :: ihull(:)
         integer              :: sampling_factor, isample, islice, itime
 
@@ -491,7 +489,7 @@ contains
         ymin = pInf
         ymax = mInf
 
-        call convex_hull(this%corners_uv, ihull)
+        call convex_hull(real(this%corners_uv, p), ihull)
 
         allocate(hull_uv(ndims,size(ihull)))
         allocate(hull(ndims, size(ihull)))
@@ -598,10 +596,10 @@ contains
         integer, intent(out)               :: npixels_per_sample
         logical, intent(out)               :: out
 
-        real*8  :: coords(ndims,this%ndetectors), coords_yz(ndims,this%ndetectors)
-        real*8  :: x(this%ndetectors), y(this%ndetectors), s(this%ndetectors)
-        real*8  :: ra, dec, pa, chop, chop_old, reference_area
-        integer :: ifine, isample, islice, itime, ivalid, nsamples, nvalids, sampling_factor, dest
+        real(p) :: coords(ndims,this%ndetectors), coords_yz(ndims,this%ndetectors)
+        real(p) :: x(this%ndetectors), y(this%ndetectors), s(this%ndetectors)
+        real(p) :: ra, dec, pa, chop, chop_old, reference_area
+        integer   :: ifine, isample, islice, itime, ivalid, nsamples, nvalids, sampling_factor, dest
         integer, allocatable :: valids(:)
 
         npixels_per_sample = 1
@@ -643,7 +641,7 @@ contains
                 do ifine = 1, sampling_factor
                      itime = (isample - 1) * sampling_factor + ifine
                      call obs%get_position_index(islice, itime, sampling_factor, ra, dec, pa, chop)
-                     if (abs(chop-chop_old) > 1.d-2) then
+                     if (abs(chop-chop_old) > 1.e-2_p) then
                          coords_yz = this%uv2yz(this%centers_uv, this%distortion_yz, chop)
                          chop_old = chop
                      end if
@@ -681,10 +679,10 @@ contains
         integer, intent(out)               :: npixels_per_sample
         logical, intent(out)               :: out
 
-        real*8  :: coords(ndims,this%ndetectors*nvertices), coords_yz(ndims,this%ndetectors*nvertices)
-        real*8  :: ra, dec, pa, chop, chop_old
-        integer :: roi(ndims,2,this%ndetectors)
-        integer :: ifine, isample, islice, itime, ivalid, nsamples, nvalids, sampling_factor, dest
+        real(p) :: coords(ndims,this%ndetectors*nvertices), coords_yz(ndims,this%ndetectors*nvertices)
+        real(p) :: ra, dec, pa, chop, chop_old
+        integer   :: roi(ndims,2,this%ndetectors)
+        integer   :: ifine, isample, islice, itime, ivalid, nsamples, nvalids, sampling_factor, dest
         integer, allocatable :: valids(:)
 
         npixels_per_sample = 0
@@ -724,7 +722,7 @@ contains
                 do ifine = 1, sampling_factor
                      itime = (isample - 1) * sampling_factor + ifine
                      call obs%get_position_index(islice, itime, sampling_factor, ra, dec, pa, chop)
-                     if (abs(chop-chop_old) > 1.d-2) then
+                     if (abs(chop-chop_old) > 1.e-2_p) then
                          coords_yz = this%uv2yz(this%corners_uv, this%distortion_yz, chop)
                          chop_old = chop
                      end if
@@ -805,14 +803,14 @@ contains
 
     subroutine read_one(this, obs, signal, mask, status)
 
-        class(pacsinstrument), intent(in)   :: this
+        class(pacsinstrument), intent(in)       :: this
 !!$        class(observationslice), intent(in) :: obs
         class(pacsobservationslice), intent(in) :: obs
-        real*8, intent(out)                 :: signal(:,:)
-        logical*1, intent(out)              :: mask  (:,:)
-        integer, intent(out)                :: status
+        real(p), intent(out)                    :: signal(:,:)
+        logical*1, intent(out)                  :: mask  (:,:)
+        integer, intent(out)                    :: status
 
-        integer                :: p, q
+        integer                :: ip, iq
         integer                :: idetector, ndetectors, unit, length
         integer, allocatable   :: imageshape(:)
         logical                :: mask_found
@@ -821,7 +819,7 @@ contains
         integer                :: ncompressed
         integer                :: isample, icompressed, ibit
         integer                :: firstcompressed, lastcompressed
-        real(dp)               :: signal_(obs%nsamples)
+        real(p)                :: signal_(obs%nsamples)
         logical*1              :: mask_(obs%nsamples)
 
         ndetectors = size(signal, 2)
@@ -842,10 +840,10 @@ contains
 
         do idetector = 1, ndetectors
 
-            p = this%pq(1,idetector)
-            q = this%pq(2,idetector)
+            ip = this%pq(1,idetector)
+            iq = this%pq(2,idetector)
 
-            call ft_read_slice(unit, obs%first, obs%last, q+1, p+1, imageshape, signal_, status)
+            call ft_read_slice(unit, obs%first, obs%last, iq+1, ip+1, imageshape, signal_, status)
             if (status /= 0) return
 
             signal(:,idetector) = pack(signal_, .not. obs%p%removed)
@@ -881,12 +879,12 @@ contains
 
         do idetector = 1, size(mask,2)
 
-            p = this%pq(1,idetector)
-            q = this%pq(2,idetector)
+            ip = this%pq(1,idetector)
+            iq = this%pq(2,idetector)
 
             mask_ = .false.
 
-            call ft_read_slice(unit, firstcompressed, lastcompressed, q+1, p+1, imageshape, maskcompressed, status)
+            call ft_read_slice(unit, firstcompressed, lastcompressed, iq+1, ip+1, imageshape, maskcompressed, status)
             if (status /= 0) return
 
             ! loop over the bytes of the compressed mask
@@ -918,16 +916,16 @@ contains
 
     subroutine read_oldstyle(this, obs, signal, mask, status)
 
-        class(pacsinstrument), intent(in)   :: this
+        class(pacsinstrument), intent(in)       :: this
 !!$        class(observationslice), intent(in) :: obs
         class(pacsobservationslice), intent(in) :: obs
-        real*8, intent(inout)               :: signal(:,:)
-        logical*1, intent(inout)            :: mask(:,:)
-        integer, intent(out)                :: status
+        real(p), intent(inout)                  :: signal(:,:)
+        logical*1, intent(inout)                :: mask(:,:)
+        integer, intent(out)                    :: status
 
-        integer              :: p, q
+        integer              :: ip, iq
         integer              :: idetector, unit
-        real(dp)             :: signal_(obs%nsamples)
+        real(p)              :: signal_(obs%nsamples)
         logical*1            :: mask_(obs%nsamples)
         integer, allocatable :: imageshape(:)
 
@@ -937,9 +935,9 @@ contains
 
         do idetector = 1, size(signal,2)
 
-            p = this%pq(1,idetector)
-            q = this%pq(2,idetector)
-            call ft_read_slice(unit, obs%first, obs%last, q+1, p+1, imageshape, signal_, status)
+            ip = this%pq(1,idetector)
+            iq = this%pq(2,idetector)
+            call ft_read_slice(unit, obs%first, obs%last, iq+1, ip+1, imageshape, signal_, status)
             if (status /= 0) return
 
             signal(:, idetector) = pack(signal_, .not. obs%p%removed)
@@ -955,10 +953,10 @@ contains
 
         do idetector = 1, size(mask,2)
 
-            p = this%pq(1,idetector)
-            q = this%pq(2,idetector)
+            ip = this%pq(1,idetector)
+            iq = this%pq(2,idetector)
 
-            call ft_read_slice(unit, obs%first, obs%last, q+1, p+1, imageshape, mask_, status)
+            call ft_read_slice(unit, obs%first, obs%last, iq+1, ip+1, imageshape, mask_, status)
             if (status /= 0) return
 
             mask(:, idetector) = pack(mask_, .not. obs%p%removed)
@@ -976,11 +974,11 @@ contains
     function read_filter_calibration_ncorrelations(channel, status) result (ncorrelations)
 
         character(len=*), intent(in) :: channel
-        integer, intent(out)  :: status
-        integer               :: ncorrelations
+        integer, intent(out)         :: status
+        integer                      :: ncorrelations
 
-        integer               :: unit
-        character(len=70)     :: comment
+        integer           :: unit
+        character(len=70) :: comment
 
         select case (channel)
             case ('Blue')
@@ -1040,8 +1038,8 @@ contains
         type(FilterUncorrelated), intent(out) :: filter
         integer, intent(out)                  :: status
 
-        real(dp), allocatable :: data(:,:)
-        integer               :: idetector, ndetectors, nrows, ncolumns, p, q
+        real(p), allocatable :: data(:,:)
+        integer              :: idetector, ndetectors, nrows, ncolumns, ip, iq
 
         ndetectors = size(mask) - count(mask)
         nrows = size(mask, 1)
@@ -1064,10 +1062,10 @@ contains
 
         !XXX CHECK P, Q layout in calibration file
         idetector = 1
-        do p = 1, nrows
-            do q = 1, ncolumns
-                if (mask(p,q)) cycle
-                filter%data(:,idetector) = data(:, (p-1) * ncolumns + q)
+        do ip = 1, nrows
+            do iq = 1, ncolumns
+                if (mask(ip,iq)) cycle
+                filter%data(:,idetector) = data(:, (ip-1) * ncolumns + iq)
                 idetector = idetector + 1
             end do
         end do
@@ -1080,13 +1078,13 @@ contains
 
     subroutine multiplexing_direct(signal, sampled_signal, sampling, ij)
 
-        real*8, intent(in)  :: signal(:,:)
-        integer, intent(in) :: sampling
-        real*8, intent(out) :: sampled_signal(size(signal,1)/sampling,size(signal,2))
-        integer, intent(in) :: ij(2,size(signal,2))
+        real(p), intent(in)  :: signal(:,:)
+        integer, intent(in)  :: sampling
+        real(p), intent(out) :: sampled_signal(size(signal,1)/sampling,size(signal,2))
+        integer, intent(in)  :: ij(2,size(signal,2))
 
         integer :: ndetectors, idetector, isample, j
-        real*8  :: frac
+        real(p) :: frac
 
         ndetectors = size(signal, 2)
         if (sampling == 16) then
@@ -1104,7 +1102,7 @@ contains
             do idetector = 1, ndetectors
                 j = ij(2,idetector)
                 isample = j * sampling / 16 + 1
-                frac = (j * sampling / 16.d0) - floor(j * sampling / 16.d0)
+                frac = (j * sampling / 16._p) - floor(j * sampling / 16._p)
                 sampled_signal(:,idetector) = (1-frac) * signal(isample  ::sampling,idetector) + &
                                                  frac  * signal(isample+1::sampling,idetector)
             end do
@@ -1119,17 +1117,17 @@ contains
 
     subroutine multiplexing_transpose(sampled_signal, signal, sampling, ij)
 
-        real*8, intent(in)  :: sampled_signal(:,:)
+        real(p), intent(in) :: sampled_signal(:,:)
         integer, intent(in) :: sampling
-        real*8, intent(out) :: signal(size(sampled_signal,1)*sampling,size(sampled_signal,2))
+        real(p), intent(out):: signal(size(sampled_signal,1)*sampling,size(sampled_signal,2))
         integer, intent(in) :: ij(2,size(sampled_signal,2))
 
         integer :: ndetectors, isample, idetector, j
-        real*8  :: frac
+        real(p) :: frac
 
         ndetectors = size(sampled_signal, 2)
         if (sampling == 16) then
-            signal = 0.d0
+            signal = 0
             !$omp parallel do default(shared) private(idetector)
             do idetector = 1, ndetectors
                 signal(ij(2,idetector)+1::16,idetector) = sampled_signal(:,idetector)
@@ -1138,13 +1136,13 @@ contains
         else
             !$omp parallel default(shared) private(idetector,isample,frac,j)
             !$omp workshare
-            signal = 0.d0
+            signal = 0
             !$omp end workshare
             !$omp do
             do idetector = 1, ndetectors
                 j = ij(2,idetector)
                 isample = j * sampling / 16 + 1 ! isample+1 is guaranteed to exist
-                frac = (j * sampling / 16.d0) - floor(j * sampling / 16.d0)
+                frac = (j * sampling / 16._p) - floor(j * sampling / 16._p)
                 signal(isample  ::sampling,idetector) = (1-frac) * sampled_signal(isample::sampling,idetector)
                 signal(isample+1::sampling,idetector) =    frac  * sampled_signal(isample::sampling,idetector)
             end do

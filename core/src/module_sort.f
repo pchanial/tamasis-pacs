@@ -1,6 +1,7 @@
 module module_sort
 
-    use module_math, only : NaN, neq_real
+    use module_math,    only : NaN, neq_real
+    use module_tamasis, only : p
     implicit none
     private
 
@@ -13,7 +14,7 @@ module module_sort
     public :: where
 
     integer, pointer, private :: array_int(:) => null()
-    real*8,  pointer, private :: array_double(:) => null()
+    real(p), pointer, private :: array_double(:) => null()
     !$omp threadprivate(array_int, array_double)
 
     interface histogram
@@ -69,17 +70,17 @@ contains
       integer :: l
       integer :: l1
       integer :: ndeep
-      integer :: p
+      integer :: p_
       integer :: q
       integer :: u
       integer :: u1
       integer :: yp
 !
-      real*8, intent(in) :: A(:)
+      real(p), intent(in)  :: A(:)
       integer, intent(out) :: ORD(size(A))
       integer :: POPLST(2,1000)
       integer :: N
-      real*8 X,XX,Z,ZZ,Y
+      real(p) :: X,XX,Z,ZZ,Y
 !
       n = size(A)
 !     TO SORT DIFFERENT INPUT TYPES, CHANGE THE FOLLOWING
@@ -98,10 +99,10 @@ contains
 !
 ! PART
 !
-    4 P=L
+    4 P_=L
       Q=U
 !     FOR CHARACTER SORTS, THE FOLLOWING 3 STATEMENTS WOULD BECOME
-!     X = ORD(P)
+!     X = ORD(P_)
 !     Z = ORD(Q)
 !     IF (A(X) .LE. A(Z)) GO TO 2
 !
@@ -109,42 +110,42 @@ contains
 !     FIRST ARGUMENT IS LESS THAN OR EQUAL TO THE SECOND, BASED ON "LEN"
 !     CHARACTERS.
 !
-      X=A(ORD(P))
+      X=A(ORD(P_))
       Z=A(ORD(Q))
       IF (X.LE.Z) GO TO 5
       Y=X
       X=Z
       Z=Y
-      YP=ORD(P)
-      ORD(P)=ORD(Q)
+      YP=ORD(P_)
+      ORD(P_)=ORD(Q)
       ORD(Q)=YP
     5 IF (U-L.LE.1) GO TO 15
       XX=X
-      IX=P
+      IX=P_
       ZZ=Z
       IZ=Q
 !
 ! LEFT
 !
-    6 P=P+1
-      IF (P.GE.Q) GO TO 7
-      X=A(ORD(P))
+    6 P_=P_+1
+      IF (P_.GE.Q) GO TO 7
+      X=A(ORD(P_))
       IF (X.GE.XX) GO TO 8
       GO TO 6
-    7 P=Q-1
+    7 P_=Q-1
       GO TO 13
 !
 ! RIGHT
 !
     8 Q=Q-1
-      IF (Q.LE.P) GO TO 9
+      IF (Q.LE.P_) GO TO 9
       Z=A(ORD(Q))
       IF (Z.LE.ZZ) GO TO 10
       GO TO 8
-    9 Q=P
-      P=P-1
+    9 Q=P_
+      P_=P_-1
       Z=X
-      X=A(ORD(P))
+      X=A(ORD(P_))
 !
 ! DIST
 !
@@ -152,12 +153,12 @@ contains
       Y=X
       X=Z
       Z=Y
-      IP=ORD(P)
-      ORD(P)=ORD(Q)
+      IP=ORD(P_)
+      ORD(P_)=ORD(Q)
       ORD(Q)=IP
    11 IF (X.LE.XX) GO TO 12
       XX=X
-      IX=P
+      IX=P_
    12 IF (Z.GE.ZZ) GO TO 6
       ZZ=Z
       IZ=Q
@@ -166,9 +167,9 @@ contains
 ! OUT
 !
    13 CONTINUE
-      IF (.NOT.(P.NE.IX.AND.X.NE.XX)) GO TO 14
-      IP=ORD(P)
-      ORD(P)=ORD(IX)
+      IF (.NOT.(P_.NE.IX.AND.X.NE.XX)) GO TO 14
+      IP=ORD(P_)
+      ORD(P_)=ORD(IX)
       ORD(IX)=IP
    14 CONTINUE
       IF (.NOT.(Q.NE.IZ.AND.Z.NE.ZZ)) GO TO 15
@@ -176,14 +177,14 @@ contains
       ORD(Q)=ORD(IZ)
       ORD(IZ)=IQ
    15 CONTINUE
-      IF (U-Q.LE.P-L) GO TO 16
+      IF (U-Q.LE.P_-L) GO TO 16
       L1=L
-      U1=P-1
+      U1=P_-1
       L=Q+1
       GO TO 17
    16 U1=U
       L1=Q+1
-      U=P-1
+      U=P_-1
    17 CONTINUE
       IF (U1.LE.L1) GO TO 18
 !
@@ -226,14 +227,14 @@ contains
       integer :: l
       integer :: l1
       integer :: ndeep
-      integer :: p
+      integer :: p_
       integer :: q
       integer :: u
       integer :: u1
       integer :: yp
 !
       integer :: POPLST(2,1000)
-      integer X,XX,Z,ZZ,Y
+      integer :: X,XX,Z,ZZ,Y
 !
 !     TO SORT DIFFERENT INPUT TYPES, CHANGE THE FOLLOWING
 !     SPECIFICATION STATEMENTS; FOR EXAMPLE, FOR FORTRAN CHARACTER
@@ -253,10 +254,10 @@ contains
 !
 ! PART
 !
-    4 P=L
+    4 P_=L
       Q=U
 !     FOR CHARACTER SORTS, THE FOLLOWING 3 STATEMENTS WOULD BECOME
-!     X = ORD(P)
+!     X = ORD(P_)
 !     Z = ORD(Q)
 !     IF (A(X) .LE. A(Z)) GO TO 2
 !
@@ -264,42 +265,42 @@ contains
 !     FIRST ARGUMENT IS LESS THAN OR EQUAL TO THE SECOND, BASED ON "LEN"
 !     CHARACTERS.
 !
-      X=ORD(P)
+      X=ORD(P_)
       Z=ORD(Q)
       IF (compare(X, Z) >= 0) GO TO 5
       Y = X
       X = Z
       Z = Y
-      YP=ORD(P)
-      ORD(P)=ORD(Q)
+      YP=ORD(P_)
+      ORD(P_)=ORD(Q)
       ORD(Q)=YP
     5 IF (U - L <= 1) GO TO 15
       XX=X
-      IX=P
+      IX=P_
       ZZ=Z
       IZ=Q
 !
 ! LEFT
 !
-    6 P=P+1
-      IF (P.GE.Q) GO TO 7
-      X=ORD(P)
+    6 P_=P_+1
+      IF (P_.GE.Q) GO TO 7
+      X=ORD(P_)
       IF (compare(X, XX) <= 0) GO TO 8
       GO TO 6
-    7 P=Q-1
+    7 P_=Q-1
       GO TO 13
 !
 ! RIGHT
 !
     8 Q=Q-1
-      IF (Q.LE.P) GO TO 9
+      IF (Q.LE.P_) GO TO 9
       Z=ORD(Q)
       IF (compare(Z, ZZ) >= 0) GO TO 10
       GO TO 8
-    9 Q=P
-      P=P-1
+    9 Q=P_
+      P_=P_-1
       Z=X
-      X=ORD(P)
+      X=ORD(P_)
 !
 ! DIST
 !
@@ -307,12 +308,12 @@ contains
       Y = X
       X = Z
       Z = Y
-      IP=ORD(P)
-      ORD(P)=ORD(Q)
+      IP=ORD(P_)
+      ORD(P_)=ORD(Q)
       ORD(Q)=IP
    11 IF (compare(X, XX) >= 0) GO TO 12
       XX=X
-      IX=P
+      IX=P_
    12 IF (compare(Z, ZZ) <=0) GO TO 6
       ZZ=Z
       IZ=Q
@@ -321,9 +322,9 @@ contains
 ! OUT
 !
    13 CONTINUE
-      IF (.NOT.(P /= IX .AND. compare(X,XX) /= 0)) GO TO 14
-      IP=ORD(P)
-      ORD(P)=ORD(IX)
+      IF (.NOT.(P_ /= IX .AND. compare(X,XX) /= 0)) GO TO 14
+      IP=ORD(P_)
+      ORD(P_)=ORD(IX)
       ORD(IX)=IP
    14 CONTINUE
       IF (.NOT.(Q /= IZ .AND. compare(Z,ZZ) /= 0)) GO TO 15
@@ -331,14 +332,14 @@ contains
       ORD(Q)=ORD(IZ)
       ORD(IZ)=IQ
    15 CONTINUE
-      IF (U-Q <= P-L) GO TO 16
+      IF (U-Q <= P_-L) GO TO 16
       L1=L
-      U1=P-1
+      U1=P_-1
       L=Q+1
       GO TO 17
    16 U1=U
       L1=Q+1
-      U=P-1
+      U=P_-1
    17 CONTINUE
       IF (U1 <= L1) GO TO 18
 !
@@ -405,8 +406,8 @@ contains
 
     subroutine qsorti_double(array, index)
 
-        real*8, intent(in), target :: array(:)
-        integer, intent(out) :: index(size(array))
+        real(p), intent(in), target :: array(:)
+        integer, intent(out)        :: index(size(array))
 
         array_double => array
         call qsortgi(size(array), compare_double, index)
@@ -483,13 +484,13 @@ contains
     ! fixme: algo different from uniq_int...
     subroutine uniq_double(array, inindex, outindex, rtol)
 
-        real*8, intent(in)  :: array(:)
-        integer, intent(in) :: inindex(size(array))
+        real(p), intent(in)               :: array(:)
+        integer, intent(in)               :: inindex(size(array))
         integer, intent(out), allocatable :: outindex(:)
-        real*8, intent(in)  :: rtol
+        real(p), intent(in)               :: rtol
 
         integer :: index(size(array)), nuniqs, n, i
-        real*8  :: val
+        real(p) :: val
 
         n = size(array)
         if (n == 0) then
@@ -522,14 +523,14 @@ contains
         use iso_fortran_env, only : OUTPUT_UNIT
         implicit none
 
-        real*8, intent(in)               :: array(:)
-        integer, intent(out)             :: index(size(array))
-        integer, intent(out)             :: nuniqs
-        real*8, intent(out), allocatable :: table(:)
-        real*8, intent(in)               :: rtol
+        real(p), intent(in)               :: array(:)
+        integer, intent(out)              :: index(size(array))
+        integer, intent(out)              :: nuniqs
+        real(p), intent(out), allocatable :: table(:)
+        real(p), intent(in)               :: rtol
 
         integer :: isort(size(array)), ndata, i
-        real*8  :: val, tmptable(size(array))
+        real(p) :: val, tmptable(size(array))
 
         ndata = size(array)
         if (ndata == 0) then

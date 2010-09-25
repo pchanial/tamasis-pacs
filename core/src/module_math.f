@@ -1,6 +1,7 @@
 module module_math
 
-    use module_precision, only : p, sp, dp, qp
+    use module_precision, only : sp, dp, qp
+    use module_tamasis,   only : p
     implicit none
     private
 
@@ -32,14 +33,30 @@ module module_math
         module procedure sum_kahan_1d, sum_kahan_2d, sum_kahan_3d
     end interface sum_kahan
 
-    real(p), parameter :: PI = 4.0_p * atan(1.0_p)
+    real(p), parameter :: PI = 4._p * atan(1._p)
     real(p), parameter :: DEG2RAD = PI / 180._p
     real(p), parameter :: RAD2DEG = 180._p / PI
-    !XXX should use ieee_arithmetic instead when gfortran implements it
-    real(p), parameter ::                                                                       &
-        NaN  = transfer('1111111111111000000000000000000000000000000000000000000000000000'b, 0._dp), &
-        mInf = transfer('1111111111110000000000000000000000000000000000000000000000000000'b,0._dp),  &
-        pInf = transfer('0111111111110000000000000000000000000000000000000000000000000000'b,0._dp)
+    !XXX should use ieee_arithmetic instead when gfortran implements it. So far, gfortran doesn't allow NaN, mInf, pInf conversion
+    ! between different real kinds...
+#if PRECISION_REAL == 4
+    real(p), parameter ::                                                                                                          &
+        NaN  = transfer('11111111110000000000000000000000'b, 0._p),                                                                &
+        mInf = transfer('11111111100000000000000000000000'b, 0._p),                                                                &
+        pInf = transfer('01111111100000000000000000000000'b, 0._p)
+#elif PRECISION_REAL == 8
+    real(p), parameter ::                                                                                                          &
+        NaN  = transfer('1111111111111000000000000000000000000000000000000000000000000000'b, 0._p),                                &
+        mInf = transfer('1111111111110000000000000000000000000000000000000000000000000000'b, 0._p),                                &
+        pInf = transfer('0111111111110000000000000000000000000000000000000000000000000000'b, 0._p)
+#elif PRECISION_REAL == 16
+    real(p), parameter ::                                                                                                          &
+        NaN  = transfer('1111111111111111100000000000000000000000000000000000000000000000'                                         &
+                         '0000000000000000000000000000000000000000000000000000000000000000'b, 0._qp),                              &
+        mInf = transfer('1111111111111111000000000000000000000000000000000000000000000000'                                         &
+                         '0000000000000000000000000000000000000000000000000000000000000000'b, 0._qp),                              &
+        pInf = transfer('0111111111111111000000000000000000000000000000000000000000000000'                                         &
+                         '0000000000000000000000000000000000000000000000000000000000000000'b, 0._qp)
+#endif
 
 
 contains
@@ -47,14 +64,14 @@ contains
 
     subroutine moment(input, mean, variance, skewness, kurtosis, stddev, meandev, mask)
 
-        real(kind=p), intent(in)            :: input(:)
-        real(kind=p), intent(out), optional :: mean, variance, skewness
-        real(kind=p), intent(out), optional :: kurtosis, stddev, meandev
-        logical, intent(in), optional       :: mask(:)
+        real(p), intent(in)            :: input(:)
+        real(p), intent(out), optional :: mean, variance, skewness
+        real(p), intent(out), optional :: kurtosis, stddev, meandev
+        logical, intent(in), optional  :: mask(:)
 
-        integer                   :: nsamples
-        real(kind=p)              :: m, var, sdev
-        real(kind=p), allocatable :: residuals(:)
+        integer              :: nsamples
+        real(p)              :: m, var, sdev
+        real(p), allocatable :: residuals(:)
 
         nsamples = size(input)
         if (present(mask)) then
@@ -105,7 +122,7 @@ contains
             if (sdev == 0) then
                 kurtosis = NaN
             else
-                kurtosis = sum_kahan(residuals**4, mask) / (nsamples * sdev**4)-3.0_p
+                kurtosis = sum_kahan(residuals**4, mask) / (nsamples * sdev**4) - 3
             end if
         end if
 
@@ -119,8 +136,8 @@ contains
 
     function mean(input, mask)
 
-        real(kind=p)                 :: mean
-        real(kind=p), intent(in)     :: input(:)
+        real(p)                      :: mean
+        real(p), intent(in)          :: input(:)
         logical, intent(in),optional :: mask(:)
         
         call moment(input, mean, mask=mask)
@@ -133,8 +150,8 @@ contains
 
     function stddev(input, mask)
 
-        real(kind=p)                  :: stddev
-        real(kind=p), intent(in)      :: input(:)
+        real(p)                       :: stddev
+        real(p), intent(in)           :: input(:)
         logical, intent(in), optional :: mask(:)
         
         call moment(input, stddev=stddev, mask=mask)
@@ -147,9 +164,9 @@ contains
 
     function sum_kahan_1d(input, mask) result(sum)
 
-        real(kind=p), intent(in)      :: input(:)
+        real(p), intent(in)           :: input(:)
         logical, intent(in), optional :: mask(:)
-        real(kind=p)                  :: sum, c, t, y
+        real(p)                       :: sum, c, t, y
 
         integer                       :: i
 
@@ -171,7 +188,7 @@ contains
         end if
         
         sum = input(i)
-        c = 0.0_p
+        c = 0
         do i = i+1, size(input)
             if (present(mask)) then
                 if (mask(i)) cycle
@@ -190,10 +207,10 @@ contains
 
     function sum_kahan_2d(input) result(sum)
 
-        real(kind=p), intent(in) :: input(:,:)
-        real(kind=p)             :: sum, c, t, y
+        real(p), intent(in) :: input(:,:)
+        real(p)             :: sum, c, t, y
 
-        integer                  :: i
+        integer             :: i
 
         if (size(input) == 0) then
             sum = NaN
@@ -201,7 +218,7 @@ contains
         end if
 
         sum = sum_kahan_1d(input(:,1))
-        c = 0.0_p
+        c = 0
         do i = 2, size(input,2)
             y = sum_kahan_1d(input(:,i)) - c
             t = sum + y
@@ -216,10 +233,10 @@ contains
 
     function sum_kahan_3d(input) result(sum)
 
-        real(kind=p), intent(in) :: input(:,:,:)
-        real(kind=p)             :: sum, c, t, y
+        real(p), intent(in) :: input(:,:,:)
+        real(p)             :: sum, c, t, y
 
-        integer                  :: i
+        integer             :: i
 
         if (size(input) == 0) then
             sum = NaN
@@ -227,7 +244,7 @@ contains
         end if
 
         sum = sum_kahan_2d(input(:,:,1))
-        c = 0.0_p
+        c = 0
         do i = 2, size(input,3)
             y = sum_kahan_2d(input(:,:,i)) - c
             t = sum + y
@@ -242,15 +259,15 @@ contains
 
     function mean_degrees(array, mask)
 
-        real*8, intent(in)            :: array(:)
+        real(p), intent(in)           :: array(:)
         logical, optional, intent(in) :: mask(size(array))
-        real*8                        :: mean_degrees
+        real(p)                       :: mean_degrees
         
-        real*8  :: value
+        real(p) :: value
         integer :: isample, n180, nvalids
         logical :: zero_minus, zero_plus
 
-        mean_degrees = 0.0d0
+        mean_degrees = 0
         zero_minus = .false.
         zero_plus  = .false.
         n180 = 0
@@ -262,20 +279,20 @@ contains
             if (present(mask)) then
                 if (mask(isample)) cycle
             end if
-            value = modulo(array(isample), 360.d0)
+            value = modulo(array(isample), 360._p)
             if (value /= value) cycle
-            zero_minus = zero_minus .or. value > 270.d0
-            zero_plus  = zero_plus  .or. value <= 90.d0
-            if (value >= 180.d0) n180 = n180 + 1
+            zero_minus = zero_minus .or. value > 270
+            zero_plus  = zero_plus  .or. value <= 90
+            if (value >= 180) n180 = n180 + 1
             mean_degrees = mean_degrees + value
             nvalids = nvalids + 1
         end do
         !$omp end parallel do
 
-        if (zero_minus .and. zero_plus) mean_degrees = mean_degrees - 360.d0 * n180
+        if (zero_minus .and. zero_plus) mean_degrees = mean_degrees - 360._p * n180
 
         if (nvalids > 0) then
-            mean_degrees = modulo(mean_degrees / nvalids, 360.d0)
+            mean_degrees = modulo(mean_degrees / nvalids, 360._p)
         else
             mean_degrees = NaN
         end if
@@ -288,11 +305,11 @@ contains
 
     function linspace(min, max, n)
 
-        real(kind=p)              :: linspace(n)
-        real(kind=p), intent(in)  :: min, max
-        integer, intent(in)       :: n
+        real(p)             :: linspace(n)
+        real(p), intent(in) :: min, max
+        integer, intent(in) :: n
 
-        integer                   :: i
+        integer             :: i
 
         linspace = min + (max - min) / (n-1) * [(i, i=0, n-1)]
 
@@ -303,10 +320,10 @@ contains
 
 
     function logspace(min, max, n)
-        real(kind=p)              :: logspace(n)
-        real(kind=p), intent(in)  :: min, max
-        integer, intent(in)       :: n
-        integer                   :: i
+        real(p)             :: logspace(n)
+        real(p), intent(in) :: min, max
+        integer, intent(in) :: n
+        integer             :: i
 
         logspace = exp(log(min)+(log(max)-log(min)) / (n-1) * [(i, i=0,n-1)])
 
@@ -318,8 +335,8 @@ contains
 
     elemental function nint_down(x)
 
-        integer                  :: nint_down
-        real(kind=p), intent(in) :: x
+        integer             :: nint_down
+        real(p), intent(in) :: x
         
         nint_down = nint(x)
         if (x > 0 .and. abs(x-nint_down) == 0.5_p) then
@@ -334,8 +351,8 @@ contains
 
     elemental function nint_up(x)
 
-        integer                  :: nint_up
-        real(kind=p), intent(in) :: x
+        integer             :: nint_up
+        real(p), intent(in) :: x
         
         nint_up = nint(x)
         if (x < 0 .and. abs(x-nint_up) == 0.5_p) then
@@ -349,8 +366,8 @@ contains
 
 
     elemental subroutine swap(a,b)
-        real(kind=p), intent(inout) :: a, b
-        real(kind=p)                :: tmp
+        real(p), intent(inout) :: a, b
+        real(p)                :: tmp
         tmp = a
         a   = b
         b   = tmp
@@ -383,10 +400,10 @@ contains
     ! This code by Nicolas Devillard - 1998. Public domain.
     function median_nocopy(arr) result(median)
 
-        real(kind=p)                :: median
-        real(kind=p), intent(inout) :: arr(0:)
+        real(p)                :: median
+        real(p), intent(inout) :: arr(0:)
 
-        integer                     :: low, high, imedian, middle, ll, hh
+        integer                :: low, high, imedian, middle, ll, hh
 
         low = 0
         high = size(arr)-1
@@ -450,11 +467,11 @@ contains
     ! returns the median absolute deviation
     function mad(x, m)
 
-        real(kind=p)                        :: mad
-        real(kind=p), intent(in)            :: x(:)
-        real(kind=p), intent(out), optional :: m
+        real(p)                        :: mad
+        real(p), intent(in)            :: x(:)
+        real(p), intent(out), optional :: m
 
-        real(kind=p)                        :: x_(size(x)), med
+        real(p)                        :: x_(size(x)), med
  
         x_ = x
         med = median_nocopy(x_)
@@ -526,14 +543,7 @@ contains
         if (present(rtol)) then
             rtol_ = rtol
         else
-            select case (p)
-                case default
-                    rtol_ = 1.e-7_p
-                case (dp)
-                    rtol_ = 1.e-14_p
-                case (qp)
-                    rtol_ = 1.e-28_p
-            end select
+            rtol_ = 10._p * epsilon(1._p)
         end if
 
         eq_real = abs(a-b) <= rtol_ * max(abs(a),abs(b))

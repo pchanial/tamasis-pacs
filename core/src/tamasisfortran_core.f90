@@ -2,12 +2,28 @@
 !
 ! Author: P. Chanial
 
+subroutine info_nbytes_real(nbytes)
+
+    implicit none
+
+    !f2py intent(out)    :: nbytes
+
+    integer, intent(out) :: nbytes
+    
+    nbytes = PRECISION_REAL
+
+end subroutine info_nbytes_real
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
 subroutine info_nthreads(nthreads)
 
     use omp_lib, only : omp_get_max_threads
     implicit none
 
-    !f2py intent(out) :: nthreads
+    !f2py intent(out)    :: nthreads
 
     integer, intent(out) :: nthreads
     
@@ -21,7 +37,8 @@ end subroutine info_nthreads
 
 subroutine pointing_matrix_direct(pmatrix, map1d, signal, npixels_per_sample, nsamples, ndetectors, npixels)
 
-    use module_pointingmatrix
+    use module_pointingmatrix, only : PointingElement, pmatrix_direct
+    use module_tamasis,        only : p
     implicit none
 
     !f2py threadsafe
@@ -34,12 +51,12 @@ subroutine pointing_matrix_direct(pmatrix, map1d, signal, npixels_per_sample, ns
     !f2py intent(hide)    :: npixels = size(map1d)
 
     type(PointingElement), intent(inout) :: pmatrix(npixels_per_sample, nsamples, ndetectors)
-    real*8, intent(in)    :: map1d(npixels)
-    real*8, intent(inout) :: signal(nsamples, ndetectors)
-    integer, intent(in)   :: npixels_per_sample
-    integer*8, intent(in) :: nsamples
-    integer, intent(in)   :: ndetectors
-    integer, intent(in)   :: npixels
+    real(p), intent(in)    :: map1d(npixels)
+    real(p), intent(inout) :: signal(nsamples, ndetectors)
+    integer, intent(in)    :: npixels_per_sample
+    integer*8, intent(in)  :: nsamples
+    integer, intent(in)    :: ndetectors
+    integer, intent(in)    :: npixels
 
     call pmatrix_direct(pmatrix, map1d, signal)
 
@@ -51,7 +68,8 @@ end subroutine pointing_matrix_direct
 
 subroutine pointing_matrix_transpose(pmatrix, signal, map1d, npixels_per_sample, nsamples, ndetectors, npixels)
 
-    use module_pointingmatrix
+    use module_pointingmatrix, only : PointingElement, pmatrix_transpose
+    use module_tamasis,        only : p
     implicit none
 
     !f2py threadsafe
@@ -64,12 +82,12 @@ subroutine pointing_matrix_transpose(pmatrix, signal, map1d, npixels_per_sample,
     !f2py intent(hide)  :: npixels = size(map1d)
 
     type(PointingElement), intent(inout) :: pmatrix(npixels_per_sample, nsamples, ndetectors)
-    real*8, intent(in)    :: signal(nsamples, ndetectors)
-    real*8, intent(inout) :: map1d(npixels)
-    integer, intent(in)   :: npixels_per_sample
-    integer*8, intent(in) :: nsamples
-    integer, intent(in)   :: ndetectors
-    integer, intent(in)   :: npixels
+    real(p), intent(in)    :: signal(nsamples, ndetectors)
+    real(p), intent(inout) :: map1d(npixels)
+    integer, intent(in)    :: npixels_per_sample
+    integer*8, intent(in)  :: nsamples
+    integer, intent(in)    :: ndetectors
+    integer, intent(in)    :: npixels
 
     call pmatrix_transpose(pmatrix, signal, map1d)
 
@@ -81,7 +99,8 @@ end subroutine pointing_matrix_transpose
 
 subroutine pointing_matrix_ptp(pmatrix, ptp, npixels_per_sample, nsamples, ndetectors, npixels)
 
-    use module_pointingmatrix
+    use module_pointingmatrix, only : PointingElement, pmatrix_ptp
+    use module_tamasis,        only : p
     implicit none
 
     !f2py threadsafe
@@ -93,7 +112,7 @@ subroutine pointing_matrix_ptp(pmatrix, ptp, npixels_per_sample, nsamples, ndete
     !f2py intent(in)  :: npixels
 
     type(PointingElement), intent(inout) :: pmatrix(npixels_per_sample, nsamples, ndetectors)
-    real*8, intent(out)                  :: ptp(npixels, npixels)
+    real(p), intent(out)                 :: ptp(npixels, npixels)
     integer, intent(in)                  :: npixels_per_sample
     integer*8, intent(in)                :: nsamples
     integer, intent(in)                  :: ndetectors
@@ -110,6 +129,7 @@ end subroutine pointing_matrix_ptp
 subroutine compression_average_direct(data, compressed, factor, nsamples, ndetectors)
 
     use module_compression, only : direct => compression_average_direct
+    use module_tamasis,     only : p
     implicit none
 
     !f2py threadsafe
@@ -120,8 +140,8 @@ subroutine compression_average_direct(data, compressed, factor, nsamples, ndetec
     !f2py intent(hide)    :: ndetectors = shape(data,1)
 
     integer, intent(in)   :: factor, nsamples, ndetectors
-    real*8, intent(in)    :: data(nsamples*factor,ndetectors)
-    real*8, intent(out)   :: compressed(nsamples,ndetectors)
+    real(p), intent(in)   :: data(nsamples*factor,ndetectors)
+    real(p), intent(out)  :: compressed(nsamples,ndetectors)
 
     call direct(data, compressed, factor)
 
@@ -134,6 +154,7 @@ end subroutine compression_average_direct
 subroutine compression_average_transpose(compressed, data, factor, nsamples, ndetectors)
 
     use module_compression, only : transpos => compression_average_transpose
+    use module_tamasis,     only : p
     implicit none
 
     !f2py threadsafe
@@ -144,8 +165,8 @@ subroutine compression_average_transpose(compressed, data, factor, nsamples, nde
     !f2py intent(hide)    :: ndetectors = shape(data,1)
 
     integer, intent(in)   :: factor, nsamples, ndetectors
-    real*8, intent(in)    :: compressed(nsamples,ndetectors)
-    real*8, intent(out)   :: data(nsamples*factor,ndetectors)
+    real(p), intent(in)   :: compressed(nsamples,ndetectors)
+    real(p), intent(out)  :: data(nsamples*factor,ndetectors)
 
     call transpos(compressed, data, factor)
 
@@ -158,6 +179,7 @@ end subroutine compression_average_transpose
 subroutine downsampling_direct(data, compressed, factor, nsamples, ndetectors)
 
     use module_compression, only : direct => downsampling_direct
+    use module_tamasis,     only : p
     implicit none
 
     !f2py threadsafe
@@ -168,8 +190,8 @@ subroutine downsampling_direct(data, compressed, factor, nsamples, ndetectors)
     !f2py intent(hide)    :: ndetectors = shape(data,1)
 
     integer, intent(in)   :: factor, nsamples, ndetectors
-    real*8, intent(in)    :: data(nsamples*factor,ndetectors)
-    real*8, intent(out)   :: compressed(nsamples,ndetectors)
+    real(p), intent(in)   :: data(nsamples*factor,ndetectors)
+    real(p), intent(out)  :: compressed(nsamples,ndetectors)
 
     call direct(data, compressed, factor)
 
@@ -182,6 +204,7 @@ end subroutine downsampling_direct
 subroutine downsampling_transpose(compressed, data, factor, nsamples, ndetectors)
 
     use module_compression, only : transpos => downsampling_transpose
+    use module_tamasis,     only : p
     implicit none
 
     !f2py threadsafe
@@ -192,8 +215,8 @@ subroutine downsampling_transpose(compressed, data, factor, nsamples, ndetectors
     !f2py intent(hide)    :: ndetectors = shape(data,1)
 
     integer, intent(in)   :: factor, nsamples, ndetectors
-    real*8, intent(in)    :: compressed(nsamples,ndetectors)
-    real*8, intent(out)   :: data(nsamples*factor,ndetectors)
+    real(p), intent(in)   :: compressed(nsamples,ndetectors)
+    real(p), intent(out)  :: data(nsamples*factor,ndetectors)
 
     call transpos(compressed, data, factor)
 
@@ -206,6 +229,7 @@ end subroutine downsampling_transpose
 subroutine backprojection_weighted(pmatrix, data, mask, map1d, weight1d, npixels_per_sample, nsamples, ndetectors, npixels)
 
     use module_pointingmatrix, only : bpw => backprojection_weighted, PointingElement
+    use module_tamasis,        only : p
     implicit none
 
     !f2py threadsafe
@@ -220,10 +244,10 @@ subroutine backprojection_weighted(pmatrix, data, mask, map1d, weight1d, npixels
     !f2py intent(hide)         :: npixels = size(map1d)
 
     type(PointingElement), intent(in) :: pmatrix(npixels_per_sample,nsamples,ndetectors)
-    real*8, intent(in)                :: data(nsamples,ndetectors)
+    real(p), intent(in)               :: data(nsamples,ndetectors)
     logical*1, intent(in)             :: mask(nsamples,ndetectors)
-    real*8, intent(inout)             :: map1d(npixels)
-    real*8, intent(inout)             :: weight1d(npixels)
+    real(p), intent(inout)            :: map1d(npixels)
+    real(p), intent(inout)            :: weight1d(npixels)
     integer, intent(in)               :: npixels_per_sample
     integer*8, intent(in)             :: nsamples
     integer, intent(in)               :: ndetectors
@@ -240,7 +264,8 @@ end subroutine backprojection_weighted
 subroutine deglitch_l2b_std(pmatrix, nx, ny, data, mask, nsigma, npixels_per_sample, nsamples, ndetectors)
 
     use module_pointingmatrix, only : PointingElement
-    use module_deglitching, only : deglitch_l2b
+    use module_deglitching,    only : deglitch_l2b
+    use module_tamasis,        only : p
     implicit none
 
     !f2py threadsafe
@@ -255,9 +280,9 @@ subroutine deglitch_l2b_std(pmatrix, nx, ny, data, mask, nsigma, npixels_per_sam
 
     type(PointingElement), intent(in) :: pmatrix(npixels_per_sample,nsamples,ndetectors)
     integer, intent(in)               :: nx, ny
-    real*8, intent(in)                :: data(nsamples,ndetectors)
+    real(p), intent(in)               :: data(nsamples,ndetectors)
     logical*1, intent(inout)          :: mask(nsamples,ndetectors)
-    real*8, intent(in)                :: nsigma
+    real(p), intent(in)               :: nsigma
     integer, intent(in)               :: npixels_per_sample
     integer*8, intent(in)             :: nsamples
     integer, intent(in)               :: ndetectors
@@ -274,6 +299,7 @@ subroutine deglitch_l2b_mad(pmatrix, nx, ny, data, mask, nsigma, npixels_per_sam
 
     use module_pointingmatrix, only : PointingElement
     use module_deglitching,    only : deglitch_l2b
+    use module_tamasis,        only : p
     implicit none
 
     !f2py threadsafe
@@ -288,9 +314,9 @@ subroutine deglitch_l2b_mad(pmatrix, nx, ny, data, mask, nsigma, npixels_per_sam
 
     type(PointingElement), intent(in) :: pmatrix(npixels_per_sample,nsamples,ndetectors)
     integer, intent(in)               :: nx, ny
-    real*8, intent(in)                :: data(nsamples,ndetectors)
+    real(p), intent(in)               :: data(nsamples,ndetectors)
     logical*1, intent(inout)          :: mask(nsamples,ndetectors)
-    real*8, intent(in)                :: nsigma
+    real(p), intent(in)               :: nsigma
     integer, intent(in)               :: npixels_per_sample
     integer*8, intent(in)             :: nsamples
     integer, intent(in)               :: ndetectors
@@ -307,6 +333,7 @@ subroutine filter_median(data, length, nsamples, nsamples_tot, nslices, ndetecto
 
     use iso_fortran_env,     only : ERROR_UNIT, OUTPUT_UNIT
     use module_preprocessor, only : median_filtering
+    use module_tamasis,      only : p
     implicit none
 
     !f2py threadsafe
@@ -318,13 +345,13 @@ subroutine filter_median(data, length, nsamples, nsamples_tot, nslices, ndetecto
     !f2py intent(hide) :: ndetectors=shape(data,1)
     !f2py intent(out)  :: status
 
-    real*8, intent(inout) :: data(nsamples_tot,ndetectors)
-    integer, intent(in)   :: length
-    integer, intent(in)   :: nsamples(nslices)
-    integer, intent(in)   :: nsamples_tot
-    integer, intent(in)   :: nslices
-    integer, intent(in)   :: ndetectors
-    integer, intent(out)  :: status
+    real(p), intent(inout) :: data(nsamples_tot,ndetectors)
+    integer, intent(in)    :: length
+    integer, intent(in)    :: nsamples(nslices)
+    integer, intent(in)    :: nsamples_tot
+    integer, intent(in)    :: nslices
+    integer, intent(in)    :: ndetectors
+    integer, intent(out)   :: status
 
     integer :: islice, start
     integer :: count1, count2, count_rate, count_max
@@ -363,6 +390,7 @@ subroutine fft_filter_uncorrelated(data, nsamples, nsamples_tot, ncorrelations, 
 
     use iso_fortran_env,  only : ERROR_UNIT
     use module_filtering, only : FilterUncorrelated, fft_filter => create_filter_uncorrelated
+    use module_tamasis,   only : p
     implicit none
 
     !f2py threadsafe
@@ -379,9 +407,9 @@ subroutine fft_filter_uncorrelated(data, nsamples, nsamples_tot, ncorrelations, 
     integer, intent(in)  :: ncorrelations
     integer, intent(in)  :: ndetectors
     integer, intent(in)  :: nslices
-    real*8, intent(in)   :: data(ncorrelations+1,ndetectors,nslices)
+    real(p), intent(in)  :: data(ncorrelations+1,ndetectors,nslices)
     integer, intent(in)  :: nsamples(nslices)
-    real*8, intent(out)  :: tod_filter(nsamples_tot,ndetectors)
+    real(p), intent(out) :: tod_filter(nsamples_tot,ndetectors)
     integer, intent(out) :: status
 
     type(FilterUncorrelated), allocatable :: filter(:)
@@ -408,6 +436,7 @@ end subroutine fft_filter_uncorrelated
 subroutine fft_plan(data, nsamples, nslices, plan, nsamples_tot, ndetectors)
 
     use module_filtering, only : fft_tod
+    use module_tamasis,   only : p
     implicit none
 
     !f2py threadsafe
@@ -418,14 +447,14 @@ subroutine fft_plan(data, nsamples, nslices, plan, nsamples_tot, ndetectors)
     !f2py intent(hide)  :: nsamples_tot = size(data,2)
     !f2py intent(hide)  :: ndetectors = size(data,1)
 
-    real*8, intent(inout) :: data(nsamples_tot,ndetectors)
-    integer*8, intent(in) :: nsamples(nslices)
-    integer, intent(in)   :: nslices
-    integer*8, intent(in) :: plan(nslices)
-    integer, intent(in)   :: nsamples_tot
-    integer, intent(in)   :: ndetectors
+    real(p), intent(inout) :: data(nsamples_tot,ndetectors)
+    integer*8, intent(in)  :: nsamples(nslices)
+    integer, intent(in)    :: nslices
+    integer*8, intent(in)  :: plan(nslices)
+    integer, intent(in)    :: nsamples_tot
+    integer, intent(in)    :: ndetectors
 
-    integer               :: islice, dest
+    integer                :: islice, dest
 
     dest = 1
     do islice = 1, nslices
@@ -444,6 +473,7 @@ end subroutine fft_plan
 subroutine unpack_direct(input, nvalids, mask, nx, ny, output, field)
 
     use iso_fortran_env, only : ERROR_UNIT
+    use module_tamasis,  only : p
     implicit none
 
     !f2py threadsafe
@@ -455,12 +485,12 @@ subroutine unpack_direct(input, nvalids, mask, nx, ny, output, field)
     !f2py intent(inout) :: output(nx,ny)
     !f2py intent(in)    :: field
 
-    real*8, intent(in)    :: input(nvalids)
-    integer, intent(in)   :: nvalids
-    logical*1, intent(in) :: mask(nx,ny)
-    integer, intent(in)   :: nx, ny
-    real*8, intent(out)   :: output(nx,ny)
-    real*8, intent(in)    :: field
+    real(p), intent(in)    :: input(nvalids)
+    integer, intent(in)    :: nvalids
+    logical*1, intent(in)  :: mask(nx,ny)
+    integer, intent(in)    :: nx, ny
+    real(p), intent(out)   :: output(nx,ny)
+    real(p), intent(in)    :: field
 
     if (count(.not. mask) /= nvalids) then
         write (ERROR_UNIT,'(a)') 'UNPACK_DIRECT: The mask is not compatible with the input size.'
@@ -477,6 +507,7 @@ end subroutine unpack_direct
 subroutine unpack_transpose(input, mask, nx, ny, nvalids, output)
 
     use iso_fortran_env, only : ERROR_UNIT
+    use module_tamasis,  only : p
     implicit none
 
     !f2py threadsafe
@@ -487,11 +518,11 @@ subroutine unpack_transpose(input, mask, nx, ny, nvalids, output)
     !f2py intent(hide)  :: nvalids = size(output)
     !f2py intent(inout) :: output(nvalids)
 
-    real*8, intent(in)    :: input(nx,ny)
+    real(p), intent(in)   :: input(nx,ny)
     logical*1, intent(in) :: mask(nx,ny)
     integer, intent(in)   :: nx, ny
     integer, intent(in)   :: nvalids
-    real*8, intent(out)   :: output(nvalids)
+    real(p), intent(out)  :: output(nvalids)
 
     if (count(.not. mask) /= nvalids) then
         write (ERROR_UNIT,'(a)') 'UNPACK_TRANSPOSE: The mask is not compatible with the output size.'
@@ -508,6 +539,7 @@ end subroutine unpack_transpose
 subroutine masking(input, ninputs, mask, nmasks, status)
 
     use iso_fortran_env, only : ERROR_UNIT
+    use module_tamasis,  only : p
     implicit none
 
     !f2py threadsafe
@@ -517,10 +549,10 @@ subroutine masking(input, ninputs, mask, nmasks, status)
     !f2py intent(hide)  :: nmasks=size(mask)
     !f2py intent(out)   :: status
 
-    real*8, intent(inout) :: input(ninputs)
-    logical*1, intent(in) :: mask(nmasks)
-    integer, intent(in)   :: ninputs, nmasks
-    integer, intent(out)  :: status
+    real(p), intent(inout) :: input(ninputs)
+    logical*1, intent(in)  :: mask(nmasks)
+    integer, intent(in)    :: ninputs, nmasks
+    integer, intent(out)   :: status
 
     if (ninputs /= nmasks) then
         write (ERROR_UNIT,'(a,2(i0,a))') "The data array has a size incompatible with the mask ('", ninputs, "' instead of '",     &
@@ -531,7 +563,7 @@ subroutine masking(input, ninputs, mask, nmasks, status)
 
     !$omp parallel workshare
     where (mask)
-        input = 0.d0
+        input = 0
     end where
     !$omp end parallel workshare
 
@@ -545,7 +577,8 @@ end subroutine masking
 
 subroutine mean_degrees(array, n, mean)
 
-    use module_math, only : mean_degrees_ => mean_degrees
+    use module_math,    only : mean_degrees_ => mean_degrees
+    use module_tamasis, only : p
     implicit none
 
     !f2py threadsafe
@@ -553,9 +586,9 @@ subroutine mean_degrees(array, n, mean)
     !f2py intent(hide) :: n = size(array)
     !f2py intent(out)  :: mean
 
-    real*8, intent(in)  :: array(n)
-    integer, intent(in) :: n
-    real*8, intent(out) :: mean
+    real(p), intent(in)  :: array(n)
+    integer, intent(in)  :: n
+    real(p), intent(out) :: mean
 
     mean = mean_degrees_(array)
 

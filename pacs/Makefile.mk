@@ -22,8 +22,9 @@ lib/libtamasispacs.so: lib/libtamasiscore.so $(MODULESOURCES:.f=.o)
 $(EXECSOURCES:.f=) $(TESTSOURCES:.f=):%: lib/libtamasiscore.so lib/libtamasispacs.so %.o
 	$(FC) -o $@ $@.o $(LDFLAGS) -ltamasiscore -ltamasispacs
 
+test-pacs: lib/libtamasis.so
 test-pacs: $(TESTSOURCES:.f=)
-	@for test in $^; do \
+	@for test in $(filter-out %.so,$^); do \
         echo;\
         echo "Running PACS test: "$$test"...";\
         echo "==================";\

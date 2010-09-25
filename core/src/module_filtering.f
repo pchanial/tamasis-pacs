@@ -1,7 +1,7 @@
 module module_filtering
 
-    use iso_fortran_env,  only : ERROR_UNIT
-    use module_precision, only : dp, p
+    use iso_fortran_env, only : ERROR_UNIT
+    use module_tamasis,  only : p
     implicit none
     private
 
@@ -26,7 +26,7 @@ contains
         type(FilterUncorrelated), intent(in) :: filter(:)
         integer, intent(in)                  :: nsamples(:)
         integer, intent(in)                  :: ndetectors
-        real(dp), intent(out)                :: tod(sum(nsamples),ndetectors)
+        real(p), intent(out)                 :: tod(sum(nsamples),ndetectors)
         integer, intent(out)                 :: status
 
         real(p), allocatable :: in(:), out(:)
@@ -101,11 +101,11 @@ contains
 
 
     subroutine fft_tod(plan, data)
-        integer*8, intent(in) :: plan
-        real*8, intent(inout) :: data(:,:)
+        integer*8, intent(in)  :: plan
+        real(p), intent(inout) :: data(:,:)
 
         integer :: idetector, ndetectors
-        real*8  :: out(size(data,1))
+        real(p) :: out(size(data,1))
 
         ndetectors = size(data, 2)
 

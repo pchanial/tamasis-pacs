@@ -11,18 +11,21 @@ INCLUDES += -I$(SDIR)
 
 # define module dependencies
 $(SDIR)/module_cfitsio := $(SDIR)/module_stdio
-$(SDIR)/module_deglitching := $(SDIR)/module_math $(SDIR)/module_pointingmatrix $(SDIR)/module_precision $(SDIR)/module_string
-$(SDIR)/module_filtering := $(SDIR)/module_precision
+$(SDIR)/module_compression := $(SDIR)/module_tamasis
+$(SDIR)/module_deglitching := $(SDIR)/module_math $(SDIR)/module_pointingmatrix $(SDIR)/module_string $(SDIR)/module_tamasis
+$(SDIR)/module_filtering := $(SDIR)/module_tamasis
 $(SDIR)/module_fitstools := $(SDIR)/module_cfitsio $(SDIR)/module_precision $(SDIR)/module_string
-$(SDIR)/module_instrument := $(SDIR)/module_precision $(SDIR)/module_string
-$(SDIR)/module_math := $(SDIR)/module_precision
-$(SDIR)/module_observation := $(SDIR)/module_fitstools $(SDIR)/module_math $(SDIR)/module_precision $(SDIR)/module_string $(SDIR)/module_tamasis
-$(SDIR)/module_optionparser := $(SDIR)/module_string
-$(SDIR)/module_pointingmatrix := $(SDIR)/module_math $(SDIR)/module_precision $(SDIR)/module_projection
-$(SDIR)/module_preprocessor := $(SDIR)/module_math $(SDIR)/module_sort
-$(SDIR)/module_projection := $(SDIR)/module_precision $(SDIR)/module_sort $(SDIR)/module_stack
-$(SDIR)/module_sort := $(SDIR)/module_math
-$(SDIR)/module_wcs := $(SDIR)/module_fitstools $(SDIR)/module_math $(SDIR)/module_string $(SDIR)/module_wcslib
+$(SDIR)/module_instrument := $(SDIR)/module_string $(SDIR)/module_tamasis
+$(SDIR)/module_math := $(SDIR)/module_precision $(SDIR)/module_tamasis
+$(SDIR)/module_observation := $(SDIR)/module_fitstools $(SDIR)/module_math $(SDIR)/module_string $(SDIR)/module_tamasis
+$(SDIR)/module_optionparser := $(SDIR)/module_string $(SDIR)/module_tamasis
+$(SDIR)/module_pointingmatrix := $(SDIR)/module_math $(SDIR)/module_precision $(SDIR)/module_projection $(SDIR)/module_tamasis
+$(SDIR)/module_preprocessor := $(SDIR)/module_math $(SDIR)/module_sort $(SDIR)/module_tamasis
+$(SDIR)/module_projection := $(SDIR)/module_sort $(SDIR)/module_stack $(SDIR)/module_tamasis
+$(SDIR)/module_sort := $(SDIR)/module_math $(SDIR)/module_tamasis
+$(SDIR)/module_string := $(SDIR)/module_tamasis
+$(SDIR)/module_tamasis := $(SDIR)/module_precision
+$(SDIR)/module_wcs := $(SDIR)/module_fitstools $(SDIR)/module_math $(SDIR)/module_string $(SDIR)/module_tamasis $(SDIR)/module_wcslib
 
 .PHONY: core test-core clean-core distclean-core
 core: ranlib lib/libtamasiscore.so
@@ -34,8 +37,9 @@ lib/libtamasiscore.so: $(MODULESOURCES:.f=.o)
 $(TESTSOURCES:.f=):%: lib/libtamasiscore.so %.o
 	$(FC) -o $@ $@.o $(LDFLAGS) -ltamasiscore
 
+test-core: lib/libtamasis.so
 test-core: $(TESTSOURCES:.f=)
-	@for test in $^; do \
+	@for test in $(filter-out %.so,$^); do \
 	echo;\
 	echo "Running CORE test: "$$test"...";\
 	echo "==================";\

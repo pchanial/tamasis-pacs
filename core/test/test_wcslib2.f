@@ -4,6 +4,7 @@ program test_wcslib2
     use module_math,      only : neq_real
     use module_fitstools, only : ft_header2str
     use module_wcslib
+    use module_tamasis,   only : dp
 
     implicit none
 
@@ -15,8 +16,8 @@ program test_wcslib2
     character(len=2)            :: calts(0:26)
     integer                     :: i, status, relax, ctrl, nreject, nwcs, wcsp
 
-    real*8                      :: ad(2*ncoords), xy(2*ncoords), imgcrd(2*ncoords), ra_
-    real*8                      :: phi(ncoords), theta(ncoords)
+    real(dp)                    :: ad(2*ncoords), xy(2*ncoords), imgcrd(2*ncoords), ra_
+    real(dp)                    :: phi(ncoords), theta(ncoords)
 
     call ft_header2str(filename, header, status)
     if (status /= 0) stop 'ft_header2str: FAILED.'
@@ -57,8 +58,8 @@ program test_wcslib2
         stop
     END IF
 
-    ra_ = 300d0
-    ad = [ra_, 50d0, ra_, 60d0, ra_, 62d0]
+    ra_ = 300._dp
+    ad = [ra_, 50._dp, ra_, 60._dp, ra_, 62._dp]
 
     status = wcss2p(wcs, ncoords, 2, ad, phi, theta, imgcrd, xy, statproj)
     if (status /= 0) then
@@ -69,8 +70,8 @@ program test_wcslib2
         end do
     end if
 
-    if (any(neq_real(xy, [-6538.19790689358d0,12196.226642292400d0, -4998.77434749560d0,114.620164770842d0,-4694.59388530175d0,    &
-        -2272.629672963080d0], 1d-12))) then
+    if (any(neq_real(xy, [-6538.19790689358_dp, 12196.226642292400_dp, -4998.77434749560_dp, 114.620164770842_dp,                  &
+         -4694.59388530175_dp, -2272.629672963080_dp], 1.e-12_dp))) then
         stop 'wcss2p: Wrong result.'
     end if
 

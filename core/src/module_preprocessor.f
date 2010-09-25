@@ -1,8 +1,8 @@
 module module_preprocessor
 
-    use module_precision, only : p
-    use module_math, only : median, sum_kahan
-    use module_sort, only : histogram, reorder
+    use module_math,    only : median, sum_kahan
+    use module_sort,    only : histogram, reorder
+    use module_tamasis, only : p
     implicit none
     private
 
@@ -157,7 +157,7 @@ contains
 
         !$omp parallel workshare
         where(mask)
-            data = 0.d0
+            data = 0
         end where
         !$omp end parallel workshare
 

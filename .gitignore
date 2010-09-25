@@ -12,9 +12,9 @@ tamasis
 .cproject
 .project
 .settings/
-pacs_photproject
-tamasis.pyc
+.f2py_f2cmap
 
+pacs_photproject
 test_cfitsio
 test_compression
 test_deglitching

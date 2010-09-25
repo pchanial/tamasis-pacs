@@ -2,13 +2,13 @@ program test_pointingmatrix
 
     use module_math,          only : sum_kahan, neq_real
     use module_pointingmatrix
-    use module_precision,     only : p
+    use module_tamasis,       only : p
     use module_projection,    only : surface_convex_polygon
     implicit none
 
     integer, parameter :: nvertices = 4
-    real(p), allocatable, dimension(:)  :: x_vect, y_vect
-    real(p), allocatable, dimension(:,:):: xy
+    real(p), allocatable, dimension(:)   :: x_vect, y_vect
+    real(p), allocatable, dimension(:,:) :: xy
     integer, allocatable :: roi(:,:,:)
     integer i
     integer :: npixels_per_sample, ntimes, ndetectors, nroi, nx, ny, itime
@@ -44,7 +44,8 @@ program test_pointingmatrix
         stop 'FAILED: roi2pmatrix1'
     end if
 
-    if (neq_real(sum_kahan(real(pmatrix%weight,kind=p)), surface_convex_polygon(xy(:,1:4))*ndetectors*ntimes, 1d-8)) then
+    if (neq_real(sum_kahan(real(pmatrix%weight,kind=p)), surface_convex_polygon(real(xy(:,1:4), p)) * ndetectors * ntimes,         &
+        10._p * epsilon(1.0))) then
         stop 'FAILED: roi2pmatrix2'
     end if
 

@@ -1,6 +1,7 @@
 program test_fitstools
 
     use module_fitstools
+    use module_tamasis, only : p
     implicit none
 
     character(len=*), parameter :: filename_header = 'core/test/data/header.fits'
@@ -8,12 +9,12 @@ program test_fitstools
     integer                     :: status, unit
     character(len=2880*2)       :: header
     character(len=160)          :: header_too_small
-    real*8                      :: image(10,15)
-    real*8, allocatable         :: image_(:,:)
+    real(p)                     :: image(10,15)
+    real(p), allocatable        :: image_(:,:)
     logical                     :: bvalue
     integer*4                   :: ivalue
     integer*8                   :: lvalue
-    real*8                      :: dvalue
+    real(p)                     :: dvalue
     character(len=70)           :: cvalue
     logical                     :: found
 
@@ -64,10 +65,10 @@ program test_fitstools
     if (status /= 0 .or. lvalue /= 487) stop 'FAILED: naxis2'
 
     call ft_read_keyword(header, 'cdelt1', dvalue, found, status)
-    if (status /= 0 .or. dvalue /= -0.00083333333333333d0) stop 'FAILED: cdelt1'
+    if (status /= 0 .or. dvalue /= -0.00083333333333333_p) stop 'FAILED: cdelt1'
 
     call ft_read_keyword(header, 'cdelt2', dvalue, found, status)
-    if (status /= 0 .or. dvalue /= 0.00083333333333333d0) stop 'FAILED: cdelt2'
+    if (status /= 0 .or. dvalue /= 0.00083333333333333_p) stop 'FAILED: cdelt2'
 
     call ft_read_keyword(header, 'crota2', dvalue, found, status)
     if (status /= 0 .or. dvalue /= 0) stop 'FAILED.'
@@ -79,10 +80,10 @@ program test_fitstools
     if (status /= 0 .or. dvalue /= 1) stop 'FAILED.'
 
     call ft_read_keyword(header, 'crval1', dvalue, found, status)
-    if (status /= 0 .or. dvalue /= 308.3404249521426d0) stop 'FAILED: crval1'
+    if (status /= 0 .or. dvalue /= 308.3404249521426_p) stop 'FAILED: crval1'
 
     call ft_read_keyword(header, 'crval2', dvalue, found, status)
-    if (status /= 0 .or. dvalue /= 60.357773247484651d0) stop 'FAILED: crval2'
+    if (status /= 0 .or. dvalue /= 60.357773247484651_p) stop 'FAILED: crval2'
 
     call ft_read_keyword(header, 'ctype1', cvalue, found, status)
     if (status /= 0 .or. cvalue /= 'RA---TAN') stop 'FAILED: ctype1'
@@ -199,10 +200,10 @@ program test_fitstools
     if (status /= 0 .or. lvalue /= 487) stop 'FAILED: unit,naxis2'
 
     call ft_read_keyword(unit, 'cdelt1', dvalue, found, status)
-    if (status /= 0 .or. dvalue /= -0.00083333333333333d0) stop 'FAILED: unit,cdelt1'
+    if (status /= 0 .or. dvalue /= -0.00083333333333333_p) stop 'FAILED: unit,cdelt1'
 
     call ft_read_keyword(unit, 'cdelt2', dvalue, found, status)
-    if (status /= 0 .or. dvalue /= 0.00083333333333333d0) stop 'FAILED: unit,cdelt2'
+    if (status /= 0 .or. dvalue /= 0.00083333333333333_p) stop 'FAILED: unit,cdelt2'
 
     call ft_read_keyword(unit, 'crota2', dvalue, found, status)
     if (status /= 0 .or. dvalue /= 0) stop 'FAILED.'
@@ -214,10 +215,10 @@ program test_fitstools
     if (status /= 0 .or. dvalue /= 1) stop 'FAILED.'
 
     call ft_read_keyword(unit, 'crval1', dvalue, found, status)
-    if (status /= 0 .or. dvalue /= 308.3404249521426d0) stop 'FAILED: unit,crval1'
+    if (status /= 0 .or. dvalue /= 308.3404249521426_p) stop 'FAILED: unit,crval1'
 
     call ft_read_keyword(unit, 'crval2', dvalue, found, status)
-    if (status /= 0 .or. dvalue /= 60.357773247484651d0) stop 'FAILED: unit,crval2'
+    if (status /= 0 .or. dvalue /= 60.357773247484651_p) stop 'FAILED: unit,crval2'
 
     call ft_read_keyword(unit, 'ctype1', cvalue, found, status)
     if (status /= 0 .or. cvalue /= 'RA---TAN') stop 'FAILED: unit,ctype1'

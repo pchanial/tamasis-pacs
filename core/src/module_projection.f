@@ -1,8 +1,8 @@
 module module_projection
 
-    use module_precision, only : p
-    use module_sort,      only : qsortgi
-    use module_stack,     only : stack_int
+    use module_sort,    only : qsortgi
+    use module_stack,   only : stack_int
+    use module_tamasis, only : p
     implicit none
     private
 
@@ -15,8 +15,8 @@ module module_projection
     public :: set_pivot
     public :: qsorti_point
 
-    real*8, private          :: pivot_(2)
-    real*8, pointer, private :: array_point(:,:)
+    real(p), private          :: pivot_(2)
+    real(p), pointer, private :: array_point(:,:)
     !$omp threadprivate(pivot_, array_point)
 
 contains
@@ -24,11 +24,11 @@ contains
 
     pure function intersection_polygon_unity_square(xy, nvertices) result(output)
 
-        real(kind=p)             :: output
-        real(kind=p), intent(in) :: xy(2,nvertices)
-        integer, intent(in)      :: nvertices
+        real(p)             :: output
+        real(p), intent(in) :: xy(2,nvertices)
+        integer, intent(in) :: nvertices
 
-        integer                  :: i, j
+        integer             :: i, j
 
         output = 0
         j = nvertices
@@ -45,25 +45,25 @@ contains
 
     pure function intersection_segment_unity_square(x1,  y1, x2,  y2) result(output)
 
-        real*8             :: output
-        real*8, intent(in) :: x1, y1, x2, y2 ! first and second point coordinates
+        real(p)             :: output
+        real(p), intent(in) :: x1, y1, x2, y2 ! first and second point coordinates
 
         ! we will use the following variables :
 
-        real*8 :: pente               ! The slope of the straight line going through p1, p2
-        real*8 :: ordonnee            ! The point where the straight line crosses y-axis
-        real*8 :: delta_x             ! = x2-x1
-        real*8 :: xmin, xmax          ! minimum and maximum values of x to consider
-                                      ! (clipped in the square (0,0),(1,0),(1,1),(0,1)
-        real*8 :: ymin, ymax          ! minimum and maximum values of y to consider
-                                      ! (clipped in the square (0,0),(1,0),(1,1),(0,1)
-        real*8 :: xhaut               ! value of x at which straight line crosses the
-                                      ! (0,1),(1,1) line
-        logical :: negative_delta_x   ! TRUE if delta_x < 0
+        real(p) :: pente               ! The slope of the straight line going through p1, p2
+        real(p) :: ordonnee            ! The point where the straight line crosses y-axis
+        real(p) :: delta_x             ! = x2-x1
+        real(p) :: xmin, xmax          ! minimum and maximum values of x to consider
+                                       ! (clipped in the square (0,0),(1,0),(1,1),(0,1)
+        real(p) :: ymin, ymax          ! minimum and maximum values of y to consider
+                                       ! (clipped in the square (0,0),(1,0),(1,1),(0,1)
+        real(p) :: xhaut               ! value of x at which straight line crosses the
+                                       ! (0,1),(1,1) line
+        logical :: negative_delta_x    ! TRUE if delta_x < 0
 
         ! Check for vertical line : the area intercepted is 0
         if (x1 == x2) then
-            output = 0.d0
+            output = 0
             return
         end if
 
@@ -78,45 +78,45 @@ contains
 
         ! And determine the bounds ignoring y for now
         ! test is p1 and p2 are outside the square along x-axis
-        if (xmin > 1.d0 .or. xmax < 0.d0) then
-            output = 0.0d0
+        if (xmin > 1 .or. xmax < 0) then
+            output = 0
             return    ! outside, the area is 0
         end if
 
         ! We compute xmin, xmax, clipped between 0 and 1 in x
         ! then we compute pente (slope) and ordonnee and use it to get ymin
         ! and ymax
-        xmin = max(xmin, 0.0d0)
-        xmax = min(xmax, 1.0d0)
+        xmin = max(xmin, 0._p)
+        xmax = min(xmax, 1._p)
 
         delta_x = x2 - x1
-        negative_delta_x = delta_x < 0.0d0
+        negative_delta_x = delta_x < 0
         pente = (y2 - y1) / delta_x
         ordonnee  = y1 - pente * x1
         ymin = pente * xmin + ordonnee
         ymax = pente * xmax + ordonnee
 
         ! Trap segment entirely below axis
-        if (ymin < 0.0d0 .and. ymax < 0.0d0) then
-            output = 0.0d0
+        if (ymin < 0 .and. ymax < 0) then
+            output = 0
             return  ! if segment below axis, intercepted surface is 0
         end if
 
         ! Adjust bounds if segment crosses axis x-axis
         !(to exclude anything below axis)
-        if (ymin < 0.0d0) then
-            ymin = 0.0d0
+        if (ymin < 0) then
+            ymin = 0
             xmin = - ordonnee / pente
         end if
-        if (ymax < 0.0d0) then
-            ymax = 0.0d0
+        if (ymax < 0) then
+            ymax = 0
             xmax = - ordonnee / pente
         end if
 
         ! There are four possibilities: both y below 1, both y above 1
         ! and one of each.
 
-        if (ymin >= 1.d0 .and. ymax >= 1.d0) then
+        if (ymin >= 1 .and. ymax >= 1) then
 
             ! Line segment is entirely above square : we clip with the square
             if (negative_delta_x) then
@@ -128,31 +128,31 @@ contains
 
         end if
 
-        if (ymin <= 1.d0 .and. ymax <= 1.d0) then
+        if (ymin <= 1 .and. ymax <= 1) then
           ! Segment is entirely within square
           if (negative_delta_x) then
-             output = 0.5d0 * (xmin-xmax) * (ymax+ymin)
+             output = 0.5_p * (xmin-xmax) * (ymax+ymin)
           else
-             output = 0.5d0 * (xmax-xmin) * (ymax+ymin)
+             output = 0.5_p * (xmax-xmin) * (ymax+ymin)
           end if
           return
         end if
 
         ! otherwise it must cross the top of the square
         ! the crossing occurs at xhaut
-        xhaut = (1.d0 - ordonnee) / pente
+        xhaut = (1 - ordonnee) / pente
         !!if ((xhaut < xmin) .or. (xhaut > xmax))   cout << " BUGGGG "
-        if (ymin < 1.d0) then
+        if (ymin < 1) then
             if (negative_delta_x) then
-                output = -(0.5d0 * (xhaut-xmin) * (1.d0+ymin) + xmax - xhaut)
+                output = -(0.5_p * (xhaut-xmin) * (1+ymin) + xmax - xhaut)
             else
-                output = 0.5d0 * (xhaut-xmin) * (1.d0+ymin) + xmax - xhaut
+                output = 0.5_p * (xhaut-xmin) * (1+ymin) + xmax - xhaut
             end if
         else
             if (negative_delta_x) then
-                output = -(0.5d0 * (xmax-xhaut) * (1.d0+ymax) + xhaut-xmin)
+                output = -(0.5_p * (xmax-xhaut) * (1+ymax) + xhaut-xmin)
             else
-                output = 0.5d0 * (xmax-xhaut) * (1.d0+ymax) + xhaut-xmin
+                output = 0.5_p * (xmax-xhaut) * (1+ymax) + xhaut-xmin
             end if
         end if
 
@@ -167,8 +167,8 @@ contains
     ! positive if a, b, c are counter-clockwise, negative otherwise
     pure function point_on_or_left(a, b, c)
 
-        real*8, intent(in) :: a(2), b(2), c(2)
-        logical            :: point_on_or_left
+        real(p), intent(in) :: a(2), b(2), c(2)
+        logical             :: point_on_or_left
 
         point_on_or_left = surface_parallelogram(a, b, c) >= 0
 
@@ -183,8 +183,8 @@ contains
     ! positive if a, b, c are counter-clockwise, negative otherwise
     pure function surface_parallelogram(a, b, c)
 
-        real*8             :: surface_parallelogram
-        real*8, intent(in) :: a(2), b(2), c(2)
+        real(p)             :: surface_parallelogram
+        real(p), intent(in) :: a(2), b(2), c(2)
 
         surface_parallelogram = (b(1) - a(1)) * (c(2) - a(2)) - (c(1) - a(1)) * (b(2) - a(2))
 
@@ -196,10 +196,10 @@ contains
 
     pure function surface_convex_polygon(xy) result(output)
 
-        real*8, intent(in) :: xy(:,:)
-        real*8             :: output
+        real(p), intent(in) :: xy(:,:)
+        real(p)             :: output
 
-        integer            :: i, j
+        integer             :: i, j
 
         output = 0
         j = size(xy,2)
@@ -207,7 +207,7 @@ contains
             output = output + xy(1,j)*xy(2,i) - xy(2,j)*xy(1,i)
             j = i
         end do
-        output = 0.5d0 * output
+        output = 0.5_p * output
 
     end function surface_convex_polygon
 
@@ -218,8 +218,8 @@ contains
     ! quick sort for points, using 1) angles 2) length (see function compare below)
     subroutine qsorti_point(array, index)
 
-        real*8, intent(in), target :: array(:,:)
-        integer, intent(out) :: index(size(array,2))
+        real(p), intent(in), target :: array(:,:)
+        integer, intent(out)        :: index(size(array,2))
 
         array_point => array
         call qsortgi(size(array_point,2), compare_point, index)
@@ -239,7 +239,7 @@ contains
         integer, intent(in) :: point1, point2
         integer             :: compare_point
 
-        real*8              :: area, length
+        real(p)             :: area, length
 
         area = surface_parallelogram(pivot_, array_point(:,point1), array_point(:,point2))
         if (area > 0) then
@@ -271,7 +271,7 @@ contains
     ! set pivot in a global variable accessible from compare_point
     subroutine set_pivot(pivot)
 
-        real*8, intent(in) :: pivot(2)
+        real(p), intent(in) :: pivot(2)
 
         pivot_ = pivot
 
@@ -284,10 +284,10 @@ contains
     ! find the rightmost among the bottommost vertices
     function find_pivot(points)
 
-        real*8, intent(in) :: points(:,:)
-        integer            :: find_pivot
+        real(p), intent(in) :: points(:,:)
+        integer             :: find_pivot
 
-        integer            :: imin(1)
+        integer             :: imin(1)
 
         imin = minloc(points(1,:), points(2,:) == minval(points(2,:)))
         find_pivot = imin(1)
@@ -303,11 +303,12 @@ contains
     ! modified to cope with the cases in which the point lies on an edge
     function point_in_polygon(point, polygon)
 
-        real*8, intent(in) :: point(2), polygon(:,:)
-        integer            :: point_in_polygon
+        real(p), intent(in) :: point(2), polygon(:,:)
+        integer             :: point_in_polygon
 
         integer :: i, j, n
-        real*8  :: a, b
+        real(p) :: a, b
+
         point_in_polygon = -1
         n = size(polygon, 2)
 
@@ -351,7 +352,7 @@ contains
     ! Graham scan implementation
     subroutine convex_hull(points, index)
 
-        real*8, intent(in)                :: points(:,:)
+        real(p), intent(in)               :: points(:,:)
         integer, intent(out), allocatable :: index(:)
 
         integer                           :: i, n, ipivot, junk

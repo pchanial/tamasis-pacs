@@ -3,7 +3,7 @@
 
 # set up default compiler
 ifeq "$(origin FC)" "default"
-    ifneq ($(shell which ifort),)
+    ifneq (,$(shell which ifort))
         FC=ifort
     else ifneq ($(shell which gfortran),)
         FC=gfortran
@@ -16,7 +16,7 @@ ifeq "$(FC)" "gfortran"
 else ifeq ($(FC),ifort)
     include Makefile-ifort.mk
 else
-    $(error Unsupported compiler '$(FC)'.)
+    $(error Unsupported compiler '$(FC)')
 endif
 
 # add libraries built by this Makefile
@@ -30,6 +30,17 @@ ifeq ($(DEBUG),1)
     FFLAGS = $(FFLAGS_DEBUG) -DDEBUG
 else
     FFLAGS = $(FFLAGS_RELEASE)
+endif
+
+# set up precision
+ifeq (,$(PRECISION_REAL))
+    PRECISION_REAL = 8
+else ifeq (,$(filter 4 8 16,$(PRECISION_REAL)))
+    $(error Valid PRECISION_REAL values are '4', '8' or '16')
+endif
+FFLAGS += -DPRECISION_REAL=$(PRECISION_REAL)
+ifeq ($(SUPPORT_QUAD)$(PRECISION_REAL),16)
+    $(error Quadruple precision is not supported by $(FC) version $(FCVERSION))
 endif
 
 # apply a function to each element of a list
@@ -68,8 +79,11 @@ $(MODULES:.f=.o) $(EXECS:.f=.o):%.o: %.f $$(addsuffix .mod,$$(sort $$(call map,f
 
 # tamasisfortran.so should depend on libtamasis.so, but an address mapping problem occurs with the threadprivate variables in module_projection.f
 tamasis/tamasisfortran.so: $(join $(DIRS),$(patsubst %,/src/tamasisfortran_%.f90,$(DIRS))) $(MODULES:.f=.o)
-	@if ! test -e tamasis; then mkdir tamasis; fi
-	unset LDFLAGS ; \
+	@if ! test -e tamasis; then mkdir tamasis; fi;\
+	if test ${PRECISION_REAL} = 4; then echo {\'real\':{\'p\':\'float\'}} > .f2py_f2cmap; fi;\
+	if test ${PRECISION_REAL} = 8; then echo {\'real\':{\'p\':\'double\'}} > .f2py_f2cmap; fi;\
+	if test ${PRECISION_REAL} = 16; then echo {\'real\':{\'p\':\'long_double\'}} > .f2py_f2cmap; fi;\
+	unset LDFLAGS
 	f2py --fcompiler=${FCOMPILER} --f90exec=$(FC) --f90flags="$(FFLAGS)" -DF2PY_REPORT_ON_ARRAY_COPY=1 -c $^ -m tamasisfortran $(INCLUDES) $(LDFLAGS); \
 	mv -f tamasisfortran.so tamasis/
 
@@ -94,9 +108,10 @@ test-python: tamasis/tamasisfortran.so
 
 # clean targets
 clean: $(patsubst %,clean-%,$(DIRS))
+	@rm -f .f2py_f2cmap
 
 distclean: $(patsubst %,distclean-%,$(DIRS))
-	@rm -rf lib tamasis
+	@rm -rf .f2py_f2cmap lib tamasis
 
 # return number of lines of code
 loc:

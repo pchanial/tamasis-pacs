@@ -2,7 +2,8 @@ module module_pointingmatrix
 
     use module_math,       only : NaN, nint_down, nint_up
     use module_projection, only : intersection_polygon_unity_square
-    use module_precision,  only : p, sp
+    use module_precision,  only : sp
+    use module_tamasis,    only : p
     implicit none
     private
 
@@ -17,7 +18,7 @@ module module_pointingmatrix
     public :: backprojection_weighted_roi
 
     type pointingelement
-        real*4    :: weight
+        real(sp)  :: weight
         integer*4 :: pixel
     end type pointingelement
 
@@ -27,8 +28,8 @@ contains
     subroutine pmatrix_direct(pmatrix, map, timeline)
 
         type(pointingelement), intent(in) :: pmatrix(:,:,:)
-        real(kind=p), intent(in)          :: map(0:)
-        real(kind=p), intent(inout)       :: timeline(:,:)
+        real(p), intent(in)               :: map(0:)
+        real(p), intent(inout)            :: timeline(:,:)
         integer                           :: ipixel, isample, idetector, npixels_per_sample, nsamples, ndetectors
 
         npixels_per_sample = size(pmatrix,1)
@@ -39,7 +40,7 @@ contains
         do idetector = 1, ndetectors
             do isample = 1, nsamples
 !!$                timeline(isample,idetector) = sum(map(pmatrix(:,isample,idetector)%pixel) * pmatrix(:,isample,idetector)%weight)
-                timeline(isample,idetector) = 0._p
+                timeline(isample,idetector) = 0
                 do ipixel = 1, npixels_per_sample
                     if (pmatrix(ipixel,isample,idetector)%pixel == -1) exit
                     timeline(isample,idetector) = timeline(isample,idetector) + map(pmatrix(ipixel,isample,idetector)%pixel) *     &
@@ -139,8 +140,8 @@ contains
         ndetectors = size(pmatrix, 3)
         domask     = present(mask)
 
-        map    = 0.d0
-        weight = 0.d0
+        map    = 0
+        weight = 0
         !$omp parallel do default(shared) reduction(+:map,weight) &
         !$omp private(idetector,isample,ipixel,imap)
         do idetector = 1, ndetectors
@@ -163,7 +164,7 @@ contains
         if (present(threshold)) then
             threshold_ = threshold
         else
-            threshold_ = 0.d0
+            threshold_ = 0
         endif
 
         where (weight <= threshold_)
@@ -178,16 +179,18 @@ contains
 
     ! backproject a frame into a minimap
     subroutine backprojection_weighted_roi(pmatrix, nx, timeline, mask, itime, map, roi)
+
         type(pointingelement), intent(in) :: pmatrix(:,:,:)
         integer, intent(in)               :: nx
-        real(kind=p), intent(in)          :: timeline(:,:)
+        real(p), intent(in)               :: timeline(:,:)
         logical(kind=1), intent(in)       :: mask(:,:)
         integer, intent(in)               :: itime
-        real(kind=p), intent(out)         :: map(0:)
+        real(p), intent(out)              :: map(0:)
         integer, intent(out)              :: roi(2,2)
-        real(kind=sp)                     :: weight(0:ubound(map,1))
-        integer :: nxmap, xmap, ymap, imap
-        integer :: ndetectors, npixels_per_sample, idetector, ipixel
+
+        real(sp) :: weight(0:ubound(map,1))
+        integer  :: nxmap, xmap, ymap, imap
+        integer  :: ndetectors, npixels_per_sample, idetector, ipixel
 
         npixels_per_sample = size(pmatrix,1)
         ndetectors = size(pmatrix,3)
@@ -233,9 +236,11 @@ contains
 
     ! roi is a 3-dimensional array: [1=x|2=y,1=min|2=max,idetector]
     function xy2roi(xy, nvertices) result(roi)
-        real*8, intent(in)  :: xy(:,:)
+
+        real(p), intent(in) :: xy(:,:)
         integer, intent(in) :: nvertices
-        real*8              :: roi(size(xy,1),2,size(xy,2)/nvertices)
+
+        integer             :: roi(size(xy,1),2,size(xy,2)/nvertices)
         integer             :: idetector
 
         do idetector = 1, size(xy,2) / nvertices
@@ -253,7 +258,7 @@ contains
 
     subroutine xy2pmatrix(x, y, nx, ny, out, pmatrix)
 
-        real*8, intent(in)                 :: x(:), y(:)
+        real(p), intent(in)                :: x(:), y(:)
         integer, intent(in)                :: nx, ny
         logical, intent(inout)             :: out
         type(pointingelement), intent(out) :: pmatrix(:)
@@ -286,15 +291,15 @@ contains
 
         integer, intent(in)                :: roi(:,:,:)
         integer, intent(in)                :: nvertices
-        real*8, intent(in)                 :: coords(:,:)
+        real(p), intent(in)                :: coords(:,:)
         integer, intent(in)                :: nx, ny
         integer, intent(inout)             :: nroi
         logical, intent(inout)             :: out
         type(pointingelement), intent(out) :: pmatrix(:,:)
 
-        real*8  :: polygon(size(roi,1),nvertices)
-        integer :: npixels_per_sample, idetector, ix, iy, iroi
-        real*4  :: weight
+        real(p)  :: polygon(size(roi,1),nvertices)
+        integer  :: npixels_per_sample, idetector, ix, iy, iroi
+        real(sp) :: weight
 
         npixels_per_sample = size(pmatrix, 1)
         do idetector = 1, size(pmatrix, 2)
@@ -308,8 +313,8 @@ contains
 
                 do ix = max(roi(1,1,idetector),1), min(roi(1,2,idetector),nx)
 
-                    polygon(1,:) = coords(1,(idetector-1)*nvertices+1:idetector*nvertices) - (ix-0.5d0)
-                    polygon(2,:) = coords(2,(idetector-1)*nvertices+1:idetector*nvertices) - (iy-0.5d0)
+                    polygon(1,:) = coords(1,(idetector-1)*nvertices+1:idetector*nvertices) - (ix-0.5_p)
+                    polygon(2,:) = coords(2,(idetector-1)*nvertices+1:idetector*nvertices) - (iy-0.5_p)
                     weight = abs(intersection_polygon_unity_square(polygon, nvertices))
                     if (weight <= 0) cycle
                     if (iroi <= npixels_per_sample) then

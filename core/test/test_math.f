@@ -1,17 +1,17 @@
 program test_math
 
-    use module_math,      only : NaN, linspace, logspace, median, moment, nint_down, nint_up, neq_real, sigma_clipping
-    use module_precision, only : p
+    use module_math,    only : NaN, linspace, logspace, median, moment, nint_down, nint_up, neq_real, sigma_clipping
+    use module_tamasis, only : p
     implicit none
 
-    real(kind=p), parameter :: sample(5) = [0.204803265708662_p, 0.911376768702354_p,0.892714242396155_p,0.848272032735291_p,      &
-                                            0.232127193083888_p]
-    real(kind=p), parameter :: mresults(6) = [0.617858700525270_p, 0.133548079242052_p,-0.285146600004998_p,-2.246479349723560_p,  &
-                                              0.365442306311204_p,0.319514776903196_p]
-    real(kind=p) :: mean, variance, skewness, kurtosis, stddev, meandev
-    real(kind=p), allocatable :: x(:)
-    logical, allocatable      :: mask(:)
-    integer                   :: i
+    real(p), parameter :: sample(5) = [0.204803265708662_p, 0.911376768702354_p,0.892714242396155_p,0.848272032735291_p,           &
+                                       0.232127193083888_p]
+    real(p), parameter :: mresults(6) = [0.617858700525270_p, 0.133548079242052_p,-0.285146600004998_p,-2.246479349723560_p,       &
+                                         0.365442306311204_p,0.319514776903196_p]
+    real(p)              :: mean, variance, skewness, kurtosis, stddev, meandev
+    real(p), allocatable :: x(:)
+    logical, allocatable :: mask(:)
+    integer              :: i
 
     call moment(sample, mean, variance, skewness, kurtosis, stddev=stddev, meandev=meandev)
 
@@ -49,7 +49,7 @@ program test_math
     end if
 
     x = logspace(1._p, 2._p, 3)
-    if (any(neq_real(x, [1._p, 1.41421356237309_p, 2._p]))) then
+    if (any(neq_real(x, [1._p, sqrt(2._p), 2._p]))) then
         stop 'FAILED: logspace'
     end if
     deallocate(x)

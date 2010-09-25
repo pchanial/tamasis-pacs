@@ -16,7 +16,7 @@ import scipy.sparse.linalg
 import tamasisfortran as tmf
 import utils
 
-from config import __verbose__
+from config import __verbose__, get_default_dtype, get_default_dtype_float, get_default_dtype_complex
 from datatypes import Map, Tod, combine_sliced_shape, distance, flatten_sliced_shape, validate_sliced_shape
 from processing import interpolate_linear
 
@@ -45,6 +45,7 @@ class AcquisitionModel(object):
     they return M.x (submodels are applied in right-to-left order) and transpose(M).y.
     Author: P. Chanial
     """
+
     def __init__(self, description=None):
         if description is None:
             description = self.__class__.__name__
@@ -60,7 +61,7 @@ class AcquisitionModel(object):
         self._dtype = None
         # Acquisition model components
         self.blocks = []
-
+    
     def __call__(self, data, reusein=False, reuseout=False):
         return self.direct(data, reusein=reusein, reuseout=reuseout)
 
@@ -99,9 +100,9 @@ class AcquisitionModel(object):
         if self._dtype is not None:
             return self._dtype
         for block in self.blocks:
-            if block.dtype == numpy.dtype('complex128'):
+            if block.dtype in (numpy.complex64, numpy.complex128, numpy.complex256):
                 return block.dtype
-        return numpy.dtype('float64')
+        return get_default_dtype_float()
 
     def aslinearoperator(self, shape=None, packing=None, unpacking=None):
         """Returns the AcquisitionModel as a LinearOperator"""
@@ -230,9 +231,9 @@ class AcquisitionModel(object):
         if self._output_direct is None or shapeout_flat != self._output_direct.shape:
             if __verbose__: print 'Info: Allocating '+str(numpy.product(shapeout_flat)/2.**17)+' MiB for the output of '+self.__class__.__name__+'.'
             if cls == numpy.ndarray:
-                self._output_direct = numpy.empty(shapeout, dtype=numpy.float64, **options)
+                self._output_direct = numpy.empty(shapeout, dtype=self.dtype, **options)
             else:
-                self._output_direct = cls.empty(shapeout_flat, dtype=numpy.float64, **options)
+                self._output_direct = cls.empty(shapeout_flat, dtype=self.dtype, **options)
         output = self._output_direct
         if not reuseout:
             self._output_direct = None
@@ -249,9 +250,9 @@ class AcquisitionModel(object):
         if self._output_transpose is None or shapein_flat != self._output_transpose.shape:
             if __verbose__: print 'Info: Allocating '+str(numpy.product(shapein_flat)/2.**17)+' MiB for the output of '+self.__class__.__name__+'.T.'
             if cls == numpy.ndarray:
-                self._output_transpose = numpy.empty(shapein, dtype=numpy.float64, **options)
+                self._output_transpose = numpy.empty(shapein, dtype=self.dtype, **options)
             else:
-                self._output_transpose = cls.empty(shapein_flat, dtype=numpy.float64, **options)
+                self._output_transpose = cls.empty(shapein_flat, dtype=self.dtype, **options)
         output = self._output_transpose
         if not reuseout:
             self._output_transpose = None
@@ -302,23 +303,15 @@ class AcquisitionModel(object):
     def __neg__(self):
         return Scalar(-1.) * self
 
-    def __getitem__(self, index):
-        if len(self) == 0:
-            raise IndexError('This acquisition model has no component.')
-        return self.blocks[index]
-
     def __iter__(self):
-        if len(self) == 0:
+        if len(self.blocks) == 0:
             return iter((self,))
         return self.blocks.__iter__()
 
     def __reversed__(self):
-        if len(self) == 0:
+        if len(self.blocks) == 0:
             return iter((self,))
         return self.blocks.__reversed__()
-
-    def __len__(self):
-        return self.blocks.__len__()
 
     def __str__(self):
         result = self.description
@@ -449,7 +442,7 @@ class Addition(AcquisitionModel):
         if not reuseout:
             self._output_direct = None
         for i, model in enumerate(self.blocks[1:]):
-            reusein_ = reusein and i == len(self)-1
+            reusein_ = reusein and i == len(self.blocks)-1
             output += model(data, reusein=reusein_, reuseout=True)
         return output
 
@@ -460,7 +453,7 @@ class Addition(AcquisitionModel):
         if not reuseout:
             self._output_transpose = None
         for i, model in enumerate(self.blocks[1:]):
-            reusein_ = reusein and i == len(self)-1
+            reusein_ = reusein and i == len(self.blocks)-1
             output += self.blocks[i].transpose(data, reusein=reusein_, reuseout=True)
         return output
 
@@ -541,14 +534,14 @@ class Composition(AcquisitionModel):
     def direct(self, data, reusein=False, reuseout=False):
         for i, model in enumerate(self):
             reusein_  = reusein  or i != 0
-            reuseout_ = reuseout or i != len(self)-1
+            reuseout_ = reuseout or i != len(self.blocks)-1
             data = model.direct(data, reusein=reusein_, reuseout=reuseout_)
         return data
 
     def transpose(self, data, reusein=False, reuseout=False):
         for i, model in enumerate(reversed(self)):
             reusein_  = reusein  or i != 0
-            reuseout_ = reuseout or i != len(self)-1
+            reuseout_ = reuseout or i != len(self.blocks)-1
             data = model.transpose(data, reusein=reusein_, reuseout=reuseout_)
         return data
 
@@ -636,9 +629,7 @@ class Diagonal(Symmetric):
     """Diagonal operator"""
     def __init__(self, diagonal, nsamples=None, description=None):
         AcquisitionModel.__init__(self, description)
-        self.diagonal = numpy.asarray(diagonal)
-        if self.diagonal.dtype.name not in ('float64', 'complex128'):
-            self.diagonal = numpy.asarray(self.diagonal, dtype='float64')
+        self.diagonal = numpy.asarray(diagonal, dtype=get_default_dtype(diagonal))
         if not utils._my_isscalar(self.diagonal):
             self.shapein = validate_sliced_shape(self.diagonal.shape, nsamples)
 
@@ -650,7 +641,7 @@ class Diagonal(Symmetric):
 
     @property
     def dtype(self):
-        return self.diagonal.dtype
+        return self.diagonal.dtype.type
 
 
 #-------------------------------------------------------------------------------
@@ -860,7 +851,7 @@ class Scalar(Diagonal):
     """
     def __init__(self, value, description=None):
         if not numpy.iscomplex(value):
-            value = float(numpy.real(value))
+            value = numpy.real(value)
         Diagonal.__init__(self, value, description)
        
     def __str__(self):
@@ -916,9 +907,9 @@ class Masking(Symmetric):
 
     @property
     def dtype(self):
-        if self.mask.dtype is numpy.dtype('complex128'):
-            return self.mask.dtype
-        return numpy.dtype('float64')
+        if self.mask.dtype.type in (numpy.complex64, numpy.complex128, numpy.complex256):
+            return self.mask.dtype.type
+        return get_default_dtype_float()
 
 
 #-------------------------------------------------------------------------------
@@ -1117,11 +1108,11 @@ class Fft(AcquisitionModel):
         self._shapeout = shape
         self.n = numpy.product(shape)
         self.axes = axes
-        self._in  = numpy.zeros(shape, dtype=complex)
-        self._out = numpy.zeros(shape, dtype=complex)
+        self._in  = numpy.zeros(shape, dtype=get_default_dtype_complex())
+        self._out = numpy.zeros(shape, dtype=get_default_dtype_complex())
         self.forward_plan = fftw3.Plan(self._in, self._out, direction='forward', flags=flags, nthreads=nthreads)
         self.backward_plan = fftw3.Plan(self._in, self._out, direction='backward', flags=flags, nthreads=nthreads)
-        self._dtype = numpy.dtype('complex128')
+        self._dtype = get_default_dtype_complex()
 
     def direct(self, array, reusein=False, reuseout=False):
         self._in[:] = array
@@ -1148,8 +1139,8 @@ class FftHalfComplex(AcquisitionModel):
         self.backward_plan = numpy.empty(self.nsamples.size, dtype='int64')
         nsamples_max = numpy.max(self.nsamples)
         for i, n in enumerate(self.nsamples):
-            tarray = numpy.empty(n, dtype='float64')
-            farray = numpy.empty(n, dtype='float64')
+            tarray = numpy.empty(n, dtype=get_default_dtype_float())
+            farray = numpy.empty(n, dtype=get_default_dtype_float())
             self.forward_plan[i] = fftw3.Plan(tarray, farray, direction='forward', flags=['measure'], realtypes=['halfcomplex r2c'], nthreads=1)._get_parameter()
             self.backward_plan[i] = fftw3.Plan(farray, tarray, direction='backward', flags=['measure'], realtypes=['halfcomplex c2r'], nthreads=1)._get_parameter()
 
@@ -1230,7 +1221,7 @@ class AllReduce(Square):
 #-------------------------------------------------------------------------------
 
 
-def aperture_circular(shape, diameter, origin=None, resolution=1., dtype='float64'):
+def aperture_circular(shape, diameter, origin=None, resolution=1., dtype=None):
     array = distance(shape, origin=origin, resolution=resolution, dtype=dtype)
     m = array > diameter / 2.
     array[ m] = 0
@@ -1242,7 +1233,7 @@ def aperture_circular(shape, diameter, origin=None, resolution=1., dtype='float6
 
 
 def phasemask_fourquadrant(shape, phase=-1):
-    array = Map.ones(shape, dtype=complex)
+    array = Map.ones(shape, dtype=get_default_dtype_complex())
     array[0:shape[0]//2,shape[1]//2:] = phase
     array[shape[0]//2:,0:shape[1]//2] = phase
     return array

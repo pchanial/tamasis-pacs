@@ -4,7 +4,7 @@ program test_pacsobservation
     use module_pacsobservation, only : MaskPolicy, PacsObservation
     use module_observation,     only : Pointing
     use module_string,          only : strsection
-    use module_tamasis,         only : init_tamasis, get_tamasis_path, POLICY_REMOVE
+    use module_tamasis,         only : init_tamasis, get_tamasis_path, p, POLICY_REMOVE
     implicit none
 
     class(PacsObservation), allocatable :: obs
@@ -14,10 +14,10 @@ program test_pacsobservation
     character(len=*), parameter         :: filename = 'pacs/test/data/frames_blue.fits'
     character(len=255), allocatable     :: afilename(:)
     integer                :: status, idetector
-    real*8, allocatable    :: signal(:,:)
+    real(p), allocatable   :: signal(:,:)
     logical*1, allocatable :: mask(:,:)
     integer                :: first, last
-    real*8                 :: signal_ref(360)
+    real(p)                :: signal_ref(360)
     logical*1              :: mask_ref(360)
 
     ! initialise tamasis
@@ -142,8 +142,7 @@ program test_pacsobservation
            deallocate (mask)
            deallocate (obs%slice(1)%p)
         end do
-    end do
-    
+    end do    
 
     stop 'OK.'
    

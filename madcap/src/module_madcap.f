@@ -3,8 +3,8 @@ module module_madcap
     use iso_fortran_env,       only : ERROR_UNIT
     use module_filtering,      only : FilterUncorrelated
     use module_pointingmatrix, only : pointingelement
-    use module_precision,      only : p
     use module_string,         only : strinteger
+    use module_tamasis,        only : p
     implicit none
     private
 

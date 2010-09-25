@@ -5,16 +5,18 @@ module module_wcs
     use module_fitstools, only : ft_read_keyword
     use module_math,      only : DEG2RAD, RAD2DEG
     use module_string,    only : strinteger, strlowcase, strupcase
+    use module_tamasis,   only : p
     use module_wcslib
     implicit none
     private
 
-    type, public :: astrometry
-        integer :: naxis(2)
-        real*8  :: crpix(2), crval(2), cd(2,2)
+    type astrometry
+        integer          :: naxis(2)
+        real(p)          :: crpix(2), crval(2), cd(2,2)
         character(len=8) :: ctype(2), cunit(2)
     end type astrometry
 
+    public :: astrometry
     public :: init_astrometry
     public :: print_astrometry
     public :: init_gnomonic
@@ -35,14 +37,14 @@ contains
 
     subroutine init_astrometry(header, astr, status)
 
-        character(len=*), intent(in)  :: header
+        character(len=*), intent(in)            :: header
         type(astrometry), intent(out), optional :: astr
-        integer, intent(out)          :: status
+        integer, intent(out)                    :: status
 
         type(astrometry)  :: myastr
         logical           :: found
         integer           :: has_cd
-        real*8            :: crota2, cdelt1, cdelt2
+        real(p)           :: crota2, cdelt1, cdelt2
         character(len=70) :: buffer
 
         has_cd = 0
@@ -178,8 +180,8 @@ contains
 
         type(astrometry), intent(in) :: astr
 
-        real*8 :: lambda0                ! crval(1) in rad
-        real*8 :: phi1, cosphi1, sinphi1 ! cos and sin of crval(2)
+        real(p) :: lambda0                ! crval(1) in rad
+        real(p) :: phi1, cosphi1, sinphi1 ! cos and sin of crval(2)
         common /gnomonic/ lambda0, cosphi1, sinphi1
 
         lambda0 = astr%crval(1) * DEG2RAD
@@ -195,13 +197,13 @@ contains
 
     pure function ad2xy_gnomonic(ad) result(xy)
 
-        real*8, intent(in) :: ad(:,:)          ! R.A. and declination in degrees
-        real*8             :: xy(size(ad,1),size(ad,2))
+        real(p), intent(in) :: ad(:,:)          ! R.A. and declination in degrees
+        real(p)             :: xy(size(ad,1),size(ad,2))
 
-        real*8             :: lambda, phi, invcosc, xsi, eta
-        integer            :: i
-        real*8             :: lambda0          ! crval[0] in rad
-        real*8             :: cosphi1, sinphi1 ! cos and sin of crval[1]
+        real(p)             :: lambda, phi, invcosc, xsi, eta
+        integer             :: i
+        real(p)             :: lambda0          ! crval[0] in rad
+        real(p)             :: cosphi1, sinphi1 ! cos and sin of crval[1]
         common /gnomonic/ lambda0, cosphi1, sinphi1
 
         do i = 1, size(ad,2)
@@ -222,22 +224,22 @@ contains
 
     pure subroutine ad2xys_gnomonic(ad, x, y, scale)
 
-        real*8, intent(in)  :: ad(:,:)          ! R.A. and declination in degrees
-        real*8, intent(out) :: x(size(ad,2))
-        real*8, intent(out) :: y(size(ad,2))
-        real*8, intent(out) :: scale(size(ad,2))
+        real(p), intent(in)  :: ad(:,:)          ! R.A. and declination in degrees
+        real(p), intent(out) :: x(size(ad,2))
+        real(p), intent(out) :: y(size(ad,2))
+        real(p), intent(out) :: scale(size(ad,2))
 
-        real*8  :: lambda, phi, invcosc, xsi, eta
+        real(p) :: lambda, phi, invcosc, xsi, eta
         integer :: i
-        real*8  :: lambda0          ! crval[0] in rad
-        real*8  :: cosphi1, sinphi1 ! cos and sin of crval[1]
+        real(p) :: lambda0          ! crval[0] in rad
+        real(p) :: cosphi1, sinphi1 ! cos and sin of crval[1]
 
         common /gnomonic/ lambda0, cosphi1, sinphi1
 
         do i = 1, size(ad,2)
             lambda = ad(1,i) * DEG2RAD
             phi = ad(2,i) * DEG2RAD
-            invcosc = 1.d0 / (sinphi1*sin(phi)+cosphi1*cos(phi)*cos(lambda-lambda0))
+            invcosc = 1 / (sinphi1*sin(phi)+cosphi1*cos(phi)*cos(lambda-lambda0))
             xsi = RAD2DEG * invcosc * cos(phi)*sin(lambda-lambda0)
             eta = RAD2DEG * invcosc * (cosphi1*sin(phi)-sinphi1*cos(phi)*cos(lambda-lambda0))
 
@@ -253,12 +255,12 @@ contains
 
     pure elemental subroutine ad2xy_gnomonic_vect(a, d, x, y)
 
-        real*8, intent(in)  :: a, d             ! R.A. and declination in degrees
-        real*8, intent(out) :: x, y
+        real(p), intent(in)  :: a, d             ! R.A. and declination in degrees
+        real(p), intent(out) :: x, y
 
-        real*8              :: lambda, phi, invcosc, xsi, eta
-        real*8              :: lambda0          ! crval[0] in rad
-        real*8              :: cosphi1, sinphi1 ! cos and sin of crval[1]
+        real(p)              :: lambda, phi, invcosc, xsi, eta
+        real(p)              :: lambda0          ! crval[0] in rad
+        real(p)              :: cosphi1, sinphi1 ! cos and sin of crval[1]
         common /gnomonic/ lambda0, cosphi1, sinphi1
 
         lambda  = a * DEG2RAD
@@ -279,7 +281,7 @@ contains
 
         type(astrometry), intent(in) :: astr
 
-        real*8 :: cdinv(2,2), crpix(2)
+        real(p) :: cdinv(2,2), crpix(2)
         common /rotation/ cdinv, crpix
 
         cdinv = reshape([astr%cd(2,2), -astr%cd(2,1), -astr%cd(1,2), astr%cd(1,1)], [2,2]) / &
@@ -294,10 +296,10 @@ contains
 
     elemental subroutine xy2xy_rotation(xsi, eta, x, y)
 
-        real*8, intent(in)  :: xsi, eta
-        real*8, intent(out) :: x, y
+        real(p), intent(in)  :: xsi, eta
+        real(p), intent(out) :: x, y
 
-        real*8              :: cdinv(2,2), crpix(2)
+        real(p) :: cdinv(2,2), crpix(2)
         common /rotation/ cdinv, crpix
 
         x = cdinv(1,1)*xsi + cdinv(1,2)*eta + crpix(1)
@@ -312,12 +314,12 @@ contains
 
     function refpix_area()
 
-        real*8 :: refpix_area
+        real(p) :: refpix_area
 
-        real*8 :: cdinv(2,2), crpix(2)
+        real(p) :: cdinv(2,2), crpix(2)
         common /rotation/ cdinv, crpix
         
-        refpix_area = 1.d0 / abs(cdinv(1,1) * cdinv(2,2) - cdinv(1,2) * cdinv(2,1)) * 3600d0**2
+        refpix_area = 1 / abs(cdinv(1,1) * cdinv(2,2) - cdinv(1,2) * cdinv(2,1)) * 3600._p**2
 
     end function refpix_area
 
@@ -342,13 +344,13 @@ contains
 
     function ad2xy_wcslib(ad) result(xy)
 
-        real*8, intent(in)   :: ad(:,:)
-        real*8               :: xy(size(ad,1),size(ad,2))
+        real(p), intent(in) :: ad(:,:)
+        real(p)             :: xy(size(ad,1),size(ad,2))
 
-        integer              :: status
-        integer              :: wcs(WCSLEN)
-        integer              :: stat(size(ad,2))
-        real*8               :: phi(size(ad,2)), theta(size(ad,2)), imgcrd(size(ad,2),size(ad,2))
+        integer             :: status
+        integer             :: wcs(WCSLEN)
+        integer             :: stat(size(ad,2))
+        real(p)             :: phi(size(ad,2)), theta(size(ad,2)), imgcrd(size(ad,2),size(ad,2))
         common /wcslib/ wcs
 
         status = wcss2p(wcs, size(ad,2), 2, ad, phi, theta, imgcrd, xy, stat)

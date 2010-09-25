@@ -1,26 +1,27 @@
 program test_preprocessor
 
     use module_fitstools, only : ft_read_image
-    use module_math, only      : median, neq_real
+    use module_math,      only : median, neq_real
     use module_preprocessor
+    use module_tamasis,   only : p
     implicit none
 
-    real*8 :: small(10)
-    real*8, allocatable :: timeline(:), filtered(:), reference(:)
-    integer             :: count1, count2, count_rate, count_max, status, i
+    real(p)              :: small(10)
+    real(p), allocatable :: timeline(:), filtered(:), reference(:)
+    integer              :: count1, count2, count_rate, count_max, status, i
 
-    small = [7.1d0,1.2d0,5.d0, 3.d0, 4.d0, 5.d0, 3.d0,10.d0,22.d0,32.d0]
+    small = [7.1_p,1.2_p,5._p, 3._p, 4._p, 5._p, 3._p,10._p,22._p,32._p]
 
     allocate (filtered(10))
     filtered = small
     call median_filtering(filtered, 3)
     !print(scipy.signalmedfilt(small, kernel_size=3))
-    if (any(neq_real(small-filtered,[1.2d0,5.d0,3.d0,4.d0,4.d0,4.d0,5.d0,10d0,22.d0,22.d0]))) stop 'FAILED: medfilt1'
+    if (any(neq_real(small-filtered,[1.2_p,5._p,3._p,4._p,4._p,4._p,5._p,10._p,22._p,22._p]))) stop 'FAILED: medfilt1'
 
     filtered = small
     call median_filtering(filtered, 5)
     !print(scipy.signalmedfilt(small, kernel_size=3))
-    if (any(neq_real(small-filtered,[5.d0,3.d0,4.d0,4.d0,4.d0,4.d0,5.d0,10.d0,10.d0,22.d0]))) stop 'FAILED: medfilt2'
+    if (any(neq_real(small-filtered,[5._p,3._p,4._p,4._p,4._p,4._p,5._p,10._p,10._p,22._p]))) stop 'FAILED: medfilt2'
 
     deallocate (filtered)
 
@@ -40,8 +41,8 @@ program test_preprocessor
     end do
 
     do i=1, size(timeline)
-        if (neq_real(reference(i), timeline(i)-filtered(i))) then
-            print *, 'FAILED:', i, reference(i), timeline(i)-filtered(i)
+        if (neq_real(reference(i)+filtered(i), timeline(i), 100._p * epsilon(1._p))) then
+            print *, 'FAILED:', i, reference(i)+filtered(i), timeline(i)
         end if
     end do
 

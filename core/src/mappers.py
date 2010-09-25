@@ -3,6 +3,7 @@ import scipy
 import time
 
 from acquisitionmodels import asacquisitionmodel, Diagonal, DiscreteDifference, Identity, Masking, AllReduce
+from config import get_default_dtype_float
 from datatypes import Map, Tod
 from mpi4py import MPI
 from unit import Quantity, UnitError
@@ -71,7 +72,7 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None, tol=
         ntods = MPI.COMM_WORLD.allreduce(numpy.sum(tod.mask == 0), op=MPI.SUM)
         nmaps = C.aslinearoperator(unpacking=unpacking).shape[0]
         if MPI.COMM_WORLD.Get_rank() == 0:
-            hyper = float(hyper * ntods / nmaps)
+            hyper = numpy.array(hyper * ntods / nmaps, dtype=get_default_dtype_float())
             dX = DiscreteDifference(axis=1)
             dY = DiscreteDifference(axis=0)
             C += hyper * ( dX.T * dX + dY.T * dY )

@@ -14,3 +14,5 @@ ifeq ($(PROF_USE),1)
     FFLAGS_PROF = -prof_use -prof_dir/home/pchanial/profiles
 endif
 
+FCVERSION = $(lastword $(shell ifort -v))
+SUPPORT_QUAD = 1

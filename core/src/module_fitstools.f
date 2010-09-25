@@ -3,8 +3,9 @@ module module_fitstools
     use iso_c_binding
     use iso_fortran_env,  only : ERROR_UNIT, OUTPUT_UNIT
     use module_cfitsio
-    use module_precision, only : dp
+    use module_precision, only : sp, dp, qp
     use module_string,    only : strinteger, strlowcase, strsection, strupcase
+    use module_tamasis,   only : p
     implicit none
     private
 
@@ -33,50 +34,71 @@ module module_fitstools
     integer, private, parameter :: NULLVAL = 0
     integer, private, parameter :: BUFFERSIZE = 1024
 
+    integer, private, parameter :: FLEN_KEYWORD = 71
+    integer, private, parameter :: FLEN_CARD    = 80
+    integer, private, parameter :: FLEN_VALUE   = 70
+    integer, private, parameter :: FLEN_COMMENT = 72
+    integer, private, parameter :: FLEN_ERRMSG  = 80
+    integer, private, parameter :: FLEN_STATUS  = 30
+
     interface ft_read_column
-        module procedure ft_read_column_character_filename, ft_read_column_character_unit,                                         &
-                         ft_read_column_int4_filename, ft_read_column_int4_unit,                                                   &
-                         ft_read_column_int8_filename, ft_read_column_int8_unit,                                                   &
-                         ft_read_column_double_filename, ft_read_column_double_unit
+        module procedure ft_read_column_filename_character, ft_read_column_character_unit,                                         &
+                         ft_read_column_filename_int4, ft_read_column_unit_int4,                                                   &
+                         ft_read_column_filename_int8, ft_read_column_unit_int8,                                                   &
+                         ft_read_column_filename_real4, ft_read_column_unit_real4,                                                 &
+                         ft_read_column_filename_real8, ft_read_column_unit_real8
+#if PRECISION_REAL == 16
+        module procedure ft_read_column_filename_real16, ft_read_column_unit_real16
+#endif
     end interface ft_read_column
 
     interface ft_read_image
-        module procedure ft_read_image_logical_1d, ft_read_image_int8_1d, ft_read_image_double_1d,                                 &
-                         ft_read_image_logical_2d, ft_read_image_double_2d,                                                        &
-                         ft_read_image_logical_3d, ft_read_image_double_3d
+        module procedure ft_read_image_logical_1d, ft_read_image_logical_2d, ft_read_image_logical_3d,                             &
+                         ft_read_image_int8_1d,                                                                                    &
+                         ft_read_image_real4_1d, ft_read_image_real4_2d, ft_read_image_real4_3d,                                   &
+                         ft_read_image_real8_1d, ft_read_image_real8_2d, ft_read_image_real8_3d
+#if PRECISION_REAL == 16
+        module procedure ft_read_image_real16_1d, ft_read_image_real16_2d, ft_read_image_real16_3d
+#endif
     end interface ft_read_image
 
     interface ft_read_slice
-        module procedure ft_read_slice_logical_filename, ft_read_slice_logical_unit,                                               &
-                         ft_read_slice_int4_filename,   ft_read_slice_int4_unit,                                                   &
-                         ft_read_slice_int8_filename,   ft_read_slice_int8_unit,                                                   &
-                         ft_read_slice_double_filename,  ft_read_slice_double_unit,                                                &
-                         ft_read_slice_logical_3d, ft_read_slice_int4_3d,                                                          &
-                         ft_read_slice_int8_3d, ft_read_slice_double_3d
+        module procedure ft_read_slice_logical_3d, ft_read_slice_int4_3d, ft_read_slice_int8_3d,                                   &
+                         ft_read_slice_real4_3d, ft_read_slice_real8_3d
+#if PRECISION_REAL == 16
+        module procedure ft_read_slice_real16_3d
+#endif
     end interface ft_read_slice
 
     interface ft_write_image
         module procedure ft_write_image_int4_1d, ft_write_image_int4_2d, ft_write_image_int4_3d,                                   &
-                         ft_write_image_double_1d, ft_write_image_double_2d, ft_write_image_double_3d
+                         ft_write_image_real4_1d, ft_write_image_real4_2d, ft_write_image_real4_3d,                                &
+                         ft_write_image_real8_1d, ft_write_image_real8_2d, ft_write_image_real8_3d
     end interface ft_write_image
 
     interface ft_read_keyword
         module procedure ft_read_keyword_header_logical, ft_read_keyword_header_int4, ft_read_keyword_header_int8,                 &
-                         ft_read_keyword_header_double, ft_read_keyword_header_character,                                          &
+                         ft_read_keyword_header_real4, ft_read_keyword_header_real8, ft_read_keyword_header_character,             &
                          ft_read_keyword_unit_logical, ft_read_keyword_unit_int4, ft_read_keyword_unit_int8,                       &
-                         ft_read_keyword_unit_double, ft_read_keyword_unit_character
+                         ft_read_keyword_unit_real4, ft_read_keyword_unit_real8, ft_read_keyword_unit_character
+#if PRECISION_REAL == 16
+        module procedure ft_read_keyword_header_real16, ft_read_keyword_unit_real16
+#endif
     end interface ft_read_keyword
 
     interface ft_read_keyword_hcss
         module procedure ft_read_keyword_hcss_logical, ft_read_keyword_hcss_int4, ft_read_keyword_hcss_int8,                       &
-                         ft_read_keyword_hcss_double, ft_read_keyword_hcss_character
+                         ft_read_keyword_hcss_real4, ft_read_keyword_hcss_real8, ft_read_keyword_hcss_character
+#if PRECISION_REAL == 16
+        module procedure ft_read_keyword_hcss_real16
+#endif
     end interface ft_read_keyword_hcss
 
 
 contains
 
 
-    subroutine ft_read_column_character_filename(filename, colname, data, status)
+    subroutine ft_read_column_filename_character(filename, colname, data, status)
 
         character(len=*), intent(in)               :: filename
         character(len=*), intent(in)               :: colname
@@ -89,12 +111,12 @@ contains
         if (status /= 0) return
         
         allocate(data(nrecords))
-        call ft_read_column_character_unit(unit, colname, 1, nrecords, data, status)
+        call ft_read_column(unit, colname, 1, nrecords, data, status)
         if (status /= 0) return
 
         call ft_close(unit, status)
 
-    end subroutine ft_read_column_character_filename
+    end subroutine ft_read_column_filename_character
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
@@ -135,7 +157,7 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_column_int4_filename(filename, colname, data, status)
+    subroutine ft_read_column_filename_int4(filename, colname, data, status)
 
         character(len=*), intent(in)        :: filename
         character(len=*), intent(in)        :: colname
@@ -148,18 +170,18 @@ contains
         if (status /= 0) return
         
         allocate(data(nrecords))
-        call ft_read_column_int4_unit(unit, colname, 1, nrecords, data, status)
+        call ft_read_column(unit, colname, 1, nrecords, data, status)
         if (status /= 0) return
         
         call ft_close(unit, status)
 
-    end subroutine ft_read_column_int4_filename
+    end subroutine ft_read_column_filename_int4
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_column_int4_unit(unit, colname, first, last, data, status)
+    subroutine ft_read_column_unit_int4(unit, colname, first, last, data, status)
 
         integer, intent(in)          :: unit
         character(len=*), intent(in) :: colname
@@ -189,13 +211,13 @@ contains
         call ftgcvj(unit, colnum, first, 1, last-first+1, nullval, data, anyf, status)
         if (ft_check_error_cfitsio(status, unit)) return
 
-    end subroutine ft_read_column_int4_unit
+    end subroutine ft_read_column_unit_int4
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_column_int8_filename(filename, colname, data, status)
+    subroutine ft_read_column_filename_int8(filename, colname, data, status)
 
         character(len=*), intent(in)        :: filename
         character(len=*), intent(in)        :: colname
@@ -208,18 +230,18 @@ contains
         if (status /= 0) return
         
         allocate(data(nrecords))
-        call ft_read_column_int8_unit(unit, colname, 1, nrecords, data, status)
+        call ft_read_column(unit, colname, 1, nrecords, data, status)
         if (status /= 0) return
         
         call ft_close(unit, status)
 
-    end subroutine ft_read_column_int8_filename
+    end subroutine ft_read_column_filename_int8
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_column_int8_unit(unit, colname, first, last, data, status)
+    subroutine ft_read_column_unit_int8(unit, colname, first, last, data, status)
 
         integer, intent(in)          :: unit
         character(len=*), intent(in) :: colname
@@ -249,18 +271,18 @@ contains
         call ftgcvk(unit, colnum, first, 1, last-first+1, nullval, data, anyf, status)
         if (ft_check_error_cfitsio(status, unit)) return
 
-    end subroutine ft_read_column_int8_unit
+    end subroutine ft_read_column_unit_int8
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_column_double_filename(filename, colname, data, status)
+    subroutine ft_read_column_filename_real4(filename, colname, data, status)
 
-        character(len=*), intent(in)     :: filename
-        character(len=*), intent(in)     :: colname
-        real*8, allocatable, intent(out) :: data(:)
-        integer, intent(out)             :: status
+        character(len=*), intent(in)       :: filename
+        character(len=*), intent(in)       :: colname
+        real(sp), allocatable, intent(out) :: data(:)
+        integer, intent(out)               :: status
 
         integer :: nrecords, unit
         
@@ -268,22 +290,81 @@ contains
         if (status /= 0) return
         
         allocate(data(nrecords))
-        call ft_read_column_double_unit(unit, colname, 1, nrecords, data, status)
+        call ft_read_column(unit, colname, 1, nrecords, data, status)
         if (status /= 0) return
         
         call ft_close(unit, status)
 
-    end subroutine ft_read_column_double_filename
+    end subroutine ft_read_column_filename_real4
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_column_double_unit(unit, colname, first, last, data, status)
+    subroutine ft_read_column_filename_real8(filename, colname, data, status)
+
+        character(len=*), intent(in)       :: filename
+        character(len=*), intent(in)       :: colname
+        real(dp), allocatable, intent(out) :: data(:)
+        integer, intent(out)               :: status
+
+        integer :: nrecords, unit
+        
+        call ft_open_bintable(filename, unit, nrecords, status)
+        if (status /= 0) return
+        
+        allocate(data(nrecords))
+        call ft_read_column(unit, colname, 1, nrecords, data, status)
+        if (status /= 0) return
+        
+        call ft_close(unit, status)
+
+    end subroutine ft_read_column_filename_real8
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine ft_read_column_unit_real4(unit, colname, first, last, data, status)
         integer, intent(in)          :: unit
         character(len=*), intent(in) :: colname
         integer, intent(in)          :: first, last
-        real(kind=dp), intent(out)   :: data(:)
+        real(sp), intent(out)        :: data(:)
+        integer, intent(out)         :: status
+
+        logical                      :: anyf   ! set to true if undef values
+        integer                      :: colnum
+
+        ! parameter check
+        if (size(data) /= last-first+1) then
+            status = 1
+            write (ERROR_UNIT,'(a,i0,a)') "FT_READ_COLUMN: Output array has a s&
+                &ize '", size(data), "' incompatible with the specified range '&
+                &[" // strsection(first, last) // "]'."
+            return
+        end if
+
+        status = 0
+
+        ! get column number
+        call ftgcno(unit, .true., colname, colnum, status)
+        if (ft_check_error_cfitsio(status, unit)) return
+
+        ! extract column
+        call ftgcve(unit, colnum, first, 1, last-first+1, nullval, data, anyf, status)
+        if (ft_check_error_cfitsio(status, unit)) return
+
+    end subroutine ft_read_column_unit_real4
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine ft_read_column_unit_real8(unit, colname, first, last, data, status)
+        integer, intent(in)          :: unit
+        character(len=*), intent(in) :: colname
+        integer, intent(in)          :: first, last
+        real(dp), intent(out)        :: data(:)
         integer, intent(out)         :: status
 
         logical                      :: anyf   ! set to true if undef values
@@ -308,7 +389,7 @@ contains
         call ftgcvd(unit, colnum, first, 1, last-first+1, nullval, data, anyf, status)
         if (ft_check_error_cfitsio(status, unit)) return
 
-    end subroutine ft_read_column_double_unit
+    end subroutine ft_read_column_unit_real8
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
@@ -368,15 +449,42 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_image_double_1d(filename, output, status, hdu)
+    subroutine ft_read_image_real4_1d(filename, output, status, hdu)
 
-        character(len=*), intent(in)     :: filename
-        real*8, allocatable, intent(out) :: output(:)
-        integer, intent(out)             :: status
-        integer, optional, intent(in)    :: hdu
+        character(len=*), intent(in)       :: filename
+        real(sp), allocatable, intent(out) :: output(:)
+        integer, intent(out)               :: status
+        integer, optional, intent(in)      :: hdu
 
-        integer                          :: unit, anynull
-        integer, allocatable             :: imageshape(:)
+        integer                            :: unit, anynull
+        integer, allocatable               :: imageshape(:)
+
+        call ft_open_image(filename, unit, 1, imageshape, status, hdu=hdu)
+        if (status /= 0) return
+
+        !  Initialize variables
+        allocate(output(imageshape(1)))
+
+        call ftgpve(unit, GROUP, 1, imageshape(1), NULLVAL, output, anynull, status)
+        if (ft_check_error_cfitsio(status, unit, filename)) continue
+
+        call ft_close(unit, status)
+
+    end subroutine ft_read_image_real4_1d
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine ft_read_image_real8_1d(filename, output, status, hdu)
+
+        character(len=*), intent(in)       :: filename
+        real(dp), allocatable, intent(out) :: output(:)
+        integer, intent(out)               :: status
+        integer, optional, intent(in)      :: hdu
+
+        integer                            :: unit, anynull
+        integer, allocatable               :: imageshape(:)
 
         call ft_open_image(filename, unit, 1, imageshape, status, hdu=hdu)
         if (status /= 0) return
@@ -389,7 +497,30 @@ contains
 
         call ft_close(unit, status)
 
-    end subroutine ft_read_image_double_1d
+    end subroutine ft_read_image_real8_1d
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+#if PRECISION_REAL == 16
+    subroutine ft_read_image_real16_1d(filename, output, status, hdu)
+
+        character(len=*), intent(in)       :: filename
+        real(qp), allocatable, intent(out) :: output(:)
+        integer, intent(out)               :: status
+        integer, optional, intent(in)      :: hdu
+
+        real(dp), allocatable              :: output_(:)
+
+        call ft_read_image(filename, output_, status, hdu)
+        if (status /= 0) return
+
+        allocate(output(shape(output_,1)))
+        output = real(output_, qp)
+
+    end subroutine ft_read_image_real4_1d
+#endif
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
@@ -429,12 +560,46 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_image_double_2d(filename, output, status, hdu)
+    subroutine ft_read_image_real4_2d(filename, output, status, hdu)
     
-        character(len=*), intent(in)     :: filename
-        real*8, allocatable, intent(out) :: output(:,:)
-        integer, intent(out)             :: status
-        integer, optional, intent(in)    :: hdu
+        character(len=*), intent(in)       :: filename
+        real(sp), allocatable, intent(out) :: output(:,:)
+        integer, intent(out)               :: status
+        integer, optional, intent(in)      :: hdu
+
+        integer                          :: unit, firstpix, anynull, j
+        integer, allocatable             :: imageshape(:)
+    
+        call ft_open_image(filename, unit, 2, imageshape, status, hdu=hdu)
+        if (status /= 0) return
+
+        !  Initialize variables
+        firstpix=1
+        allocate(output(imageshape(1),imageshape(2)))
+
+        do j = 1, imageshape(2)
+    
+            call ftgpve(unit, GROUP, firstpix, imageshape(1), NULLVAL, output(:,j), anynull, status)
+            if (ft_check_error_cfitsio(status, unit, filename)) return
+
+            firstpix = firstpix + imageshape(1)
+
+        end do
+
+        call ft_close(unit, status)
+
+    end subroutine ft_read_image_real4_2d
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine ft_read_image_real8_2d(filename, output, status, hdu)
+    
+        character(len=*), intent(in)       :: filename
+        real(dp), allocatable, intent(out) :: output(:,:)
+        integer, intent(out)               :: status
+        integer, optional, intent(in)      :: hdu
 
         integer                          :: unit, firstpix, anynull, j
         integer, allocatable             :: imageshape(:)
@@ -457,7 +622,30 @@ contains
 
         call ft_close(unit, status)
 
-    end subroutine ft_read_image_double_2d
+    end subroutine ft_read_image_real8_2d
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+#if PRECISION_REAL == 16
+    subroutine ft_read_image_real16_2d(filename, output, status, hdu)
+
+        character(len=*), intent(in)       :: filename
+        real(qp), allocatable, intent(out) :: output(:,:)
+        integer, intent(out)               :: status
+        integer, optional, intent(in)      :: hdu
+
+        real(dp), allocatable              :: output_(:,:)
+
+        call ft_read_image(filename, output_, status, hdu)
+        if (status /= 0) return
+
+        allocate(output(shape(output_,1),shape(output_,2)))
+        output = real(output_, qp)
+
+    end subroutine ft_read_image_real4_1d
+#endif
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
@@ -498,11 +686,48 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_image_double_3d(filename, output, status)
+    subroutine ft_read_image_real4_3d(filename, output, status)
 
-        character(len=*), intent(in)     :: filename
-        real*8, allocatable, intent(out) :: output(:,:,:)
-        integer, intent(out)             :: status
+        character(len=*), intent(in)       :: filename
+        real(sp), allocatable, intent(out) :: output(:,:,:)
+        integer, intent(out)               :: status
+
+        integer                          :: unit, firstpix, anynull, j, k
+        integer, allocatable             :: imageshape(:)
+
+        call ft_open_image(filename, unit, 3, imageshape, status)
+        if (status /= 0) return
+
+        !  Initialize variables
+        firstpix = 1
+        allocate(output(imageshape(1), imageshape(2), imageshape(3)))
+
+        do k = 1, imageshape(3)
+
+            do j = 1, imageshape(2)
+
+                call ftgpve(unit, GROUP, firstpix, imageshape(1), NULLVAL, output(:,j,k), anynull, status)
+                if (ft_check_error_cfitsio(status, unit, filename)) return
+
+                firstpix = firstpix + imageshape(1)
+
+            end do
+
+        end do
+
+        call ft_close(unit, status)
+
+    end subroutine ft_read_image_real4_3d
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine ft_read_image_real8_3d(filename, output, status)
+
+        character(len=*), intent(in)       :: filename
+        real(dp), allocatable, intent(out) :: output(:,:,:)
+        integer, intent(out)               :: status
 
         integer                          :: unit, firstpix, anynull, j, k
         integer, allocatable             :: imageshape(:)
@@ -529,174 +754,30 @@ contains
 
         call ft_close(unit, status)
 
-    end subroutine ft_read_image_double_3d
+    end subroutine ft_read_image_real8_3d
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_slice_logical_filename(filename, x1, x2, array, status)
+#if PRECISION_REAL == 16
+    subroutine ft_read_image_real16_3d(filename, output, status, hdu)
 
-        character(len=*), intent(in) :: filename
-        integer, intent(in)          :: x1, x2
-        logical*1, intent(inout)     :: array(x2 - x1 + 1)
-        integer, intent(out)         :: status
+        character(len=*), intent(in)       :: filename
+        real(qp), allocatable, intent(out) :: output(:,:,:)
+        integer, intent(out)               :: status
+        integer, optional, intent(in)      :: hdu
 
-        integer                      :: unit
+        real(dp), allocatable              :: output_(:,:,:)
 
-        call ft_open(filename, unit, status)
+        call ft_read_image(filename, output_, status, hdu)
         if (status /= 0) return
 
-        call ft_read_slice_logical_unit(unit, x1, x2, array, status)
-        if (status /= 0) return
+        allocate(output(shape(output_,1),shape(output_,2),shape(output_,3)))
+        output = real(output_, qp)
 
-        call ft_close(unit, status)
-
-    end subroutine ft_read_slice_logical_filename
-
-
-    !-------------------------------------------------------------------------------------------------------------------------------
-
-
-    subroutine ft_read_slice_logical_unit(unit, x1, x2, array, status)
-
-        integer, intent(in)      :: unit
-        integer, intent(in)      :: x1, x2
-        logical*1, intent(inout) :: array(x2 - x1 + 1)
-        integer, intent(out)     :: status
-
-        integer                  :: anynull
-
-        status = 0
-        call ftgpvd(unit, GROUP, x1, x2 - x1 + 1, NULLVAL, array, anynull, status)
-        if (ft_check_error_cfitsio(status, unit)) return
-
-    end subroutine ft_read_slice_logical_unit
-
-
-    !-------------------------------------------------------------------------------------------------------------------------------
-
-
-    subroutine ft_read_slice_int4_filename(filename, x1, x2, array, status)
-
-        character(len=*), intent(in) :: filename
-        integer, intent(in)          :: x1, x2
-        integer*4, intent(inout)     :: array(x2 - x1 + 1)
-        integer, intent(out)         :: status
-
-        integer                      :: unit
-
-        call ft_open(filename, unit, status)
-        if (status /= 0) return
-
-        call ft_read_slice_int4_unit(unit, x1, x2, array, status)
-        if (status /= 0) return
-
-        call ft_close(unit, status)
-
-    end subroutine ft_read_slice_int4_filename
-
-
-    !-------------------------------------------------------------------------------------------------------------------------------
-
-
-    subroutine ft_read_slice_int4_unit(unit, x1, x2, array, status)
-
-        integer, intent(in)      :: unit
-        integer, intent(in)      :: x1, x2
-        integer*4, intent(inout) :: array(x2 - x1 + 1)
-        integer, intent(out)     :: status
-        integer :: anynull
-
-        status = 0
-        call ftgpvj(unit, GROUP, x1, x2-x1+1, NULLVAL, array, anynull, status)
-        if (ft_check_error_cfitsio(status, unit)) return
-
-    end subroutine ft_read_slice_int4_unit
-
-
-    !-------------------------------------------------------------------------------------------------------------------------------
-
-
-    subroutine ft_read_slice_int8_filename(filename, x1, x2, array, status)
-
-        character(len=*), intent(in) :: filename
-        integer, intent(in)          :: x1, x2
-        integer*8, intent(inout)     :: array(x2 - x1 + 1)
-        integer, intent(out)         :: status
-
-        integer                      :: unit
-
-        call ft_open(filename, unit, status)
-        if (status /= 0) return
-
-        call ft_read_slice_int8_unit(unit, x1, x2, array, status)
-        if (status /= 0) return
-
-        call ft_close(unit, status)
-
-    end subroutine ft_read_slice_int8_filename
-
-
-    !-------------------------------------------------------------------------------------------------------------------------------
-
-
-    subroutine ft_read_slice_int8_unit(unit, x1, x2, array, status)
-
-        integer, intent(in)      :: unit
-        integer, intent(in)      :: x1, x2
-        integer*8, intent(inout) :: array(x2 - x1 + 1)
-        integer, intent(out)     :: status
-
-        integer                  :: anynull
-
-        status = 0
-        call ftgpvk(unit, GROUP, x1, x2-x1+1, NULLVAL, array, anynull, status)
-        if (ft_check_error_cfitsio(status, unit)) return
-
-    end subroutine ft_read_slice_int8_unit
-
-
-    !-------------------------------------------------------------------------------------------------------------------------------
-
-
-    subroutine ft_read_slice_double_filename(filename, x1, x2, array, status)
-
-        character(len=*), intent(in) :: filename
-        integer, intent(in)          :: x1, x2
-        real*8, intent(inout)        :: array(x2 - x1 + 1)
-        integer, intent(out)         :: status
-
-        integer                      :: unit
-
-        call ft_open(filename, unit, status)
-        if (status /= 0) return
-
-        call ft_read_slice_double_unit(unit, x1, x2, array, status)
-        if (status /= 0) return
-
-        call ft_close(unit, status)
-
-    end subroutine ft_read_slice_double_filename
-
-
-    !-------------------------------------------------------------------------------------------------------------------------------
-
-
-    subroutine ft_read_slice_double_unit(unit, x1, x2, array, status)
-
-        integer, intent(in)    :: unit
-        integer, intent(in)    :: x1, x2
-        real*8, intent(inout)  :: array(x2 - x1 + 1)
-        integer, intent(out)   :: status
-
-        integer                :: anynull
-
-        status = 0
-        call ftgpvd(unit, GROUP, x1, x2-x1+1, NULLVAL, array, anynull, status)
-        if (ft_check_error_cfitsio(status, unit)) return
-
-    end subroutine ft_read_slice_double_unit
+    end subroutine ft_read_image_real16_3d
+#endif
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
@@ -771,24 +852,47 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_slice_double_3d(unit, x1, x2, y, z, naxes, array, status)
+    subroutine ft_read_slice_real4_3d(unit, x1, x2, y, z, naxes, array, status)
 
-        integer, intent(in)   :: unit
-        integer, intent(in)   :: x1, x2
-        integer, intent(in)   :: y, z
-        integer, intent(in)   :: naxes(3)
-        real*8, intent(inout) :: array(x2 - x1 + 1)
-        integer, intent(out)  :: status
+        integer, intent(in)     :: unit
+        integer, intent(in)     :: x1, x2
+        integer, intent(in)     :: y, z
+        integer, intent(in)     :: naxes(3)
+        real(sp), intent(inout) :: array(x2 - x1 + 1)
+        integer, intent(out)    :: status
 
-        integer               :: anynull
-        integer               :: firstpix
+        integer                 :: anynull
+        integer                 :: firstpix
+
+        status = 0
+        firstpix = x1 + naxes(1) * (y - 1 + naxes(2) * (z - 1))
+        call ftgpve(unit, GROUP, firstpix, x2 - x1 + 1, NULLVAL, array, anynull, status)
+        if (ft_check_error_cfitsio(status, unit)) return
+
+    end subroutine ft_read_slice_real4_3d
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine ft_read_slice_real8_3d(unit, x1, x2, y, z, naxes, array, status)
+
+        integer, intent(in)     :: unit
+        integer, intent(in)     :: x1, x2
+        integer, intent(in)     :: y, z
+        integer, intent(in)     :: naxes(3)
+        real(dp), intent(inout) :: array(x2 - x1 + 1)
+        integer, intent(out)    :: status
+
+        integer                 :: anynull
+        integer                 :: firstpix
 
         status = 0
         firstpix = x1 + naxes(1) * (y - 1 + naxes(2) * (z - 1))
         call ftgpvd(unit, GROUP, firstpix, x2 - x1 + 1, NULLVAL, array, anynull, status)
         if (ft_check_error_cfitsio(status, unit)) return
 
-    end subroutine ft_read_slice_double_3d
+    end subroutine ft_read_slice_real8_3d
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
@@ -969,8 +1073,9 @@ contains
         if (ft_check_error_cfitsio(status)) continue
         status_release = 0
         call ftfiou(unit, status_release)
-        if (ft_check_error_cfitsio(status_release) .and. status == 0)           &
+        if (ft_check_error_cfitsio(status_release) .and. status == 0) then
             status = status_release
+        end if
 
     end subroutine ft_close
 
@@ -981,7 +1086,7 @@ contains
     subroutine ft_create_header(naxis1, naxis2, cd, crval1, crval2, crpix1, crpix2, header)
 
         integer, intent(in) :: naxis1, naxis2
-        real*8, intent(in)  :: cd(2,2), crval1, crval2, crpix1, crpix2
+        real(p), intent(in) :: cd(2,2), crval1, crval2, crpix1, crpix2
         character(len=2880), intent(out) :: header
 
         character(len=*), parameter :: format_dbl = "(a8,'= ',f20.15)"
@@ -1016,8 +1121,8 @@ contains
 
     function check_duplicate_keywords(keyword) result (is_dup)
 
-        character(len=8), intent(in) :: keyword
-        logical                      :: is_dup
+        character(len=FLEN_KEYWORD), intent(in) :: keyword
+        logical                                 :: is_dup
 
         is_dup = keyword == 'SIMPLE' .or. keyword == 'BITPIX' .or. keyword == 'NAXIS' .or. keyword == 'EXTEND'
         if (is_dup) return
@@ -1039,9 +1144,9 @@ contains
         character(len=*), intent(in), optional :: header
         integer, intent(out)            :: status
 
-        integer           :: irec, unit, blocksize, bitpix, naxis, naxes(1)
-        logical           :: simple, extend
-        character(len=80) :: record
+        integer                  :: irec, unit, blocksize, bitpix, naxis, naxes(1)
+        logical                  :: simple, extend
+        character(len=FLEN_CARD) :: record
 
         ! delete file if it exists
         open(10, file=filename, status='unknown')
@@ -1093,9 +1198,9 @@ contains
         character(len=*), intent(in), optional :: header
         integer, intent(out)            :: status
 
-        integer           :: irec, unit, blocksize, bitpix, naxis, naxes(2)
-        logical           :: simple, extend
-        character(len=80) :: record
+        integer                  :: irec, unit, blocksize, bitpix, naxis, naxes(2)
+        logical                  :: simple, extend
+        character(len=FLEN_CARD) :: record
 
         ! delete file if it exists
         open(10, file=filename, status='unknown')
@@ -1147,9 +1252,9 @@ contains
         character(len=*), intent(in), optional :: header
         integer, intent(out)            :: status
 
-        integer           :: irec, unit, blocksize, bitpix, naxis
-        logical           :: simple, extend
-        character(len=80) :: record
+        integer                  :: irec, unit, blocksize, bitpix, naxis
+        logical                  :: simple, extend
+        character(len=FLEN_CARD) :: record
 
         ! delete file if it exists
         open(10, file=filename, status='unknown')
@@ -1190,21 +1295,73 @@ contains
     end subroutine ft_write_image_int4_3d
 
 
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine ft_write_image_real4_1d(filename, data, header, status)
+
+        character(len=*), intent(in)           :: filename
+        real(sp), intent(in)                   :: data(:)
+        character(len=*), intent(in), optional :: header
+        integer, intent(out)                   :: status
+
+        integer                  :: irec, unit, blocksize, bitpix, naxis, naxes(1)
+        logical                  :: simple, extend
+        character(len=FLEN_CARD) :: record
+
+        ! delete file if it exists
+        open(10, file=filename, status='unknown')
+        close(10, status='delete')
+
+        ! open and initialise the fits file
+        status = 0
+        call ftgiou(unit, status)
+        if (ft_check_error_cfitsio(status, filename=filename)) return
+
+        call ftinit(unit, filename, blocksize, status)
+        if (ft_check_error_cfitsio(status, unit, filename)) return
+
+        simple = .true.
+        bitpix = -32
+        naxis  = 1
+        naxes  = [ size(data) ]
+        extend = .true.
+        call FTPHPR(unit, simple, bitpix, naxis, naxes, 0, 1, extend, status)
+        if (ft_check_error_cfitsio(status, unit, filename)) return
+
+        ! write the astrometry keywords
+        if (present(header)) then
+            do irec=1, len(header) / 80
+                record = header((irec-1)*80+1:irec*80)
+                if (check_duplicate_keywords(record(1:8))) cycle
+                call FTPREC(unit,header((irec-1)*80+1:irec*80), status)
+            end do
+            if (ft_check_error_cfitsio(status, unit, filename)) return
+        end if
+
+        ! write the image data
+        call FTPPRE(unit, GROUP, 1, size(data), data, status)
+        if (ft_check_error_cfitsio(status, unit, filename)) return
+
+        ! close the fits file
+        call ft_close(unit, status)
+
+    end subroutine ft_write_image_real4_1d
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_write_image_double_1d(filename, data, header, status)
+    subroutine ft_write_image_real8_1d(filename, data, header, status)
 
-        character(len=*), intent(in)    :: filename
-        real*8, intent(in)              :: data(:)
+        character(len=*), intent(in)           :: filename
+        real(dp), intent(in)                   :: data(:)
         character(len=*), intent(in), optional :: header
-        integer, intent(out)            :: status
+        integer, intent(out)                   :: status
 
-        integer           :: irec, unit, blocksize, bitpix, naxis, naxes(1)
-        logical           :: simple, extend
-        character(len=80) :: record
+        integer                  :: irec, unit, blocksize, bitpix, naxis, naxes(1)
+        logical                  :: simple, extend
+        character(len=FLEN_CARD) :: record
 
         ! delete file if it exists
         open(10, file=filename, status='unknown')
@@ -1243,22 +1400,76 @@ contains
         ! close the fits file
         call ft_close(unit, status)
 
-    end subroutine ft_write_image_double_1d
+    end subroutine ft_write_image_real8_1d
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_write_image_double_2d(filename, data, header, status)
+    subroutine ft_write_image_real4_2d(filename, data, header, status)
 
-        character(len=*), intent(in)    :: filename
-        real*8, intent(in)              :: data(:,:)
+        character(len=*), intent(in)           :: filename
+        real(sp), intent(in)                   :: data(:,:)
         character(len=*), intent(in), optional :: header
-        integer, intent(out)            :: status
+        integer, intent(out)                   :: status
 
-        integer           :: irec, unit, blocksize, bitpix, naxis, naxes(2)
-        logical           :: simple, extend
-        character(len=80) :: record
+        integer                  :: irec, unit, blocksize, bitpix, naxis, naxes(2)
+        logical                  :: simple, extend
+        character(len=FLEN_CARD) :: record
+
+        ! delete file if it exists
+        open(10, file=filename, status='unknown')
+        close(10, status='delete')
+
+        ! open and initialise the fits file
+        status = 0
+        call ftgiou(unit, status)
+        if (ft_check_error_cfitsio(status, filename=filename)) return
+
+        call ftinit(unit, filename, blocksize, status)
+        if (ft_check_error_cfitsio(status, unit, filename)) return
+
+        simple = .true.
+        bitpix = -32
+        naxis  = 2
+        naxes  = [size(data,1), size(data,2)]
+        extend = .true.
+        call FTPHPR(unit, simple, bitpix, naxis, naxes, 0, 1, extend, status)
+        if (ft_check_error_cfitsio(status, unit, filename)) return
+
+        ! write the astrometry keywords
+        if (present(header)) then
+            do irec=1, len(header) / 80
+                record = header((irec-1)*80+1:irec*80)
+                if (check_duplicate_keywords(record(1:8))) cycle
+                call FTPREC(unit,header((irec-1)*80+1:irec*80), status)
+            end do
+            if (ft_check_error_cfitsio(status, unit, filename)) return
+        end if
+
+        ! write the image data
+        call FTPPRE(unit, GROUP, 1, size(data), data, status)
+        if (ft_check_error_cfitsio(status, unit, filename)) return
+
+        ! close the fits file
+        call ft_close(unit, status)
+
+    end subroutine ft_write_image_real4_2d
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine ft_write_image_real8_2d(filename, data, header, status)
+
+        character(len=*), intent(in)           :: filename
+        real(dp), intent(in)                   :: data(:,:)
+        character(len=*), intent(in), optional :: header
+        integer, intent(out)                   :: status
+
+        integer                  :: irec, unit, blocksize, bitpix, naxis, naxes(2)
+        logical                  :: simple, extend
+        character(len=FLEN_CARD) :: record
 
         ! delete file if it exists
         open(10, file=filename, status='unknown')
@@ -1297,22 +1508,75 @@ contains
         ! close the fits file
         call ft_close(unit, status)
 
-    end subroutine ft_write_image_double_2d
+    end subroutine ft_write_image_real8_2d
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_write_image_double_3d(filename, data, header, status)
+    subroutine ft_write_image_real4_3d(filename, data, header, status)
 
-        character(len=*), intent(in)    :: filename
-        real*8, intent(in)              :: data(:,:,:)
+        character(len=*), intent(in)           :: filename
+        real(sp), intent(in)                   :: data(:,:,:)
         character(len=*), intent(in), optional :: header
-        integer, intent(out)            :: status
+        integer, intent(out)                   :: status
 
-        integer           :: irec, unit, blocksize, bitpix, naxis
-        logical           :: simple, extend
-        character(len=80) :: record
+        integer                  :: irec, unit, blocksize, bitpix, naxis
+        logical                  :: simple, extend
+        character(len=FLEN_CARD) :: record
+
+        ! delete file if it exists
+        open(10, file=filename, status='unknown')
+        close(10, status='delete')
+
+        ! open and initialise the fits file
+        status = 0
+        call ftgiou(unit, status)
+        if (ft_check_error_cfitsio(status, filename=filename)) return
+
+        call ftinit(unit, filename, blocksize, status)
+        if (ft_check_error_cfitsio(status, unit, filename)) return
+
+        simple = .true.
+        bitpix = -32
+        naxis  = 3
+        extend = .true.
+        call FTPHPR(unit, simple, bitpix, naxis, shape(data), 0, 1, extend, status)
+        if (ft_check_error_cfitsio(status, unit, filename)) return
+
+        ! write the astrometry keywords
+        if (present(header)) then
+            do irec=1, len(header) / 80
+                record = header((irec-1)*80+1:irec*80)
+                if (check_duplicate_keywords(record(1:8))) cycle
+                call FTPREC(unit,header((irec-1)*80+1:irec*80), status)
+            end do
+            if (ft_check_error_cfitsio(status, unit, filename)) return
+        end if
+
+        ! write the image data
+        call FTPPRE(unit, GROUP, 1, size(data), data, status)
+        if (ft_check_error_cfitsio(status, unit, filename)) return
+
+        ! close the fits file
+        call ft_close(unit, status)
+
+    end subroutine ft_write_image_real4_3d
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine ft_write_image_real8_3d(filename, data, header, status)
+
+        character(len=*), intent(in)           :: filename
+        real(dp), intent(in)                   :: data(:,:,:)
+        character(len=*), intent(in), optional :: header
+        integer, intent(out)                   :: status
+
+        integer                  :: irec, unit, blocksize, bitpix, naxis
+        logical                  :: simple, extend
+        character(len=FLEN_CARD) :: record
 
         ! delete file if it exists
         open(10, file=filename, status='unknown')
@@ -1350,7 +1614,7 @@ contains
         ! close the fits file
         call ft_close(unit, status)
 
-    end subroutine ft_write_image_double_3d
+    end subroutine ft_write_image_real8_3d
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
@@ -1396,17 +1660,17 @@ contains
 
     subroutine get_keyword(header, keyword, value, found, comment, must_exist, status)
 
-        character(len=*), intent(in)   :: header
-        character(len=*), intent(in)   :: keyword
-        character(len=70), intent(out) :: value
-        logical, intent(out)           :: found
-        character(len=70), intent(out), optional :: comment
-        logical, intent(in), optional  :: must_exist
-        integer, intent(out)           :: status
+        character(len=*), intent(in)                       :: header
+        character(len=*), intent(in)                       :: keyword
+        character(len=FLEN_VALUE), intent(out)             :: value
+        logical, intent(out)                               :: found
+        character(len=FLEN_COMMENT), intent(out), optional :: comment
+        logical, intent(in), optional                      :: must_exist
+        integer, intent(out)                               :: status
 
-        character(len=70)              :: buffer
-        character(len=len(keyword))      :: strlowkeyword
-        integer                        :: i, ikeyword, ncards
+        character(len=FLEN_VALUE)   :: buffer
+        character(len=FLEN_KEYWORD) :: strlowkeyword
+        integer                     :: i, ikeyword, ncards
 
         status = 0
         value = ' '
@@ -1474,15 +1738,15 @@ contains
 
     subroutine ft_read_keyword_header_logical(header, keyword, value, found, status, comment)
 
-        character(len=*), intent(in)             :: header
-        character(len=*), intent(in)             :: keyword
-        logical, intent(out)                     :: value
-        logical, intent(out), optional           :: found
-        integer, intent(out)                     :: status
-        character(len=70), optional, intent(out) :: comment
+        character(len=*), intent(in)                       :: header
+        character(len=*), intent(in)                       :: keyword
+        logical, intent(out)                               :: value
+        logical, intent(out), optional                     :: found
+        integer, intent(out)                               :: status
+        character(len=FLEN_COMMENT), optional, intent(out) :: comment
 
-        character(len=70) :: charvalue
-        logical           :: found_
+        character(len=FLEN_VALUE) :: charvalue
+        logical                   :: found_
 
         value = .false.
 
@@ -1508,15 +1772,15 @@ contains
 
     subroutine ft_read_keyword_header_int4(header, keyword, value, found, status, comment)
 
-        character(len=*), intent(in)             :: header
-        character(len=*), intent(in)             :: keyword
-        integer*4, intent(out)                   :: value
-        logical, intent(out), optional           :: found
-        integer, intent(out)                     :: status
-        character(len=70), optional, intent(out) :: comment
+        character(len=*), intent(in)                       :: header
+        character(len=*), intent(in)                       :: keyword
+        integer*4, intent(out)                             :: value
+        logical, intent(out), optional                     :: found
+        integer, intent(out)                               :: status
+        character(len=FLEN_COMMENT), optional, intent(out) :: comment
 
-        character(len=70) :: charvalue
-        logical           :: found_
+        character(len=FLEN_VALUE) :: charvalue
+        logical                   :: found_
 
         value = 0
 
@@ -1540,15 +1804,15 @@ contains
 
     subroutine ft_read_keyword_header_int8(header, keyword, value, found, status, comment)
 
-        character(len=*), intent(in)             :: header
-        character(len=*), intent(in)             :: keyword
-        integer*8, intent(out)                   :: value
-        logical, intent(out), optional           :: found
-        integer, intent(out)                     :: status
-        character(len=70), optional, intent(out) :: comment
+        character(len=*), intent(in)                       :: header
+        character(len=*), intent(in)                       :: keyword
+        integer*8, intent(out)                             :: value
+        logical, intent(out), optional                     :: found
+        integer, intent(out)                               :: status
+        character(len=FLEN_COMMENT), optional, intent(out) :: comment
 
-        character(len=70) :: charvalue
-        logical           :: found_
+        character(len=FLEN_VALUE) :: charvalue
+        logical                   :: found_
 
         value = 0
 
@@ -1570,19 +1834,39 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_keyword_header_double(header, keyword, value, found, status, comment)
+    subroutine ft_read_keyword_header_real4(header, keyword, value, found, status, comment)
 
-        character(len=*), intent(in)             :: header
-        character(len=*), intent(in)             :: keyword
-        real*8, intent(out)                      :: value
-        logical, intent(out), optional           :: found
-        integer, intent(out)                     :: status
-        character(len=70), optional, intent(out) :: comment
+        character(len=*), intent(in)                       :: header
+        character(len=*), intent(in)                       :: keyword
+        real(sp), intent(out)                              :: value
+        logical, intent(out), optional                     :: found
+        integer, intent(out)                               :: status
+        character(len=FLEN_COMMENT), optional, intent(out) :: comment
 
-        character(len=70) :: charvalue
-        logical           :: found_
+        real(dp) :: value_
 
-        value = 0.d0
+        call ft_read_keyword(header, keyword, value_, found, status, comment)
+        value = real(value_, sp)
+
+    end subroutine ft_read_keyword_header_real4
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine ft_read_keyword_header_real8(header, keyword, value, found, status, comment)
+
+        character(len=*), intent(in)                       :: header
+        character(len=*), intent(in)                       :: keyword
+        real(dp), intent(out)                              :: value
+        logical, intent(out), optional                     :: found
+        integer, intent(out)                               :: status
+        character(len=FLEN_COMMENT), optional, intent(out) :: comment
+
+        character(len=FLEN_VALUE) :: charvalue
+        logical                   :: found_
+
+        value = 0
 
         call get_keyword(header, keyword, charvalue, found_, comment, .not. present(found), status)
         if (present(found)) found = found_
@@ -1591,12 +1875,34 @@ contains
         read (charvalue,'(bn,f20.0)',iostat=status) value
         if (status /= 0) then
             status = 409
-            write (ERROR_UNIT,'(a)') "ft_read_keyword_header_double: invalid real value '" // trim(charvalue) //                 &
+            write (ERROR_UNIT,'(a)') "ft_read_keyword: invalid real value '" // trim(charvalue) //                 &
                   "' for keyword '" // keyword // "' in FITS header."
             return
         end if
 
-    end subroutine ft_read_keyword_header_double
+    end subroutine ft_read_keyword_header_real8
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+#if PRECISION_REAL == 16
+    subroutine ft_read_keyword_header_real16(header, keyword, value, found, status, comment)
+
+        character(len=*), intent(in)                       :: header
+        character(len=*), intent(in)                       :: keyword
+        real(qp), intent(out)                              :: value
+        logical, intent(out), optional                     :: found
+        integer, intent(out)                               :: status
+        character(len=FLEN_COMMENT), optional, intent(out) :: comment
+
+        real(dp) :: value_
+
+        call ft_read_keyword(header, keyword, value_, found, status, comment)
+        value = real(value_, qp)
+
+    end subroutine ft_read_keyword_header_real16
+#endif
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
@@ -1604,16 +1910,16 @@ contains
 
     subroutine ft_read_keyword_header_character(header, keyword, value, found, status, comment)
 
-        character(len=*), intent(in)             :: header
-        character(len=*), intent(in)             :: keyword
-        character(len=*), intent(out)            :: value
-        logical, intent(out), optional           :: found
-        integer, intent(out)                     :: status
-        character(len=70), optional, intent(out) :: comment
+        character(len=*), intent(in)                       :: header
+        character(len=*), intent(in)                       :: keyword
+        character(len=*), intent(out)                      :: value
+        logical, intent(out), optional                     :: found
+        integer, intent(out)                               :: status
+        character(len=FLEN_COMMENT), optional, intent(out) :: comment
 
-        character(len=70) :: charvalue
-        integer           :: ncharvalue, i, j
-        logical           :: found_
+        character(len=FLEN_VALUE) :: charvalue
+        integer                   :: ncharvalue, i, j
+        logical                   :: found_
 
         call get_keyword(header, keyword, charvalue, found_, comment, .not. present(found), status)
         if (present(found)) found = found_
@@ -1654,15 +1960,15 @@ contains
 
     subroutine ft_read_keyword_unit_logical(unit, keyword, value, found, status, comment)
 
-        integer, intent(in)                      :: unit
-        character(len=*), intent(in)             :: keyword
-        logical*4, intent(out)                   :: value
-        logical, intent(out), optional           :: found
-        integer, intent(out)                     :: status
-        character(len=70), optional, intent(out) :: comment
+        integer, intent(in)                                :: unit
+        character(len=*), intent(in)                       :: keyword
+        logical*4, intent(out)                             :: value
+        logical, intent(out), optional                     :: found
+        integer, intent(out)                               :: status
+        character(len=FLEN_COMMENT), optional, intent(out) :: comment
 
-        logical           :: found_
-        character(len=70) :: comment_
+        logical                     :: found_
+        character(len=FLEN_COMMENT) :: comment_
         
         found_ = .false.
         status = 0
@@ -1686,15 +1992,15 @@ contains
 
     subroutine ft_read_keyword_unit_int4(unit, keyword, value, found, status, comment)
 
-        integer, intent(in)                      :: unit
-        character(len=*), intent(in)             :: keyword
-        integer*4, intent(out)                   :: value
-        logical, intent(out), optional           :: found
-        integer, intent(out)                     :: status
-        character(len=70), optional, intent(out) :: comment
+        integer, intent(in)                                :: unit
+        character(len=*), intent(in)                       :: keyword
+        integer*4, intent(out)                             :: value
+        logical, intent(out), optional                     :: found
+        integer, intent(out)                               :: status
+        character(len=FLEN_COMMENT), optional, intent(out) :: comment
 
-        logical           :: found_
-        character(len=70) :: comment_
+        logical                     :: found_
+        character(len=FLEN_COMMENT) :: comment_
         
         found_ = .false.
         status = 0
@@ -1718,15 +2024,15 @@ contains
 
     subroutine ft_read_keyword_unit_int8(unit, keyword, value, found, status, comment)
 
-        integer, intent(in)                      :: unit
-        character(len=*), intent(in)             :: keyword
-        integer*8, intent(out)                   :: value
-        logical, intent(out), optional           :: found
-        integer, intent(out)                     :: status
-        character(len=70), optional, intent(out) :: comment
+        integer, intent(in)                                :: unit
+        character(len=*), intent(in)                       :: keyword
+        integer*8, intent(out)                             :: value
+        logical, intent(out), optional                     :: found
+        integer, intent(out)                               :: status
+        character(len=FLEN_COMMENT), optional, intent(out) :: comment
 
-        logical           :: found_
-        character(len=70) :: comment_
+        logical                     :: found_
+        character(len=fLEN_COMMENT) :: comment_
                 
         found_ = .false.
         status = 0
@@ -1748,17 +2054,37 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_keyword_unit_double(unit, keyword, value, found, status, comment)
+    subroutine ft_read_keyword_unit_real4(unit, keyword, value, found, status, comment)
 
-        integer, intent(in)                      :: unit
-        character(len=*), intent(in)             :: keyword
-        real(dp) , intent(out)                   :: value
-        logical, intent(out), optional           :: found
-        integer, intent(out)                     :: status
-        character(len=70), optional, intent(out) :: comment
+        integer, intent(in)                                :: unit
+        character(len=*), intent(in)                       :: keyword
+        real(sp), intent(out)                              :: value
+        logical, intent(out), optional                     :: found
+        integer, intent(out)                               :: status
+        character(len=FLEN_COMMENT), optional, intent(out) :: comment
 
-        logical           :: found_
-        character(len=70) :: comment_
+        real(dp) :: value_
+
+        call ft_read_keyword(unit, keyword, value_, found, status, comment)
+        value = real(value_, sp)
+
+    end subroutine ft_read_keyword_unit_real4
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine ft_read_keyword_unit_real8(unit, keyword, value, found, status, comment)
+
+        integer, intent(in)                                :: unit
+        character(len=*), intent(in)                       :: keyword
+        real(dp) , intent(out)                             :: value
+        logical, intent(out), optional                     :: found
+        integer, intent(out)                               :: status
+        character(len=FLEN_COMMENT), optional, intent(out) :: comment
+
+        logical                     :: found_
+        character(len=FLEN_COMMENT) :: comment_
         
         found_ = .false.
         status = 0
@@ -1774,7 +2100,29 @@ contains
         if (present(found)) found = found_
         if (present(comment)) comment = comment_
 
-    end subroutine ft_read_keyword_unit_double
+    end subroutine ft_read_keyword_unit_real8
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+#if PRECISION_REAL == 16
+    subroutine ft_read_keyword_unit_real16(unit, keyword, value, found, status, comment)
+
+        integer, intent(in)                                :: unit
+        character(len=*), intent(in)                       :: keyword
+        real(qp), intent(out)                              :: value
+        logical, intent(out), optional                     :: found
+        integer, intent(out)                               :: status
+        character(len=FLEN_COMMENT), optional, intent(out) :: comment
+
+        real(dp) :: value_
+
+        call ft_read_keyword(unit, keyword, value_, found, status, comment)
+        value = real(value_, qp)
+
+    end subroutine ft_read_keyword_unit_real16
+#endif
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
@@ -1782,15 +2130,15 @@ contains
 
     subroutine ft_read_keyword_unit_character(unit, keyword, value, found, status, comment)
 
-        integer, intent(in)                      :: unit
-        character(len=*), intent(in)             :: keyword
-        character(len=*), intent(out)            :: value
-        logical, intent(out), optional           :: found
-        integer, intent(out)                     :: status
-        character(len=70), optional, intent(out) :: comment
+        integer, intent(in)                                :: unit
+        character(len=*), intent(in)                       :: keyword
+        character(len=*), intent(out)                      :: value
+        logical, intent(out), optional                     :: found
+        integer, intent(out)                               :: status
+        character(len=FLEN_COMMENT), optional, intent(out) :: comment
 
-        logical           :: found_
-        character(len=70) :: comment_
+        logical                     :: found_
+        character(len=FLEN_COMMENT) :: comment_
         
         found_ = .false.
         status = 0
@@ -1814,16 +2162,17 @@ contains
 
     subroutine ft_read_keyword_hcss_logical(unit, keyword, value, found, status, comment)
 
-        integer, intent(in)                      :: unit
-        character(len=*), intent(in)             :: keyword
-        logical, intent(out)                     :: value
-        logical, intent(out), optional           :: found
-        integer, intent(out)                     :: status
-        character(len=70), optional, intent(out) :: comment
+        integer, intent(in)                                :: unit
+        character(len=*), intent(in)                       :: keyword
+        logical, intent(out)                               :: value
+        logical, intent(out), optional                     :: found
+        integer, intent(out)                               :: status
+        character(len=FLEN_COMMENT), optional, intent(out) :: comment
 
-        logical           :: found_
-        integer           :: ikey
-        character(len=70) :: comment_, kwd
+        logical                     :: found_
+        integer                     :: ikey
+        character(len=FLEN_COMMENT) :: comment_
+        character(len=FLEN_KEYWORD) :: kwd
         
         if (present(found)) found = .false.
 
@@ -1856,16 +2205,17 @@ contains
 
     subroutine ft_read_keyword_hcss_int4(unit, keyword, value, found, status, comment)
 
-        integer, intent(in)                      :: unit
-        character(len=*), intent(in)             :: keyword
-        integer*4, intent(out)                   :: value
-        logical, intent(out), optional           :: found
-        integer, intent(out)                     :: status
-        character(len=70), optional, intent(out) :: comment
+        integer, intent(in)                                :: unit
+        character(len=*), intent(in)                       :: keyword
+        integer*4, intent(out)                             :: value
+        logical, intent(out), optional                     :: found
+        integer, intent(out)                               :: status
+        character(len=FLEN_COMMENT), optional, intent(out) :: comment
 
-        logical           :: found_
-        integer           :: ikey
-        character(len=70) :: comment_, kwd
+        logical                     :: found_
+        integer                     :: ikey
+        character(len=FLEN_COMMENT) :: comment_
+        character(len=FLEN_KEYWORD) :: kwd
         
         if (present(found)) found = .false.
 
@@ -1898,16 +2248,17 @@ contains
 
     subroutine ft_read_keyword_hcss_int8(unit, keyword, value, found, status, comment)
 
-        integer, intent(in)                      :: unit
-        character(len=*), intent(in)             :: keyword
-        integer*8, intent(out)                      :: value
-        logical, intent(out), optional           :: found
-        integer, intent(out)                     :: status
-        character(len=70), optional, intent(out) :: comment
+        integer, intent(in)                                :: unit
+        character(len=*), intent(in)                       :: keyword
+        integer*8, intent(out)                             :: value
+        logical, intent(out), optional                     :: found
+        integer, intent(out)                               :: status
+        character(len=FLEN_COMMENT), optional, intent(out) :: comment
 
-        logical           :: found_
-        integer           :: ikey
-        character(len=70) :: comment_, kwd
+        logical                     :: found_
+        integer                     :: ikey
+        character(len=FLEN_COMMENT) :: comment_
+        character(len=FLEN_KEYWORD) :: kwd
         
         if (present(found)) found = .false.
 
@@ -1938,18 +2289,39 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_keyword_hcss_double(unit, keyword, value, found, status, comment)
+    subroutine ft_read_keyword_hcss_real4(unit, keyword, value, found, status, comment)
 
-        integer, intent(in)                      :: unit
-        character(len=*), intent(in)             :: keyword
-        real*8, intent(out)                      :: value
-        logical, intent(out), optional           :: found
-        integer, intent(out)                     :: status
-        character(len=70), optional, intent(out) :: comment
+        integer, intent(in)                                :: unit
+        character(len=*), intent(in)                       :: keyword
+        real(sp), intent(out)                              :: value
+        logical, intent(out), optional                     :: found
+        integer, intent(out)                               :: status
+        character(len=FLEN_COMMENT), optional, intent(out) :: comment
 
-        logical           :: found_
-        integer           :: ikey
-        character(len=70) :: comment_, kwd
+        real(dp) :: value_
+
+        call ft_read_keyword_hcss(unit, keyword, value_, found, status, comment)
+        value = real(value_, sp)
+
+    end subroutine ft_read_keyword_hcss_real4
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine ft_read_keyword_hcss_real8(unit, keyword, value, found, status, comment)
+
+        integer, intent(in)                                :: unit
+        character(len=*), intent(in)                       :: keyword
+        real(dp), intent(out)                              :: value
+        logical, intent(out), optional                     :: found
+        integer, intent(out)                               :: status
+        character(len=FLEN_COMMENT), optional, intent(out) :: comment
+
+        logical                     :: found_
+        integer                     :: ikey
+        character(len=FLEN_COMMENT) :: comment_
+        character(len=FLEN_KEYWORD) :: kwd
         
         if (present(found)) found = .false.
 
@@ -1974,7 +2346,29 @@ contains
         status = 1
         write (ERROR_UNIT,'(a)') "FT_READ_KEYWORD_HCSS: FITS keyword '" // keyword // "' is not found."
 
-    end subroutine ft_read_keyword_hcss_double
+    end subroutine ft_read_keyword_hcss_real8
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+#if PRECISION_REAL == 16
+    subroutine ft_read_keyword_hcss_real16(unit, keyword, value, found, status, comment)
+
+        integer, intent(in)                                :: unit
+        character(len=*), intent(in)                       :: keyword
+        real(qp), intent(out)                              :: value
+        logical, intent(out), optional                     :: found
+        integer, intent(out)                               :: status
+        character(len=FLEN_COMMENT), optional, intent(out) :: comment
+
+        real(dp) :: value_
+
+        call ft_read_keyword_hcss(unit, keyword, value_, found, status, comment)
+        value = real(value_, qp)
+
+    end subroutine ft_read_keyword_hcss_real16
+#endif
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
@@ -1982,16 +2376,17 @@ contains
 
     subroutine ft_read_keyword_hcss_character(unit, keyword, value, found, status, comment)
 
-        integer, intent(in)                      :: unit
-        character(len=*), intent(in)             :: keyword
-        character(len=*), intent(out)            :: value
-        logical, intent(out), optional           :: found
-        integer, intent(out)                     :: status
-        character(len=70), optional, intent(out) :: comment
+        integer, intent(in)                                :: unit
+        character(len=*), intent(in)                       :: keyword
+        character(len=*), intent(out)                      :: value
+        logical, intent(out), optional                     :: found
+        integer, intent(out)                               :: status
+        character(len=FLEN_COMMENT), optional, intent(out) :: comment
 
         logical           :: found_
         integer           :: ikey
-        character(len=70) :: comment_, kwd
+        character(len=FLEN_COMMENT) :: comment_
+        character(len=FLEN_KEYWORD) :: kwd
         
         if (present(found)) found = .false.
 
@@ -2033,7 +2428,8 @@ contains
         character(len=*), intent(in), optional :: filename
         integer, intent(in), optional          :: hdu
 
-        character                              :: errtext*30, errmessage*80
+        character(len=FLEN_STATUS)             :: errtext
+        character(len=FLEN_ERRMSG)             :: errmessage
         integer                                :: status_close
 
         ft_check_error_cfitsio = status /= 0

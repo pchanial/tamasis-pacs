@@ -326,21 +326,22 @@ def pacs_preprocess(obs, projection_method='sharp edges', oversampling=True, npi
     # bail out if not in transparent mode
     if not obs.transparent_mode or compression_factor == 1:
         model = CompressionAverage(obs.compression_factor) * projection
-        map_mask = model.T(Tod(tod.mask, dtype='float64', nsamples=tod.nsamples))
+        map_mask = model.T(Tod(tod.mask, nsamples=tod.nsamples))
         model = masking * model
         return tod, model, mapper_naive(tod, model), map_mask
 
     # compress the transparent observation
     compression = CompressionAverage(compression_factor)
     todc = compression(tod)
-    mask = compression(numpy.asarray(tod.mask, 'float64'))
-    mask[mask != 0] = 1.
+    mask = compression(tod.mask)
+    mask[mask != 0] = 1
     todc.mask = numpy.array(mask, dtype='int8')
     maskingc = Masking(todc.mask)
 
     model = compression * projection
-    map_mask = model.T(numpy.asarray(tod.mask, 'float64'))
+    map_mask = model.T(tod.mask)
     model = masking * model
+    print 'XXX PACS PREPROCESS CHECK compression(tod.mask) and model.T(mask)'
 
     return todc, model, mapper_naive(todc, model), map_mask
 

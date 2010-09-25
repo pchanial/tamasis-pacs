@@ -9,7 +9,7 @@ program test_ngc6946_bpj
     use module_preprocessor,    only : subtract_meandim1, divide_vectordim2
     use module_projection,      only : surface_convex_polygon
     use module_string,          only : strinteger
-    use module_tamasis,         only : init_tamasis, POLICY_KEEP, POLICY_MASK, POLICY_REMOVE
+    use module_tamasis,         only : init_tamasis, p, POLICY_KEEP, POLICY_MASK, POLICY_REMOVE
     use module_wcs,             only : init_astrometry, ad2xy_gnomonic
     use omp_lib
     implicit none
@@ -20,9 +20,10 @@ program test_ngc6946_bpj
     character(len=*), parameter         :: inputdir = '/home/pchanial/work/pacs/data/transparent/NGC6946/'
     character(len=*), parameter         :: filename(1) = inputdir // '1342184520_blue[12001:16000]'
     integer, parameter                  :: npixels_per_sample = 6
-    real*8, allocatable                 :: signal(:,:), coords(:,:), coords_yz(:,:)
-    real*8                              :: ra, dec, pa, chop, chop_old
-    real*8, allocatable                 :: surface1(:,:), surface2(:,:)
+    real(p), allocatable                :: signal(:,:)
+    real(p), allocatable                :: coords(:,:), coords_yz(:,:)
+    real(p)                             :: ra, dec, pa, chop, chop_old
+    real(p), allocatable                :: surface1(:,:), surface2(:,:)
     logical*1, allocatable              :: mask(:,:)
     character(len=2880)                 :: header
     integer                             :: nx, ny
@@ -30,7 +31,7 @@ program test_ngc6946_bpj
     integer                             :: count2, count_rate, count_max
     integer                             :: idetector, isample
     integer*8                           :: nsamples
-    real*8, allocatable                 :: map1d(:)
+    real(p), allocatable                :: map1d(:)
     type(pointingelement), allocatable  :: pmatrix(:,:,:)
 
     call system_clock(count0, count_rate, count_max)
@@ -52,7 +53,7 @@ program test_ngc6946_bpj
     if (status /= 0) stop 'FAILED: pacsinstrument%init'
 
     ! get header map
-    call pacs%compute_map_header(obs, .false., 3.d0, header, status)
+    call pacs%compute_map_header(obs, .false., 3._p, header, status)
     if (status /= 0) stop 'FAILED: compute_map_header.'
 
     call ft_read_keyword(header, 'naxis1', nx, status=status)
@@ -104,15 +105,16 @@ program test_ngc6946_bpj
     !!$omp parallel do default(shared) firstprivate(chop_old) private(isample, ra, dec, pa, chop, coords, coords_yz)
     do isample = 1, nsamples
         call obs%get_position_index(1, isample, 1, ra, dec, pa, chop)
-        if (abs(chop-chop_old) > 1.d-2) then
+        if (abs(chop-chop_old) > 1.e-2_p) then
             coords_yz = pacs%uv2yz(pacs%corners_uv, pacs%distortion_yz, chop)
             chop_old = chop
         end if
         coords = pacs%yz2ad(coords_yz, ra, dec, pa)
         coords = ad2xy_gnomonic(coords)
         do idetector = 1, pacs%ndetectors
-            surface1(isample,idetector) = abs(surface_convex_polygon(coords(:,(idetector-1)*NVERTICES+1:idetector*NVERTICES)))
-            surface2(isample,idetector) = sum_kahan(real(pmatrix(:,isample,idetector)%weight, kind=8))
+            surface1(isample,idetector) = abs(surface_convex_polygon(                                                              &
+                                          real(coords(:,(idetector-1)*NVERTICES+1:idetector*NVERTICES),p)))
+            surface2(isample,idetector) = sum_kahan(real(pmatrix(:,isample,idetector)%weight, p))
         end do
     end do
     !!$omp end parallel do
@@ -122,34 +124,33 @@ program test_ngc6946_bpj
     write (*,*) 'Difference: ', maxval(abs((surface1-surface2)/surface1))
     write (*,*) 'Sum surfaces: ', sum_kahan(surface1), sum_kahan(surface2), nx, ny
     write (*,*) 'Sum pmatrix weight: ', sum(pmatrix%weight), 'max:', maxval(pmatrix%weight)
-    write (*,*) 'Sum pmatrix pixel: ', sum(int(pmatrix%pixel,kind=8)), 'max:', maxval(pmatrix%pixel)
+    write (*,*) 'Sum pmatrix pixel: ', sum(int(pmatrix%pixel,kind=4)), 'max:', maxval(pmatrix%pixel)
     write (*,*) 'Sum signal: ', sum_kahan(signal), 'max:', maxval(signal)
 
     ! back project the timeline
     write (*,'(a)', advance='no') 'Computing the back projection... '
-    signal = 1.d0 / surface1
+    signal = 1._p / surface1
     call system_clock(count1, count_rate, count_max)
     call pmatrix_transpose(pmatrix, signal, map1d)
     call system_clock(count2, count_rate, count_max)
     write (*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
 
     ! test the back projected map
-    write (OUTPUT_UNIT,*) 'Sum in map is ', sum_kahan(map1d), ' ...instead of ',&
-                         strinteger(int(pacs%ndetectors*nsamples, kind=4))
-    if (neq_real(sum_kahan(map1d), real(pacs%ndetectors*nsamples,kind=8), 1.d-6)) then
+    write (OUTPUT_UNIT,*) 'Sum in map is ', sum_kahan(map1d), ' ...instead of ', strinteger(int(pacs%ndetectors*nsamples, kind=4))
+    if (neq_real(sum_kahan(map1d), real(pacs%ndetectors*nsamples,p), 10._p * epsilon(1.0))) then
         stop 'FAILED.'
     end if
 
     ! project the map
     write (*,'(a)', advance='no') 'Computing the forward projection... '
-    map1d = 1.d0
+    map1d = 1._p
     call system_clock(count1, count_rate, count_max)
     call pmatrix_direct(pmatrix, map1d, signal)
     call system_clock(count2, count_rate, count_max)
     write (*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
 
     ! test the back projected map
-    if (any(neq_real(signal, surface1, 1d-5))) then
+    if (any(neq_real(signal, surface1, 10._p * epsilon(1.0)))) then
         write (ERROR_UNIT,*) 'Invalid signal.'
         stop 'FAILED.'
     end if

@@ -19,8 +19,9 @@ lib/libtamasismadcap.so: lib/libtamasiscore.so $(MODULESOURCES:.f=.o)
 $(TESTSOURCES:.f=):%: lib/libtamasiscore.so lib/libtamasismadcap.so %.o
 	$(FC) -o $@ $@.o $(LDFLAGS) -ltamasiscore -ltamasismadcap
 
+test-madcap:lib/libtamasis.so
 test-madcap: $(TESTSOURCES:.f=)
-	@for test in $^; do \
+	@for test in $(filter-out %.so,$^); do \
         echo;\
         echo "Running MADCAP test: "$$test"...";\
         echo "==================";\

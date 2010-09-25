@@ -15,6 +15,7 @@ module module_optionparser
 
     use iso_fortran_env, only : ERROR_UNIT, OUTPUT_UNIT
     use module_string,   only : strlowcase, strinteger
+    use module_tamasis,  only : p
     implicit none
     private
 
@@ -763,12 +764,12 @@ contains
         class(optionparser), intent(in) :: this
         character(len=*), intent(in)    :: name
         integer, intent(out), optional  :: status
-        real*8                          :: value
+        real(p)                         :: value
         character(len=OPTION_VALUE_LEN) :: charvalue
         integer                         :: iostatus
         
         !XXX should be NaN
-        value = 0.d0
+        value = 0
         charvalue = this%get_option(name, status)
         if (present(status)) then
             if (status /= 0) return

@@ -2,8 +2,8 @@ module module_deglitching
 
     use module_math,           only : moment, mad, sigma_clipping
     use module_pointingmatrix, only : pointingelement, backprojection_weighted_roi
-    use module_precision,      only : p, sp
     use module_string,         only : strternary
+    use module_tamasis,        only : p
     implicit none
     private
 
@@ -17,28 +17,28 @@ contains
 
         type(pointingelement), intent(in) :: pmatrix(:,:,:)
         integer, intent(in)               :: nx, ny
-        real(kind=p), intent(in)          :: timeline(:,:)
+        real(p), intent(in)               :: timeline(:,:)
         logical(kind=1), intent(inout)    :: mask(:,:)
-        real(kind=p), intent(in)          :: nsigma
+        real(p), intent(in)               :: nsigma
         logical, intent(in)               :: use_mad
         logical, intent(in), optional     :: verbose
 
-        integer, parameter        :: MIN_SAMPLE_SIZE = 5
-        integer                   :: npixels_per_sample, npixels_per_frame
-        integer                   :: ndetectors, ntimes
-        integer                   :: hitmap(0:nx*ny-1)
-        integer                   :: roi(2,2,size(timeline,1))
-        integer                   :: i, j, ipixel, itime, idetector, isample, imap, iminimap, iv
-        integer                   :: xmin, xmax, ymin, ymax
-        integer                   :: nv, nhits_max
-        real(kind=p)              :: mv, stddev
-        real(kind=p), allocatable :: map(:,:)
-        real(kind=p), allocatable :: arrv(:)
-        integer, allocatable      :: arrt(:)
-        logical, allocatable      :: isglitch(:)
-        integer                   :: count1, count2, count_rate, count_max
-        integer*8                 :: nbads
-        logical                   :: verbose_
+        integer, parameter   :: MIN_SAMPLE_SIZE = 5
+        integer              :: npixels_per_sample, npixels_per_frame
+        integer              :: ndetectors, ntimes
+        integer              :: hitmap(0:nx*ny-1)
+        integer              :: roi(2,2,size(timeline,1))
+        integer              :: i, j, ipixel, itime, idetector, isample, imap, iminimap, iv
+        integer              :: xmin, xmax, ymin, ymax
+        integer              :: nv, nhits_max
+        real(p)              :: mv, stddev
+        real(p), allocatable :: map(:,:)
+        real(p), allocatable :: arrv(:)
+        integer, allocatable :: arrt(:)
+        logical, allocatable :: isglitch(:)
+        integer              :: count1, count2, count_rate, count_max
+        integer*8            :: nbads
+        logical              :: verbose_
         
         verbose_ = .false.
         if (present(verbose)) verbose_ = verbose

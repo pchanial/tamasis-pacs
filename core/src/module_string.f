@@ -1,5 +1,6 @@
 module module_string
 
+    use module_tamasis, only : p
     implicit none
     private
 
@@ -239,7 +240,7 @@ contains
 
     pure function strreal(input, prec)
 
-        real*8, intent(in)  :: input
+        real(p), intent(in) :: input
         integer, intent(in) :: prec
         character(len=strreal_len(input,prec)) :: strreal
       
@@ -263,7 +264,7 @@ contains
     pure function strreal_len(input, prec) result(length)
 
         integer             :: length
-        real*8, intent(in)  :: input
+        real(p), intent(in) :: input
         integer, intent(in) :: prec
 
         character(len=20)   :: charvalue

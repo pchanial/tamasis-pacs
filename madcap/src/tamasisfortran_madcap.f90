@@ -115,6 +115,7 @@ subroutine madmap1_read_tod(todfile, invnttfile, convert, npixels_per_sample, ns
     use module_filtering,      only : FilterUncorrelated
     use module_madcap,         only : read_filter, read_tod
     use module_pointingmatrix, only : PointingElement
+    use module_tamasis,        only : p
     implicit none
 
     !f2py threadsafe
@@ -134,7 +135,7 @@ subroutine madmap1_read_tod(todfile, invnttfile, convert, npixels_per_sample, ns
     integer, intent(in)                  :: npixels_per_sample
     integer, intent(in)                  :: nsamples_tot
     integer, intent(in)                  :: ndetectors
-    real*8, intent(inout)                :: tod(nsamples_tot,ndetectors)
+    real(p), intent(inout)               :: tod(nsamples_tot,ndetectors)
     type(PointingElement), intent(inout) :: pmatrix(npixels_per_sample,nsamples_tot,ndetectors)
     integer, intent(out)                 :: status
 
@@ -157,6 +158,7 @@ subroutine madmap1_read_filter(filename, convert, ncorrelations, ndetectors, nsl
     use iso_fortran_env,  only : ERROR_UNIT
     use module_filtering, only : FilterUncorrelated, create_filter_uncorrelated
     use module_madcap,    only : read_filter
+    use module_tamasis,   only : p
     implicit none
 
     !f2py threadsafe
@@ -174,7 +176,7 @@ subroutine madmap1_read_filter(filename, convert, ncorrelations, ndetectors, nsl
     integer, intent(in)          :: ncorrelations
     integer, intent(in)          :: ndetectors
     integer, intent(in)          :: nslices
-    real*8, intent(out)          :: data(ncorrelations+1, ndetectors, nslices)
+    real(p), intent(out)         :: data(ncorrelations+1, ndetectors, nslices)
     integer, intent(out)         :: nsamples(nslices)
     integer, intent(out)         :: status
 

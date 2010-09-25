@@ -9,7 +9,7 @@ program pacs_photproject
     use module_pointingmatrix,  only : backprojection_weighted, PointingElement
     use module_preprocessor,    only : divide_vectordim2, median_filtering, subtract_meandim1
     use module_string,          only : strlowcase
-    use module_tamasis,         only : init_tamasis, POLICY_KEEP, POLICY_MASK, POLICY_REMOVE
+    use module_tamasis,         only : init_tamasis, p, POLICY_KEEP, POLICY_MASK, POLICY_REMOVE
     implicit none
 
     class(PacsInstrument), allocatable :: pacs
@@ -17,13 +17,13 @@ program pacs_photproject
     type(MaskPolicy)                   :: policy
     type(PointingElement), allocatable :: pmatrix(:,:,:)
     class(OptionParser), allocatable   :: parser
-    real*8, allocatable                :: signal(:,:)
+    real(p), allocatable               :: signal(:,:)
     logical*1, allocatable             :: mask(:,:)
-    real*8, allocatable                :: map1d(:), weight1d(:)
+    real(p), allocatable               :: map1d(:), weight1d(:)
     character(len=2048), allocatable   :: infile(:)
     character(len=2048)                :: outfile, headerfile
     character(len=2880)                :: header
-    real*8                             :: resolution
+    real(p)                            :: resolution
     integer                            :: npixels_per_sample
     logical                            :: do_flatfield
     logical                            :: reject_bad_line
@@ -32,7 +32,7 @@ program pacs_photproject
     integer                            :: nobs, iobs, nx, ny, start
     integer                            :: status, count1, count2, count_rate, count_max
     integer                            :: filtering_length
-    real*8                             :: deglitching_nsigma
+    real(p)                            :: deglitching_nsigma
 
     ! command parsing
     allocate(parser)
@@ -193,7 +193,7 @@ program pacs_photproject
     ! back project the timeline
     write(OUTPUT_UNIT,'(a)', advance='no') 'Computing the map... '
     call system_clock(count1, count_rate, count_max)
-    call backprojection_weighted(pmatrix, signal, mask, map1d, weight1d, 0.d0)
+    call backprojection_weighted(pmatrix, signal, mask, map1d, weight1d, 0._p)
     call system_clock(count2, count_rate, count_max)
     write(OUTPUT_UNIT,'(f6.2,a)') real(count2-count1)/count_rate, 's'
 

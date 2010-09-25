@@ -1,26 +1,25 @@
 ! Because of bugs in gfortran and ifort related to array of classes
 ! the architecture is (temporarily hopefully) a mess
 ! this module should define a derived type: observationslice and the
-! module module_pacsobservation should extend it and define pacsobservationslice
-! for now, many routines that should belong to module_pacsobservation are here...
+! module module_PacsObservation should extend it and define PacsObservationSlice
+! for now, many routines that should belong to module_PacsObservation are here...
 
 module module_observation
 
     use iso_fortran_env,  only : ERROR_UNIT, OUTPUT_UNIT
     use module_fitstools, only : ft_open, ft_open_bintable, ft_read_column, ft_read_image, ft_read_keyword_hcss, ft_close
     use module_math,      only : NaN, mean, mean_degrees, median, neq_real
-    use module_precision, only : dp, p
     use module_string,    only : strinteger, strlowcase, strreal, strsection, strternary
-    use module_tamasis,   only : POLICY_KEEP, POLICY_MASK, POLICY_REMOVE
+    use module_tamasis,   only : p, POLICY_KEEP, POLICY_MASK, POLICY_REMOVE
     implicit none
     private
 
     public :: MaskPolicy
-    public :: observation
+    public :: Observation
 !!$    public :: observationslice
-public :: pacsobservationslice
-public :: pacsobservation    
-    public :: pointing
+public :: PacsObservationSlice
+public :: PacsObservation    
+    public :: Pointing
 
     type MaskPolicy
         integer :: inscan = POLICY_KEEP
@@ -30,11 +29,11 @@ public :: pacsobservation
     end type MaskPolicy
 
     type Pointing
-        real(dp)  :: time
-        real(dp)  :: ra
-        real(dp)  :: dec
-        real(dp)  :: pa
-        real(dp)  :: chop
+        real(p)   :: time
+        real(p)   :: ra
+        real(p)   :: dec
+        real(p)   :: pa
+        real(p)   :: chop
 
         logical*1 :: inscan
         logical*1 :: turnaround
@@ -59,8 +58,8 @@ public :: pacsobservation
 !!$
 !!$    end type observationslice
 
-!!$ type, extends(observationslice) :: pacsobservationslice
-    type :: pacsobservationslice
+!!$ type, extends(observationslice) :: PacsObservationSlice
+    type :: PacsObservationSlice
 
         integer            :: first, last, nsamples, nvalids
         character(len=256) :: filename
@@ -68,7 +67,7 @@ public :: pacsobservation
         character(len=70)  :: observing_mode
         character(len=70)  :: unit
         integer            :: compression_factor
-        real(dp)           :: sampling_interval
+        real(p)            :: sampling_interval
         type(pointing), allocatable :: p(:)
 
     contains
@@ -84,9 +83,9 @@ public :: pacsobservation
         procedure :: set_sampling_interval
         procedure :: set_astrometry_oldstyle
 
-    end type pacsobservationslice
+    end type PacsObservationSlice
 
-    type :: observation
+    type :: Observation
         integer           :: nslices
         integer           :: nsamples  ! number of pointings
         integer           :: nvalids   ! number of non-removed pointings, to be included in tod & pmatrix
@@ -94,17 +93,17 @@ public :: pacsobservation
         character(len=70) :: observing_mode
         character(len=70) :: unit
         type(MaskPolicy)  :: policy
-        type(pacsobservationslice), allocatable :: slice(:)
+        type(PacsObservationSlice), allocatable :: slice(:)
     contains
         procedure :: compute_center
         procedure :: get_position_time
         procedure :: get_position_index
         procedure :: destructor
-    end type observation
+    end type Observation
 
-    ! the following belongs to module_pacsobservation.f
+    ! the following belongs to module_PacsObservation.f
     ! moved here because of gfortran bug #44065
-    type, extends(observation) :: pacsobservation
+    type, extends(observation) :: PacsObservation
 
     contains
 
@@ -112,7 +111,7 @@ public :: pacsobservation
         procedure :: init_sim
         procedure :: print
 
-    end type pacsobservation
+    end type PacsObservation
 
 
 contains
@@ -123,11 +122,11 @@ contains
     subroutine get_position_time(this, islice, time, ra, dec, pa, chop, index)
         class(observation), intent(in) :: this
         integer, intent(in)            :: islice
-        real*8, intent(in)             :: time
-        real*8, intent(out)            :: ra, dec, pa, chop
+        real(p), intent(in)            :: time
+        real(p), intent(out)           :: ra, dec, pa, chop
         integer, intent(inout)         :: index
         integer                        :: i, first, last, nsamples
-        real*8                         :: frac
+        real(p)                        :: frac
 
         if (islice < 1 .or. islice > this%nslices) then
             write (ERROR_UNIT,'(a,i0,a)') "GET_POSITION: Invalid slice number '", islice, "'."
@@ -138,8 +137,8 @@ contains
         last  = this%slice(islice)%last
         nsamples = last - first + 1
 
-        if (time > 2.d0 * this%slice(islice)%p(nsamples)%time - this%slice(islice)%p(nsamples-1)%time .or.                         &
-            time < 2.d0 * this%slice(islice)%p(1)%time - this%slice(islice)%p(2)%time) then
+        if (time > 2._p * this%slice(islice)%p(nsamples)%time - this%slice(islice)%p(nsamples-1)%time .or.                         &
+            time < 2._p * this%slice(islice)%p(1)%time - this%slice(islice)%p(2)%time) then
             ra   = NaN
             dec  = NaN
             pa   = NaN
@@ -181,9 +180,9 @@ contains
     subroutine get_position_index(this, islice, itime, sampling_factor, ra, dec, pa, chop)
         class(observation), intent(in) :: this
         integer, intent(in)            :: islice, itime, sampling_factor
-        real*8, intent(out)            :: ra, dec, pa, chop
+        real(p), intent(out)           :: ra, dec, pa, chop
         integer                        :: i, itime_max
-        real*8                         :: frac
+        real(p)                        :: frac
 
         if (islice < 1 .or. islice > this%nslices) then
             write (ERROR_UNIT,'(a,i0,a)') "GET_POSITION: Invalid slice number '", islice, "'."
@@ -215,9 +214,9 @@ contains
     subroutine compute_center(this, ra0, dec0)
 
         class(observation), intent(in) :: this
-        real*8, intent(out)            :: ra0, dec0
+        real(p), intent(out)           :: ra0, dec0
 
-        real*8, allocatable            :: ra(:), dec(:)
+        real(p), allocatable           :: ra(:), dec(:)
         integer                        :: islice
 
         allocate (ra(this%nslices), dec(this%nslices))
@@ -270,7 +269,7 @@ contains
 
     subroutine set_filename(this, filename, first, last, status)
 
-        class(pacsobservationslice), intent(inout) :: this
+        class(PacsObservationSlice), intent(inout) :: this
         character(len=*), intent(in)               :: filename
         integer, intent(out)                       :: first, last
         integer, intent(out)                       :: status
@@ -361,7 +360,7 @@ contains
 
     subroutine set_policy(this, policy, first, last, status)
 
-        class(pacsobservationslice), intent(inout) :: this
+        class(PacsObservationSlice), intent(inout) :: this
         type(MaskPolicy), intent(in)               :: policy
         integer, intent(in)                        :: first, last
         integer, intent(out)                       :: status
@@ -429,7 +428,7 @@ contains
     ! sets 'b', 'g' or 'r' for a blue, green or red channel observation
     subroutine set_channel(this, status)
 
-        class(pacsobservationslice), intent(inout) :: this
+        class(PacsObservationSlice), intent(inout) :: this
         integer, intent(out)                       :: status
 
         integer                       :: isample, length, nbs, nbl, nr, nu, nmax, nsamples, unit
@@ -541,7 +540,7 @@ contains
 
     subroutine set_compression_mode(this, status)
 
-        class(pacsobservationslice), intent(inout) :: this
+        class(PacsObservationSlice), intent(inout) :: this
         integer, intent(out)                       :: status
 
         integer           :: unit, length
@@ -585,7 +584,7 @@ contains
 
 
     subroutine set_observing_mode(this, status)
-        class(pacsobservationslice), intent(inout) :: this
+        class(PacsObservationSlice), intent(inout) :: this
         integer, intent(out)                       :: status
         integer           :: unit, length
         character(len=70) :: compression
@@ -632,7 +631,7 @@ contains
     ! if invalid samples have been found, we then discard the first 10, that might be affected by relaxation.
     subroutine set_flags(this, status)
 
-        class(pacsobservationslice), intent(inout) :: this
+        class(PacsObservationSlice), intent(inout) :: this
         integer, intent(out)                       :: status
 
         logical(1), allocatable :: inscan(:)
@@ -641,7 +640,7 @@ contains
         integer                 :: unit
         integer                 :: isample, itarget
         integer*8, allocatable  :: bbid(:)
-        real*8, allocatable     :: chop(:)
+        real(p), allocatable    :: chop(:)
 
         length = len_trim(this%filename)
         if (this%filename(length-4:length) /= '.fits') then
@@ -724,7 +723,7 @@ contains
 
     subroutine set_astrometry(this, status)
 
-        class(pacsobservationslice), intent(inout) :: this
+        class(PacsObservationSlice), intent(inout) :: this
         integer, intent(out)                       :: status
 
         integer*8, allocatable :: timeus(:)
@@ -751,7 +750,7 @@ contains
         
         call ft_read_column(unit, 'FINETIME', 1, nsamples, timeus, status)
         if (status /= 0) return
-        this%p%time = timeus * 1.d-6
+        this%p%time = (timeus - timeus(1)) * 1.e-6_p
         
         call ft_read_column(unit, 'RaArray', 1, nsamples, this%p%ra, status)
         if (status /= 0) return
@@ -775,17 +774,15 @@ contains
 
     subroutine set_astrometry_oldstyle(this, status)
 
-        class(pacsobservationslice), intent(inout) :: this
+        class(PacsObservationSlice), intent(inout) :: this
         integer, intent(out)                       :: status
 
-        real(dp), allocatable  :: buffer(:)
+        real(p), allocatable   :: buffer(:)
         integer*8, allocatable :: timeus(:)
         
         call ft_read_image(trim(this%filename)//'_Time.fits', timeus, status)
         if (status /= 0) return
-        allocate(buffer(size(timeus)))
-        buffer = timeus * 1.0d-6
-        this%p%time = buffer
+        this%p%time = (timeus - timeus(1)) * 1.e-6_p
 
         call ft_read_image(trim(this%filename) // '_RaArray.fits', buffer, status)
         if (status /= 0) return
@@ -811,7 +808,7 @@ contains
 
     subroutine set_unit(this, status)
 
-        class(pacsobservationslice), intent(inout) :: this
+        class(PacsObservationSlice), intent(inout) :: this
         integer, intent(out)                       :: status
 
         character(len=70) :: comment
@@ -839,18 +836,18 @@ contains
 
     subroutine set_sampling_interval(this, status, verbose)
 
-        class(pacsobservationslice), intent(inout) :: this
+        class(PacsObservationSlice), intent(inout) :: this
         integer, intent(out)                       :: status
         logical, intent(in)                        :: verbose
 
-        integer                :: isample, njumps
-        integer                :: compression_factor
-        real(dp), allocatable  :: delta(:)
-        real(dp)               :: delta_max
+        integer              :: isample, njumps
+        integer              :: compression_factor
+        real(p), allocatable :: delta(:)
+        real(p)              :: delta_max
 
         ! special case if there is only one sample
         if (this%nsamples == 1) then
-            this%sampling_interval = this%compression_factor * 0.024996_dp
+            this%sampling_interval = this%compression_factor * 0.024996_p
             return
         end if
 
@@ -889,7 +886,7 @@ contains
         
         ! check if there are gaps
         delta_max = maxval(abs(delta))
-        if (verbose .and. any(neq_real(delta, this%sampling_interval, 1.d-3))) then
+        if (verbose .and. any(neq_real(delta, this%sampling_interval, 1.e-3_p))) then
             write (*,'(a,$)') "Warning: In observation '" // trim(this%filename) //"', the pointing time is not evenly spaced."
             if (delta_max > 1.5_p * this%sampling_interval) then
                 write (*,'(a)') ' Largest gap is ' // strreal(delta_max*1000._p,1) // 'ms.'
@@ -899,8 +896,8 @@ contains
         end if
         
         ! check the compression factor from the data themselves
-        compression_factor = nint(this%sampling_interval / 0.024996_dp)
-        if (neq_real(compression_factor * 0.024996_dp, this%sampling_interval, 1e-2_p)) then
+        compression_factor = nint(this%sampling_interval / 0.024996_p)
+        if (neq_real(compression_factor * 0.024996_p, this%sampling_interval, 1e-2_p)) then
             write (*,'(a)') 'Error: The sampling time is not an integer number of PACS sampling time (40Hz).'
             return
         end if
@@ -917,12 +914,12 @@ contains
     end subroutine set_sampling_interval
 
 
-    ! the following belongs to module_pacsobservation.f
+    ! the following belongs to module_PacsObservation.f
     ! moved here because of gfortran bug #44065
 
     subroutine init(this, filename, policy, status, verbose)
 
-        class(pacsobservation), intent(inout) :: this
+        class(PacsObservation), intent(inout) :: this
         character(len=*), intent(in)          :: filename(:)
         type(MaskPolicy), intent(in)          :: policy
         integer, intent(out)                  :: status
@@ -1042,8 +1039,8 @@ contains
 
 
     subroutine init_sim(this, time, ra, dec, pa, chop, status, verbose)
-        class(pacsobservation), intent(inout) :: this
-        real*8, intent(in)                    :: time(:),ra(:),dec(:),pa(:),chop(:)
+        class(PacsObservation), intent(inout) :: this
+        real(p), intent(in)                   :: time(:),ra(:),dec(:),pa(:),chop(:)
         integer, intent(out)                  :: status
         logical, intent(in), optional         :: verbose
         integer                               :: nsamples
@@ -1090,7 +1087,7 @@ contains
         this%slice(1)%filename = 'simulation'
         this%slice(1)%channel  = ' '
         this%slice(1)%observing_mode = 'Unknown'
-        this%slice(1)%compression_factor = nint((time(2)-time(1)) / 0.024996_dp)
+        this%slice(1)%compression_factor = nint((time(2)-time(1)) / 0.024996_p)
         this%slice(1)%sampling_interval = time(2)-time(1)
         allocate (this%slice(1)%p(nsamples))
 
@@ -1158,7 +1155,7 @@ contains
 
     subroutine print(this)
 
-        class(pacsobservation), intent(in) :: this
+        class(PacsObservation), intent(in) :: this
 
         integer :: islice, nsamples
 

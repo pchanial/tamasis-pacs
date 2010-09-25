@@ -183,7 +183,7 @@ subroutine pacs_info(tamasis_dir, filename, nfilenames, transparent_mode, fine_s
     use iso_fortran_env,        only : OUTPUT_UNIT
     use module_pacsinstrument,  only : PacsInstrument
     use module_pacsobservation, only : PacsObservation, MaskPolicy
-    use module_tamasis,         only : init_tamasis
+    use module_tamasis,         only : init_tamasis, p
     implicit none
 
     !f2py threadsafe
@@ -216,10 +216,10 @@ subroutine pacs_info(tamasis_dir, filename, nfilenames, transparent_mode, fine_s
     integer, intent(out)           :: compression_factor(nfilenames)
     integer*8, intent(out)         :: nsamples(nfilenames)
     character(len=70), intent(out) :: unit
-    real*8, intent(out)            :: responsivity
-    real*8, intent(out)            :: detector_area(nrows,ncolumns)
-    real*8, intent(out)            :: flatfield_detector(nrows,ncolumns)
-    real*8, intent(out)            :: flatfield_optical(nrows,ncolumns)
+    real(p), intent(out)           :: responsivity
+    real(p), intent(out)           :: detector_area(nrows,ncolumns)
+    real(p), intent(out)           :: flatfield_detector(nrows,ncolumns)
+    real(p), intent(out)           :: flatfield_optical(nrows,ncolumns)
     integer, intent(out)           :: status
 
     character(len=len(filename)/nfilenames), allocatable :: filename_(:)
@@ -298,7 +298,7 @@ subroutine pacs_read_filter_calibration(tamasis_dir, channel, ncorrelations, nde
     use iso_fortran_env,       only : ERROR_UNIT
     use module_filtering,      only : FilterUncorrelated
     use module_pacsinstrument, only : read_filter_calibration
-    use module_tamasis,        only : init_tamasis
+    use module_tamasis,        only : init_tamasis, p
     implicit none
 
     !f2py threadsafe
@@ -319,7 +319,7 @@ subroutine pacs_read_filter_calibration(tamasis_dir, channel, ncorrelations, nde
     logical*1, intent(in)        :: mask(nrows,ncolumns)
     integer, intent(in)          :: nrows
     integer, intent(in)          :: ncolumns
-    real*8, intent(out)          :: data(ncorrelations+1,ndetectors)
+    real(p), intent(out)         :: data(ncorrelations+1,ndetectors)
     integer, intent(out)         :: status
 
     type(FilterUncorrelated)     :: filter
@@ -353,7 +353,7 @@ subroutine pacs_map_header(tamasis_dir, filename, nfilenames, oversampling, fine
 
     use module_pacsinstrument,  only : PacsInstrument
     use module_pacsobservation, only : PacsObservation, MaskPolicy
-    use module_tamasis,         only : init_tamasis
+    use module_tamasis,         only : p, init_tamasis
     implicit none
 
     !f2py threadsafe
@@ -378,7 +378,7 @@ subroutine pacs_map_header(tamasis_dir, filename, nfilenames, oversampling, fine
     integer, intent(in)          :: frame_policy(4)
     logical*1, intent(in)        :: detector_mask(nrows,ncolumns)
     integer, intent(in)          :: nrows, ncolumns
-    real*8, intent(in)           :: resolution
+    real(p), intent(in)          :: resolution
     character(len=2880), intent(out) :: header
     integer, intent(out)             :: status
 
@@ -428,7 +428,7 @@ subroutine pacs_timeline(tamasis_dir, filename, nfilenames, nsamples, ndetectors
     use module_pacsinstrument,  only : PacsInstrument
     use module_pacsobservation, only : PacsObservation, MaskPolicy
     use module_preprocessor,    only : divide_vectordim2, subtract_meandim1
-    use module_tamasis,         only : init_tamasis
+    use module_tamasis,         only : init_tamasis, p
     implicit none
 
     !f2py threadsafe
@@ -456,7 +456,7 @@ subroutine pacs_timeline(tamasis_dir, filename, nfilenames, nsamples, ndetectors
     logical*1, intent(in)        :: detector_mask(nrow,ncol)
     integer, intent(in)          :: nrow, ncol
     logical, intent(in)          :: do_flatfielding, do_subtraction_mean
-    real*8, intent(out)          :: signal(nsamples, ndetectors)
+    real(p), intent(out)         :: signal(nsamples, ndetectors)
     logical*1, intent(out)       :: mask(nsamples, ndetectors)
     integer, intent(out)         :: status
 
@@ -650,20 +650,21 @@ end subroutine pacs_pointing_matrix_filename
 subroutine pacs_multiplexing_direct(signal, multiplexed, fine_sampling_factor, ij, nsamples, ndetectors)
 
     use module_pacsinstrument, only : multiplexing_direct
+    use module_tamasis,        only : p
     implicit none
 
     !f2py threadsafe
-    !f2py intent(in)      :: signal
-    !f2py intent(inout)   :: multiplexed
-    !f2py intent(in)      :: fine_sampling_factor
-    !f2py intent(in)      :: ij
-    !f2py intent(hide)    :: nsamples = shape(signal,0)
-    !f2py intent(hide)    :: ndetectors = shape(signal,1)
+    !f2py intent(in)       :: signal
+    !f2py intent(inout)    :: multiplexed
+    !f2py intent(in)       :: fine_sampling_factor
+    !f2py intent(in)       :: ij
+    !f2py intent(hide)     :: nsamples = shape(signal,0)
+    !f2py intent(hide)     :: ndetectors = shape(signal,1)
 
-    integer*8, intent(in) :: nsamples, ndetectors
-    real*8, intent(in)    :: signal(nsamples, ndetectors)
-    integer, intent(in)   :: fine_sampling_factor, ij(2, ndetectors)
-    real*8, intent(inout) :: multiplexed(nsamples/fine_sampling_factor, ndetectors)
+    real(p), intent(in)    :: signal(nsamples, ndetectors)
+    integer*8, intent(in)  :: nsamples
+    integer, intent(in)    :: ndetectors, fine_sampling_factor, ij(2, ndetectors)
+    real(p), intent(inout) :: multiplexed(nsamples/fine_sampling_factor, ndetectors)
 
     call multiplexing_direct(signal, multiplexed, fine_sampling_factor, ij)
 
@@ -676,20 +677,21 @@ end subroutine pacs_multiplexing_direct
 subroutine pacs_multiplexing_transpose(multiplexed, signal, fine_sampling_factor, ij, nsamples, ndetectors)
 
     use module_pacsinstrument, only : multiplexing_transpose
+    use module_tamasis,        only : p
     implicit none
 
     !f2py threadsafe
-    !f2py intent(in)      :: multiplexed
-    !f2py intent(inout)   :: signal
-    !f2py intent(in)      :: fine_sampling_factor
-    !f2py intent(in)      :: ij
-    !f2py intent(hide)    :: nsamples = shape(signal,0)
-    !f2py intent(hide)    :: ndetectors = shape(signal,1)
+    !f2py intent(in)       :: multiplexed
+    !f2py intent(inout)    :: signal
+    !f2py intent(in)       :: fine_sampling_factor
+    !f2py intent(in)       :: ij
+    !f2py intent(hide)     :: nsamples = shape(signal,0)
+    !f2py intent(hide)     :: ndetectors = shape(signal,1)
     
-    integer, intent(in)   :: nsamples, ndetectors, fine_sampling_factor
-    real*8, intent(in)    :: multiplexed(nsamples/fine_sampling_factor, ndetectors)
-    integer, intent(in)   :: ij(2, ndetectors)
-    real*8, intent(inout) :: signal(nsamples, ndetectors)
+    real(p), intent(in)    :: multiplexed(nsamples/fine_sampling_factor, ndetectors)
+    integer*8, intent(in)  :: nsamples
+    integer, intent(in)    :: ndetectors, fine_sampling_factor, ij(2, ndetectors)
+    real(p), intent(inout) :: signal(nsamples, ndetectors)
 
     call multiplexing_transpose(multiplexed, signal, fine_sampling_factor, ij)
 

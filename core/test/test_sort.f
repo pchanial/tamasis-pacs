@@ -3,19 +3,20 @@ program test_sort
     use module_fitstools, only : ft_read_image
     use module_math,      only : eq_real, neq_real
     use module_sort
+    use module_tamasis,   only : p
     implicit none
 
-    real*8  :: a(10)
+    real(p) :: a(10)
     integer :: b(10)
-    real*8  :: rtol
+    real(p) :: rtol
     integer :: index(10), i, j, nuniqs, status
-    real*8, allocatable  :: table(:), timeline(:)
+    real(p), allocatable :: table(:), timeline(:)
     integer, allocatable :: iuniq(:), hist(:)
     integer, allocatable :: order(:), isort(:)
     integer              :: count
     integer, allocatable :: i1(:), i2(:), i3(:)
 
-    a = [ 2.d0, 4.d0, 2.d0, 1.3d0, -3.d0, 10.d0, 8.d0, 100.d0, 4.00000001d0, 7.d0 ]
+    a = [ 2._p, 4._p, 2._p, 1.3_p, -3._p, 10._p, 8._p, 100._p, 4.00000001_p, 7._p ]
     b = [ 2, 4, 2, 1, 3, -8, -203, 990, 0, 3]
     call qsortid(a, index)
     do i = 2, 10
@@ -27,21 +28,23 @@ program test_sort
        if (a(index(i-1)) > a(index(i))) stop "FAILED: qsorti_int"
     end do
 
-    rtol = 1.e-6
+    rtol = 1.e-6_p
     call uniq(a, index, iuniq, rtol)
     if (size(iuniq) /= 8) stop 'FAILED: uniq1'
     do i = 2, size(iuniq)
        if (a(iuniq(i-1)) > a(iuniq(i)) .or. eq_real(a(iuniq(i-1)),a(iuniq(i)),rtol)) stop "FAILED: uniq2"
     end do
 
-    rtol = 1.e-10
+#if PRECISION_REAL != 4
+    rtol = 1.e-10_p
     call uniq(a, index, iuniq, rtol)
     if (size(iuniq) /= 9) stop 'FAILED: uniq3'
     do i = 2, size(iuniq)
        if (a(iuniq(i-1)) > a(iuniq(i)) .or. eq_real(a(iuniq(i-1)),a(iuniq(i)),rtol)) stop "FAILED: uniq4"
     end do
+#endif
 
-    rtol = 1.e-6
+    rtol = 1.e-6_p
     call reorder(a, index, nuniqs, table, rtol)
     if (nuniqs /= 8) stop 'FAILED: reorder1'
     do i = 1, nuniqs
@@ -56,7 +59,8 @@ program test_sort
     if (any(hist /= [1,1,2,2,1,1,1,1])) stop 'FAILED: histogram1'
     deallocate (hist)
 
-    rtol = 1.e-10
+#if PRECISION_REAL != 4
+    rtol = 1.e-10_p
     call reorder(a, index, nuniqs, table, rtol)
     if (nuniqs /= 9) stop 'FAILED: reorder3'
     do i = 1, nuniqs
@@ -71,6 +75,8 @@ program test_sort
     if (any(hist /= [1,1,2,1,1,1,1,1,1])) stop 'FAILED: histogram2'
     deallocate (hist)
 
+#endif
+
     call qsorti(b, index)
     do i = 2, 10
        if (b(index(i-1)) > b(index(i))) stop "FAILED: qsorti_double."
@@ -79,7 +85,8 @@ program test_sort
     call ft_read_image('core/test/data/timeline_transparent_mode.fits', timeline, status)
     if (status /= 0) stop 'FAILED ft_read_image'
 
-    rtol = 1.e-12
+#if PRECISION_REAL != 4
+    rtol = 1.e-12_p
     allocate (order(size(timeline)), isort(size(timeline)))
     call reorder(timeline, order, nuniqs, table, rtol)
     call qsorti(timeline, isort)
@@ -89,6 +96,7 @@ program test_sort
             if (neq_real(timeline(isort(i)), timeline(isort(i-1)), rtol)) stop 'FAILED: reorder =='
         end if
     end do
+#endif
 
     call uniq([2,2,3,4,4,5,8,8,9,9,9], isort)
     if (size(isort) /= 6 .or. any(isort /= [2,3,5,6,8,11])) stop 'FAILED: uniq_int'
