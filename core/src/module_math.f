@@ -281,9 +281,9 @@ contains
             end if
             value = modulo(array(isample), 360._p)
             if (value /= value) cycle
-            zero_minus = zero_minus .or. value > 270
-            zero_plus  = zero_plus  .or. value <= 90
-            if (value >= 180) n180 = n180 + 1
+            zero_minus = zero_minus .or. value > 270._p
+            zero_plus  = zero_plus  .or. value <= 90._p
+            if (value >= 180._p) n180 = n180 + 1
             mean_degrees = mean_degrees + value
             nvalids = nvalids + 1
         end do
