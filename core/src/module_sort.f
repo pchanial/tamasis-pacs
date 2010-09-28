@@ -424,7 +424,15 @@ contains
         integer, intent(in) :: first, second
         integer             :: compare_double
 
-        if (array_double(first) < array_double(second)) then
+        if (array_double(first) /= array_double(first)) then
+            if (array_double(second) /= array_double(second)) then
+                compare_double = 0
+            else
+                compare_double = -1
+            end if
+        else if (array_double(second) /= array_double(second)) then
+            compare_double = 1
+        else if (array_double(first) < array_double(second)) then
            compare_double = 1
         else if (array_double(first) /= array_double(second)) then
            compare_double = -1
@@ -502,6 +510,7 @@ contains
         index(1) = inindex(1)
         val = array(inindex(1))
         do i = 2, n
+            if (array(inindex(i)) /= array(inindex(i))) cycle
             if (neq_real(array(inindex(i)), val, rtol)) then
                 val = array(inindex(i))
                 nuniqs = nuniqs + 1
@@ -530,11 +539,12 @@ contains
         real(p), intent(in)               :: rtol
 
         integer :: isort(size(array)), ndata, i
-        real(p) :: val, tmptable(size(array))
+        real(p) :: val, val2, tmptable(size(array))
 
         ndata = size(array)
         if (ndata == 0) then
             nuniqs = 0
+            allocate (table(0))
             return
         end if
 
@@ -543,8 +553,13 @@ contains
         nuniqs = 0
         val = NaN
         do i = 1, ndata
-            if (neq_real(array(isort(i)), val, rtol)) then
-                val = array(isort(i))
+            val2 = array(isort(i))
+            if (val2 /= val2) then
+                index(isort(i)) = huge(index)
+                cycle
+            end if
+            if (neq_real(val, val2, rtol)) then
+                val = val2
                 nuniqs = nuniqs + 1
                 tmptable(nuniqs) = val
             end if
@@ -570,6 +585,7 @@ contains
 
         histogram = 0
         do i = 1, size(array)
+            if (array(i) == huge(array)) cycle
             histogram(array(i)) = histogram(array(i)) + 1
         end do
         

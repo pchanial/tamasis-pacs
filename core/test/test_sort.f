@@ -1,15 +1,15 @@
 program test_sort
 
     use module_fitstools, only : ft_read_image
-    use module_math,      only : eq_real, neq_real
+    use module_math,      only : NaN, eq_real, neq_real
     use module_sort
     use module_tamasis,   only : p
     implicit none
 
-    real(p) :: a(10)
+    real(p) :: a(10), a_NaN(14)
     integer :: b(10)
     real(p) :: rtol
-    integer :: index(10), i, j, nuniqs, status
+    integer :: index(10), index_NaN(14), i, j, nuniqs, status
     real(p), allocatable :: table(:), timeline(:)
     integer, allocatable :: iuniq(:), hist(:)
     integer, allocatable :: order(:), isort(:)
@@ -17,7 +17,6 @@ program test_sort
     integer, allocatable :: i1(:), i2(:), i3(:)
 
     a = [ 2._p, 4._p, 2._p, 1.3_p, -3._p, 10._p, 8._p, 100._p, 4.00000001_p, 7._p ]
-    b = [ 2, 4, 2, 1, 3, -8, -203, 990, 0, 3]
     call qsortid(a, index)
     do i = 2, 10
        if (a(index(i-1)) > a(index(i))) stop "FAILED: qsortid"
@@ -25,7 +24,16 @@ program test_sort
 
     call qsorti(a, index)
     do i = 2, 10
-       if (a(index(i-1)) > a(index(i))) stop "FAILED: qsorti_int"
+       if (a(index(i-1)) > a(index(i))) stop "FAILED: qsorti_double"
+    end do
+
+    a_NaN = [ 2._p, 4._p, 2._p, NaN, 1.3_p, NaN, NaN, NaN, -3._p, 10._p, 8._p, 100._p, 4.00000001_p, 7._p ]
+    call qsorti(a_NaN, index_NaN)
+    do i = 2, 10
+       if (a_NaN(index_NaN(i-1)) > a_NaN(index_NaN(i))) stop "FAILED: qsorti_double NaN 1"
+    end do
+    do i = 11, 14
+        if (a_NaN(index_NaN(i)) == a_NaN(index_NaN(i))) stop "Failed: qsorti_double NaN 2"
     end do
 
     rtol = 1.e-6_p
@@ -34,6 +42,11 @@ program test_sort
     do i = 2, size(iuniq)
        if (a(iuniq(i-1)) > a(iuniq(i)) .or. eq_real(a(iuniq(i-1)),a(iuniq(i)),rtol)) stop "FAILED: uniq2"
     end do
+    call uniq(a_NaN, index_NaN, iuniq, rtol)
+    if (size(iuniq) /= 8) stop 'FAILED: uniq1 NaN'
+    do i = 2, size(iuniq)
+       if (a_NaN(iuniq(i-1)) > a_NaN(iuniq(i)) .or. eq_real(a_NaN(iuniq(i-1)),a_NaN(iuniq(i)),rtol)) stop "FAILED: uniq2 NaN"
+    end do
 
 #if PRECISION_REAL != 4
     rtol = 1.e-10_p
@@ -41,6 +54,11 @@ program test_sort
     if (size(iuniq) /= 9) stop 'FAILED: uniq3'
     do i = 2, size(iuniq)
        if (a(iuniq(i-1)) > a(iuniq(i)) .or. eq_real(a(iuniq(i-1)),a(iuniq(i)),rtol)) stop "FAILED: uniq4"
+    end do
+    call uniq(a_NaN, index_NaN, iuniq, rtol)
+    if (size(iuniq) /= 9) stop 'FAILED: uniq3 NaN'
+    do i = 2, size(iuniq)
+       if (a_NaN(iuniq(i-1)) > a_NaN(iuniq(i)) .or. eq_real(a_NaN(iuniq(i-1)),a_NaN(iuniq(i)),rtol)) stop "FAILED: uniq4 NaN"
     end do
 #endif
 
@@ -53,10 +71,21 @@ program test_sort
             if (neq_real(a(j), table(i), rtol)) stop 'FAILED: reorder2'
         end do
     end do
+    call reorder(a_NaN, index_NaN, nuniqs, table, rtol)
+    if (nuniqs /= 8) stop 'FAILED: reorder1 NaN'
+    do i = 1, nuniqs
+        do j = 1, 10
+            if (index_NaN(j) /= i) cycle
+            if (neq_real(a_NaN(j), table(i), rtol)) stop 'FAILED: reorder2 NaN 1'
+        end do
+    end do
+    if (any(index_NaN([4,6,7,8]) /= huge(index_NaN))) stop 'FAILED: reorder 2 NaN 2'
 
     allocate (hist(nuniqs))
     hist = histogram(index, nuniqs)
     if (any(hist /= [1,1,2,2,1,1,1,1])) stop 'FAILED: histogram1'
+    hist = histogram(index_NaN, nuniqs)
+    if (any(hist /= [1,1,2,2,1,1,1,1])) stop 'FAILED: histogram1 NaN'
     deallocate (hist)
 
 #if PRECISION_REAL != 4
@@ -69,6 +98,15 @@ program test_sort
             if (neq_real(a(j), table(i), rtol)) stop 'FAILED: reorder4'
         end do
     end do
+    call reorder(a_NaN, index_NaN, nuniqs, table, rtol)
+    if (nuniqs /= 9) stop 'FAILED: reorder3 NaN'
+    do i = 1, nuniqs
+        do j = 1, 10
+            if (index_NaN(j) /= i) cycle
+            if (neq_real(a_NaN(j), table(i), rtol)) stop 'FAILED: reorder4 NaN 1'
+        end do
+    end do
+    if (any(index_NaN([4,6,7,8]) /= huge(index_NaN))) stop 'FAILED: reorder 4 NaN 2'
 
     allocate (hist(nuniqs))
     hist = histogram(index, nuniqs)
@@ -77,6 +115,7 @@ program test_sort
 
 #endif
 
+    b = [ 2, 4, 2, 1, 3, -8, -203, 990, 0, 3]
     call qsorti(b, index)
     do i = 2, 10
        if (b(index(i-1)) > b(index(i))) stop "FAILED: qsorti_double."
