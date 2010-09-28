@@ -1,25 +1,32 @@
 module module_preprocessor
 
-    use module_math,    only : median, sum_kahan
+    use module_math,    only : NaN, median, sum_kahan
     use module_sort,    only : histogram, reorder
     use module_tamasis, only : p
     implicit none
     private
 
-    public :: subtract_meandim1
     public :: add_vectordim2
-    public :: subtract_vectordim2
-    public :: multiply_vectordim2
-    public :: divide_vectordim2
     public :: apply_mask
+    public :: divide_vectordim2
+    public :: interpolate_linear
     public :: median_filtering
+    public :: multiply_vectordim2
+    public :: subtract_meandim1
+    public :: subtract_vectordim2
+
+    interface interpolate_linear
+        module procedure interpolate_linear_equally_spaced_1d_1d, interpolate_linear_equally_spaced_1d_2d
+    end interface interpolate_linear
 
     interface median_filtering
         module procedure median_filtering_1d_1d, median_filtering_1d_2d
     end interface median_filtering
+
     interface subtract_meandim1
         module procedure subtract_meandim1, subtract_meandim1_mask
     end interface subtract_meandim1
+
 
 contains
 
@@ -167,6 +174,79 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
+    subroutine interpolate_linear_equally_spaced_1d_1d(data)
+
+        real(p), intent(inout) :: data(:)
+
+        real(p) :: val, delta
+        logical :: hasNaN
+        integer :: i, j, iNaN, ival
+
+        if (size(data) <= 1) then
+            return
+        end if
+
+        val = NaN
+        iNaN = 1
+        hasNaN = .false.
+
+        do i = 1, size(data)
+
+            ! we hit a NaN, update index of first NaN if necessary
+            if (data(i) /= data(i)) then
+                if (hasNaN) cycle
+                hasNaN = .true.
+                iNaN = i
+                cycle
+            endif
+
+            if (hasNaN .and. val == val) then
+                ! some values need to be interpolated loop over the values which might be NaN
+                delta = (data(i) - val) / (i - ival)
+                do j = iNaN, i-1
+                    data(j) = val + delta * (j - ival)
+                end do
+                hasNaN = .false.
+            end if
+
+            ! update last defined value
+            val = data(i)
+            ival = i
+
+        end do
+
+        ! deal with trailing NaN
+        if (hasNaN .and. val == val .and. data(ival-1) == data(ival-1)) then
+            delta = val - data(ival-1)
+            do j = ival+1, size(data)
+                data(j) = val + delta * (j - ival)
+            end do
+        end if
+
+    end subroutine interpolate_linear_equally_spaced_1d_1d
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine interpolate_linear_equally_spaced_1d_2d(data)
+
+        real(p), intent(inout) :: data(:,:)
+
+        integer :: i
+
+        !$omp parallel do
+        do i = 1, size(data,2)
+            call interpolate_linear(data(:,i))
+        end do
+        !$omp end parallel do
+
+    end subroutine interpolate_linear_equally_spaced_1d_2d
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
     ! median filtering in O(1) for the window length
     ! the samples inside the window form an histogram which is updated as the window slides.
     subroutine median_filtering_1d_1d(data, length)
@@ -186,13 +266,13 @@ contains
            return
         end if
 
-        call reorder(data, order, nbins, table, 1e-12_p)
+        call reorder(data, order, nbins, table, 1000._p*epsilon(data))
 
         allocate (hist(nbins))
         half_minus = min((length-1) / 2, ndata-1)
         half_plus  = min(length / 2, ndata-1)
         hist = histogram(order(1:1+half_plus), nbins)
-        even = mod(1 + half_plus, 2) == 0
+        even = modulo(1 + half_plus, 2) == 0
 
         call median_filtering_find_rank(hist, 1+half_plus, ibin, irank)
 

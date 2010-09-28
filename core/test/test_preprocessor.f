@@ -1,7 +1,7 @@
 program test_preprocessor
 
     use module_fitstools, only : ft_read_image
-    use module_math,      only : median, neq_real
+    use module_math,      only : NaN, median, neq_real
     use module_preprocessor
     use module_tamasis,   only : p
     implicit none
@@ -24,6 +24,10 @@ program test_preprocessor
     if (any(neq_real(small-filtered,[5._p,3._p,4._p,4._p,4._p,4._p,5._p,10._p,10._p,22._p]))) stop 'FAILED: medfilt2'
 
     deallocate (filtered)
+
+    small = [ NaN, NaN, 2._p, NaN, NaN, 5._p, NaN, 5._p, 4.5_p, NaN]
+    call interpolate_linear(small)
+    if (any(neq_real(small, [0._p, 1._p, 2._p, 3._p, 4._p, 5._p, 5._p, 5._p, 4.5_p, 4._p]))) stop 'FAILED: interpolate linear'
 
     call ft_read_image('core/test/data/timeline_transparent_mode.fits', timeline, status)
     if (status /= 0) stop 'FAILED ft_read_image'
