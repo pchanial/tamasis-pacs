@@ -8,10 +8,10 @@ program test_pacspointing
     class(pacsobservation), allocatable :: obs
     type(MaskPolicy)            :: policy
     character(len=*), parameter :: filename(1) = 'pacs/test/data/frames_blue.fits'
+    real(p), parameter          :: rtol = 100._p * epsilon(1._p)
     integer                     :: i, index
     real(p)                     :: time(12), ra(12), dec(12), pa(12), chop(12)
-    real(p), parameter          :: timetest(6) = [1634799159.471412_p, 1634799159.5713959_p, 1634799159.6713789_p,                 &
-                                                  1634799159.771354_p, 1634799159.871338_p, 1634799159.9713209_p]
+    real(p), parameter          :: timetest(6) = [0._p, 9.9984e-2_p, 0.199967_p, 0.299942_p, 0.399926_p, 0.499909_p]
     real(p), parameter          :: ratest(6)   = [246.00222169646082_p, 246.00162449475283_p, 246.00103010675886_p,                &
                                                   246.00043574779528_p, 245.99983813619218_p, 245.99923984440272_p]
     real(p), parameter          :: dectest(6)  = [61.500650548286465_p, 61.501139611012334_p, 61.501628617896479_p,                &
@@ -27,11 +27,11 @@ program test_pacspointing
 
     index = 0
     do i = 1, 6
-        call obs%get_position_time(1, timetest(i), ra(i), dec(i), pa(i), chop(i), index)
+        call obs%get_position_time(1, timetest(i)-timetest(1), ra(i), dec(i), pa(i), chop(i), index)
     end do
-    if (any(neq_real(ra  (1:6), ratest  ))) stop 'FAILED: ra'
-    if (any(neq_real(dec (1:6), dectest ))) stop 'FAILED: dec'
-    if (any(neq_real(pa  (1:6), patest  ))) stop 'FAILED: pa'
+    if (any(neq_real(ra  (1:6), ratest))) stop 'FAILED: ra'
+    if (any(neq_real(dec (1:6), dectest))) stop 'FAILED: dec'
+    if (any(neq_real(pa  (1:6), patest ))) stop 'FAILED: pa'
     if (any(neq_real(chop(1:6), choptest))) stop 'FAILED: chop'
 
     call obs%destructor()
@@ -64,9 +64,9 @@ program test_pacspointing
 
     ! time starts from -1 to 4.5
     if (any(neq_real(ra,  [nan, -1.0_p, -0.5_p, 0.0_p, 0.5_p, 1.0_p, 1.5_p, 2.0_p, 2.5_p, 3.0_p, nan, nan]) .or.                   &
-            neq_real(dec, [nan,   3.0_p, 3.0_p, 3.0_p, 3.0_p, 3.0_p, 3.0_p, 3.0_p, 3.0_p, 3.0_p, nan, nan]) .or.                   &
-            neq_real(pa,  [nan,   4.0_p, 3.5_p, 3.0_p, 2.5_p, 2.0_p, 1.5_p, 1.0_p, 0.5_p, 0.0_p, nan, nan]) .or.                   &
-            neq_real(chop,[nan,   0.0_p, 0.0_p, 0.0_p, 0.0_p, 0.0_p, 0.0_p, 0.0_p, 1.0_p, 2.0_p, nan, nan]))) then
+            neq_real(dec, [nan,  3.0_p,  3.0_p, 3.0_p, 3.0_p, 3.0_p, 3.0_p, 3.0_p, 3.0_p, 3.0_p, nan, nan]) .or.                   &
+            neq_real(pa,  [nan,  4.0_p,  3.5_p, 3.0_p, 2.5_p, 2.0_p, 1.5_p, 1.0_p, 0.5_p, 0.0_p, nan, nan]) .or.                   &
+            neq_real(chop,[nan,  0.0_p,  0.0_p, 0.0_p, 0.0_p, 0.0_p, 0.0_p, 0.0_p, 1.0_p, 2.0_p, nan, nan]))) then
         stop 'FAILED: get_position_time 2'
     end if
 
