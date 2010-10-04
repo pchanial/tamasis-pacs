@@ -37,12 +37,18 @@ def deglitch_l2mad(tod, projection, nsigma=5.):
 #-------------------------------------------------------------------------------
 
 
-def filter_median(tod, length=10):
+def filter_median(tod, length=10, mask=None):
     """
     Median filtering, O(1) in window length
     """
     filtered = tod.copy()
-    status = tmf.filter_median(filtered.T, length, numpy.array(tod.nsamples))
+    if mask is None:
+        mask = tod.mask
+        if mask is None:
+            mask = numpy.zeros(tod.shape, dtype='int8')
+    else:
+        mask = numpy.ascontiguousarray(mask, dtype='int8')
+    status = tmf.filter_median(filtered.T, mask.T, length, numpy.array(tod.nsamples))
     if status != 0:
         raise RuntimeError()
     return filtered

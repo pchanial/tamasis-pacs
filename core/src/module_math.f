@@ -33,6 +33,10 @@ module module_math
         module procedure sum_kahan_1d, sum_kahan_2d, sum_kahan_3d
     end interface sum_kahan
 
+    interface median
+        module procedure median_nomask, median_mask
+    end interface median
+
     real(p), parameter :: PI = 4._p * atan(1._p)
     real(p), parameter :: DEG2RAD = PI / 180._p
     real(p), parameter :: RAD2DEG = 180._p / PI
@@ -162,7 +166,7 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    function sum_kahan_1d(input, mask) result(sum)
+    function sum_kahan_1d(input, mask) result (sum)
 
         real(p), intent(in)           :: input(:)
         logical, intent(in), optional :: mask(:)
@@ -205,7 +209,7 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    function sum_kahan_2d(input) result(sum)
+    function sum_kahan_2d(input) result (sum)
 
         real(p), intent(in) :: input(:,:)
         real(p)             :: sum, c, t, y
@@ -231,7 +235,7 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    function sum_kahan_3d(input) result(sum)
+    function sum_kahan_3d(input) result (sum)
 
         real(p), intent(in) :: input(:,:,:)
         real(p)             :: sum, c, t, y
@@ -366,28 +370,49 @@ contains
 
 
     elemental subroutine swap(a,b)
+
         real(p), intent(inout) :: a, b
+
         real(p)                :: tmp
+
         tmp = a
         a   = b
         b   = tmp
+
     end subroutine swap
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    function median(arr) 
+    function median_nomask(array) result (median) 
 
         real(p)             :: median
-        real(p), intent(in) :: arr(:)
+        real(p), intent(in) :: array(:)
 
-        real(p)             :: arr_copy(size(arr))
+        real(p), allocatable :: array_copy(:)
 
-        arr_copy = arr
-        median = median_nocopy(arr_copy)
+        array_copy = pack(array, array == array)
+        median = median_nocopy(array_copy)
 
-    end function median
+    end function median_nomask
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    function median_mask(array, mask) result (median) 
+
+        real(p)               :: median
+        real(p), intent(in)   :: array(:)
+        logical*1, intent(in) :: mask(size(array))
+
+        real(p), allocatable  :: array_copy(:)
+
+        array_copy = pack(array, array == array .and. .not. mask)
+        median = median_nocopy(array_copy)
+
+    end function median_mask
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
@@ -398,12 +423,17 @@ contains
     ! Cambridge University Press, 1992, Section 8.5, ISBN 0-521-43108-5
     ! input array may be reordered
     ! This code by Nicolas Devillard - 1998. Public domain.
-    function median_nocopy(arr) result(median)
+    function median_nocopy(arr) result (median)
 
         real(p)                :: median
         real(p), intent(inout) :: arr(0:)
 
         integer                :: low, high, imedian, middle, ll, hh
+
+        if (size(arr) == 0) then
+            median = NaN
+            return
+        end if
 
         low = 0
         high = size(arr)-1

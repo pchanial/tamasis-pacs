@@ -8,7 +8,7 @@ program test_math
                                        0.232127193083888_p]
     real(p), parameter :: mresults(6) = [0.617858700525270_p, 0.133548079242052_p,-0.285146600004998_p,-2.246479349723560_p,       &
                                          0.365442306311204_p,0.319514776903196_p]
-    real(p)              :: mean, variance, skewness, kurtosis, stddev, meandev
+    real(p)              :: mean, variance, skewness, kurtosis, stddev, meandev, val
     real(p), allocatable :: x(:)
     logical, allocatable :: mask(:)
     integer              :: i
@@ -66,6 +66,14 @@ program test_math
     x = [mresults, -999._p]
     if (median(x) /= mresults(2)) stop 'FAILED: median'
     deallocate (x)
+    val = median([NaN, NaN, NaN])
+    if (val == val) stop 'FAILED: median 2'
+    val = median([1._p, 3._p, 3._p], logical([.true., .true., .true.], 1))
+    if (val == val) stop 'FAILED: median 3'
+    val = median([1._p, NaN, 3._p], logical([.true., .false., .true.], 1))
+    if (val == val) stop 'FAILED: median 4'
+    val = median([3._p, 2._p, 1._p], logical([.true., .true., .false.], 1))
+    if (neq_real(val, 1._p)) stop 'FAILED: median 4'
 
     allocate(x(100))
     allocate(mask(size(x)))
@@ -77,6 +85,7 @@ program test_math
     call sigma_clipping(x, mask, 5._p)
     if (count(mask) /= 2) stop 'FAILED: sigma_clipping 2' 
     deallocate (x, mask)
+
 
     stop 'OK.'
 

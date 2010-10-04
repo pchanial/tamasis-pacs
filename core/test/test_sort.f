@@ -6,10 +6,11 @@ program test_sort
     use module_tamasis,   only : p
     implicit none
 
-    real(p) :: a(10), a_NaN(14)
+    real(p) :: a(10), a_NaN(14), a_mask(14)
     integer :: b(10)
     real(p) :: rtol
-    integer :: index(10), index_NaN(14), i, j, nuniqs, status
+    integer :: index(10), index_NaN(14), index_mask(14), i, j, nuniqs, status
+    logical*1 :: mask(14)
     real(p), allocatable :: table(:), timeline(:)
     integer, allocatable :: iuniq(:), hist(:)
     integer, allocatable :: order(:), isort(:)
@@ -34,6 +35,16 @@ program test_sort
     end do
     do i = 11, 14
         if (a_NaN(index_NaN(i)) == a_NaN(index_NaN(i))) stop "Failed: qsorti_double NaN 2"
+    end do
+
+    a_mask = [ 2._p, 4._p, 2._p, 0._p, 1.3_p, 0._p, NaN, 0._p, -3._p, 10._p, 8._p, 100._p, 4.00000001_p, 7._p ]
+    mask =  logical(a_mask == 0,1)
+    call qsorti(a_mask, mask, index_mask)
+    do i = 2, 10
+       if (a_mask(index_mask(i-1)) > a_mask(index_mask(i))) stop "FAILED: qsorti_double mask 1"
+    end do
+    do i = 11, 14
+        if (.not. mask(index_mask(i)) .and. a_mask(index_mask(i)) == a_mask(index_mask(i))) stop "Failed: qsorti_double mask 2"
     end do
 
     rtol = 1.e-6_p
@@ -80,12 +91,23 @@ program test_sort
         end do
     end do
     if (any(index_NaN([4,6,7,8]) /= huge(index_NaN))) stop 'FAILED: reorder 2 NaN 2'
+    call reorder(a_mask, mask, index_mask, nuniqs, table, rtol)
+    if (nuniqs /= 8) stop 'FAILED: reorder1 mask'
+    do i = 1, nuniqs
+        do j = 1, 10
+            if (index_mask(j) /= i) cycle
+            if (neq_real(a_mask(j), table(i), rtol)) stop 'FAILED: reorder2 mask 1'
+        end do
+    end do
+    if (any(index_mask([4,6,7,8]) /= huge(index_mask))) stop 'FAILED: reorder 2 mask 2'
 
     allocate (hist(nuniqs))
     hist = histogram(index, nuniqs)
     if (any(hist /= [1,1,2,2,1,1,1,1])) stop 'FAILED: histogram1'
     hist = histogram(index_NaN, nuniqs)
     if (any(hist /= [1,1,2,2,1,1,1,1])) stop 'FAILED: histogram1 NaN'
+    hist = histogram(index_mask, nuniqs)
+    if (any(hist /= [1,1,2,2,1,1,1,1])) stop 'FAILED: histogram1 mask'
     deallocate (hist)
 
 #if PRECISION_REAL != 4
@@ -107,6 +129,15 @@ program test_sort
         end do
     end do
     if (any(index_NaN([4,6,7,8]) /= huge(index_NaN))) stop 'FAILED: reorder 4 NaN 2'
+    call reorder(a_mask, mask, index_mask, nuniqs, table, rtol)
+    if (nuniqs /= 9) stop 'FAILED: reorder3 mask'
+    do i = 1, nuniqs
+        do j = 1, 10
+            if (index_mask(j) /= i) cycle
+            if (neq_real(a_mask(j), table(i), rtol)) stop 'FAILED: reorder4 mask 1'
+        end do
+    end do
+    if (any(index_mask([4,6,7,8]) /= huge(index_mask))) stop 'FAILED: reorder 4 mask 2'
 
     allocate (hist(nuniqs))
     hist = histogram(index, nuniqs)

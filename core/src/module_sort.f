@@ -13,20 +13,21 @@ module module_sort
     public :: uniq
     public :: where
 
-    integer, pointer, private :: array_int(:) => null()
-    real(p), pointer, private :: array_double(:) => null()
-    !$omp threadprivate(array_int, array_double)
+    integer, pointer   :: module_array_int(:) => null()
+    real(p), pointer   :: module_array_double(:) => null()
+    logical*1, pointer :: module_mask(:) => null()
+    !$omp threadprivate(module_array_int, module_array_double, module_mask)
 
     interface histogram
-        module procedure histogram_int
+        module procedure histogram_nomask_int, histogram_mask_int
     end interface histogram
 
     interface reorder
-        module procedure reorder_double
+        module procedure reorder_nomask_double, reorder_mask_double
     end interface reorder
 
     interface qsorti
-        module procedure qsorti_int, qsorti_double
+        module procedure qsorti_int, qsorti_nomask_double, qsorti_mask_double
     end interface qsorti
 
     interface uniq
@@ -374,9 +375,9 @@ contains
         integer, intent(in), target :: array(:)
         integer, intent(out) :: index(size(array))
 
-        array_int => array
+        module_array_int => array
         call qsortgi(size(array), compare_int, index)
-        array_int => null()
+        module_array_int => null()
 
     end subroutine qsorti_int
 
@@ -389,9 +390,9 @@ contains
         integer, intent(in) :: first, second
         integer             :: compare_int
 
-        if (array_int(first) < array_int(second)) then
+        if (module_array_int(first) < module_array_int(second)) then
            compare_int = 1
-        else if (array_int(first) /= array_int(second)) then
+        else if (module_array_int(first) /= module_array_int(second)) then
            compare_int = -1
         else
            compare_int = 0
@@ -404,43 +405,88 @@ contains
     ! DOUBLE
     !-------------------------------------------------------------------------------------------------------------------------------
 
-    subroutine qsorti_double(array, index)
+    subroutine qsorti_nomask_double(array, index)
 
         real(p), intent(in), target :: array(:)
         integer, intent(out)        :: index(size(array))
 
-        array_double => array
-        call qsortgi(size(array), compare_double, index)
-        array_double => null()
+        module_array_double => array
+        call qsortgi(size(array), compare_nomask_double, index)
+        module_array_double => null()
 
-    end subroutine qsorti_double
+    end subroutine qsorti_nomask_double
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    function compare_double(first, second)
+    subroutine qsorti_mask_double(array, mask, index)
+
+        real(p), intent(in), target   :: array(:)
+        logical*1, intent(in), target :: mask(:)
+        integer, intent(out)          :: index(size(array))
+
+        module_array_double => array
+        module_mask => mask
+        call qsortgi(size(array), compare_mask_double, index)
+        module_array_double => null()
+        module_mask => null()
+
+    end subroutine qsorti_mask_double
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    function compare_nomask_double(first, second) result (compare)
 
         integer, intent(in) :: first, second
-        integer             :: compare_double
+        integer             :: compare
 
-        if (array_double(first) /= array_double(first)) then
-            if (array_double(second) /= array_double(second)) then
-                compare_double = 0
+        if (module_array_double(first) /= module_array_double(first)) then
+            if (module_array_double(second) /= module_array_double(second)) then
+                compare = 0
             else
-                compare_double = -1
+                compare = -1
             end if
-        else if (array_double(second) /= array_double(second)) then
-            compare_double = 1
-        else if (array_double(first) < array_double(second)) then
-           compare_double = 1
-        else if (array_double(first) /= array_double(second)) then
-           compare_double = -1
+        else if (module_array_double(second) /= module_array_double(second)) then
+            compare = 1
+        else if (module_array_double(first) < module_array_double(second)) then
+           compare = 1
+        else if (module_array_double(first) /= module_array_double(second)) then
+           compare = -1
         else
-           compare_double = 0
+           compare = 0
         end if
 
-    end function compare_double
+    end function compare_nomask_double
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    function compare_mask_double(first, second) result (compare)
+
+        integer, intent(in) :: first, second
+        integer             :: compare
+
+        if (module_array_double(first) /= module_array_double(first) .or. module_mask(first)) then
+            if (module_array_double(second) /= module_array_double(second) .or. module_mask(second)) then
+                compare = 0
+            else
+                compare = -1
+            end if
+        else if (module_array_double(second) /= module_array_double(second) .or. module_mask(second)) then
+            compare = 1
+        else if (module_array_double(first) < module_array_double(second)) then
+           compare = 1
+        else if (module_array_double(first) /= module_array_double(second)) then
+           compare = -1
+        else
+           compare = 0
+        end if
+
+    end function compare_mask_double
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
@@ -527,7 +573,7 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine reorder_double(array, index, nuniqs, table, rtol)
+    subroutine reorder_nomask_double(array, index, nuniqs, table, rtol)
 
         use iso_fortran_env, only : OUTPUT_UNIT
         implicit none
@@ -569,13 +615,62 @@ contains
         allocate (table(nuniqs))
         table = tmptable(:nuniqs)
         
-    end subroutine reorder_double
+    end subroutine reorder_nomask_double
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    function histogram_int(array, nbins) result(histogram)
+    subroutine reorder_mask_double(array, mask, index, nuniqs, table, rtol)
+
+        use iso_fortran_env, only : OUTPUT_UNIT
+        implicit none
+
+        real(p), intent(in)               :: array(:)
+        logical*1, intent(in)             :: mask(size(array))
+        integer, intent(out)              :: index(size(array))
+        integer, intent(out)              :: nuniqs
+        real(p), intent(out), allocatable :: table(:)
+        real(p), intent(in)               :: rtol
+
+        integer :: isort(size(array)), ndata, i
+        real(p) :: val, val2, tmptable(size(array))
+
+        ndata = size(array)
+        if (ndata == 0) then
+            nuniqs = 0
+            allocate (table(0))
+            return
+        end if
+
+        call qsorti(array, mask, isort)
+
+        nuniqs = 0
+        val = NaN
+        do i = 1, ndata
+            val2 = array(isort(i))
+            if (val2 /= val2 .or. mask(isort(i))) then
+                index(isort(i)) = huge(index)
+                cycle
+            end if
+            if (neq_real(val, val2, rtol)) then
+                val = val2
+                nuniqs = nuniqs + 1
+                tmptable(nuniqs) = val
+            end if
+            index(isort(i)) = nuniqs
+        end do
+
+        allocate (table(nuniqs))
+        table = tmptable(:nuniqs)
+        
+    end subroutine reorder_mask_double
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    function histogram_nomask_int(array, nbins) result(histogram)
 
         integer, intent(in) :: array(:)
         integer, intent(in) :: nbins
@@ -589,7 +684,28 @@ contains
             histogram(array(i)) = histogram(array(i)) + 1
         end do
         
-    end function histogram_int
+    end function histogram_nomask_int
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    function histogram_mask_int(array, mask, nbins) result(histogram)
+
+        integer, intent(in)   :: array(:)
+        logical*1, intent(in) :: mask(size(array))
+        integer, intent(in)   :: nbins
+        integer               :: histogram(nbins)
+
+        integer               :: i
+
+        histogram = 0
+        do i = 1, size(array)
+            if (array(i) == huge(array) .or. mask(i)) cycle
+            histogram(array(i)) = histogram(array(i)) + 1
+        end do
+        
+    end function histogram_mask_int
 
 
     !-------------------------------------------------------------------------------------------------------------------------------

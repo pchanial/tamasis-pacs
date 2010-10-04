@@ -20,7 +20,8 @@ module module_preprocessor
     end interface interpolate_linear
 
     interface median_filtering
-        module procedure median_filtering_1d_1d, median_filtering_1d_2d
+        module procedure median_filtering_mask_1d_1d, median_filtering_mask_1d_2d
+        module procedure median_filtering_nomask_1d_1d, median_filtering_nomask_1d_2d
     end interface median_filtering
 
     interface subtract_meandim1
@@ -249,43 +250,74 @@ contains
 
     ! median filtering in O(1) for the window length
     ! the samples inside the window form an histogram which is updated as the window slides.
-    subroutine median_filtering_1d_1d(data, length)
+    ! the number of elements in the histogram is length minus the number of NaN value in the window.
+    subroutine median_filtering_mask_1d_1d(data, mask, length)
 
         real(p), intent(inout) :: data(:)
+        logical*1, intent(in)  :: mask(size(data))
         integer, intent(in)    :: length
 
-        integer                :: nbins, ndata, order(size(data)), i, old, new, half_minus, half_plus, ibin, irank
+        integer                :: nbins, ndata, nvalids, order(size(data)), i, old, new, half_minus, half_plus, ibin, irank
+        real(p)                :: filter(size(data))
         integer, allocatable   :: hist(:)
         real(p), allocatable   :: table(:)
         logical                :: even
+        integer, parameter     :: iNaN = huge(order)
+
+        integer, allocatable :: iw(:)
 
         ndata = size(data)
 
         if (ndata <= length) then
-           data = data - median(data)
+           data = data - median(data, mask)
            return
         end if
 
-        call reorder(data, order, nbins, table, 1000._p*epsilon(data))
+        call reorder(data, mask, order, nbins, table, 1000._p*epsilon(data))
 
         allocate (hist(nbins))
-        half_minus = min((length-1) / 2, ndata-1)
-        half_plus  = min(length / 2, ndata-1)
+        half_minus = (length-1) / 2
+        half_plus  = length / 2
         hist = histogram(order(1:1+half_plus), nbins)
-        even = modulo(1 + half_plus, 2) == 0
+        nvalids = count(order(1:1+half_plus) /= iNaN)
+        even = modulo(nvalids, 2) == 0
+        call median_filtering_find_rank(hist, nvalids, ibin, irank)
 
-        call median_filtering_find_rank(hist, 1+half_plus, ibin, irank)
-
-        data(1) = data(1) - table(ibin)
+        filter(1) = table(ibin)
         do i = 2, ndata
 
-            ! there are missing values on the left hand side, we'll add them one by one until we reach a sample of size 'length' 
             if (i <= half_minus + 1) then
-
+                old = iNaN
+            else
+                old = order(i-half_minus-1)
+            end if
+            
+            if (i > ndata - half_plus) then
+                new = iNaN
+            else
                 new = order(i+half_plus)
-                hist(new) = hist(new) + 1
+            end if
 
-                if (new >= ibin) then
+            ! no old value to be removed
+            if (old == iNaN) then
+
+                ! nothing to do
+                if (new == iNaN) then
+                    if (nvalids == 0) then
+                        filter(i) = NaN
+                    else
+                        filter(i) = table(ibin)
+                    end if
+                    cycle
+                end if
+
+                hist(new) = hist(new) + 1
+                nvalids = nvalids + 1
+
+                if (nvalids == 1) then
+                    ibin = new
+                    irank = 1
+                else if (new >= ibin) then
                     if (even) then
                         irank = irank + 1
                         if (irank > hist(ibin)) then
@@ -300,14 +332,24 @@ contains
                 end if
                 even = .not. even
 
-            ! there are missing values on the right hand side, we'll subtract them one by one until we reach the end
-            else if (i > ndata - half_plus) then
+            ! no new value to be added
+            else if (new == iNaN) then
                 
-                old = order(i-half_minus - 1)
                 hist(old) = hist(old) - 1
+                nvalids = nvalids - 1
 
                 if (old >= ibin) then
-                    if (.not. even) then
+                    if (hist(ibin) == 0) then
+                        if (nvalids == 0) then
+                            filter(i) = NaN
+                            even = .true.
+                            cycle
+                        else if (even) then
+                            call median_filtering_next(hist, ibin, irank)
+                        else
+                            call median_filtering_previous(hist, ibin, irank)
+                        end if
+                    else if (.not. even) then
                         irank = irank - 1
                         if (irank == 0) then
                             call median_filtering_previous(hist, ibin, irank)
@@ -321,11 +363,9 @@ contains
                 end if
                 even = .not. even
                
-            ! the full sample of size 'length' is available
+            ! add new value and remove old one
             else
 
-                old = order(i - half_minus - 1)
-                new = order(i + half_plus)
                 hist(old) = hist(old) - 1
                 hist(new) = hist(new) + 1
 
@@ -352,17 +392,55 @@ contains
 
             end if
 
-            data(i) = data(i) - table(ibin)
+            filter(i) = table(ibin)
 
         end do
 
-    end subroutine median_filtering_1d_1d
+        call interpolate_linear(filter)
+        data = data - filter
+
+    end subroutine median_filtering_mask_1d_1d
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine median_filtering_1d_2d(data, length)
+    subroutine median_filtering_nomask_1d_1d(data, length)
+
+        real(p), intent(inout) :: data(:)
+        integer, intent(in)    :: length
+
+        integer                :: i
+
+        call median_filtering(data, [(logical(.false.,1), i=1, size(data))], length)
+
+    end subroutine median_filtering_nomask_1d_1d
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine median_filtering_mask_1d_2d(data, mask, length)
+
+        real(p), intent(inout) :: data(:,:)
+        logical*1, intent(in)  :: mask(size(data,1),size(data,2))
+        integer, intent(in)    :: length
+
+        integer                :: i
+
+        !$omp parallel do
+        do i = 1, size(data, 2)
+            call median_filtering(data(:,i), mask(:,i), length)
+        end do
+        !$omp end parallel do
+
+    end subroutine median_filtering_mask_1d_2d
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine median_filtering_nomask_1d_2d(data, length)
 
         real(p), intent(inout) :: data(:,:)
         integer, intent(in)    :: length
@@ -375,7 +453,7 @@ contains
         end do
         !$omp end parallel do
 
-    end subroutine median_filtering_1d_2d
+    end subroutine median_filtering_nomask_1d_2d
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
@@ -388,8 +466,13 @@ contains
 
         integer :: nbins
 
-        nbins = size(hist)
         irank = (length + 1) / 2
+        if (irank == 0) then
+            ibin = 0
+            return
+        end if
+
+        nbins = size(hist)
         do ibin=1, nbins
             if (irank - hist(ibin) <= 0) exit
             irank = irank - hist(ibin)
@@ -409,7 +492,7 @@ contains
         do
             ibin = ibin - 1
             irank = hist(ibin)
-            if (irank /= 0) exit
+            if (irank /= 0) return
         end do
 
     end subroutine median_filtering_previous

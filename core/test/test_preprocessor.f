@@ -6,9 +6,10 @@ program test_preprocessor
     use module_tamasis,   only : p
     implicit none
 
-    real(p)              :: small(10)
-    real(p), allocatable :: timeline(:), filtered(:), reference(:)
-    integer              :: count1, count2, count_rate, count_max, status, i
+    real(p)                :: small(10)
+    real(p), allocatable   :: timeline(:), timeline_NaN(:), filtered(:), reference(:), rnd(:)
+    logical*1, allocatable :: mask(:)
+    integer                :: count1, count2, count_rate, count_max, status, i
 
     small = [7.1_p,1.2_p,5._p, 3._p, 4._p, 5._p, 3._p,10._p,22._p,32._p]
 
@@ -32,7 +33,7 @@ program test_preprocessor
     call ft_read_image('core/test/data/timeline_transparent_mode.fits', timeline, status)
     if (status /= 0) stop 'FAILED ft_read_image'
 
-    allocate (filtered(size(timeline)), reference(size(timeline)))
+    allocate (filtered(size(timeline)), reference(size(timeline)), mask(size(timeline)))
     filtered = timeline
     
     call system_clock(count1, count_rate, count_max)
@@ -46,9 +47,46 @@ program test_preprocessor
 
     do i=1, size(timeline)
         if (neq_real(reference(i)+filtered(i), timeline(i), 100._p * epsilon(1._p))) then
-            print *, 'FAILED:', i, reference(i)+filtered(i), timeline(i)
+            print *, 'FAILED median_filtering:', i, reference(i)+filtered(i), timeline(i)
         end if
     end do
+
+    allocate (rnd(size(timeline)/2))
+    call random_number(rnd)
+    allocate (timeline_NaN(size(timeline)))
+    timeline_NaN = timeline
+    timeline_NaN(ceiling(rnd * size(filtered))) = NaN
+    filtered = timeline_NaN
+
+    call system_clock(count1, count_rate, count_max)
+    call median_filtering(filtered, 3)
+    call system_clock(count2, count_rate, count_max)
+    write(*,'(f6.3,a)') real(count2-count1)/count_rate, 's'
+
+    
+    do i=1, size(timeline_NaN)
+        reference(i) = median(timeline_NaN(max(i-1,1):min(i+1,size(timeline_NaN))))
+    end do
+    call interpolate_linear(reference)
+
+    do i=1, size(timeline_NaN)
+        if (neq_real(timeline_NaN(i)-reference(i), filtered(i), 100._p * epsilon(1._p))) then
+            print *, 'FAILED median_filtering NaN:', i, filtered(i), reference(i)
+        end if
+    end do
+
+    mask = .false.
+    mask(ceiling(rnd * size(filtered))) = .true.
+    filtered = timeline
+
+    call system_clock(count1, count_rate, count_max)
+    call median_filtering(filtered, mask, 3)
+    call system_clock(count2, count_rate, count_max)
+    write(*,'(f6.3,a)') real(count2-count1)/count_rate, 's'
+
+    if (any(neq_real(timeline-reference, filtered, 100._p * epsilon(1._p)))) then
+        stop 'FAILED median_filtering mask'
+    end if
 
     stop 'OK.'
 

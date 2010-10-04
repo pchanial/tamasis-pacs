@@ -329,7 +329,7 @@ end subroutine deglitch_l2b_mad
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine filter_median(data, length, nsamples, nsamples_tot, nslices, ndetectors, status)
+subroutine filter_median(data, mask, length, nsamples, nsamples_tot, nslices, ndetectors, status)
 
     use iso_fortran_env,     only : ERROR_UNIT, OUTPUT_UNIT
     use module_preprocessor, only : median_filtering
@@ -338,6 +338,7 @@ subroutine filter_median(data, length, nsamples, nsamples_tot, nslices, ndetecto
 
     !f2py threadsafe
     !f2py intent(in)   :: data
+    !f2py intent(in)   :: mask
     !f2py intent(in)   :: length
     !f2py intent(in)   :: nsamples
     !f2py intent(hide) :: nsamples_tot=shape(data,0)
@@ -346,6 +347,7 @@ subroutine filter_median(data, length, nsamples, nsamples_tot, nslices, ndetecto
     !f2py intent(out)  :: status
 
     real(p), intent(inout) :: data(nsamples_tot,ndetectors)
+    logical*1, intent(in)  :: mask(nsamples_tot,ndetectors)
     integer, intent(in)    :: length
     integer, intent(in)    :: nsamples(nslices)
     integer, intent(in)    :: nsamples_tot
@@ -374,7 +376,7 @@ subroutine filter_median(data, length, nsamples, nsamples_tot, nslices, ndetecto
     call system_clock(count1, count_rate, count_max)
     start = 1
     do islice = 1, nslices
-        call median_filtering(data(start:start+nsamples(islice)-1,:), length)
+        call median_filtering(data(start:start+nsamples(islice)-1,:), mask(start:start+nsamples(islice)-1,:), length)
         start = start + nsamples(islice)
     end do
     call system_clock(count2, count_rate, count_max)
