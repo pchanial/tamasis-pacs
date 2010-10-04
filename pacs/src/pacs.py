@@ -70,7 +70,7 @@ class PacsObservation(object):
 
         # retrieve information from the observations
         nthreads = tmf.info_nthreads()
-        print 'Info: ' + MPI.Get_processor_name() + ', ' + str(nthreads) + ' core' + ('s' if nthreads > 1 else '') + ' (' + str(ndetectors) + ')'
+        print 'Info: ' + MPI.Get_processor_name() + ' (' + str(nthreads) + ' core' + ('s' if nthreads > 1 else '') + ' handling ' + str(ndetectors) + ' detector' + ('s' if ndetectors > 1 else '') + ')'
         compression_factor, nsamples, unit, responsivity, detector_area, dflat, oflat, status = tmf.pacs_info(tamasis_dir, filename_, nfilenames, transparent_mode, fine_sampling_factor, numpy.array(frame_policy), numpy.asfortranarray(detector_mask))
         if status != 0: raise RuntimeError()
 
