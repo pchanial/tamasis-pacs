@@ -283,7 +283,11 @@ contains
         even = modulo(nvalids, 2) == 0
         call median_filtering_find_rank(hist, nvalids, ibin, irank)
 
-        filter(1) = table(ibin)
+        if (ibin == 0) then
+            filter(1) = NaN
+        else
+            filter(1) = table(ibin)
+        end if
         do i = 2, ndata
 
             if (i <= half_minus + 1) then
@@ -410,9 +414,10 @@ contains
         real(p), intent(inout) :: data(:)
         integer, intent(in)    :: length
 
+        logical*1, parameter   :: l1 = .false.
         integer                :: i
 
-        call median_filtering(data, [(logical(.false.,1), i=1, size(data))], length)
+        call median_filtering_mask_1d_1d(data, [(l1, i=1, size(data))], length)
 
     end subroutine median_filtering_nomask_1d_1d
 
