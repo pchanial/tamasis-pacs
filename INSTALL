@@ -11,13 +11,13 @@ Requirements:
 - python 2.6
 - numpy 1.4.1
 - scipy
-- matplotlib
-- ipython
 - PyFFTW3 0.2 with patches (https://launchpad.net/pyfftw)
 - pyfits 2.3 (http://www.stsci.edu/resources/software_hardware/pyfits)
--mpi4py
+- mpi4py
 
 Recommended packages:
 =====================
 - kapteyn (http://www.astro.rug.nl/software/kapteyn/index.html)
 - pyds9
+- ipython
+- matplotlib

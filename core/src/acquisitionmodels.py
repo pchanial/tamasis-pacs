@@ -5,11 +5,6 @@ try:
 except:
     print 'Warning: Library PyFFTW3 is not installed.'
 
-try:
-    from mpi4py import MPI
-except:
-    print 'Warning: Library mpi4py is not installed.'
-
 import multiprocessing
 import numpy
 import scipy.sparse.linalg
@@ -18,6 +13,7 @@ import utils
 
 from config import __verbose__, get_default_dtype, get_default_dtype_float, get_default_dtype_complex
 from datatypes import Map, Tod, combine_sliced_shape, distance, flatten_sliced_shape, validate_sliced_shape
+from mpi4py import MPI
 from processing import interpolate_linear
 
 __all__ = ['AcquisitionModel', 'AcquisitionModelTranspose', 'Composition', 
