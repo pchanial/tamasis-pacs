@@ -387,7 +387,10 @@ contains
         real(p), intent(in) :: array(:)
 
         real(p), allocatable :: array_copy(:)
-
+        
+#ifdef IFORT
+        allocate (array_copy(count(array == array)))
+#endif
         array_copy = pack(array, array == array)
         median = median_nocopy(array_copy)
 
@@ -405,6 +408,9 @@ contains
 
         real(p), allocatable  :: array_copy(:)
 
+#ifdef IFORT
+        allocate (array_copy(count(array == array .and. .not. mask)))
+#endif
         array_copy = pack(array, array == array .and. .not. mask)
         median = median_nocopy(array_copy)
 
