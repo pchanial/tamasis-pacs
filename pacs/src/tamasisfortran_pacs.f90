@@ -688,10 +688,10 @@ subroutine pacs_multiplexing_transpose(multiplexed, signal, fine_sampling_factor
     !f2py intent(hide)     :: nsamples = shape(signal,0)
     !f2py intent(hide)     :: ndetectors = shape(signal,1)
     
-    real(p), intent(in)    :: multiplexed(nsamples/fine_sampling_factor, ndetectors)
     integer*8, intent(in)  :: nsamples
     integer, intent(in)    :: ndetectors, fine_sampling_factor, ij(2, ndetectors)
     real(p), intent(inout) :: signal(nsamples, ndetectors)
+    real(p), intent(in)    :: multiplexed(nsamples/fine_sampling_factor, ndetectors)
 
     call multiplexing_transpose(multiplexed, signal, fine_sampling_factor, ij)
 
