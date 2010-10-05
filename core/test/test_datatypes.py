@@ -6,6 +6,7 @@ from tamasis.datatypes import validate_sliced_shape
 from uuid import uuid1
 
 filename = 'tamasistest-'+str(uuid1())
+deftype = get_default_dtype_float()
 
 def test_cleanup():
     files = glob.glob(filename+'*')
@@ -122,7 +123,7 @@ if tod2.shape != (10,8): raise TestFailure('Addition')
 if tod2.nsamples != (3,5): raise TestFailure('Addition2')
 
 a = Tod([10,20])
-if a.dtype != numpy.float64: raise TestFailure()
+if a.dtype.type != deftype: raise TestFailure()
 
 a = Tod([10,20], mask=[True,False])
 b = Tod(a, copy=True)
@@ -131,7 +132,8 @@ if id(a.mask) == id(b.mask): raise TestFailure()
 b = Tod(a, copy=False)
 if id(a) != id(b): raise TestFailure()
 
-b = Tod(a, dtype='float32', copy=False)
+othertype = numpy.float32 if deftype is not numpy.float32 else numpy.float64
+b = Tod(a, dtype=othertype, copy=False)
 if id(a) == id(b): raise TestFailure()
 if id(a.mask) != id(b.mask): raise TestFailure()
 
@@ -190,7 +192,7 @@ if b.nsamples != a.nsamples: raise TestFailure()
 b = a[:,2]
 if not isinstance(b, FitsArray): raise TestFailure()
 b = a[4,2]
-if not isinstance(b, numpy.float64): raise TestFailure()
+if not isinstance(b, deftype): raise TestFailure()
 
 m = numpy.ndarray((10,2,10), dtype='int8')
 m.flat = numpy.random.random(m.size)*2

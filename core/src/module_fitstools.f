@@ -74,6 +74,9 @@ module module_fitstools
         module procedure ft_write_image_int4_1d, ft_write_image_int4_2d, ft_write_image_int4_3d,                                   &
                          ft_write_image_real4_1d, ft_write_image_real4_2d, ft_write_image_real4_3d,                                &
                          ft_write_image_real8_1d, ft_write_image_real8_2d, ft_write_image_real8_3d
+#if PRECISION_REAL == 16
+        module procedure ft_write_image_real16_1d, ft_write_image_real16_2d, ft_write_image_real16_3d
+#endif
     end interface ft_write_image
 
     interface ft_read_keyword
@@ -325,6 +328,28 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
+#if PRECISION_REAL == 16
+    subroutine ft_read_column_filename_real16(filename, colname, data, status)
+
+        character(len=*), intent(in)       :: filename
+        character(len=*), intent(in)       :: colname
+        real(qp), allocatable, intent(out) :: data(:)
+        integer, intent(out)               :: status
+
+        real(dp), allocatable :: data_(:)
+        
+        call ft_read_column(filename, colname, data_, status)
+        if (status /= 0) return
+        
+        allocate(data(size(data_)))
+        data = data_
+
+    end subroutine ft_read_column_filename_real16
+#endif
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
     subroutine ft_read_column_unit_real4(unit, colname, first, last, data, status)
         integer, intent(in)          :: unit
         character(len=*), intent(in) :: colname
@@ -391,6 +416,27 @@ contains
 
     end subroutine ft_read_column_unit_real8
 
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+#if PRECISION_REAL == 16
+    subroutine ft_read_column_unit_real16(unit, colname, first, last, data, status)
+        integer, intent(in)          :: unit
+        character(len=*), intent(in) :: colname
+        integer, intent(in)          :: first, last
+        real(qp), intent(out)        :: data(:)
+        integer, intent(out)         :: status
+
+        real(dp) :: data_(size(data))
+
+        call ft_read_column(unit, colname, first, last, data_, status)
+        if (status /= 0) return
+
+        data = data_
+
+    end subroutine ft_read_column_unit_real16
+#endif
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
@@ -516,10 +562,10 @@ contains
         call ft_read_image(filename, output_, status, hdu)
         if (status /= 0) return
 
-        allocate(output(shape(output_,1)))
+        allocate(output(size(output_)))
         output = real(output_, qp)
 
-    end subroutine ft_read_image_real4_1d
+    end subroutine ft_read_image_real16_1d
 #endif
 
 
@@ -641,10 +687,10 @@ contains
         call ft_read_image(filename, output_, status, hdu)
         if (status /= 0) return
 
-        allocate(output(shape(output_,1),shape(output_,2)))
+        allocate(output(size(output_,1),size(output_,2)))
         output = real(output_, qp)
 
-    end subroutine ft_read_image_real4_1d
+    end subroutine ft_read_image_real16_2d
 #endif
 
 
@@ -761,20 +807,19 @@ contains
 
 
 #if PRECISION_REAL == 16
-    subroutine ft_read_image_real16_3d(filename, output, status, hdu)
+    subroutine ft_read_image_real16_3d(filename, output, status)
 
         character(len=*), intent(in)       :: filename
         real(qp), allocatable, intent(out) :: output(:,:,:)
         integer, intent(out)               :: status
-        integer, optional, intent(in)      :: hdu
 
         real(dp), allocatable              :: output_(:,:,:)
 
-        call ft_read_image(filename, output_, status, hdu)
+        call ft_read_image(filename, output_, status)
         if (status /= 0) return
 
-        allocate(output(shape(output_,1),shape(output_,2),shape(output_,3)))
-        output = real(output_, qp)
+        allocate (output(size(output_,1),size(output_,2),size(output_,3)))
+        output = output_
 
     end subroutine ft_read_image_real16_3d
 #endif
@@ -893,6 +938,29 @@ contains
         if (ft_check_error_cfitsio(status, unit)) return
 
     end subroutine ft_read_slice_real8_3d
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+#if PRECISION_REAL == 16
+    subroutine ft_read_slice_real16_3d(unit, x1, x2, y, z, naxes, array, status)
+
+        integer, intent(in)     :: unit
+        integer, intent(in)     :: x1, x2
+        integer, intent(in)     :: y, z
+        integer, intent(in)     :: naxes(3)
+        real(qp), intent(inout) :: array(x2 - x1 + 1)
+        integer, intent(out)    :: status
+
+        real(dp) :: array_(size(array))
+
+        call ft_read_slice(unit, x1, x2, y, z, naxes, array_, status)
+        if (status /= 0) return
+        array = array_
+
+    end subroutine ft_read_slice_real16_3d
+#endif
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
@@ -1406,6 +1474,26 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
+#if PRECISION_REAL == 16
+    subroutine ft_write_image_real16_1d(filename, data, header, status)
+
+        character(len=*), intent(in)           :: filename
+        real(qp), intent(in)                   :: data(:)
+        character(len=*), intent(in), optional :: header
+        integer, intent(out)                   :: status
+
+        real(dp) :: data_(size(data))
+
+        data_ = data
+        call ft_write_image(filename, data_, header, status)
+
+    end subroutine ft_write_image_real16_1d
+#endif
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
     subroutine ft_write_image_real4_2d(filename, data, header, status)
 
         character(len=*), intent(in)           :: filename
@@ -1514,6 +1602,26 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
+#if PRECISION_REAL == 16
+    subroutine ft_write_image_real16_2d(filename, data, header, status)
+
+        character(len=*), intent(in)           :: filename
+        real(qp), intent(in)                   :: data(:,:)
+        character(len=*), intent(in), optional :: header
+        integer, intent(out)                   :: status
+
+        real(dp) :: data_(size(data,1),size(data,2))
+
+        data_ = data
+        call ft_write_image(filename, data_, header, status)
+
+    end subroutine ft_write_image_real16_2d
+#endif
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
     subroutine ft_write_image_real4_3d(filename, data, header, status)
 
         character(len=*), intent(in)           :: filename
@@ -1615,6 +1723,26 @@ contains
         call ft_close(unit, status)
 
     end subroutine ft_write_image_real8_3d
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+#if PRECISION_REAL == 16
+    subroutine ft_write_image_real16_3d(filename, data, header, status)
+
+        character(len=*), intent(in)           :: filename
+        real(qp), intent(in)                   :: data(:,:,:)
+        character(len=*), intent(in), optional :: header
+        integer, intent(out)                   :: status
+
+        real(dp) :: data_(size(data,1),size(data,2),size(data,3))
+
+        data_ = data
+        call ft_write_image(filename, data_, header, status)
+
+    end subroutine ft_write_image_real16_3d
+#endif
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
