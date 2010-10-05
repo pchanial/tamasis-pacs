@@ -648,6 +648,10 @@ contains
                      itime  = (ivalid-1) * sampling_factor + ifine + dest
                      coords = this%yz2ad(coords_yz, ra, dec, pa)
                      call ad2xys_gnomonic(coords, x, y, s)
+                     ! the input map has flux densities, not surface brightness
+                     ! f_idetector = f_imap * weight
+                     ! with weight = detector_area / pixel_area
+                     ! and pixel_area = reference_area / s
                      s = s * this%detector_area / reference_area
                      call xy2pmatrix(x, y, nx, ny, out, pmatrix(1,itime,:))
                      pmatrix(1,itime,:)%weight = s
