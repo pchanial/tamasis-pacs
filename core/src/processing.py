@@ -13,7 +13,10 @@ def deglitch_l2std(tod, projection, nsigma=5.):
     nx = projection.header['naxis1']
     ny = projection.header['naxis2']
     npixels_per_sample = projection.npixels_per_sample
-    mask = tod.mask.copy()
+    if tod.mask is None:
+        mask = numpy.zeros(tod.shape, dtype='int8')
+    else:
+        mask = tod.mask.copy()
     tmf.deglitch_l2b_std(projection._pmatrix, nx, ny, tod.T, mask.T, nsigma, npixels_per_sample)
     return mask
 
@@ -29,7 +32,10 @@ def deglitch_l2mad(tod, projection, nsigma=5.):
     nx = projection.header['naxis1']
     ny = projection.header['naxis2']
     npixels_per_sample = projection.npixels_per_sample
-    mask = tod.mask.copy()
+    if tod.mask is None:
+        mask = numpy.zeros(tod.shape, dtype='int8')
+    else:
+        mask = tod.mask.copy()
     tmf.deglitch_l2b_mad(projection._pmatrix, nx, ny, tod.T, mask.T, nsigma, npixels_per_sample)
     return mask
 

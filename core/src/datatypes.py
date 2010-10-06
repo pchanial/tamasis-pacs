@@ -354,14 +354,10 @@ class Tod(FitsArray):
 
         # nsamples attribute
         if type(data) is str and nsamples is None:
-            try:
+            if result.header.has_key('nsamples'):
                 nsamples = result.header['nsamples'][1:-1].replace(' ', '')
                 if len(nsamples) > 0:
-                    nsamples = map(lambda x: int(x), nsamples.split(','))
-                else:
-                    nsamples = ()
-            except:
-                pass
+                    nsamples = map(lambda x: int(float(x)), nsamples.split(','))
         if nsamples is None:
             return result
         shape = validate_sliced_shape(result.shape, nsamples)
