@@ -871,6 +871,7 @@ class Masking(Symmetric):
         AcquisitionModel.__init__(self, description)
         if mask is None:
             self.mask = None
+            print 'Warning: input mask is None.'
         else:
             self.mask = mask
         # shapein is not set, since it would fail for Tod with more than one slice
@@ -907,7 +908,7 @@ class Masking(Symmetric):
 
     @property
     def dtype(self):
-        if self.mask.dtype.type in (numpy.complex64, numpy.complex128, numpy.complex256):
+        if self.mask is not None and self.mask.dtype.type in (numpy.complex64, numpy.complex128, numpy.complex256):
             return self.mask.dtype.type
         return get_default_dtype_float()
 
