@@ -362,10 +362,8 @@ class Tod(FitsArray):
             return result
         shape = validate_sliced_shape(result.shape, nsamples)
         result.nsamples = shape[-1]
-        if _my_isscalar(nsamples):
-            result.nsamples = (int(nsamples),)
-        else:
-            result.nsamples = tuple(nsamples)
+        if type(result.nsamples) is not tuple:
+            result.nsamples = (result.nsamples,)
 
         return result
 
@@ -540,6 +538,8 @@ def combine_sliced_shape(shape, nsamples):
 def validate_sliced_shape(shape, nsamples=None):
     # convert shape and nsamples to tuple
     if shape is None:
+        if nsamples is None:
+            return None
         shape = ()
     elif _my_isscalar(shape):
         shape = (int(shape),)
@@ -558,9 +558,9 @@ def validate_sliced_shape(shape, nsamples=None):
     
     if nsamples is None:
         if _my_isscalar(shape[-1]):
-            nsamples = (int(shape[-1]),)
+            nsamples = int(shape[-1])
         else:
-            nsamples = tuple(shape[-1])
+            nsamples = tuple(map(int, shape[-1]))
     else:
         if len(nsamples) == 0:
             raise ValueError("The input is not scalar and is incompatible with nsamples.")
@@ -568,6 +568,8 @@ def validate_sliced_shape(shape, nsamples=None):
             raise ValueError('The input nsamples has negative values.')
         elif numpy.sum(nsamples) != numpy.sum(shape[-1]):
             raise ValueError("The sliced input has an incompatible number of samples '" + str(nsamples) + "' instead of '" + str(shape[-1]) + "'.")
+        if len(nsamples) == 1:
+            nsamples = nsamples[0]
     
     l = list(shape[0:-1])
     l.append(nsamples)
