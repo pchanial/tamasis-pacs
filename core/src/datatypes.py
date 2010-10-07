@@ -429,6 +429,22 @@ class Tod(FitsArray):
     def copy(self, order='C'):
         return Tod(self, copy=True, order=order)
 
+    def flatten(self, order='C'):
+        """
+        Return a copy of the array collapsed into one dimension.
+        """
+        result = super(self.__class__, self).flatten(order)
+        result.nsamples = None
+        return result
+
+    def ravel(self, order='C'):
+        """
+        Return a flattened view of the array
+        """
+        result = super(self.__class__, self).ravel(order)
+        result.nsamples = None
+        return result
+        
     def imshow(self, num=None, title=None, figsize=None, dpi=None, aspect='auto', **kw):
         """
         A simple graphical display function for the Map class
