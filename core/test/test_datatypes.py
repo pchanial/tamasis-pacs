@@ -25,24 +25,24 @@ if validate_sliced_shape([],()) != ((),): raise TestFailure()
 if validate_sliced_shape(numpy.array(()),()) != ((),): raise TestFailure()
 
 # validate arrays of size 0
-if validate_sliced_shape((0,),None) != ((0,),): raise TestFailure()
-if validate_sliced_shape((0,),(0,)) != ((0,),): raise TestFailure()
-if validate_sliced_shape([0],None) != ((0,),): raise TestFailure()
-if validate_sliced_shape([0],(0,)) != ((0,),): raise TestFailure()
+if validate_sliced_shape((0,),None) != (0,): raise TestFailure()
+if validate_sliced_shape((0,),(0,)) != (0,): raise TestFailure()
+if validate_sliced_shape([0],None) != (0,): raise TestFailure()
+if validate_sliced_shape([0],(0,)) != (0,): raise TestFailure()
 
 # validate arrays with slices of size 0
 a = numpy.ones((1,0,1))
-if validate_sliced_shape(a.shape, None) != (1,0,(1,)): raise TestFailure()
-if validate_sliced_shape(a.shape, 1) != (1,0,(1,)): raise TestFailure()
-if validate_sliced_shape(a.shape, (1,)) != (1,0,(1,)): raise TestFailure()
+if validate_sliced_shape(a.shape, None) != (1,0,1): raise TestFailure()
+if validate_sliced_shape(a.shape, 1) != (1,0,1): raise TestFailure()
+if validate_sliced_shape(a.shape, (1,)) != (1,0,1): raise TestFailure()
 a = numpy.ones((1,1,0))
-if validate_sliced_shape(a.shape, None) != (1,1,(0,)): raise TestFailure()
-if validate_sliced_shape(a.shape, 0) != (1,1,(0,)): raise TestFailure()
-if validate_sliced_shape(a.shape, (0,)) != (1,1,(0,)): raise TestFailure()
+if validate_sliced_shape(a.shape, None) != (1,1,0): raise TestFailure()
+if validate_sliced_shape(a.shape, 0) != (1,1,0): raise TestFailure()
+if validate_sliced_shape(a.shape, (0,)) != (1,1,0): raise TestFailure()
 a = numpy.ones((1,1,3))
 
 if validate_sliced_shape((10,(10,3)), None) != (10, (10,3)): raise TestFailure()
-if validate_sliced_shape((10,13), None) != (10, (13,)): raise TestFailure()
+if validate_sliced_shape((10,13), None) != (10, 13): raise TestFailure()
 
 # check errors
 try:
