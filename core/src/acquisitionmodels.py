@@ -144,6 +144,7 @@ class AcquisitionModel(object):
         operator = scipy.sparse.linalg.interface.LinearOperator(shape, matvec=model.direct, rmatvec=model.transpose, dtype=self.dtype)
         operator.packing   = packing
         operator.unpacking = unpacking
+        operator.model = model
         return operator
         
     def validate_shape(self, shapein):
@@ -176,8 +177,7 @@ class AcquisitionModel(object):
         return self.shapein
 
     def validate_input(self, cls, data):
-        if not isinstance(data, numpy.ndarray):
-            data = numpy.asarray(data)
+        data = numpy.asanyarray(data)
         if not utils._my_issctype(data.dtype):
             raise TypeError("The input of '" + self.__class__.__name__ + "' has an non-numeric type '" + utils.get_type(data) + "'.")
         if not isinstance(data, cls):
@@ -187,8 +187,7 @@ class AcquisitionModel(object):
         return data
 
     def validate_input_direct(self, cls, data, reusein):
-        if not isinstance(data, numpy.ndarray):
-            data = numpy.asarray(data)
+        data = numpy.asanyarray(data)
         if not utils._my_issctype(data.dtype):
             raise TypeError("The input of '" + self.__class__.__name__ + "' has an non-numeric type '" + utils.get_type(data)+"'.")
         if not isinstance(data, cls):
@@ -198,13 +197,11 @@ class AcquisitionModel(object):
         return data, shapeout
 
     def validate_input_transpose(self, cls, data, reusein):
-        if not isinstance(data, numpy.ndarray):
-            data = numpy.asarray(data)
+        data = numpy.asanyarray(data)
         if not utils._my_issctype(data.dtype):
             raise TypeError("The input of '" + self.__class__.__name__ + ".T' has an non-numeric type '" + get_type(data) + "'.")
         if not isinstance(data, cls):
             data = data.view(cls)
-                
         shapein = self.validate_shapeout(validate_sliced_shape(data.shape, getattr(data, 'nsamples', None)))
         if reusein: self._output_direct = data
         return data, shapein
@@ -216,7 +213,7 @@ class AcquisitionModel(object):
         """
         if reusein:
             return array
-        if __verbose__: print 'Info: Allocating '+str(numpy.product(array.shape)/2.**17)+' MiB in '+self.__class__.__name__+'.'
+        if __verbose__: print 'Info: Allocating '+str(array.dtype.itemsize*numpy.product(array.shape)/2.**20)+' MiB in '+self.__class__.__name__+'.'
         return array.copy('a')
 
     def validate_output_direct(self, cls, shapeout, dtype, reuseout, **options):
@@ -302,16 +299,6 @@ class AcquisitionModel(object):
 
     def __neg__(self):
         return Scalar(-1.) * self
-
-    def __iter__(self):
-        if len(self.blocks) == 0:
-            return iter((self,))
-        return self.blocks.__iter__()
-
-    def __reversed__(self):
-        if len(self.blocks) == 0:
-            return iter((self,))
-        return self.blocks.__reversed__()
 
     def __str__(self):
         result = self.description
@@ -524,7 +511,7 @@ class Composition(AcquisitionModel):
         for model in reversed(models):
             model = asacquisitionmodel(model)
             if isinstance(model, Composition):
-                for block in model:
+                for block in model.blocks:
                     self.blocks.append(block)
             else:
                 self.blocks.append(model)
@@ -532,14 +519,14 @@ class Composition(AcquisitionModel):
         shapeout = self.shapeout
 
     def direct(self, data, reusein=False, reuseout=False):
-        for i, model in enumerate(self):
+        for i, model in enumerate(self.blocks):
             reusein_  = reusein  or i != 0
             reuseout_ = reuseout or i != len(self.blocks)-1
             data = model.direct(data, reusein=reusein_, reuseout=reuseout_)
         return data
 
     def transpose(self, data, reusein=False, reuseout=False):
-        for i, model in enumerate(reversed(self)):
+        for i, model in enumerate(reversed(self.blocks)):
             reusein_  = reusein  or i != 0
             reuseout_ = reuseout or i != len(self.blocks)-1
             data = model.transpose(data, reusein=reusein_, reuseout=reuseout_)
@@ -552,14 +539,14 @@ class Composition(AcquisitionModel):
     @property
     def shapein(self):
         shapein = None
-        for model in reversed(self):
+        for model in reversed(self.blocks):
             shapein = model.validate_shapeout(shapein)
         return shapein
 
     @property
     def shapeout(self):
         shapeout = None
-        for model in self:
+        for model in self.blocks:
             shapeout = model.validate_shapein(shapeout)
         return shapeout
 
@@ -577,7 +564,7 @@ class Composition(AcquisitionModel):
     def __str__(self):
         result = super(self.__class__, self).__str__() + ':'
         components = []
-        for block in self:
+        for block in self.blocks:
             components.extend(str(block).split('\n'))
         result += '\n    '+'\n    '.join(components)
         return result
@@ -981,7 +968,7 @@ class Reshaping(AcquisitionModel):
             raise ValueError('The number of elements of the input and output of the Reshaping operator are incompatible.')
 
     def direct(self, array, reusein=False, reuseout=False):
-        array = self.validate_input(numpy.ndarray, array)
+        array, junk = self.validate_input_direct(numpy.ndarray, array, False)
         output = self.validate_output(array, reusein and reuseout)
         output = _smart_reshape(output, self.shapeout)
         if type(self.shapeout[-1]) is tuple:
@@ -989,7 +976,7 @@ class Reshaping(AcquisitionModel):
         return output
 
     def transpose(self, array, reusein=False, reuseout=False):
-        array = self.validate_input(numpy.ndarray, array)
+        array, junk = self.validate_input_transpose(numpy.ndarray, array, False)
         output = self.validate_output(array, reusein and reuseout)
         output = _smart_reshape(output, self.shapein)
         if type(self.shapein[-1]) is tuple:
@@ -1004,8 +991,8 @@ class Padding(AcquisitionModel):
     "Pads before and after a Tod."
     def __init__(self, left=0, right=0, value=0., description=None):
         AcquisitionModel.__init__(self, description)
-        left = numpy.array(left, ndmin=1)
-        right = numpy.array(right, ndmin=1)
+        left = numpy.array(left, ndmin=1, dtype=int)
+        right = numpy.array(right, ndmin=1, dtype=int)
         if numpy.any(left < 0):
             raise ValueError('Left padding is not positive.')
         if numpy.any(right < 0):
@@ -1260,6 +1247,7 @@ def asacquisitionmodel(operator, description=None):
         model.transpose = lambda data, reusein=False, reuseout=False: operator.rmatvec(data)
         model.shapein   = (operator.shape[1],)
         model.shapeout  = (operator.shape[0],)
+        model.dtype     = operator.dtype.type
         return model
     return asacquisitionmodel(scipy.sparse.linalg.aslinearoperator(operator))
 
