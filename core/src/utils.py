@@ -5,7 +5,9 @@ import re
 import tamasisfortran as tmf
 import time
 
-__all__ = [ 'any_neq', 'create_fitsheader', 'mean_degrees' ]
+__all__ = [ 'any_neq', 'create_fitsheader', 'mean_degrees', 'pointing' ]
+
+pointing = numpy.dtype([('time', numpy.float64), ('ra', numpy.float64), ('dec', numpy.float64), ('pa', numpy.float64), ('flag', numpy.int64)])
 
 def create_fitsheader(array, extname=None, crval=(0.,0.), crpix=None, ctype=('RA---TAN','DEC--TAN'), cunit='deg', cd=None, cdelt=None):
     """

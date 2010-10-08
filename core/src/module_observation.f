@@ -7,7 +7,8 @@
 module module_observation
 
     use iso_fortran_env,  only : ERROR_UNIT, OUTPUT_UNIT
-    use module_fitstools, only : ft_open, ft_open_bintable, ft_read_column, ft_read_image, ft_read_keyword_hcss, ft_close
+    use module_fitstools, only : ft_close, ft_open, ft_open_bintable, ft_read_column, ft_read_image, ft_read_keyword,              &
+                                 ft_read_keyword_hcss
     use module_math,      only : NaN, mean, mean_degrees, median, neq_real
     use module_string,    only : strinteger, strlowcase, strreal, strsection, strternary
     use module_tamasis,   only : p, POLICY_KEEP, POLICY_MASK, POLICY_REMOVE
@@ -811,8 +812,8 @@ contains
         class(PacsObservationSlice), intent(inout) :: this
         integer, intent(out)                       :: status
 
-        character(len=70) :: comment
-        integer           :: length, unit
+        integer :: length, unit
+        logical :: found
 
         this%unit = ''
         length = len_trim(this%filename)
@@ -820,12 +821,13 @@ contains
             return
         end if
 
-        call ft_open(trim(this%filename) // '[Signal]', unit, status)
-        if (status /= 0) return
+        call ft_open(trim(this%filename) // '[Signal]', unit, found, status)
+        if (status /= 0 .or. .not. found) return
 
-        call ftgkys(unit, 'QTTY____', this%unit, comment, status)
-        status = 0
-        this%unit = trim(this%unit)
+        call ft_read_keyword(unit, 'QTTY____', this%unit, found, status)
+        if (status /= 0) return
+        print *, 'module_observation::set_unit: check me'
+!!$        this%unit = trim(this%unit)
 
         call ft_close(unit, status)
 

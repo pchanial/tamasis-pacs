@@ -985,11 +985,11 @@ contains
         character(len=70) :: comment
 
         select case (channel)
-            case ('Blue')
+            case ('blue')
                 call ft_open(get_calfile(filename_ib), unit, status)
-            case ('Green')
+            case ('green')
                 call ft_open(get_calfile(filename_ig), unit, status)
-            case ('Red')
+            case ('red')
                 call ft_open(get_calfile(filename_ir), unit, status)
             case default
                 status = 1
@@ -1018,11 +1018,11 @@ contains
         integer, intent(out)                  :: status
 
         select case (channel)
-            case ('Blue')
+            case ('blue')
                 call read_filter_filename(get_calfile(filename_ib), mask, filter, status)
-            case ('Green')
+            case ('green')
                 call read_filter_filename(get_calfile(filename_ig), mask, filter, status)
-            case ('Red')
+            case ('red')
                 call read_filter_filename(get_calfile(filename_ir), mask, filter, status)
             case default
                 status = 1

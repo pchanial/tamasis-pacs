@@ -2,7 +2,7 @@
 !
 ! Author: P. Chanial
 
-subroutine pacs_info_channel(filename, nfilenames, channel, transparent_mode, status)
+subroutine pacs_info_band(filename, nfilenames, channel, transparent_mode, status)
 
     use iso_fortran_env,        only : ERROR_UNIT
     use module_fitstools,       only : ft_close, ft_open, ft_read_keyword
@@ -32,7 +32,7 @@ subroutine pacs_info_channel(filename, nfilenames, channel, transparent_mode, st
         stop 'PACS_INFO_CHANNEL: Invalid filename length.'
     end if
 
-    channel = 'Unknown'
+    channel = 'unknown'
     transparent_mode = .true.
 
     do iobs = 1, nfilenames
@@ -48,11 +48,11 @@ subroutine pacs_info_channel(filename, nfilenames, channel, transparent_mode, st
         if (filename_(length-4:length) /= '.fits') then
             status = 0
             if (strlowcase(filename_(length-3:length)) == 'blue') then
-               channel_ = 'Blue'
+               channel_ = 'blue'
             else if (strlowcase(filename_(length-4:length)) == 'green') then
-               channel_ = 'Green'
+               channel_ = 'green'
             else if (strlowcase(filename_(length-2:length)) == 'red') then
-               channel_ = 'Red'
+               channel_ = 'red'
             else
                status = 1
                write (ERROR_UNIT,'(a)') 'File name does not contain the array channel identifier (blue, green, red).'
@@ -71,19 +71,19 @@ subroutine pacs_info_channel(filename, nfilenames, channel, transparent_mode, st
 
         select case (trim(obstype))
             case ('HPPRAWBS')
-                channel_ = 'Blue'
+                channel_ = 'blue'
             case ('HPPRAWBL')
-                channel_ = 'Green'
+                channel_ = 'green'
             case ('HPPRAWRS')
-                channel_ = 'Red'
+                channel_ = 'red'
             case ('HPPAVGBS')
-                channel_ = 'Blue'
+                channel_ = 'blue'
                 transparent_mode = .false.
             case ('HPPAVGBL')
-                channel_ = 'Green'
+                channel_ = 'green'
                 transparent_mode = .false.
             case ('HPPAVGRS')
-                channel_ = 'Red'
+                channel_ = 'red'
                 transparent_mode = .false.
             case default
                 write (ERROR_UNIT, '(a)') "Unknown observation type '" // trim(obstype) // "' in file '" // filename_ // "'."
@@ -104,7 +104,7 @@ subroutine pacs_info_channel(filename, nfilenames, channel, transparent_mode, st
 
     end do
 
-end subroutine pacs_info_channel
+end subroutine pacs_info_band
 
 
 !-----------------------------------------------------------------------------------------------------------------------------------
@@ -147,14 +147,14 @@ subroutine pacs_info_bad_detector_mask(tamasis_dir, channel, transparent_mode, r
     if (size(tmp,1) /= size(detector_mask,2) .or. size(tmp,2) /= size(detector_mask,1)) then
         status = 1
         write (ERROR_UNIT, '(a,4(i0,a))') 'Invalid shape of the detector mask (', size(detector_mask,1), ',',                      &
-              size(detector_mask,2), ') instead of (', size(tmp,2), ':', size(tmp,1), ')'
+              size(detector_mask,2), ') instead of (', size(tmp,2), ',', size(tmp,1), ')'
         return
     end if
     detector_mask = transpose(tmp)
 
     ! mask detectors rejected in transparent mode
     if (transparent_mode) then
-        if (channel /= 'Red') then
+        if (channel /= 'red') then
             detector_mask(1:16,1:16) = .true.
             detector_mask(1:16,33:)  = .true.
             detector_mask(17:,:)     = .true.
@@ -166,7 +166,7 @@ subroutine pacs_info_bad_detector_mask(tamasis_dir, channel, transparent_mode, r
     end if
     
     ! mask erratic line
-    if (reject_bad_line .and. channel /= 'Red') then
+    if (reject_bad_line .and. channel /= 'red') then
         detector_mask(12,17:32) = .true.
     end if
 

@@ -5,113 +5,21 @@ import os
 import pyfits
 import re
 import tamasisfortran as tmf
+import tempfile
+import utils
 
 from acquisitionmodels import AcquisitionModel, CompressionAverage, Masking, Projection, ValidationError
-from config import tamasis_dir
+from config import __version__, tamasis_dir
 from datatypes import *
 from mappers import mapper_naive
 from mpi4py import MPI
 from processing import deglitch_l2mad, filter_median
 from unit import Quantity
-from utils import MaskPolicy
 
-__all__ = [ 'PacsObservation', 'pacs_plot_scan', 'pacs_preprocess', 'pacs_status' ]
+__all__ = [ 'PacsObservation', 'PacsSimulation', 'pacs_plot_scan', 'pacs_preprocess', 'pacs_status' ]
 
 
-class PacsObservation(object):
-    """
-    Class which encapsulates handy information about the PACS instrument and the processed
-    observation.
-    It is assumed that the detectors have sharp edges, so that the integration is simply equal
-    to the sum of the sky pixels values weighted by their intersections with the detector surface.
-    It contains the following attributes:
-    - filename           : name of the file name, including the array colour, but excluding
-                           the type. Example: '1342184520_blue'.
-    - npixels_per_sample : number of sky pixels which intersect a PACS detector
-    - keep_bad_detectors : if set to True, force the processing to include all pixels
-    - detector_mask  : (nrows,ncolumns) mask of uint8 values (0 or 1). 1 means dead pixel.
-    - ij(2,ndetectors)   : the row and column number (starting from 0) of the detectors
-    Author: P. Chanial
-    """
-    def __init__(self, filename, fine_sampling_factor=1, detector_mask=None, reject_bad_line=False, frame_policy_inscan='keep', frame_policy_turnaround='keep', frame_policy_other='remove', frame_policy_invalid='mask'):
-
-        if type(filename) == str:
-            filename = (filename,)
-        filename_, nfilenames = _files2tmf(filename)
-
-        channel, transparent_mode, status = tmf.pacs_info_channel(filename_, nfilenames)
-        if status != 0: raise RuntimeError()
-        channel = channel.strip()
-
-        nrows, ncolumns = (16,32) if channel == 'Red' else (32,64)
-
-        # get the detector mask, before distributing to the processors
-        if detector_mask is not None:
-            if detector_mask.shape != (nrows, ncolumns):
-                raise ValueError('Invalid shape of the input detector mask: ' + str(detector_mask.shape) + ' for the ' + channel + ' channel.')
-            detector_mask = numpy.array(detector_mask, dtype='int8', copy=False)
-
-        else:
-            detector_mask, status = tmf.pacs_info_bad_detector_mask(tamasis_dir, channel, transparent_mode, reject_bad_line, nrows, ncolumns)
-            if status != 0: raise RuntimeError()
-            detector_mask = numpy.ascontiguousarray(detector_mask)
-
-        # get the observations and detector mask for the current processor
-        slice_observation, slice_detector = _split_observation(nfilenames, int(numpy.sum(detector_mask == 0)))
-        filename = filename[slice_observation]
-        igood = numpy.where(detector_mask.flat == 0)[0]
-        detector_mask = numpy.ones(detector_mask.shape, dtype='int8')
-        detector_mask.flat[igood[slice_detector]] = 0
-        filename_, nfilenames = _files2tmf(filename)
-        ndetectors = int(numpy.sum(detector_mask == 0))
-
-        # frame policy
-        frame_policy = MaskPolicy('inscan,turnaround,other,invalid'.split(','), (frame_policy_inscan, frame_policy_turnaround, frame_policy_other, frame_policy_invalid), 'Frame Policy')
-
-        # retrieve information from the observations
-        nthreads = tmf.info_nthreads()
-        print 'Info: ' + MPI.Get_processor_name() + ' (' + str(nthreads) + ' core' + ('s' if nthreads > 1 else '') + ' handling ' + str(ndetectors) + ' detector' + ('s' if ndetectors > 1 else '') + ')'
-        compression_factor, nsamples, unit, responsivity, detector_area, dflat, oflat, status = tmf.pacs_info(tamasis_dir, filename_, nfilenames, transparent_mode, fine_sampling_factor, numpy.array(frame_policy), numpy.asfortranarray(detector_mask))
-        if status != 0: raise RuntimeError()
-
-        self.filename = filename
-        self.channel = channel
-        self.nrows = nrows
-        self.ncolumns = ncolumns
-        self.default_npixels_per_sample = 11 if channel == 'Red' else 6
-        self.default_resolution = 6.4 if channel == 'Red' else 3.2
-        self.nobservations = nfilenames
-        self.nsamples = tuple(nsamples)
-        self.nfinesamples = tuple(nsamples * compression_factor * fine_sampling_factor)
-        self.ndetectors = ndetectors
-        self.detector_mask = detector_mask
-        self.reject_bad_line = reject_bad_line
-        self.frame_policy = frame_policy
-        self.fine_sampling_factor = fine_sampling_factor
-        self.transparent_mode = False if transparent_mode == 0 else True
-        self.compression_factor = compression_factor
-        self.unit = unit.strip()
-        if self.unit.find('/') == -1:
-            self.unit += ' / detector'
-        self.responsivity = Quantity(responsivity, 'V/Jy')
-        self.detector_area = Map(detector_area, unit='arcsec^2/detector')
-        self.flatfield = {
-            'total'   : Map(dflat*oflat),
-            'detector': Map(numpy.ascontiguousarray(dflat)),
-            'optical' : Map(numpy.ascontiguousarray(oflat))
-            }
-
-    def get_map_header(self, resolution=None, oversampling=True):
-        if MPI.COMM_WORLD.Get_size() > 1:
-            raise ErrorNotImplemented('The common map header should be specified if more than one job is running.')
-        if resolution is None:
-            resolution = self.default_resolution
-        filename_, nfilenames = _files2tmf(self.filename)
-        header, status = tmf.pacs_map_header(tamasis_dir, filename_, nfilenames, oversampling, self.fine_sampling_factor, numpy.array(self.frame_policy), numpy.asfortranarray(self.detector_mask), resolution)
-        if status != 0: raise RuntimeError()
-        header = _str2fitsheader(header)
-        return header
-   
+class _Pacs(object):
     def get_tod(self, unit=None, flatfielding=True, subtraction_mean=True):
         """
         Returns the signal and mask timelines.
@@ -175,14 +83,177 @@ class PacsObservation(object):
         """
         Reads an inverse noise time-time correlation matrix from a calibration file, in PACS-DP format.
         """
-        ncorrelations, status = tmf.pacs_read_filter_calibration_ncorrelations(tamasis_dir, self.channel)
+        ncorrelations, status = tmf.pacs_read_filter_calibration_ncorrelations(tamasis_dir, self.band)
         if status != 0: raise RuntimeError()
 
-        data, status = tmf.pacs_read_filter_calibration(tamasis_dir, self.channel, ncorrelations, self.ndetectors, numpy.asfortranarray(self.detector_mask))
+        data, status = tmf.pacs_read_filter_calibration(tamasis_dir, self.band, ncorrelations, self.ndetectors, numpy.asfortranarray(self.detector_mask))
         if status != 0: raise RuntimeError()
 
         return data.T
 
+   
+#-------------------------------------------------------------------------------
+
+
+class PacsObservation(_Pacs):
+    """
+    Class which encapsulates handy information about the PACS instrument and the processed
+    observation.
+    It is assumed that the detectors have sharp edges, so that the integration is simply equal
+    to the sum of the sky pixels values weighted by their intersections with the detector surface.
+    It contains the following attributes:
+    - filename           : name of the file name, including the array colour, but excluding
+                           the type. Example: '1342184520_blue'.
+    - npixels_per_sample : number of sky pixels which intersect a PACS detector
+    - keep_bad_detectors : if set to True, force the processing to include all pixels
+    - detector_mask  : (nrows,ncolumns) mask of uint8 values (0 or 1). 1 means dead pixel.
+    - ij(2,ndetectors)   : the row and column number (starting from 0) of the detectors
+    Author: P. Chanial
+    """
+    def __init__(self, filename, fine_sampling_factor=1, detector_mask=None, reject_bad_line=False, frame_policy_inscan='keep', frame_policy_turnaround='keep', frame_policy_other='remove', frame_policy_invalid='mask'):
+
+        if type(filename) == str:
+            filename = (filename,)
+        filename_, nfilenames = _files2tmf(filename)
+
+        band, transparent_mode, status = tmf.pacs_info_band(filename_, nfilenames)
+        if status != 0: raise RuntimeError()
+        band = band.strip()
+
+        nrows, ncolumns = (16,32) if band == 'red' else (32,64)
+
+        # get the detector mask, before distributing to the processors
+        if detector_mask is not None:
+            if detector_mask.shape != (nrows, ncolumns):
+                raise ValueError('Invalid shape of the input detector mask: ' + str(detector_mask.shape) + ' for the ' + band + ' band.')
+            detector_mask = numpy.array(detector_mask, dtype='int8', copy=False)
+
+        else:
+            detector_mask, status = tmf.pacs_info_bad_detector_mask(tamasis_dir, band, transparent_mode, reject_bad_line, nrows, ncolumns)
+            if status != 0: raise RuntimeError()
+            detector_mask = numpy.ascontiguousarray(detector_mask)
+
+        # get the observations and detector mask for the current processor
+        slice_observation, slice_detector = _split_observation(nfilenames, int(numpy.sum(detector_mask == 0)))
+        filename = filename[slice_observation]
+        igood = numpy.where(detector_mask.flat == 0)[0]
+        detector_mask = numpy.ones(detector_mask.shape, dtype='int8')
+        detector_mask.flat[igood[slice_detector]] = 0
+        filename_, nfilenames = _files2tmf(filename)
+        ndetectors = int(numpy.sum(detector_mask == 0))
+
+        # frame policy
+        frame_policy = utils.MaskPolicy('inscan,turnaround,other,invalid'.split(','), (frame_policy_inscan, frame_policy_turnaround, frame_policy_other, frame_policy_invalid), 'Frame Policy')
+
+        # retrieve information from the observations
+        nthreads = tmf.info_nthreads()
+        print 'Info: ' + MPI.Get_processor_name() + ' (' + str(nthreads) + ' core' + ('s' if nthreads > 1 else '') + ' handling ' + str(ndetectors) + ' detector' + ('s' if ndetectors > 1 else '') + ')'
+        compression_factor, nsamples, unit, responsivity, detector_area, dflat, oflat, status = tmf.pacs_info(tamasis_dir, filename_, nfilenames, transparent_mode, fine_sampling_factor, numpy.array(frame_policy), numpy.asfortranarray(detector_mask))
+        if status != 0: raise RuntimeError()
+
+        self.filename = filename
+        self.band = band
+        self.nrows = nrows
+        self.ncolumns = ncolumns
+        self.default_npixels_per_sample = 11 if band == 'red' else 6
+        self.default_resolution = 6.4 if band == 'red' else 3.2
+        self.nobservations = nfilenames
+        self.nsamples = tuple(nsamples)
+        self.nfinesamples = tuple(nsamples * compression_factor * fine_sampling_factor)
+        self.ndetectors = ndetectors
+        self.detector_mask = detector_mask
+        self.reject_bad_line = reject_bad_line
+        self.frame_policy = frame_policy
+        self.fine_sampling_factor = fine_sampling_factor
+        self.mode = '' #XXX FIX ME!
+        self.transparent_mode = False if transparent_mode == 0 else True
+        self.compression_factor = compression_factor
+        self.unit = unit.strip()
+        if self.unit.find('/') == -1:
+            self.unit += ' / detector'
+        self.responsivity = Quantity(responsivity, 'V/Jy')
+        self.detector_area = Map(detector_area, unit='arcsec^2/detector')
+        self.flatfield = {
+            'total'   : Map(dflat*oflat),
+            'detector': Map(numpy.ascontiguousarray(dflat)),
+            'optical' : Map(numpy.ascontiguousarray(oflat))
+            }
+
+    def get_map_header(self, resolution=None, oversampling=True):
+        if MPI.COMM_WORLD.Get_size() > 1:
+            raise ErrorNotImplemented('The common map header should be specified if more than one job is running.')
+        if resolution is None:
+            resolution = self.default_resolution
+        filename_, nfilenames = _files2tmf(self.filename)
+        header, status = tmf.pacs_map_header(tamasis_dir, filename_, nfilenames, oversampling, self.fine_sampling_factor, numpy.array(self.frame_policy), numpy.asfortranarray(self.detector_mask), resolution)
+        if status != 0: raise RuntimeError()
+        header = _str2fitsheader(header)
+        return header
+   
+
+#-------------------------------------------------------------------------------
+
+
+class PacsSimulation(_Pacs):
+    def __init__(self, band, mode, ra0, dec0, pa0=0., scan_angle=0., scan_length=30., scan_nlegs=3, scan_step=20., scan_speed=10., fine_sampling_factor=1):
+        band = band.lower()
+        if band not in ('blue', 'green', 'red'):
+            raise ValueError("Band is not 'blue', 'green', nor 'red'.")
+
+        mode = mode.lower()
+        if mode not in ('prime', 'parallel', 'transparent'):
+            raise ValueError("Observing mode is not 'prime', 'parallel', nor 'transparent'.")
+        
+        compression_factor = 8 if mode == 'parallel' and band != 'red' else 1 if mode == 'transparent' else 4
+        self._file = tempfile.NamedTemporaryFile('w', suffix='.fits')
+        self.pointing = _generate_pointing(ra0, dec0, pa0, scan_angle, scan_length, scan_nlegs, scan_step, scan_speed, compression_factor)
+        self.ra0 = ra0
+        self.dec0 = dec0
+        self.pa0 = pa0
+        self.scan_angle = scan_angle
+        self.scan_length = scan_length
+        self.scan_nlegs = scan_nlegs
+        self.scan_step = scan_step
+        self.scan_speed = scan_speed
+
+        self.filename = self._file.name
+        self.band = band
+        self.nrows, self.ncolumns = (16,32) if band == 'red' else (32,64)
+        self.default_npixels_per_sample = 11 if band == 'red' else 6
+        self.default_resolution = 6.4 if band == 'red' else 3.2
+        self.nobservations = 1
+        self.nsamples = (self.pointing.size,)
+        self.nfinesamples = (self.pointing.size * compression_factor * fine_sampling_factor,)
+        self.ndetectors = self.nrows * self.ncolumns
+        self.detector_mask = numpy.zeros((self.nrows, self.ncolumns), dtype='int8')
+        self.reject_bad_line = False
+        self.frame_policy = frame_policy = utils.MaskPolicy('inscan,turnaround,other,invalid'.split(','), 4*('keep',), 'Frame Policy')
+        self.fine_sampling_factor = fine_sampling_factor
+        self.mode = mode
+        self.transparent_mode = mode == 'transparent'
+        self.compression_factor = compression_factor
+#        self.unit = unit.strip()
+#        if self.unit.find('/') == -1:
+#            self.unit += ' / detector'
+#        self.responsivity = Quantity(responsivity, 'V/Jy')
+#        self.detector_area = Map(detector_area, unit='arcsec^2/detector')
+#        self.flatfield = {
+#            'total'   : Map(dflat*oflat),
+#            'detector': Map(numpy.ascontiguousarray(dflat)),
+#            'optical' : Map(numpy.ascontiguousarray(oflat))
+#            }
+
+        _write_status(self, self.filename)
+
+    def save(self, filename, tod):
+        _write_status(self, filename)
+        header = create_fitsheader(tod, extname='Signal')
+        pyfits.append(filename, tod, header)
+        if tod.mask is not None:
+            mask = numpy.abs(self.mask).view('uint8')
+            header = create_fitsheader(mask, extname='Mask')
+            pyfits.append(filename, mask)
+        
    
 #-------------------------------------------------------------------------------
 
@@ -254,7 +325,7 @@ def pacs_plot_scan(patterns):
 
 class pacs_status(object):
     def __init__(self, filename):
-        hdu = pyfits.open(filename)[2]
+        hdu = pyfits.open(filename)['STATUS']
         while True:
             try:
                 self.status = hdu.data
@@ -349,6 +420,53 @@ def pacs_preprocess(obs, projection_method='sharp edges', oversampling=True, npi
 #-------------------------------------------------------------------------------
 
 
+def _change_coord(ra0, dec0, pa0, lon, lat):
+    """
+    Transforms the longitude and latitude coordinates expressed in the
+    native coordinate system attached to a map into right ascension and
+    declination.
+    Author: R. Gastaud
+    """
+    from numpy import arcsin, arctan2, cos, deg2rad, mod, sin, rad2deg
+
+    # Arguments in radian
+    lambd = deg2rad(lon)
+    beta  = deg2rad(lat) 
+    alpha = deg2rad(ra0)
+    delta = deg2rad(dec0)
+    eps   = deg2rad(pa0)
+
+    # Cartesian coordinates from longitude and latitude
+    z4 = sin(beta)
+    y4 = sin(lambd)*cos(beta)
+    x4 = cos(lambd)*cos(beta)
+
+    # rotation about the x4 axe of -eps 
+    x3 =  x4
+    y3 =  y4*cos(eps) + z4*sin(eps)
+    z3 = -y4*sin(eps) + z4*cos(eps)
+    
+    # rotation about the axis Oy2, angle delta
+    x2 = x3*cos(delta) - z3*sin(delta)
+    y2 = y3
+    z2 = x3*sin(delta) + z3*cos(delta)
+
+    # rotation about the axis Oz1, angle alpha
+    x1 = x2*cos(alpha) - y2*sin(alpha)
+    y1 = x2*sin(alpha) + y2*cos(alpha)
+    z1 = z2
+
+    # Compute angles from cartesian coordinates
+    # it is the only place where we can get nan with arcsinus
+    dec = rad2deg(arcsin(numpy.clip(z1, -1., 1.)))
+    ra  = mod(rad2deg(arctan2(y1, x1)), 360.)
+
+    return ra, dec
+
+
+#-------------------------------------------------------------------------------
+
+
 def _files2tmf(filename):
     nfilenames = len(filename)
     length = max(len(f) for f in filename)
@@ -356,6 +474,143 @@ def _files2tmf(filename):
     for f in filename:
         filename_ += f + (length-len(f))*' '
     return filename_, nfilenames
+
+
+#-------------------------------------------------------------------------------
+
+
+def _generate_pointing(ra0, dec0, pa0, scan_angle, scan_length=30., scan_nlegs=3, scan_step=20., scan_speed=10., compression_factor=4):
+    """
+    compute the pointing timeline of the instrument reference point
+    from the description of a scan map
+    Authors: R. Gastaud
+    """
+    
+    # some info
+    gamma = 4.
+    sampling_pacs = 0.024996
+
+    scan_angle -= 90.
+
+    scan_length = float(scan_length)
+    if scan_length <= 0:
+        raise ValueError('Input scan_length must be strictly positive.')
+
+    scan_nlegs = int(scan_nlegs)
+    if scan_nlegs <= 0:
+        raise ValueError('Input scan_nlegs must be strictly positive.')
+    
+    scan_step = float(scan_step)
+    if scan_step <= 0: 
+        raise ValueError('Input scan_step must be strictly positive.')
+
+    scan_speed = float(scan_speed)
+    if scan_speed <= 0:
+        raise ValueError('Input scan_speed must be strictly positive.')
+
+    compression_factor = int(compression_factor)
+    if compression_factor not in (1, 4, 8):
+        raise ValueError("Input compression_factor must be 1, 4 or 8.")
+    sampling_frequency = 1. / sampling_pacs / compression_factor
+    sampling_period    = 1. / sampling_frequency
+
+    # compute the different times and the total number of points
+    # acceleration time at the beginning of a leg, and deceleration time
+    # at the end
+    extra_time1 = scan_speed / gamma
+    # corresponding length 
+    extralength = 0.5 * gamma * extra_time1 * extra_time1
+    # Time needed to go from a scan line to the next 
+    extra_time2 = numpy.sqrt(scan_step / gamma)
+    # Time needed to turn around (not used)
+    turnaround_time = 2 * (extra_time1 + extra_time2)
+
+    # Time needed to go along the scanline at constant speed
+    line_time = scan_length / scan_speed
+    # Total time for a scanline
+    full_line_time=extra_time1 + line_time + extra_time1 + extra_time2 + extra_time2 
+    # Total duration of the observation
+    total_time = full_line_time * scan_nlegs - 2 * extra_time2
+
+    # Number of samples
+    nsamples = int(numpy.ceil(total_time * sampling_frequency))
+
+    # initialization
+    time          = numpy.zeros(nsamples)
+    latitude      = numpy.zeros(nsamples)
+    longitude     = numpy.zeros(nsamples)
+    flags         = numpy.zeros(nsamples, dtype=int)
+    line_counters = numpy.zeros(nsamples, dtype=int)
+
+    # Start of computations, alpha and delta are the longitude and
+    # latitide in arc seconds in the referential of the map.
+    signe = 1
+    delta = -extralength - scan_length/2.
+    alpha = -scan_step * (scan_nlegs-1)/2.
+    alpha0 = alpha
+    line_counter = 0
+    working_time = 0.
+
+    for i in xrange(nsamples):
+        flag = 255
+   
+        # check if new line
+        if working_time > full_line_time:
+            working_time = working_time - full_line_time
+            signe = -signe
+            line_counter = line_counter + 1
+            alpha = -scan_step * (scan_nlegs-1)/2. + line_counter * scan_step
+            alpha0 = alpha
+   
+        # acceleration at the beginning of a scan line to go from 0 to the
+        # scan_speed. 
+        if working_time < extra_time1:
+            delta = -signe*(extralength + scan_length/2) + signe * 0.5 * gamma * working_time * working_time
+            flag  = 0
+   
+        # constant speed
+        if working_time >=  extra_time1 and working_time < extra_time1+line_time:
+            delta = signe*(-scan_length/2+ (working_time-extra_time1)*scan_speed)
+            flag  = 1
+ 
+        # Deceleration at then end of the scanline to stop
+        if working_time >= extra_time1+line_time and working_time < extra_time1+line_time+extra_time1:
+            dt = working_time - extra_time1 - line_time
+            delta = signe * (scan_length/2 + scan_speed*dt - 0.5 * gamma*dt*dt)
+            flag  = 2
+  
+        # Acceleration to go toward the next scan line
+        if working_time >= 2*extra_time1+line_time and working_time < 2*extra_time1+line_time+extra_time2:
+            dt = working_time-2*extra_time1-line_time
+            alpha = alpha0 + 0.5*gamma*dt*dt
+            flag  = 3
+   
+        # Deceleration to stop at the next scan line
+        if working_time >= 2*extra_time1+line_time+extra_time2 and working_time < full_line_time:
+            dt = working_time-2*extra_time1-line_time-extra_time2
+            speed = gamma*extra_time2
+            alpha = (alpha0+scan_step/2.) + speed*dt - 0.5*gamma*dt*dt
+            flag  = 4
+
+        time[i] = i / sampling_frequency
+        flags[i] = flag
+        latitude[i] = delta
+        longitude[i] = alpha
+        line_counters[i] = line_counter
+        working_time = working_time + sampling_period
+
+    # Convert the longitude and latitude *expressed in degrees) to ra and dec
+    ra, dec = _change_coord(ra0, dec0, scan_angle, -longitude/3600., latitude/3600.)
+
+    p = numpy.recarray(nsamples, dtype=utils.pointing)
+    p.time = time
+    p.ra = ra
+    p.dec = dec
+    p.pa = pa0
+    p[flags == 1].flag = 0xcd2
+    p[flags != 1].flag = 0x4000
+
+    return p
 
 
 #-------------------------------------------------------------------------------
@@ -420,5 +675,71 @@ def _str2fitsheader(string):
         cards.append(pyfits.Card().fromstring(line))
         iline += 1
     return header
+
+
+#-------------------------------------------------------------------------------
+
+
+def _write_status(obs, filename):
+
+    band = 'BS' if obs.band == 'blue' else 'BL' if obs.band == 'green' else 'R '
+
+    if obs.mode == 'prime':
+        observing_mode = 'Photometry Default Mode'
+    elif mode == 'parallel':
+        observing_mode = 'Photometry Double Compression Mode'
+    else:
+        observing_mode = 'Photometry Lossless Compression Mode'
+
+    fits = pyfits.HDUList()
+
+    # Primary header
+    cc = pyfits.createCard
+    header = pyfits.Header([
+            cc('simple', True), 
+            cc('BITPIX', 32), 
+            cc('NAXIS', 0), 
+            cc('EXTEND', True), 
+            cc('TYPE', 'HPPAVG'+band.strip()), 
+            cc('CREATOR', 'TAMASIS v' + __version__), 
+            cc('INSTRUME', 'PACS    '), 
+            cc('SOURCE', 'largeScan'), 
+            cc('RA', obs.ra0),
+            cc('DEC', obs.dec0),
+            cc('META_0', obs.nrows), 
+            cc('META_1', obs.ncolumns), 
+            cc('META_2', obs.band.title()+' Photometer'), 
+            cc('META_3', ('Floating Average  : '+str(obs.compression_factor)) if obs.compression_factor > 1 else 'None'), 
+            cc('META_4', observing_mode),
+            cc('META_5', obs.scan_angle),
+            cc('META_6', obs.scan_length),
+            cc('META_7', obs.scan_nlegs),
+            cc('META_8', obs.scan_speed),
+            cc('HIERARCH key.META_0', 'detRow'), 
+            cc('HIERARCH key.META_1', 'detCol'), 
+            cc('HIERARCH key.META_2', 'camName'), 
+            cc('HIERARCH key.META_3', 'algorithm'), 
+            cc('HIERARCH key.META_4', 'compMode'),
+            cc('HIERARCH key.META_5', 'mapScanAngle'),
+            cc('HIERARCH key.META_6', 'mapScanLegLength'),
+            cc('HIERARCH key.META_7', 'mapScanNumLegs'),
+            cc('HIERARCH key.META_8', 'mapScanSpeed'),
+            ])
+    hdu = pyfits.PrimaryHDU(None, header)
+    fits.append(hdu)
+    
+    # write status
+    table = numpy.recarray(obs.nsamples[0], dtype=[('BBID', numpy.int64), ('FINETIME', numpy.int64), ('BAND', 'S2'), ('CHOPFPUANGLE', numpy.float64), ('RaArray', numpy.float64), ('DecArray', numpy.float64), ('PaArray', numpy.float64)])
+    table.BAND = band
+    table.FINETIME = numpy.round(obs.pointing.time*1000000.)
+    table.RaArray = obs.pointing.ra
+    table.DecArray = obs.pointing.dec
+    table.PaArray = obs.pointing.pa
+    table.CHOPFPUANGLE = 0.
+    table.BBID = obs.pointing.flag
+
+    status = pyfits.BinTableHDU(table, None, 'STATUS')
+    fits.append(status)
+    fits.writeto(filename)
 
 

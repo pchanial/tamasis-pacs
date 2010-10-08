@@ -100,6 +100,13 @@ class AcquisitionModel(object):
                 return block.dtype
         return get_default_dtype_float()
 
+    @dtype.setter
+    def dtype(self, dtype):
+        if len(self.blocks) != 0:
+            raise ValueError('It is not possible to set the dtype of a composite AcquisitionModel.')
+        dtype = numpy.dtype(dtype)
+        self._dtype = dtype.type
+
     def aslinearoperator(self, shape=None, packing=None, unpacking=None):
         """Returns the AcquisitionModel as a LinearOperator"""
 
@@ -447,7 +454,7 @@ class Addition(AcquisitionModel):
     @property
     def shapein(self):
         shapein = None
-        for model in reversed(self):
+        for model in reversed(self.blocks):
             shapein_ = model.validate_shapeout(None)
             if shapein_ is None:
                 continue
@@ -461,7 +468,7 @@ class Addition(AcquisitionModel):
     @property
     def shapeout(self):
         shapeout = None
-        for model in reversed(self):
+        for model in reversed(self.blocks):
             shapeout_ = model.validate_shapein(None)
             if shapeout_ is None:
                 continue
@@ -1084,7 +1091,7 @@ class CircularShift(Square):
 #-------------------------------------------------------------------------------
 
 
-class Fft(AcquisitionModel):
+class Fft(Square):
     """
     Performs complex fft
     """
@@ -1094,15 +1101,14 @@ class Fft(AcquisitionModel):
             nthreads = 1
         else:
             nthreads = tmf.info_nthreads()
-        self._shapein = shape
-        self._shapeout = shape
+        self.shapein = shape
         self.n = numpy.product(shape)
         self.axes = axes
         self._in  = numpy.zeros(shape, dtype=get_default_dtype_complex())
         self._out = numpy.zeros(shape, dtype=get_default_dtype_complex())
         self.forward_plan = fftw3.Plan(self._in, self._out, direction='forward', flags=flags, nthreads=nthreads)
         self.backward_plan = fftw3.Plan(self._in, self._out, direction='backward', flags=flags, nthreads=nthreads)
-        self._dtype = get_default_dtype_complex()
+        self.dtype = get_default_dtype_complex()
 
     def direct(self, array, reusein=False, reuseout=False):
         self._in[:] = array
@@ -1118,7 +1124,7 @@ class Fft(AcquisitionModel):
 #-------------------------------------------------------------------------------
 
 
-class FftHalfComplex(AcquisitionModel):
+class FftHalfComplex(Square):
     """
     Performs real-to-half-complex fft
     """
@@ -1173,7 +1179,7 @@ class InvNtt(Diagonal):
         nslices = nsamples.size
         if numpy.rank(filter) == 2:
             filter = numpy.resize(filter, (nslices, ndetectors, ncorrelations+1))
-        tod_filter, status = tmf.fft_filter_uncorrelated(filter.T, nsamples, numpy.sum(nsamples))
+        tod_filter, status = tmf.fft_filter_uncorrelated(filter.T, numpy.ascontiguousarray(nsamples), numpy.sum(nsamples))
         if status != 0: raise RuntimeError()
         Diagonal.__init__(self, tod_filter.T, nsamples, description)
         self.ncorrelations = ncorrelations
@@ -1243,7 +1249,7 @@ def asacquisitionmodel(operator, description=None):
         model.transpose = lambda data, reusein=False, reuseout=False: operator.rmatvec(data)
         model.shapein   = (operator.shape[1],)
         model.shapeout  = (operator.shape[0],)
-        model.dtype     = operator.dtype.type
+        model.dtype     = operator.dtype
         return model
     return asacquisitionmodel(scipy.sparse.linalg.aslinearoperator(operator))
 

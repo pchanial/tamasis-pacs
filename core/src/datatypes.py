@@ -11,7 +11,7 @@ except:
 from unit import Quantity
 from utils import create_fitsheader, _my_isscalar
 
-__all__ = [ 'FitsArray', 'Map', 'Tod', 'distance' ]
+__all__ = [ 'FitsArray', 'Map', 'Tod', 'distance', 'gaussian' ]
 
 
 class FitsArray(Quantity):
@@ -521,6 +521,15 @@ def distance(shape, origin=None, resolution=1., dtype=None):
         dim.append((numpy.arange(length) - c) * resolution)
     return Map(numpy.sqrt(numpy.sum(numpy.square(numpy.meshgrid(*dim)), axis=0)), dtype=dtype)
         
+
+#-------------------------------------------------------------------------------
+
+
+def gaussian(shape, sigma, origin=None, resolution=1., dtype=None):
+    d = distance(shape, origin=origin, resolution=resolution, dtype=dtype)
+    d = numpy.exp(-d**2/(2*sigma**2)) / (2*numpy.pi*sigma**2)
+    return d
+
 
 #-------------------------------------------------------------------------------
 

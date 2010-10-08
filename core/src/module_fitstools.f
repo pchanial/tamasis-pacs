@@ -41,6 +41,10 @@ module module_fitstools
     integer, private, parameter :: FLEN_ERRMSG  = 80
     integer, private, parameter :: FLEN_STATUS  = 30
 
+    interface ft_open
+        module procedure ft_open_must_exist, ft_open_must_not_exist
+    end interface ft_open
+
     interface ft_read_column
         module procedure ft_read_column_filename_character, ft_read_column_character_unit,                                         &
                          ft_read_column_filename_int4, ft_read_column_unit_int4,                                                   &
@@ -1001,7 +1005,7 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_open(filename, unit, status)
+    subroutine ft_open_must_exist(filename, unit, status)
 
         character(len=*), intent(in) :: filename
         integer, intent(out)         :: unit
@@ -1017,7 +1021,37 @@ contains
         call ftnopn(unit, filename, CFITSIO_READONLY, status)
         if (ft_check_error_cfitsio(status, unit, filename)) return
 
-    end subroutine ft_open
+    end subroutine ft_open_must_exist
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine ft_open_must_not_exist(filename, unit, found, status)
+
+        character(len=*), intent(in) :: filename
+        integer, intent(out)         :: unit
+        logical, intent(out)         :: found
+        integer, intent(out)         :: status
+
+        found = .false.
+        status = 0
+
+        ! get an unused logical unit number for the FITS file
+        call ftgiou(unit, status)
+        if (ft_check_error_cfitsio(status, filename=filename)) return
+
+        ! open the fits file and move to the specified extension
+        call ftnopn(unit, filename, CFITSIO_READONLY, status)
+        if (status == 301) then
+            call ft_close(unit, status)
+            return
+        end if
+        if (ft_check_error_cfitsio(status, unit, filename)) return
+
+        found = .true.
+
+    end subroutine ft_open_must_not_exist
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
