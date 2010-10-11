@@ -8,10 +8,11 @@ try:
 except:
     _imported_ds9 = False
 
+from scipy.special import jn
 from unit import Quantity
 from utils import create_fitsheader, _my_isscalar
 
-__all__ = [ 'FitsArray', 'Map', 'Tod', 'distance', 'gaussian' ]
+__all__ = [ 'FitsArray', 'Map', 'Tod', 'airy_disk', 'distance', 'gaussian' ]
 
 
 class FitsArray(Quantity):
@@ -525,11 +526,23 @@ def distance(shape, origin=None, resolution=1., dtype=None):
 #-------------------------------------------------------------------------------
 
 
-def gaussian(shape, sigma, origin=None, resolution=1., dtype=None):
+def gaussian(shape, fwhm, origin=None, resolution=1., dtype=None):
+    sigma = fwhm / numpy.sqrt(2*numpy.log(2))
     d = distance(shape, origin=origin, resolution=resolution, dtype=dtype)
     d = numpy.exp(-d**2/(2*sigma**2)) / (2*numpy.pi*sigma**2)
     return d
 
+
+#-------------------------------------------------------------------------------
+
+
+def airy_disk(shape, fwhm, origin=None, resolution=1., dtype=None):
+    d  = distance(shape, origin=origin, resolution=resolution, dtype=dtype)
+    d *= 1.61633 / (fwhm/2.)
+    d  = (2 * jn(1,d)/d)**2
+    d /= numpy.sum(d)
+    return d
+    
 
 #-------------------------------------------------------------------------------
 

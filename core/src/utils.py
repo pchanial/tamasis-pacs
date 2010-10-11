@@ -82,7 +82,7 @@ def create_fitsheader(array, extname=None, crval=(0.,0.), crpix=None, ctype=('RA
         raise ValueError('CRVAL does not have two elements.')
 
     if crpix is None:
-        crpix = numpy.array(axisn) / 2 + 1
+        crpix = (numpy.array(axisn) + 1) / 2.
     else:
         crpix = numpy.asarray(crpix, dtype=numpy.float64)
     if crpix.size != 2:
