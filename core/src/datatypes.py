@@ -1,3 +1,4 @@
+import kapteyn.maputils
 import matplotlib
 import matplotlib.pyplot as pyplot
 import numpy
@@ -300,21 +301,32 @@ class Map(FitsArray):
     def copy(self, order='C'):
         return Map(self, copy=True, order=order)
 
-    def imshow(self, mask=None, num=None, title=None, figsize=None, dpi=None, aspect='equal', **kw):
+    def imshow(self, mask=None, num=None, title=None, figsize=None, dpi=None, **kw):
         """A simple graphical display function for the Map class"""
 
         if mask is None and self.coverage is not None:
             mask = self.coverage <= 0
-
-        if self.header is not None and self.header.has_key('CRPIX1'):
-            xlabel = 'Right Ascension [pixels]'
-            ylabel = 'Declination [pixels]'
+        if mask is not None:
+            data = numpy.array(self, copy=True)
+            data[mask] = numpy.nan
         else:
-            xlabel = 'X'
-            ylabel = 'Y'
+            data = numpy.asarray(self)
 
-        image = super(Map, self).imshow(mask=mask, num=num, title=title, figsize=figsize, dpi=dpi, xlabel=xlabel, ylabel=ylabel, aspect=aspect, **kw)
-        return image
+        fitsobj = kapteyn.maputils.FITSimage(externaldata=data, externalheader=self.header)
+        fig = pyplot.figure(num=num, figsize=figsize, dpi=dpi)
+        frame = fig.add_axes([0.1,0.1,0.9,0.9])
+        frame.set_title(title)
+        annim = fitsobj.Annotatedimage(frame, blankcolor='w')
+        annim.Image(interpolation='nearest')
+        grat = annim.Graticule()
+        grat.setp_gratline(visible=False)
+        annim.plot()
+        annim.interact_imagecolors()
+        annim.interact_toolbarinfo()
+        annim.interact_writepos()
+        pyplot.show()
+
+        return annim
 
     def writefits(self, filename):
         super(Map, self).writefits(filename)
