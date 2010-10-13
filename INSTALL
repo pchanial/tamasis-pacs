@@ -1,12 +1,11 @@
 Requirements:
 =============
-
-o make 3.81
+o cfitsio 3.23
+o FFTW3 3.2.2
 o Fortran 2003 compiler
     - gfortran 4.5
     - or ifort 11.1
-o cfitsio 3.23
-o FFTW3 3.2.2
+o make 3.81
 o python 2.6
     - kapteyn 2.0.2 (http://www.astro.rug.nl/software/kapteyn/index.html)
     - matplotlib 0.99
@@ -17,8 +16,7 @@ o python 2.6
     - scipy
 o wcslib 4.4.4
 
-
 Recommended packages:
 =====================
-o pyds9
 o ipython
+o pyds9
