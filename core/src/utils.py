@@ -1,13 +1,15 @@
 import config
+import kapteyn
 import numpy
 import os
 import pyfits
 import re
 import tamasisfortran as tmf
 import time
+from matplotlib import pyplot
 from numpyutils import _my_isscalar
 
-__all__ = [ 'create_fitsheader', 'MaskPolicy', 'mean_degrees', 'minmax_degrees', 'pointing', 'airy_disk', 'aperture_circular', 'distance', 'gaussian', 'phasemask_fourquadrant' ]
+__all__ = [ 'create_fitsheader', 'MaskPolicy', 'mean_degrees', 'minmax_degrees', 'pointing', 'plot_scan', 'airy_disk', 'aperture_circular', 'distance', 'gaussian', 'phasemask_fourquadrant' ]
 
 pointing = numpy.dtype([('time', numpy.float64), ('ra', numpy.float64), ('dec', numpy.float64), ('pa', numpy.float64), ('flag', numpy.int64)])
 
@@ -182,7 +184,47 @@ class MaskPolicy(object):
             str_.append(conversion[self._array[i]] + " '" + flag + "'")
         str += ', '.join(str_)
         return str
+
+
+#-------------------------------------------------------------------------------
         
+
+def plot_scan(ra, dec, title=None, num=None, figsize=None, dpi=None):
+    crval = [mean_degrees(ra), numpy.mean(dec)]
+    ra_min,  ra_max  = minmax_degrees(ra)
+    dec_min, dec_max = numpy.min(dec), numpy.max(dec)
+    cdelt = numpy.max((ra_max-ra_min)/1000., (dec_max-dec_min)/1000.)
+    header = create_fitsheader(None, naxis=[1,1], cdelt=cdelt, crval=crval, crpix=[1,1])
+    proj = kapteyn.wcs.Projection(header)
+    coords = numpy.array([ra, dec]).T
+    xy = proj.topixel(coords)
+    xmin = int(numpy.round(numpy.min(xy[:,0])))
+    xmax = int(numpy.round(numpy.max(xy[:,0])))
+    ymin = int(numpy.round(numpy.min(xy[:,1])))
+    ymax = int(numpy.round(numpy.max(xy[:,1])))
+    xmargin = int(numpy.ceil((xmax - xmin + 1) / 10.))
+    ymargin = int(numpy.ceil((ymax - ymin + 1) / 10.))
+    xmin -= xmargin
+    xmax += xmargin
+    ymin -= ymargin
+    ymax += ymargin
+    naxis = (xmax - xmin + 1, ymax - ymin + 1)
+    crpix = (-xmin+2, -ymin+2)
+    header = create_fitsheader(None, naxis=naxis, cdelt=cdelt, crval=crval, crpix=crpix)
+    fitsobj = kapteyn.maputils.FITSimage(externalheader=header)
+    frame = pyplot.gcf().add_axes([0.1,0.1,0.8,0.8])
+    if title is not None:
+        frame.set_title(title)
+    image = fitsobj.Annotatedimage(frame, blankcolor='w')
+    grat = image.Graticule()
+    image.plot()
+    image.interact_toolbarinfo()
+    image.interact_writepos()
+    pyplot.show()
+    x, y = image.topixel(ra, dec)
+    p = pyplot.plot(x, y, linewidth=2)
+    pyplot.plot(x[0], y[0], 'o', color = p[0]._color)
+
 
 #-------------------------------------------------------------------------------
 
