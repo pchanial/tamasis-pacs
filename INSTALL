@@ -1,22 +1,24 @@
 Requirements:
 =============
 
-- make 3.81
-- Fortran 2003 compiler (gfortran 4.5 or ifort 11.1)
-- cfitsio 3.23
-- FFTW3 3.2.2
-- wcslib 4.4.4
-- python 2.6
+o make 3.81
+o Fortran 2003 compiler
+    - gfortran 4.5
+    - or ifort 11.1
+o cfitsio 3.23
+o FFTW3 3.2.2
+o python 2.6
+    - kapteyn 2.0.2 (http://www.astro.rug.nl/software/kapteyn/index.html)
+    - matplotlib 0.99
+    - mpi4py
+    - numpy 1.4.1
+    - PyFFTW3 0.2 with patches (https://launchpad.net/pyfftw)
+    - pyfits 2.3 (http://www.stsci.edu/resources/software_hardware/pyfits)
+    - scipy
+o wcslib 4.4.4
 
-- kapteyn 2.0.2 (http://www.astro.rug.nl/software/kapteyn/index.html)
-- matplotlib 0.99
-- mpi4py
-- numpy 1.4.1
-- PyFFTW3 0.2 with patches (https://launchpad.net/pyfftw)
-- pyfits 2.3 (http://www.stsci.edu/resources/software_hardware/pyfits)
-- scipy
 
 Recommended packages:
 =====================
-- pyds9
-- ipython
+o pyds9
+o ipython
