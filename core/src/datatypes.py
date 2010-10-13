@@ -9,11 +9,12 @@ try:
 except:
     _imported_ds9 = False
 
+from numpyutils import _my_isscalar
 from scipy.special import jn
 from unit import Quantity
-from utils import create_fitsheader, _my_isscalar
+from utils import create_fitsheader
 
-__all__ = [ 'FitsArray', 'Map', 'Tod', 'airy_disk', 'distance', 'gaussian' ]
+__all__ = [ 'FitsArray', 'Map', 'Tod' ]
 
 
 class FitsArray(Quantity):
@@ -497,64 +498,7 @@ class Tod(FitsArray):
         mask = numpy.abs(self.mask).view('uint8')
         header = create_fitsheader(mask, extname='Mask')
         pyfits.append(filename, mask, header)
-   
 
-#-------------------------------------------------------------------------------
-
-
-def distance(shape, origin=None, resolution=1., dtype=None):
-    """
-    Returns an array whose values are the distances to a given origin
-    
-    Parameters
-    ----------
-    shape : tuple of integer
-        dimensions of the output array. For a 2d array, the first integer
-        is for the Y-axis and the second one for the X-axis.
-    origin : array-like
-        coordinates of the origin, for which the output array value is
-        zero. Default value is the array center
-    resolution : inter-pixel distance
-    dtype : type of the output array
-
-    Example
-    -------
-    nx, ny = 3, 3
-    print distance((ny,nx))
-    [[ 1.41421356  1.          1.41421356]
-    [ 1.          0.          1.        ]
-    [ 1.41421356  1.          1.41421356]]
-    """
-    if type(shape) is not tuple and type(shape) is not list:
-        shape = (shape,)
-    if origin is None:
-        origin = (numpy.array(shape) - 1) / 2.
-    dim = []
-    for length, c in zip(reversed(shape), reversed(origin)):
-        dim.append((numpy.arange(length) - c) * resolution)
-    return Map(numpy.sqrt(numpy.sum(numpy.square(numpy.meshgrid(*dim)), axis=0)), dtype=dtype)
-        
-
-#-------------------------------------------------------------------------------
-
-
-def gaussian(shape, fwhm, origin=None, resolution=1., dtype=None):
-    sigma = fwhm / numpy.sqrt(2*numpy.log(2))
-    d = distance(shape, origin=origin, resolution=resolution, dtype=dtype)
-    d = numpy.exp(-d**2/(2*sigma**2)) / (2*numpy.pi*sigma**2)
-    return d
-
-
-#-------------------------------------------------------------------------------
-
-
-def airy_disk(shape, fwhm, origin=None, resolution=1., dtype=None):
-    d  = distance(shape, origin=origin, resolution=resolution, dtype=dtype)
-    d *= 1.61633 / (fwhm/2.)
-    d  = (2 * jn(1,d)/d)**2
-    d /= numpy.sum(d)
-    return d
-    
 
 #-------------------------------------------------------------------------------
 

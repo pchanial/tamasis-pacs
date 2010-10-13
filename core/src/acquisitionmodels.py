@@ -9,11 +9,11 @@ import multiprocessing
 import numpy
 import scipy.sparse.linalg
 import tamasisfortran as tmf
-import utils
 
 from config import __verbose__, get_default_dtype, get_default_dtype_float, get_default_dtype_complex
-from datatypes import Map, Tod, combine_sliced_shape, distance, flatten_sliced_shape, validate_sliced_shape
+from datatypes import Map, Tod, combine_sliced_shape, flatten_sliced_shape, validate_sliced_shape
 from mpi4py import MPI
+from numpyutils import _my_issctype, _my_isscalar, get_type
 from processing import interpolate_linear
 
 __all__ = ['AcquisitionModel', 'AcquisitionModelTranspose', 'Composition', 
@@ -21,7 +21,6 @@ __all__ = ['AcquisitionModel', 'AcquisitionModelTranspose', 'Composition',
            'DiscreteDifference', 'Projection', 'Compression', 
            'CompressionAverage', 'DownSampling', 'Masking', 'Unpacking', 'Unpacking2',  
            'Reshaping', 'Padding', 'Fft', 'FftHalfComplex', 'InvNtt', 'InterpolationLinear', 'AllReduce', 'CircularShift', 'ValidationError', 
-           'aperture_circular', 'phasemask_fourquadrant',
            'asacquisitionmodel']
 
 
@@ -181,8 +180,8 @@ class AcquisitionModel(object):
 
     def validate_input(self, cls, data):
         data = numpy.asanyarray(data)
-        if not utils._my_issctype(data.dtype):
-            raise TypeError("The input of '" + self.__class__.__name__ + "' has an non-numeric type '" + utils.get_type(data) + "'.")
+        if not _my_issctype(data.dtype):
+            raise TypeError("The input of '" + self.__class__.__name__ + "' has an non-numeric type '" + get_type(data) + "'.")
         if not isinstance(data, cls):
             data = data.view(cls)
 
@@ -191,8 +190,8 @@ class AcquisitionModel(object):
 
     def validate_input_direct(self, cls, data, reusein):
         data = numpy.asanyarray(data)
-        if not utils._my_issctype(data.dtype):
-            raise TypeError("The input of '" + self.__class__.__name__ + "' has an non-numeric type '" + utils.get_type(data)+"'.")
+        if not _my_issctype(data.dtype):
+            raise TypeError("The input of '" + self.__class__.__name__ + "' has an non-numeric type '" + get_type(data)+"'.")
         if not isinstance(data, cls):
             data = data.view(cls)
         shapeout = self.validate_shapein(validate_sliced_shape(data.shape, getattr(data, 'nsamples', None)))
@@ -201,7 +200,7 @@ class AcquisitionModel(object):
 
     def validate_input_transpose(self, cls, data, reusein):
         data = numpy.asanyarray(data)
-        if not utils._my_issctype(data.dtype):
+        if not _my_issctype(data.dtype):
             raise TypeError("The input of '" + self.__class__.__name__ + ".T' has an non-numeric type '" + get_type(data) + "'.")
         if not isinstance(data, cls):
             data = data.view(cls)
@@ -269,7 +268,7 @@ class AcquisitionModel(object):
         return Composition([self, other])
 
     def __rmul__(self, other):
-        if not utils._my_isscalar(other):
+        if not _my_isscalar(other):
             raise NotImplementedError("It is not possible to compose '"+str(type(other))+"' with an AcquisitionModel.")
         return Composition([other, self])
 
@@ -620,7 +619,7 @@ class Diagonal(Symmetric):
     def __init__(self, diagonal, nsamples=None, description=None):
         AcquisitionModel.__init__(self, description)
         self.diagonal = numpy.asarray(diagonal, dtype=get_default_dtype(diagonal))
-        if not utils._my_isscalar(self.diagonal):
+        if not _my_isscalar(self.diagonal):
             self.shapein = validate_sliced_shape(self.diagonal.shape, nsamples)
 
     def direct(self, data, reusein=False, reuseout=False):
@@ -734,7 +733,7 @@ class Compression(AcquisitionModel):
     """
     def __init__(self, compression_factor, description):
         AcquisitionModel.__init__(self, description)
-        if utils._my_isscalar(compression_factor):
+        if _my_isscalar(compression_factor):
             self.factor = int(compression_factor)
         else:
             self.factor = tuple(compression_factor)
@@ -889,8 +888,8 @@ class Masking(Symmetric):
         if mask is None:
             self._mask = None
             return
-        if not utils._my_issctype(numpy.asarray(mask).dtype):
-            raise TypeError("Invalid type for the mask: '" + utils.get_type(mask) + "'.")
+        if not _my_issctype(numpy.asarray(mask).dtype):
+            raise TypeError("Invalid type for the mask: '" + get_type(mask) + "'.")
         mask = numpy.asanyarray(mask)
         if numpy.rank(mask) == 0:
             raise TypeError('The input mask should not be scalar.')
@@ -1068,11 +1067,11 @@ class CircularShift(Square):
     
     def __init__(self, n, axes=None, description=None):
         Square.__init__(self, description)
-        if utils._my_isscalar(n):
+        if _my_isscalar(n):
             n = (n,)
         if axes is None:
             axes = tuple(numpy.arange(-len(n), 0))
-        elif utils._my_isscalar(axes):
+        elif _my_isscalar(axes):
             axes = (axes,)
         self.n = tuple(map(int, n))
         self.axes = tuple(map(int, axes))
@@ -1162,7 +1161,7 @@ class FftHalfComplex(Square):
         if shapein is None:
             return None
         nsamples = shapein[-1]        
-        if not utils._my_isscalar(nsamples) and tuple(nsamples) != self.nsamples:
+        if not _my_isscalar(nsamples) and tuple(nsamples) != self.nsamples:
             raise ValidationError("Invalid FFT size '"+str(nsamples)+"' instead of '"+str(self.nsamples)+"'.")
         return combine_sliced_shape(shapein[0:-1], self.nsamples)
 
@@ -1217,31 +1216,10 @@ class AllReduce(Square):
 #-------------------------------------------------------------------------------
 
 
-def aperture_circular(shape, diameter, origin=None, resolution=1., dtype=None):
-    array = distance(shape, origin=origin, resolution=resolution, dtype=dtype)
-    m = array > diameter / 2.
-    array[ m] = 0
-    array[~m] = 1
-    return array
-
-
-#-------------------------------------------------------------------------------
-
-
-def phasemask_fourquadrant(shape, phase=-1):
-    array = Map.ones(shape, dtype=get_default_dtype_complex())
-    array[0:shape[0]//2,shape[1]//2:] = phase
-    array[shape[0]//2:,0:shape[1]//2] = phase
-    return array
-
-
-#-------------------------------------------------------------------------------
-
-
 def asacquisitionmodel(operator, description=None):
     if isinstance(operator, AcquisitionModel):
         return operator
-    if utils._my_isscalar(operator):
+    if _my_isscalar(operator):
         return Scalar(operator)
     if isinstance(operator, scipy.sparse.linalg.interface.LinearOperator):
         model = AcquisitionModel(description)

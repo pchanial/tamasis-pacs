@@ -1,5 +1,6 @@
 import numpy
-from tamasis.utils import MaskPolicy, any_neq, mean_degrees
+from tamasis.utils import MaskPolicy, mean_degrees
+from tamasis.numpyutils import any_neq
 
 class TestFailure(Exception):
     pass

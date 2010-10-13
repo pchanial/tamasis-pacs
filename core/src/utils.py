@@ -5,8 +5,9 @@ import pyfits
 import re
 import tamasisfortran as tmf
 import time
+from numpyutils import _my_isscalar
 
-__all__ = [ 'any_neq', 'create_fitsheader', 'mean_degrees', 'minmax_degrees', 'pointing' ]
+__all__ = [ 'create_fitsheader', 'MaskPolicy', 'mean_degrees', 'minmax_degrees', 'pointing', 'airy_disk', 'aperture_circular', 'distance', 'gaussian', 'phasemask_fourquadrant' ]
 
 pointing = numpy.dtype([('time', numpy.float64), ('ra', numpy.float64), ('dec', numpy.float64), ('pa', numpy.float64), ('flag', numpy.int64)])
 
@@ -181,64 +182,83 @@ class MaskPolicy(object):
             str_.append(conversion[self._array[i]] + " '" + flag + "'")
         str += ', '.join(str_)
         return str
+        
 
+#-------------------------------------------------------------------------------
+
+
+def airy_disk(shape, fwhm, origin=None, resolution=1., dtype=None):
+    d  = distance(shape, origin=origin, resolution=resolution, dtype=dtype)
+    d *= 1.61633 / (fwhm/2.)
+    d  = (2 * jn(1,d)/d)**2
+    d /= numpy.sum(d)
+    return d
+
+
+#-------------------------------------------------------------------------------
+
+
+def aperture_circular(shape, diameter, origin=None, resolution=1., dtype=None):
+    array = distance(shape, origin=origin, resolution=resolution, dtype=dtype)
+    m = array > diameter / 2.
+    array[ m] = 0
+    array[~m] = 1
+    return array
+
+
+#-------------------------------------------------------------------------------
+
+
+def distance(shape, origin=None, resolution=1., dtype=None):
+    """
+    Returns an array whose values are the distances to a given origin
     
-#-------------------------------------------------------------------------------
+    Parameters
+    ----------
+    shape : tuple of integer
+        dimensions of the output array. For a 2d array, the first integer
+        is for the Y-axis and the second one for the X-axis.
+    origin : array-like
+        coordinates of the origin, for which the output array value is
+        zero. Default value is the array center
+    resolution : inter-pixel distance
+    dtype : type of the output array
 
-
-def any_neq(a, b, rtol=None, atol=0.):
+    Example
+    -------
+    nx, ny = 3, 3
+    print distance((ny,nx))
+    [[ 1.41421356  1.          1.41421356]
+    [ 1.          0.          1.        ]
+    [ 1.41421356  1.          1.41421356]]
     """
-    Returns True if two arrays are element-wise equal within a tolerance.
-    Differs from numpy.allclose in two aspects: the default rtol values (10^-7 
-    and 10^-14 for single and double floats or complex) and the treatment of 
-    NaN values (do not return False if the two arrays have element-wise
-    both NaN value)
-    """
-    a = numpy.asarray(a)
-    b = numpy.asarray(b)
-    doubletype = ('float64', 'complex128')
-    if rtol is None:
-        if str(a.dtype) in doubletype or str(b.dtype) in doubletype:
-            rtol = 1.e-14
-        else:
-            rtol = 1.e-7
-    mask = numpy.isnan(a)
-    if numpy.any(mask != numpy.isnan(b)):
-        return True
-    if numpy.all(mask):
-        return False
-    result = abs(a-b) > rtol * numpy.maximum(abs(a), abs(b)) + atol
-    if numpy.isscalar(mask):
-        return result
-    else:
-        return numpy.any(result[~mask])
+    if type(shape) is not tuple and type(shape) is not list:
+        shape = (shape,)
+    if origin is None:
+        origin = (numpy.array(shape) - 1) / 2.
+    dim = []
+    for length, c in zip(reversed(shape), reversed(origin)):
+        dim.append((numpy.arange(length) - c) * resolution)
+    return Map(numpy.sqrt(numpy.sum(numpy.square(numpy.meshgrid(*dim)), axis=0)), dtype=dtype)
+    
+
+#-------------------------------------------------------------------------------
+
+
+def gaussian(shape, fwhm, origin=None, resolution=1., dtype=None):
+    sigma = fwhm / numpy.sqrt(2*numpy.log(2))
+    d = distance(shape, origin=origin, resolution=resolution, dtype=dtype)
+    d = numpy.exp(-d**2/(2*sigma**2)) / (2*numpy.pi*sigma**2)
+    return d
 
 
 #-------------------------------------------------------------------------------
 
 
-def get_type(data):
-    """Returns input's data type."""
-    data_ = numpy.asarray(data)
-    type_ = data_.dtype.type.__name__
-    if type_[-1] == '_':
-        type_ = type_[0:-1]
-    if type_ != 'object':
-        return type_
-    return type(data).__name__
-
-   
-#-------------------------------------------------------------------------------
+def phasemask_fourquadrant(shape, phase=-1):
+    array = Map.ones(shape, dtype=get_default_dtype_complex())
+    array[0:shape[0]//2,shape[1]//2:] = phase
+    array[shape[0]//2:,0:shape[1]//2] = phase
+    return array
 
 
-def _my_issctype(dtype):
-    """Hack around numpy.issctype bug"""
-    return numpy.issctype(dtype) and str(dtype)[0:2] != '|S'
-   
-   
-#-------------------------------------------------------------------------------
-
-
-def _my_isscalar(data):
-    """Hack around numpy.isscalar bug"""
-    return numpy.rank(data) == 0 if isinstance(data, numpy.ndarray) else numpy.isscalar(data)
