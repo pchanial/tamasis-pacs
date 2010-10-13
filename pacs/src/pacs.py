@@ -1,5 +1,5 @@
 import glob
-import matplotlib
+import kapteyn
 import numpy
 import os
 import pyfits
@@ -12,6 +12,7 @@ from acquisitionmodels import AcquisitionModel, CompressionAverage, Masking, Pro
 from config import __version__, tamasis_dir
 from datatypes import *
 from mappers import mapper_naive
+from matplotlib import pyplot
 from mpi4py import MPI
 from processing import deglitch_l2mad, filter_median
 from unit import Quantity
@@ -245,6 +246,47 @@ class PacsSimulation(_Pacs):
 
         _write_status(self, self.filename)
 
+    def plot(self, map=None, title=None, num=None, figsize=None, dpi=None):
+        if map is None:
+            crval = [utils.mean_degrees(self.pointing.ra), 
+                     numpy.mean(self.pointing.dec)]
+            ra_min,  ra_max  = utils.minmax_degrees(self.pointing.ra)
+            dec_min, dec_max = numpy.min(self.pointing.dec), numpy.max(self.pointing.dec)
+            cdelt = numpy.max((ra_max-ra_min)/1000., (dec_max-dec_min)/1000.)
+            header = utils.create_fitsheader(None, naxis=[1,1], cdelt=cdelt, crval=crval, crpix=[1,1])
+            proj = kapteyn.wcs.Projection(header)
+            coords = numpy.array([self.pointing.ra, self.pointing.dec]).T
+            xy = proj.topixel(coords)
+            xmin = int(numpy.round(numpy.min(xy[:,0])))
+            xmax = int(numpy.round(numpy.max(xy[:,0])))
+            ymin = int(numpy.round(numpy.min(xy[:,1])))
+            ymax = int(numpy.round(numpy.max(xy[:,1])))
+            xmargin = int(numpy.ceil((xmax - xmin + 1) / 10.))
+            ymargin = int(numpy.ceil((ymax - ymin + 1) / 10.))
+            xmin -= xmargin
+            xmax += xmargin
+            ymin -= ymargin
+            ymax += ymargin
+            naxis = (xmax - xmin + 1, ymax - ymin + 1)
+            crpix = (-xmin+2, -ymin+2)
+            header = utils.create_fitsheader(None, naxis=naxis, cdelt=cdelt, crval=crval, crpix=crpix)
+            fitsobj = kapteyn.maputils.FITSimage(externalheader=header)
+            fig = pyplot.figure(num=num, figsize=figsize, dpi=dpi)
+            frame = fig.add_axes([0.1,0.1,0.9,0.9])
+            if title is not None:
+                frame.set_title(title)
+            image = fitsobj.Annotatedimage(frame, blankcolor='w')
+            grat = image.Graticule()
+            image.plot()
+            image.interact_toolbarinfo()
+            image.interact_writepos()
+            pyplot.show()
+        else:
+            image = map.imshow(title=title, num=num, figsize=figsize, dpi=dpi)
+        x, y = image.topixel(self.pointing.ra, self.pointing.dec)
+        pyplot.plot(x, y, color='magenta', linewidth=2)
+        pyplot.plot(x[0], y[0], 'o', color='magenta')
+
     def save(self, filename, tod):
         _write_status(self, filename)
         header = create_fitsheader(tod, extname='Signal')
@@ -317,7 +359,7 @@ def pacs_plot_scan(patterns):
             status = pacs_status(file)
         except IOError as error:
             raise IOError("Cannot extract status from file '"+file+"': "+str(error))
-        matplotlib.pyplot.plot(status['ra'], status['dec'])
+        pyplot.plot(status['ra'], status['dec'])
 
 
 #-------------------------------------------------------------------------------

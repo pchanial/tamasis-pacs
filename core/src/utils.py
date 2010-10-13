@@ -1,3 +1,4 @@
+import config
 import numpy
 import os
 import pyfits
@@ -5,11 +6,11 @@ import re
 import tamasisfortran as tmf
 import time
 
-__all__ = [ 'any_neq', 'create_fitsheader', 'mean_degrees', 'pointing' ]
+__all__ = [ 'any_neq', 'create_fitsheader', 'mean_degrees', 'minmax_degrees', 'pointing' ]
 
 pointing = numpy.dtype([('time', numpy.float64), ('ra', numpy.float64), ('dec', numpy.float64), ('pa', numpy.float64), ('flag', numpy.int64)])
 
-def create_fitsheader(array, extname=None, crval=(0.,0.), crpix=None, ctype=('RA---TAN','DEC--TAN'), cunit='deg', cd=None, cdelt=None):
+def create_fitsheader(array, extname=None, crval=(0.,0.), crpix=None, ctype=('RA---TAN','DEC--TAN'), cunit='deg', cd=None, cdelt=None, naxis=None):
     """
     Return a FITS header
 
@@ -19,7 +20,7 @@ def create_fitsheader(array, extname=None, crval=(0.,0.), crpix=None, ctype=('RA
         An array from which the dimensions will be extracted. Note that
         by FITS convention, the dimension along X is the second value 
         of the array shape and that the dimension along the Y axis is 
-        the first one.
+        the first one. If None is specified, naxis keyword must be set
     extname : None or string
         if a string is specified ('' can be used), the returned header
         type will be an Image HDU (otherwise a Primary HDU)
@@ -37,6 +38,8 @@ def create_fitsheader(array, extname=None, crval=(0.,0.), crpix=None, ctype=('RA
             CD2_1 CD2_2
     cdelt : 2 element array
         Physical increment at the reference pixel
+    naxis : 2 element array
+        (NAXIS1,NAXIS2) tuple, to be specified only if array argument is None
 
     Examples
     --------
@@ -44,21 +47,26 @@ def create_fitsheader(array, extname=None, crval=(0.,0.), crpix=None, ctype=('RA
     >>> map.header = create_fitsheader(map, cd=[[-1,0],[0,1]])
     """
 
-    if not isinstance(array, numpy.ndarray):
-        raise TypeError('The input is not an ndarray.')
-
-    axisn = tuple(reversed(array.shape))
-
-    naxis = len(axisn)
+    if array is None:
+        if naxis is None:
+            raise ValueError('An array argument or naxis keyword should be specified.')
+        typename = 'float64'
+    else:
+        if not isinstance(array, numpy.ndarray):
+            raise TypeError('The input is not an ndarray.')
+        naxis = tuple(reversed(array.shape))
+        typename = array.dtype.name
+    
+    numaxis = len(naxis)
     if extname is None:
         card = pyfits.createCard('simple', True)
     else:
         card = pyfits.createCard('xtension', 'IMAGE', 'Image extension')
     header = pyfits.Header([card])
-    header.update('bitpix', pyfits.PrimaryHDU.ImgCode[array.dtype.name], 'array data type')
-    header.update('naxis', naxis, 'number of array dimensions')
-    for dim in range(naxis):
-        header.update('naxis'+str(dim+1), axisn[naxis-dim-1])
+    header.update('bitpix', pyfits.PrimaryHDU.ImgCode[typename], 'array data type')
+    header.update('naxis', numaxis, 'number of array dimensions')
+    for dim in range(numaxis):
+        header.update('naxis'+str(dim+1), naxis[dim])
     if extname is None:
         header.update('extend', True)
     else:
@@ -82,7 +90,7 @@ def create_fitsheader(array, extname=None, crval=(0.,0.), crpix=None, ctype=('RA
         raise ValueError('CRVAL does not have two elements.')
 
     if crpix is None:
-        crpix = (numpy.array(axisn) + 1) / 2.
+        crpix = (numpy.array(naxis) + 1) / 2.
     else:
         crpix = numpy.asarray(crpix, dtype=numpy.float64)
     if crpix.size != 2:
@@ -116,12 +124,25 @@ def create_fitsheader(array, extname=None, crval=(0.,0.), crpix=None, ctype=('RA
 
 #-------------------------------------------------------------------------------
 
+
 def mean_degrees(array):
     """
-    Returns the mean value of an array, by taking into account the discrepancy
-    at 0 degrees
+    Returns the mean value of an array of values in degrees, by taking into 
+    account the discrepancy at 0 degrees
     """
-    return tmf.mean_degrees(numpy.asarray(array, dtype='float64').ravel())
+    return tmf.mean_degrees(numpy.asarray(array, dtype=config.get_default_dtype_float()).ravel())
+
+
+#-------------------------------------------------------------------------------
+
+
+def minmax_degrees(array):
+    """
+    Returns the minimum and maximum value of an array of values in degrees, 
+    by taking into account the discrepancy at 0 degrees
+    """
+    return tmf.minmax_degrees(numpy.asarray(array, dtype=config.get_default_dtype_float()).ravel())
+
 
 #-------------------------------------------------------------------------------
 

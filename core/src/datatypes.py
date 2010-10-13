@@ -130,7 +130,7 @@ class FitsArray(Quantity):
         fig.savefig(filename)
         matplotlib.interactive(is_interactive)
 
-    def imshow(self, mask=None, num=None, colorbar=True, title=None, aspect=None, interpolation='nearest', origin='lower', figsize=None, dpi=None, xlabel='', ylabel='', **kw):
+    def imshow(self, mask=None, title=None, num=None, colorbar=True, aspect=None, interpolation='nearest', origin='lower', figsize=None, dpi=None, xlabel='', ylabel='', **kw):
         """
         A simple graphical display function for the Tod class
 
@@ -301,7 +301,7 @@ class Map(FitsArray):
     def copy(self, order='C'):
         return Map(self, copy=True, order=order)
 
-    def imshow(self, mask=None, num=None, title=None, figsize=None, dpi=None, **kw):
+    def imshow(self, mask=None, title=None, num=None, figsize=None, dpi=None, **kw):
         """A simple graphical display function for the Map class"""
 
         if mask is None and self.coverage is not None:
@@ -466,7 +466,7 @@ class Tod(FitsArray):
         mask = self.mask
         xlabel = 'Sample'
         ylabel = 'Detector number'
-        image = super(Tod, self).imshow(mask=mask, num=num, title=title, origin='upper', figsize=figsize, dpi=dpi, xlabel=xlabel, ylabel=ylabel, aspect=aspect, **kw)
+        image = super(Tod, self).imshow(mask=mask, title=title, num=num, origin='upper', figsize=figsize, dpi=dpi, xlabel=xlabel, ylabel=ylabel, aspect=aspect, **kw)
         return image
 
     def __str__(self):

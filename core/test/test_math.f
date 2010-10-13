@@ -1,6 +1,6 @@
 program test_math
 
-    use module_math,    only : NaN, linspace, logspace, median, moment, nint_down, nint_up, neq_real, sigma_clipping
+    use module_math
     use module_tamasis, only : p
     implicit none
 
@@ -8,37 +8,37 @@ program test_math
                                        0.232127193083888_p]
     real(p), parameter :: mresults(6) = [0.617858700525270_p, 0.133548079242052_p,-0.285146600004998_p,-2.246479349723560_p,       &
                                          0.365442306311204_p,0.319514776903196_p]
-    real(p)              :: mean, variance, skewness, kurtosis, stddev, meandev, val
+    real(p)              :: mean_, variance, skewness, kurtosis, stddev_, meandev, val, minv, maxv
     real(p), allocatable :: x(:)
     logical, allocatable :: mask(:)
     integer              :: i
 
-    call moment(sample, mean, variance, skewness, kurtosis, stddev=stddev, meandev=meandev)
+    call moment(sample, mean_, variance, skewness, kurtosis, stddev=stddev_, meandev=meandev)
 
-    if (any(neq_real([mean,variance,skewness,kurtosis,stddev,meandev], mresults))) then
+    if (any(neq_real([mean_,variance,skewness,kurtosis,stddev_,meandev], mresults))) then
         stop 'FAILED: moment 1'
     end if
 
-    call moment([-100._p, sample(1:2), +200._p,sample(3:5), -20._p], mean, variance, skewness, kurtosis, stddev=stddev,            &
+    call moment([-100._p, sample(1:2), +200._p,sample(3:5), -20._p], mean_, variance, skewness, kurtosis, stddev=stddev_,          &
          meandev=meandev, mask=[.true., .false., .false., .true., .false., .false., .false., .true.])
 
-    if (any(neq_real([mean,variance,skewness,kurtosis,stddev,meandev], mresults))) then
+    if (any(neq_real([mean_,variance,skewness,kurtosis,stddev_,meandev], mresults))) then
         stop 'FAILED: moment 1 with mask'
     end if
 
     !XXX no [] constructor?
-    call moment(sample(1:0), mean, variance, skewness, kurtosis, stddev=stddev, meandev=meandev)
-    if (any(neq_real([mean,variance,skewness,kurtosis,stddev,meandev], NaN))) then
+    call moment(sample(1:0), mean_, variance, skewness, kurtosis, stddev=stddev_, meandev=meandev)
+    if (any(neq_real([mean_,variance,skewness,kurtosis,stddev_,meandev], NaN))) then
         stop 'FAILED: moment 2'
     end if
 
-    call moment([2.1_p], mean, variance, skewness, kurtosis, stddev=stddev, meandev=meandev)
-    if (any(neq_real([mean,variance,skewness,kurtosis,stddev,meandev], [2.1_p,NaN,NaN,NaN,NaN,0._p]))) then
+    call moment([2.1_p], mean_, variance, skewness, kurtosis, stddev=stddev_, meandev=meandev)
+    if (any(neq_real([mean_,variance,skewness,kurtosis,stddev_,meandev], [2.1_p,NaN,NaN,NaN,NaN,0._p]))) then
         stop 'FAILED: moment 3'
     end if
 
-    call moment([2.1_p,2.1_p], mean, variance, skewness, kurtosis, stddev=stddev, meandev=meandev)
-    if (any(neq_real([mean,variance,skewness,kurtosis,stddev,meandev], [2.1_p,0._p,NaN,NaN,0._p,0._p]))) then
+    call moment([2.1_p,2.1_p], mean_, variance, skewness, kurtosis, stddev=stddev_, meandev=meandev)
+    if (any(neq_real([mean_,variance,skewness,kurtosis,stddev_,meandev], [2.1_p,0._p,NaN,NaN,0._p,0._p]))) then
         stop 'FAILED: moment 4'
     end if
 
@@ -75,8 +75,8 @@ program test_math
     val = median([3._p, 2._p, 1._p], logical([.true., .true., .false.], 1))
     if (neq_real(val, 1._p)) stop 'FAILED: median 4'
 
-    allocate(x(100))
-    allocate(mask(size(x)))
+    allocate (x(100))
+    allocate (mask(size(x)))
     x = linspace(1._p,1.01_p,size(x))
     x(10) = 2._p
     x(20) = 100._p
@@ -86,6 +86,13 @@ program test_math
     if (count(mask) /= 2) stop 'FAILED: sigma_clipping 2' 
     deallocate (x, mask)
 
+    allocate (x(5))
+    x = [10._p, 350._p, 0._p, 340._p, 20._p]+1._p
+    print *,mean_degrees(x)
+    if (mean_degrees(x) /= 1._p) stop 'FAILED: mean_degrees'
+    call minmax_degrees(x, minv, maxv)
+    print *, minv, maxv
+    if (minv /= 341._p .or. maxv /= 21._p) stop 'FAILED: minmax_degrees'
 
     stop 'OK.'
 

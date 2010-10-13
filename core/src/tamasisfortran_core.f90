@@ -597,3 +597,26 @@ subroutine mean_degrees(array, n, mean)
 end subroutine mean_degrees
 
 
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine minmax_degrees(array, n, min, max)
+
+    use module_math,    only : minmax_degrees_ => minmax_degrees
+    use module_tamasis, only : p
+    implicit none
+
+    !f2py threadsafe
+    !f2py intent(in)   :: array
+    !f2py intent(hide) :: n = size(array)
+    !f2py intent(out)  :: min, max
+
+    real(p), intent(in)  :: array(n)
+    integer, intent(in)  :: n
+    real(p), intent(out) :: min, max
+
+    call minmax_degrees_(array, min, max)
+
+end subroutine minmax_degrees
+
+

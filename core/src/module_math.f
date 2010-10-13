@@ -17,6 +17,7 @@ module module_math
     public :: mad
     public :: mean
     public :: mean_degrees
+    public :: minmax_degrees
     public :: median
     public :: median_nocopy
     public :: moment
@@ -298,6 +299,45 @@ contains
         end if
             
     end function mean_degrees
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine minmax_degrees(array, minv, maxv)
+
+        real(p), intent(in)           :: array(:)
+        real(p), intent(out)          :: minv, maxv
+        
+        real(p) :: value, meanv
+        integer :: isample
+
+        meanv = mean_degrees(array)
+        if (meanv /= meanv) then
+            minv = NaN
+            maxv = NaN
+            return
+        end if
+
+        minv = pInf
+        maxv = mInf
+        !$omp parallel do default(shared) reduction(min:minv) reduction(max:maxv)
+        do isample=1, size(array)
+            value = modulo(array(isample), 360._p)
+            if (value > meanv) then
+                if (abs(value-360._p-meanv) < abs(value-meanv)) value = value - 360._p
+            else
+                if (abs(value+360._p-meanv) < abs(value-meanv)) value = value + 360._p
+            end if
+            minv = min(minv, value)
+            maxv = max(maxv, value)
+        end do
+        !$omp end parallel do
+
+        minv = modulo(minv, 360._p)
+        maxv = modulo(maxv, 360._p)
+            
+    end subroutine minmax_degrees
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
