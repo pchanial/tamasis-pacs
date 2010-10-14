@@ -197,7 +197,7 @@ if not isinstance(b, deftype): raise TestFailure()
 m = numpy.ndarray((10,2,10), dtype='int8')
 m.flat = numpy.random.random(m.size)*2
 a = Tod(numpy.random.random_sample((10,2,10)), mask=m, nsamples=(2,8), unit='Jy')
-a.writefits(filename+'_tod.fits')
+a.save(filename+'_tod.fits')
 b = Tod(filename+'_tod.fits')
 if numpy.any(a != b) or numpy.any(a.mask != b.mask) or a.nsamples != b.nsamples: raise TestFailure()
 

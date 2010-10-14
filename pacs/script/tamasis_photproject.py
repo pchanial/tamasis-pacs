@@ -101,7 +101,7 @@ if options.do_outputtod:
     dest = 0
     tod_ = tod.reshape((obs.nrows, obs.ncolumns, tod.shape[-1]))
     for nsamples, f in zip(tod.nsamples, filename):
-        tod_[:,:,dest:dest+nsamples].writefits(f+'_tod.fits')
+        tod_[:,:,dest:dest+nsamples].save(f+'_tod.fits')
         dest += nsamples
 
 if not options.do_outputmap:
@@ -117,7 +117,7 @@ mymap = mapper_naive(tod, projection, unit='Jy/pixel')
 
 # Write resulting map as a FITS file
 print 'Writing the map...'
-mymap.writefits(filename[0] + '_map.fits')
+mymap.save(filename[0] + '_map.fits')
 
 # Display map
 if options.do_ds9:

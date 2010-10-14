@@ -97,7 +97,7 @@ class FitsArray(Quantity):
     def tofile(self, fid, sep='', format='%s'):
         super(FitsArray,self).tofile(fid, sep, format)
 
-    def writefits(self, filename):
+    def save(self, filename):
         """Save a FitsArray instance to a fits file given a filename
        
         If the same file already exist it overwrites it.
@@ -336,8 +336,8 @@ class Map(FitsArray):
         pyplot.show()
         return annim
 
-    def writefits(self, filename):
-        super(Map, self).writefits(filename)
+    def save(self, filename):
+        super(Map, self).save(filename)
         if self.error is not None:
             header = create_fitsheader(self.error, extname='Error')
             pyfits.append(filename, self.error, header)
@@ -497,8 +497,8 @@ class Tod(FitsArray):
             output += ' in ' + str(nslices) + ' slices ('+strsamples+')'
         return output + ']'
 
-    def writefits(self, filename):
-        super(Tod, self).writefits(filename)
+    def save(self, filename):
+        super(Tod, self).save(filename)
         if self.mask is None:
             return
         mask = numpy.abs(self.mask).view('uint8')
