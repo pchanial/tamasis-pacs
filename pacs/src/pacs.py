@@ -246,15 +246,17 @@ class PacsSimulation(_Pacs):
 
         _write_status(self, self.filename)
 
-    def plot(self, map=None, title=None, num=None, figsize=None, dpi=None):
+    def plot(self, map=None, title=None, color='magenta', linewidth=2):
         if map is None:
-            fig = pyplot.figure(num=num, figsize=figsize, dpi=dpi)
-            plot_scan(self.pointing.ra, self.pointing.dec, title=title)
+            if title is not None:
+                frame = pyplot.gca()
+                frame.set_title(title)
+            utils.plot_scan(self.pointing.ra, self.pointing.dec, title=title)
         else:
-            image = map.imshow(title=title, num=num, figsize=figsize, dpi=dpi)
+            image = map.imshow(title=title)
             x, y = image.topixel(self.pointing.ra, self.pointing.dec)
-            pyplot.plot(x, y, color='magenta', linewidth=2)
-            pyplot.plot(x[0], y[0], 'o', color='magenta')
+            p = pyplot.plot(x, y, color=color, linewidth=linewidth)
+            pyplot.plot(x[0], y[0], 'o', color=p[0]._color)
 
     def save(self, filename, tod):
         _write_status(self, filename)
@@ -324,12 +326,18 @@ def pacs_plot_scan(patterns, num=None, figsize=None, dpi=None):
         files.extend(glob.glob(pattern))
 
     fig = pyplot.figure(num=num, figsize=figsize, dpi=dpi)
-    for file in files:
+    for ifile, file in enumerate(files):
         try:
             status = pacs_status(file)
-        except IOError as error:
-            raise IOError("Cannot extract status from file '"+file+"': "+str(error))
-        plot_scan(status['ra'], status['dec'])
+        except Exception as error:
+            print "Warning: Cannot extract status from file '"+file+"': "+str(error)
+            continue
+        if ifile == 0:
+            image = utils.plot_scan(status['ra'], status['dec'])
+        else:
+            x, y = image.topixel(status['ra'], status['dec'])
+            p = pyplot.plot(x, y, linewidth=2)
+            pyplot.plot(x[0], y[0], 'o', color = p[0]._color)
 
 
 #-------------------------------------------------------------------------------

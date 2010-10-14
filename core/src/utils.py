@@ -189,7 +189,7 @@ class MaskPolicy(object):
 #-------------------------------------------------------------------------------
         
 
-def plot_scan(ra, dec, title=None, num=None, figsize=None, dpi=None):
+def plot_scan(ra, dec, title=None):
     crval = [mean_degrees(ra), numpy.mean(dec)]
     ra_min,  ra_max  = minmax_degrees(ra)
     dec_min, dec_max = numpy.min(dec), numpy.max(dec)
@@ -224,6 +224,7 @@ def plot_scan(ra, dec, title=None, num=None, figsize=None, dpi=None):
     x, y = image.topixel(ra, dec)
     p = pyplot.plot(x, y, linewidth=2)
     pyplot.plot(x[0], y[0], 'o', color = p[0]._color)
+    return image
 
 
 #-------------------------------------------------------------------------------

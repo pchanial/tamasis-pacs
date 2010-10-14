@@ -126,12 +126,13 @@ class FitsArray(Quantity):
         dpi = 80.
         figsize = numpy.clip(numpy.max(numpy.array(self.shape[::-1])/dpi), 8, 50)
         figsize = (figsize + (2 if colorbar else 0), figsize)
-        self.imshow(colorbar=colorbar, figsize=figsize, dpi=dpi, **kw)
+        fig = pyplot.figure(figsize=figsize, dpi=dpi)
+        self.imshow(colorbar=colorbar, new_figure=False, **kw)
         fig = pyplot.gcf()
         fig.savefig(filename)
         matplotlib.interactive(is_interactive)
 
-    def imshow(self, mask=None, title=None, num=None, colorbar=True, aspect=None, interpolation='nearest', origin='lower', figsize=None, dpi=None, xlabel='', ylabel='', **kw):
+    def imshow(self, mask=None, title=None, colorbar=True, aspect=None, interpolation='nearest', origin='lower', xlabel='', ylabel='', new_figure=True, **kw):
         """
         A simple graphical display function for the Tod class
 
@@ -153,7 +154,10 @@ class FitsArray(Quantity):
         minval = float(max(mean - 2*stddev, numpy.min(data)))
         maxval = float(min(mean + 5*stddev, numpy.max(data)))
 
-        fig = pyplot.figure(num=num, figsize=figsize, dpi=dpi)
+        if new_figure:
+            fig = pyplot.figure()
+        else:
+            fig = pyplot.gcf()
         fontsize = 12. * fig.get_figheight() / 6.125
 
         image = pyplot.imshow(data, aspect=aspect, interpolation=interpolation, origin=origin, **kw)
@@ -302,7 +306,7 @@ class Map(FitsArray):
     def copy(self, order='C'):
         return Map(self, copy=True, order=order)
 
-    def imshow(self, mask=None, title=None, num=None, figsize=None, dpi=None, **kw):
+    def imshow(self, mask=None, title=None, new_figure=True, **kw):
         """A simple graphical display function for the Map class"""
 
         if mask is None and self.coverage is not None:
@@ -314,9 +318,13 @@ class Map(FitsArray):
             data = numpy.asarray(self)
 
         fitsobj = kapteyn.maputils.FITSimage(externaldata=data, externalheader=self.header)
-        fig = pyplot.figure(num=num, figsize=figsize, dpi=dpi)
-        frame = fig.add_axes([0.1,0.1,0.9,0.9])
-        frame.set_title(title)
+        if new_figure:
+            fig = pyplot.figure()
+            frame = fig.add_axes(0.1, 0.1, 0.8, 0.8)
+        else:
+            frame = pyplot.gca()
+        if title is not None:
+            frame.set_title(title)
         annim = fitsobj.Annotatedimage(frame, blankcolor='w')
         annim.Image(interpolation='nearest')
         grat = annim.Graticule()
@@ -326,7 +334,6 @@ class Map(FitsArray):
         annim.interact_toolbarinfo()
         annim.interact_writepos()
         pyplot.show()
-
         return annim
 
     def writefits(self, filename):
@@ -459,15 +466,14 @@ class Tod(FitsArray):
         result.nsamples = None
         return result
         
-    def imshow(self, num=None, title=None, figsize=None, dpi=None, aspect='auto', **kw):
+    def imshow(self, title=None, aspect='auto', **kw):
         """
         A simple graphical display function for the Map class
         """
 
-        mask = self.mask
         xlabel = 'Sample'
         ylabel = 'Detector number'
-        image = super(Tod, self).imshow(mask=mask, title=title, num=num, origin='upper', figsize=figsize, dpi=dpi, xlabel=xlabel, ylabel=ylabel, aspect=aspect, **kw)
+        image = super(Tod, self).imshow(mask=self.mask, title=title, origin='upper', xlabel=xlabel, ylabel=ylabel, aspect=aspect, **kw)
         return image
 
     def __str__(self):
