@@ -117,3 +117,11 @@ distclean: $(patsubst %,distclean-%,$(DIRS))
 loc:
 	@find . \( -name .git -prune -or -name include -prune -or -name "Makefile*" -or -name "*f" -or -name "*f90" -or -name "*py" \) -and -not -type l -and -not -type d | sort;\
 	find . \( -name .git -prune -or -name include -prune -or -name "Makefile*" -or -name "*f" -or -name "*f90" -or -name "*py" \) -and -not -type l -and -not -type d | xargs cat | wc -l
+
+loc-fortran:
+	@find . \( -name .git -prune -or -name include -prune -or -name "*f" -or -name "*f90" \) -and -not -type l -and -not -type d | sort;\
+	find . \( -name .git -prune -or -name include -prune -or -name "*f" -or -name "*f90" \) -and -not -type l -and -not -type d | xargs cat | wc -l
+
+loc-python:
+	@find . \( -name .git -prune -or -name include -prune -or -name "*py" \) -and -not -type l -and -not -type d | sort;\
+	find . \( -name .git -prune -or -name include -prune -or -name "*py" \) -and -not -type l -and -not -type d | xargs cat | wc -l
