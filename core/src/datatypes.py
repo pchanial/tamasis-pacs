@@ -575,7 +575,10 @@ def create_fitsheader(array, extname=None, crval=(0.,0.), crpix=None, ctype=('RA
         if not isinstance(array, numpy.ndarray):
             raise TypeError('The input is not an ndarray.')
         naxis = tuple(reversed(array.shape))
-        typename = array.dtype.name
+        if array.dtype.name == 'bool':
+            typename = 'uint8'
+        else:
+            typename = array.dtype.name
     
     numaxis = len(naxis)
     if extname is None:

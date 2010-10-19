@@ -93,7 +93,7 @@ class MaskPolicy(object):
 #-------------------------------------------------------------------------------
         
 
-def plot_scan(ra, dec, title=None):
+def plot_scan(ra, dec, title=None, new_figure=True):
     crval = [mean_degrees(ra), numpy.mean(dec)]
     ra_min,  ra_max  = minmax_degrees(ra)
     dec_min, dec_max = numpy.min(dec), numpy.max(dec)
@@ -116,7 +116,11 @@ def plot_scan(ra, dec, title=None):
     crpix = (-xmin+2, -ymin+2)
     header = create_fitsheader(None, naxis=naxis, cdelt=cdelt, crval=crval, crpix=crpix)
     fitsobj = kapteyn.maputils.FITSimage(externalheader=header)
-    frame = pyplot.gcf().add_axes([0.1,0.1,0.8,0.8])
+    if new_figure:
+        fig = pyplot.figure()
+        frame = fig.add_axes((0.1, 0.1, 0.8, 0.8))
+    else:
+        frame = pyplot.gca()
     if title is not None:
         frame.set_title(title)
     image = fitsobj.Annotatedimage(frame, blankcolor='w')

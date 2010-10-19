@@ -162,7 +162,7 @@ class PacsObservation(_Pacs):
         self.nsamples = tuple(nsamples)
         self.nfinesamples = tuple(nsamples * compression_factor * fine_sampling_factor)
         self.ndetectors = ndetectors
-        self.detector_mask = detector_mask
+        self.detector_mask = Map(detector_mask, origin='upper')
         self.reject_bad_line = reject_bad_line
         self.frame_policy = frame_policy
         self.fine_sampling_factor = fine_sampling_factor
@@ -173,7 +173,7 @@ class PacsObservation(_Pacs):
         if self.unit.find('/') == -1:
             self.unit += ' / detector'
         self.responsivity = Quantity(responsivity, 'V/Jy')
-        self.detector_area = Map(detector_area, unit='arcsec^2/detector')
+        self.detector_area = Map(detector_area, unit='arcsec^2/detector', origin='upper')
         self.flatfield = utils.FlatField(oflat, dflat)
 
     def get_map_header(self, resolution=None, oversampling=True):
@@ -318,7 +318,7 @@ class PacsMultiplexing(AcquisitionModel):
 #-------------------------------------------------------------------------------
 
 
-def pacs_plot_scan(patterns, num=None, figsize=None, dpi=None):
+def pacs_plot_scan(patterns, title=None, new_figure=True):
     if type(patterns) not in (tuple, list):
         patterns = (patterns,)
 
@@ -326,17 +326,24 @@ def pacs_plot_scan(patterns, num=None, figsize=None, dpi=None):
     for pattern in patterns:
         files.extend(glob.glob(pattern))
 
-    fig = pyplot.figure(num=num, figsize=figsize, dpi=dpi)
     for ifile, file in enumerate(files):
         try:
-            status = pacs_status(file)
+            hdu = pyfits.open(file)['STATUS']
         except Exception as error:
             print "Warning: Cannot extract status from file '"+file+"': "+str(error)
             continue
+
+        while True:
+            try:
+                status = hdu.data
+                break
+            except IndexError:
+                pass
+
         if ifile == 0:
-            image = utils.plot_scan(status['ra'], status['dec'])
+            image = utils.plot_scan(status.RaArray, status.DecArray, title=title, new_figure=new_figure)
         else:
-            x, y = image.topixel(status['ra'], status['dec'])
+            x, y = image.topixel(status.RaArray, status.DecArray)
             p = pyplot.plot(x, y, linewidth=2)
             pyplot.plot(x[0], y[0], 'o', color = p[0]._color)
 
