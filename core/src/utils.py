@@ -152,36 +152,40 @@ def minmax_degrees(array):
 
 class MaskPolicy(object):
     def __init__(self, flags, values, description=None):
-        self.description = description
+        self._description = description
         if _my_isscalar(flags):
             if isinstance(flags, str):
                 flags = flags.split(',')
             else:
                 flags = (flags,)
-        self.flags = tuple(flags)
         if _my_isscalar(values):
-            values = (values,)
+            if isinstance(values, str):
+                values = values.split(',')
+            else:
+                values = (values,)
         if len(flags) != len(values):
             raise ValueError('The number of policy flags is different from the number of policies.')
 
-        conversion_policy = { 'keep':0, 'mask':1, 'remove':2 }
-        self._array = numpy.ndarray(len(flags), dtype='int')
-    
-        for i, (flag, value) in enumerate(zip(flags, values)):
-            try:
-                self._array[i] = conversion_policy[str(value).lower()]
-            except KeyError:
+        self._policy = []
+        for flag, value in zip(flags, values):
+            if flag[0] == '_':
+                raise ValueError('A policy flag should not start with an underscore.')
+            value = value.strip().lower()
+            if value not in ('keep', 'mask', 'remove'):
                 raise KeyError("Invalid policy "+flag+"='" + value + "'. Valid policies are 'keep', 'mask' or 'remove'.")
+            self._policy.append({flag:value})
+            setattr(self, flag, value)
+        self._policy = tuple(self._policy)
 
-    def __array__(self):
-        return numpy.array(self._array, dtype='int32')
+    def __array__(self, dtype=int):
+        conversion = { 'keep':0, 'mask':1, 'remove':2 }
+        return numpy.array([conversion[policy.values()[0]] for policy in self._policy], dtype=dtype)
 
     def __str__(self):
-        str = self.description + ': ' if self.description is not None else ''
-        conversion = { 0:'keep', 1:'mask', 2:'remove' }
+        str = self._description + ': ' if self._description is not None else ''
         str_ = []
-        for i, flag in enumerate(self.flags):
-            str_.append(conversion[self._array[i]] + " '" + flag + "'")
+        for policy in self._policy:
+            str_.append(policy.values()[0] + " '" + policy.keys()[0] + "'")
         str += ', '.join(str_)
         return str
 

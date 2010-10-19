@@ -144,12 +144,12 @@ class PacsObservation(_Pacs):
         ndetectors = int(numpy.sum(detector_mask == 0))
 
         # frame policy
-        frame_policy = utils.MaskPolicy('inscan,turnaround,other,invalid'.split(','), (frame_policy_inscan, frame_policy_turnaround, frame_policy_other, frame_policy_invalid), 'Frame Policy')
+        frame_policy = utils.MaskPolicy('inscan,turnaround,other,invalid', (frame_policy_inscan, frame_policy_turnaround, frame_policy_other, frame_policy_invalid), 'Frame Policy')
 
         # retrieve information from the observations
         nthreads = tmf.info_nthreads()
         print 'Info: ' + MPI.Get_processor_name() + ' (' + str(nthreads) + ' core' + ('s' if nthreads > 1 else '') + ' handling ' + str(ndetectors) + ' detector' + ('s' if ndetectors > 1 else '') + ')'
-        compression_factor, nsamples, unit, responsivity, detector_area, dflat, oflat, status = tmf.pacs_info(tamasis_dir, filename_, nfilenames, transparent_mode, fine_sampling_factor, numpy.array(frame_policy), numpy.asfortranarray(detector_mask))
+        compression_factor, nsamples, unit, responsivity, detector_area, dflat, oflat, status = tmf.pacs_info(tamasis_dir, filename_, nfilenames, transparent_mode, fine_sampling_factor, numpy.array(frame_policy, dtype='int32'), numpy.asfortranarray(detector_mask))
         if status != 0: raise RuntimeError()
 
         self.filename = filename
@@ -228,7 +228,7 @@ class PacsSimulation(_Pacs):
         self.ndetectors = self.nrows * self.ncolumns
         self.detector_mask = numpy.zeros((self.nrows, self.ncolumns), dtype='int8')
         self.reject_bad_line = False
-        self.frame_policy = frame_policy = utils.MaskPolicy('inscan,turnaround,other,invalid'.split(','), 4*('keep',), 'Frame Policy')
+        self.frame_policy = utils.MaskPolicy('inscan,turnaround,other,invalid', 4*('keep',), 'Frame Policy')
         self.fine_sampling_factor = fine_sampling_factor
         self.mode = mode
         self.transparent_mode = mode == 'transparent'
