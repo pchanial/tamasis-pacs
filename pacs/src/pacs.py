@@ -10,7 +10,7 @@ import utils
 
 from acquisitionmodels import AcquisitionModel, CompressionAverage, Masking, Projection, ValidationError
 from config import __version__, tamasis_dir
-from datatypes import *
+from datatypes import Map, Tod, create_fitsheader
 from mappers import mapper_naive
 from matplotlib import pyplot
 from mpi4py import MPI
@@ -174,11 +174,7 @@ class PacsObservation(_Pacs):
             self.unit += ' / detector'
         self.responsivity = Quantity(responsivity, 'V/Jy')
         self.detector_area = Map(detector_area, unit='arcsec^2/detector')
-        self.flatfield = {
-            'total'   : Map(dflat*oflat),
-            'detector': Map(numpy.ascontiguousarray(dflat)),
-            'optical' : Map(numpy.ascontiguousarray(oflat))
-            }
+        self.flatfield = utils.FlatField(oflat, dflat)
 
     def get_map_header(self, resolution=None, oversampling=True):
         if MPI.COMM_WORLD.Get_size() > 1:
@@ -260,7 +256,12 @@ class PacsSimulation(_Pacs):
 
     def save(self, filename, tod):
         _write_status(self, filename)
-        header = create_fitsheader(tod, extname='Signal')
+        if tod.header is None:
+            header = create_fitsheader(tod, extname='Signal')
+        else:
+            header = tod.header.copy()
+            header['EXTNAME'] = 'Signal'
+
         pyfits.append(filename, tod, header)
         if tod.mask is not None:
             mask = numpy.abs(self.mask).view('uint8')

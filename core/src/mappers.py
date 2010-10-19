@@ -4,10 +4,10 @@ import time
 
 from acquisitionmodels import asacquisitionmodel, Diagonal, DiscreteDifference, Identity, Masking, AllReduce
 from config import get_default_dtype_float
-from datatypes import Map, Tod
+from datatypes import Map, Tod, create_fitsheader
 from mpi4py import MPI
 from unit import Quantity, UnitError
-from utils import create_fitsheader
+
 
 __all__ = [ 'mapper_naive', 'mapper_ls', 'mapper_rls' ]
 

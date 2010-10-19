@@ -6,126 +6,13 @@ import pyfits
 import re
 import tamasisfortran as tmf
 import time
+from datatypes import Map, create_fitsheader
 from matplotlib import pyplot
 from numpyutils import _my_isscalar
 
-__all__ = [ 'create_fitsheader', 'MaskPolicy', 'mean_degrees', 'minmax_degrees', 'pointing', 'plot_scan', 'airy_disk', 'aperture_circular', 'distance', 'gaussian', 'phasemask_fourquadrant' ]
+__all__ = [ 'FlatField', 'MaskPolicy', 'mean_degrees', 'minmax_degrees', 'pointing', 'plot_scan', 'airy_disk', 'aperture_circular', 'distance', 'gaussian', 'phasemask_fourquadrant' ]
 
 pointing = numpy.dtype([('time', numpy.float64), ('ra', numpy.float64), ('dec', numpy.float64), ('pa', numpy.float64), ('flag', numpy.int64)])
-
-def create_fitsheader(array, extname=None, crval=(0.,0.), crpix=None, ctype=('RA---TAN','DEC--TAN'), cunit='deg', cd=None, cdelt=None, naxis=None):
-    """
-    Return a FITS header
-
-    Parameters
-    ----------
-    array : array_like
-        An array from which the dimensions will be extracted. Note that
-        by FITS convention, the dimension along X is the second value 
-        of the array shape and that the dimension along the Y axis is 
-        the first one. If None is specified, naxis keyword must be set
-    extname : None or string
-        if a string is specified ('' can be used), the returned header
-        type will be an Image HDU (otherwise a Primary HDU)
-    crval : 2 element array, optional
-        Reference pixel values (FITS convention)
-    crpix : 2 element array, optional
-        Reference pixel (FITS convention)
-    ctype : 2 element string array, optional
-        Projection types
-    cunit : string or 2 element string array
-        Units of the CD matrix (default is degrees/pixel)
-    cd : 2 x 2 array
-        Astrometry parameters
-            CD1_1 CD1_2
-            CD2_1 CD2_2
-    cdelt : 2 element array
-        Physical increment at the reference pixel
-    naxis : 2 element array
-        (NAXIS1,NAXIS2) tuple, to be specified only if array argument is None
-
-    Examples
-    --------
-    >>> map = Map.ones((10,100), unit='Jy/pixel')
-    >>> map.header = create_fitsheader(map, cd=[[-1,0],[0,1]])
-    """
-
-    if array is None:
-        if naxis is None:
-            raise ValueError('An array argument or naxis keyword should be specified.')
-        typename = 'float64'
-    else:
-        if not isinstance(array, numpy.ndarray):
-            raise TypeError('The input is not an ndarray.')
-        naxis = tuple(reversed(array.shape))
-        typename = array.dtype.name
-    
-    numaxis = len(naxis)
-    if extname is None:
-        card = pyfits.createCard('simple', True)
-    else:
-        card = pyfits.createCard('xtension', 'IMAGE', 'Image extension')
-    header = pyfits.Header([card])
-    header.update('bitpix', pyfits.PrimaryHDU.ImgCode[typename], 'array data type')
-    header.update('naxis', numaxis, 'number of array dimensions')
-    for dim in range(numaxis):
-        header.update('naxis'+str(dim+1), naxis[dim])
-    if extname is None:
-        header.update('extend', True)
-    else:
-        header.update('pcount', 0, 'number of parameters')
-        header.update('gcount', 1, 'number of groups')
-        header.update('extname', extname)
-
-    if cd is not None:
-        cd = numpy.asarray(cd, dtype=numpy.float64)
-        if cd.shape != (2,2):
-            raise ValueError('The CD matrix is not a 2x2 matrix.')
-    else:
-        if cdelt is None:
-            return header
-        if _my_isscalar(cdelt):
-            cdelt = (-cdelt, cdelt)
-        cd = numpy.array(((cdelt[0], 0), (0,cdelt[1])))
-
-    crval = numpy.asarray(crval, dtype=numpy.float64)
-    if crval.size != 2:
-        raise ValueError('CRVAL does not have two elements.')
-
-    if crpix is None:
-        crpix = (numpy.array(naxis) + 1) / 2.
-    else:
-        crpix = numpy.asarray(crpix, dtype=numpy.float64)
-    if crpix.size != 2:
-        raise ValueError('CRPIX does not have two elements.')
-
-    ctype = numpy.asarray(ctype, dtype=numpy.string_)
-    if ctype.size != 2:
-        raise ValueError('CTYPE does not have two elements.')
-
-    if _my_isscalar(cunit):
-        cunit = (cunit, cunit)
-    cunit = numpy.asarray(cunit, dtype=numpy.string_)
-    if cunit.size != 2:
-        raise ValueError('CUNIT does not have two elements.')
-
-    header.update('crval1', crval[0])
-    header.update('crval2', crval[1])
-    header.update('crpix1', crpix[0])
-    header.update('crpix2', crpix[1])
-    header.update('cd1_1' , cd[0,0])
-    header.update('cd2_1' , cd[1,0])
-    header.update('cd1_2' , cd[0,1])
-    header.update('cd2_2' , cd[1,1])
-    header.update('ctype1', ctype[0])
-    header.update('ctype2', ctype[1])
-    header.update('cunit1', cunit[0])
-    header.update('cunit2', cunit[1])
-
-    return header
-
-
-#-------------------------------------------------------------------------------
 
 
 def mean_degrees(array):
@@ -145,6 +32,19 @@ def minmax_degrees(array):
     by taking into account the discrepancy at 0 degrees
     """
     return tmf.minmax_degrees(numpy.asarray(array, dtype=config.get_default_dtype_float()).ravel())
+
+
+#-------------------------------------------------------------------------------
+
+
+class FlatField(object):
+    def __init__(self, optical, detector):
+        self.optical = Map(optical)
+        self.detector = Map(detector)
+
+    @property
+    def total(self):
+        return Map(self.optical * self.detector)
 
 
 #-------------------------------------------------------------------------------
