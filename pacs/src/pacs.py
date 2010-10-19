@@ -173,7 +173,7 @@ class PacsObservation(_Pacs):
         # retrieve information from the observations
         nthreads = tmf.info_nthreads()
         print 'Info: ' + MPI.Get_processor_name() + ' (' + str(nthreads) + ' core' + ('s' if nthreads > 1 else '') + ' handling ' + str(ndetectors) + ' detector' + ('s' if ndetectors > 1 else '') + ')'
-        compression_factor, nsamples, unit, responsivity, detector_area, dflat, oflat, frame_time, frame_ra, frame_dec, frame_pa, frame_chop, frame_flag, status = tmf.pacs_info(tamasis_dir, filename_, nfilenames, transparent_mode, fine_sampling_factor, numpy.array(frame_policy, dtype='int32'), numpy.asfortranarray(detector_mask), nsamples_tot_max)
+        compression_factor, nsamples, offset, inscan, turnaround, other, invalid, unit, responsivity, detector_area, dflat, oflat, frame_time, frame_ra, frame_dec, frame_pa, frame_chop, frame_flag, status = tmf.pacs_info(tamasis_dir, filename_, nfilenames, transparent_mode, fine_sampling_factor, numpy.array(frame_policy, dtype='int32'), numpy.asfortranarray(detector_mask), nsamples_tot_max)
         if status != 0: raise RuntimeError()
 
         self.filename = filename
@@ -196,11 +196,17 @@ class PacsObservation(_Pacs):
         self.detector_area = Map(detector_area, unit='arcsec^2/detector', origin='upper')
         self.flatfield = FlatField(oflat, dflat)
 
-        self.slice = numpy.recarray(nfilenames, dtype=numpy.dtype([('filename', 'S256'), ('nsamples', int), ('nfinesamples', int), ('compression_factor', int)]))
+        self.slice = numpy.recarray(nfilenames, dtype=numpy.dtype([('filename', 'S256'), ('nsamples', int), ('nfinesamples', int), ('offset', int), ('compression_factor', int), ('inscan', int), ('turnaround', int), ('other', int), ('invalid', int)]))
         self.slice.filename = filename
-        self.slice.nsamples = tuple(nsamples)
-        self.slice.nfinesamples = tuple(nsamples * compression_factor * fine_sampling_factor) 
+        self.slice.nsamples = nsamples
+        self.slice.nfinesamples = nsamples * compression_factor * fine_sampling_factor
+        self.slice.offset = offset
         self.slice.compression_factor = compression_factor
+        self.slice.inscan = inscan
+        self.slice.turnaround = turnaround
+        self.slice.other = other
+        self.slice.invalid = invalid
+        
         self._status = None
         w = slice(0, numpy.sum(nsamples))
         self.pointing = PacsPointing(frame_time[w].copy(), frame_ra[w].copy(), frame_dec[w].copy(), frame_pa[w].copy(), frame_chop[w].copy(), frame_flag[w].copy(), nsamples=self.slice.nsamples)

@@ -203,9 +203,9 @@ end subroutine pacs_info_bad_detector_mask
 
 
 subroutine pacs_info(tamasis_dir, filename, nfilenames, transparent_mode, fine_sampling_factor, frame_policy, detector_mask,       &
-                     nsamples_tot_max, nrows, ncolumns, compression_factor, nsamples, unit, responsivity, detector_area,           &
-                     flatfield_detector, flatfield_optical, frame_time, frame_ra, frame_dec, frame_pa, frame_chop, frame_flag,     &
-                     status)
+                     nsamples_tot_max, nrows, ncolumns, compression_factor, nsamples, offset, inscan, turnaround, other, invalid,  &
+                     unit, responsivity, detector_area, flatfield_detector, flatfield_optical, frame_time, frame_ra, frame_dec,    &
+                     frame_pa, frame_chop, frame_flag, status)
 
     use iso_fortran_env,        only : OUTPUT_UNIT
     use module_pacsinstrument,  only : PacsInstrument
@@ -225,7 +225,7 @@ subroutine pacs_info(tamasis_dir, filename, nfilenames, transparent_mode, fine_s
     !f2py intent(hide) nrows = shape(bad_detector_mask,0)
     !f2py intent(hide) ncolumns = shape(bad_detector_mask,1)
     !f2py intent(out)  compression_factor
-    !f2py intent(out)  nsamples
+    !f2py intent(out)  nsamples, offset, inscan, turnaround, other, invalid
     !f2py intent(out)  unit
     !f2py intent(out)  responsivity
     !f2py intent(out)  detector_area
@@ -244,7 +244,8 @@ subroutine pacs_info(tamasis_dir, filename, nfilenames, transparent_mode, fine_s
     integer, intent(in)            :: nsamples_tot_max
     integer, intent(in)            :: nrows, ncolumns
     integer, intent(out)           :: compression_factor(nfilenames)
-    integer*8, intent(out)         :: nsamples(nfilenames)
+    integer, intent(out)           :: nsamples(nfilenames), offset(nfilenames)
+    integer, intent(out)           :: inscan(nfilenames), turnaround(nfilenames), other(nfilenames), invalid(nfilenames)
     character(len=70), intent(out) :: unit
     real(p), intent(out)           :: responsivity
     real(p), intent(out)           :: detector_area(nrows,ncolumns)
@@ -283,6 +284,10 @@ subroutine pacs_info(tamasis_dir, filename, nfilenames, transparent_mode, fine_s
     frame_flag = POLICY_KEEP
     dest = 0
     do iobs = 1, obs%nslices
+        inscan    (iobs) = count(obs%slice(iobs)%p%inscan)
+        turnaround(iobs) = count(obs%slice(iobs)%p%turnaround)
+        other     (iobs) = count(obs%slice(iobs)%p%other)
+        invalid   (iobs) = count(obs%slice(iobs)%p%invalid)
         do isample = 1, obs%slice(iobs)%nsamples
             dest = dest + 1
             frame_time(dest) = obs%slice(iobs)%p(isample)%time
@@ -307,6 +312,7 @@ subroutine pacs_info(tamasis_dir, filename, nfilenames, transparent_mode, fine_s
 
     compression_factor = obs%slice%compression_factor
     nsamples = obs%slice%nvalids
+    offset = obs%slice%first - 1
     unit = obs%unit
     responsivity = pacs%responsivity
     detector_area = pacs%detector_area_all
