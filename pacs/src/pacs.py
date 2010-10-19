@@ -378,15 +378,15 @@ class pacs_status(object):
             return vel
         return self.status.field(key)
     
+    def __getattr__(self, attr):
+        if attr in ('ra', 'dec', 'pa', 'time', 'velocity'):
+            return self[attr]
+        return getattr(self.status, attr)
+
     def __str__(self):
-        names = ['ra', 'dec', 'pa', 'time']
+        names = ['ra', 'dec', 'pa', 'time', 'velocity']
         for n in self.status.names:
             names.append(n)
-        names.insert(0, 'ra')
-        names.insert(1, 'dec')
-        names.insert(2, 'pa')
-        names.insert(3, 'time')
-        names.insert(3, 'velocity')
         return 'PACS status: ' + str(names)
         
 
