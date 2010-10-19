@@ -92,8 +92,8 @@ program test_pacsobservation
     deallocate (afilename)
 
     allocate (pacs)
-    call pacs%init(obs%channel, obs%observing_mode == 'Transparent', 1, status=status)
-    if (status /= 0 .or. pacs%channel /= 'b' .or. pacs%transparent_mode) stop 'FAILED: pacs%init'
+    call pacs%init(obs%band, obs%observing_mode == 'Transparent', 1, status=status)
+    if (status /= 0 .or. pacs%band /= 'b' .or. pacs%transparent_mode) stop 'FAILED: pacs%init'
 
     allocate(signal(obs%slice(1)%nsamples,pacs%ndetectors))
     allocate(mask  (obs%slice(1)%nsamples,pacs%ndetectors))

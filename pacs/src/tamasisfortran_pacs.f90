@@ -2,7 +2,7 @@
 !
 ! Author: P. Chanial
 
-subroutine pacs_info_band(filename, nfilenames, channel, transparent_mode, status)
+subroutine pacs_info_band(filename, nfilenames, band, transparent_mode, status)
 
     use iso_fortran_env,        only : ERROR_UNIT
     use module_fitstools,       only : ft_close, ft_open, ft_read_keyword
@@ -13,26 +13,26 @@ subroutine pacs_info_band(filename, nfilenames, channel, transparent_mode, statu
     !f2py threadsafe
     !f2py intent(in)   filename
     !f2py intent(in)   nfilenames
-    !f2py intent(out)  channel
+    !f2py intent(out)  band
     !f2py intent(out)  status
 
     character(len=*), intent(in)  :: filename
     integer, intent(in)           :: nfilenames
-    character(len=7), intent(out) :: channel
+    character(len=7), intent(out) :: band
     logical, intent(out)          :: transparent_mode
     integer, intent(out)          :: status
 
     character(len=len(filename)/nfilenames) :: filename_
     integer                                 :: iobs, length, pos, unit
     character(len=10)                       :: obstype
-    character(len=7)                        :: channel_
+    character(len=7)                        :: band_
 
     ! split input filename
     if (mod(len(filename), nfilenames) /= 0) then
-        stop 'PACS_INFO_CHANNEL: Invalid filename length.'
+        stop 'PACS_INFO_BAND: Invalid filename length.'
     end if
 
-    channel = 'unknown'
+    band = 'unknown'
     transparent_mode = .true.
 
     do iobs = 1, nfilenames
@@ -48,14 +48,14 @@ subroutine pacs_info_band(filename, nfilenames, channel, transparent_mode, statu
         if (filename_(length-4:length) /= '.fits') then
             status = 0
             if (strlowcase(filename_(length-3:length)) == 'blue') then
-               channel_ = 'blue'
+               band_ = 'blue'
             else if (strlowcase(filename_(length-4:length)) == 'green') then
-               channel_ = 'green'
+               band_ = 'green'
             else if (strlowcase(filename_(length-2:length)) == 'red') then
-               channel_ = 'red'
+               band_ = 'red'
             else
                status = 1
-               write (ERROR_UNIT,'(a)') 'File name does not contain the array channel identifier (blue, green, red).'
+               write (ERROR_UNIT,'(a)') 'File name does not contain the array band identifier (blue, green, red).'
             end if
             return
         endif
@@ -71,19 +71,19 @@ subroutine pacs_info_band(filename, nfilenames, channel, transparent_mode, statu
 
         select case (trim(obstype))
             case ('HPPRAWBS')
-                channel_ = 'blue'
+                band_ = 'blue'
             case ('HPPRAWBL')
-                channel_ = 'green'
+                band_ = 'green'
             case ('HPPRAWRS')
-                channel_ = 'red'
+                band_ = 'red'
             case ('HPPAVGBS')
-                channel_ = 'blue'
+                band_ = 'blue'
                 transparent_mode = .false.
             case ('HPPAVGBL')
-                channel_ = 'green'
+                band_ = 'green'
                 transparent_mode = .false.
             case ('HPPAVGRS')
-                channel_ = 'red'
+                band_ = 'red'
                 transparent_mode = .false.
             case default
                 write (ERROR_UNIT, '(a)') "Unknown observation type '" // trim(obstype) // "' in file '" // filename_ // "'."
@@ -92,12 +92,12 @@ subroutine pacs_info_band(filename, nfilenames, channel, transparent_mode, statu
         end select
         
         if (iobs == 1) then
-            channel = channel_
+            band = band_
             cycle
         end if
 
-        if (channel_ /= channel) then
-            write (ERROR_UNIT, '(a)') "Error: Observations are not performed with the same channel."
+        if (band_ /= band) then
+            write (ERROR_UNIT, '(a)') "Error: Observations are not performed with the same band."
             status = 1
             return
         end if
@@ -110,7 +110,7 @@ end subroutine pacs_info_band
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine pacs_info_bad_detector_mask(tamasis_dir, channel, transparent_mode, reject_bad_line, nrows, ncolumns, detector_mask,    &
+subroutine pacs_info_bad_detector_mask(tamasis_dir, band, transparent_mode, reject_bad_line, nrows, ncolumns, detector_mask,    &
                                        status)
 
     use iso_fortran_env,       only : ERROR_UNIT
@@ -120,7 +120,7 @@ subroutine pacs_info_bad_detector_mask(tamasis_dir, channel, transparent_mode, r
 
     !f2py threadsafe
     !f2py intent(in)   tamasis_dir
-    !f2py intent(in)   channel
+    !f2py intent(in)   band
     !f2py intent(in)   transparent_mode
     !f2py intent(in)   reject_bad_line
     !f2py intent(in)   nrows, ncolumns
@@ -128,7 +128,7 @@ subroutine pacs_info_bad_detector_mask(tamasis_dir, channel, transparent_mode, r
     !f2py intent(out)  status
 
     character(len=*), intent(in) :: tamasis_dir
-    character(len=*), intent(in) :: channel
+    character(len=*), intent(in) :: band
     logical, intent(in)          :: transparent_mode
     logical, intent(in)          :: reject_bad_line
     integer, intent(in)          :: nrows, ncolumns
@@ -141,7 +141,7 @@ subroutine pacs_info_bad_detector_mask(tamasis_dir, channel, transparent_mode, r
     call init_tamasis(tamasis_dir)
 
     ! read bad pixel mask
-    call ft_read_image(get_calfile(FILENAME_BPM) // '[' // channel // ']', tmp, status)
+    call ft_read_image(get_calfile(FILENAME_BPM) // '[' // band // ']', tmp, status)
     if (status /= 0) return
 
     if (size(tmp,1) /= size(detector_mask,2) .or. size(tmp,2) /= size(detector_mask,1)) then
@@ -154,7 +154,7 @@ subroutine pacs_info_bad_detector_mask(tamasis_dir, channel, transparent_mode, r
 
     ! mask detectors rejected in transparent mode
     if (transparent_mode) then
-        if (channel /= 'red') then
+        if (band /= 'red') then
             detector_mask(1:16,1:16) = .true.
             detector_mask(1:16,33:)  = .true.
             detector_mask(17:,:)     = .true.
@@ -166,7 +166,7 @@ subroutine pacs_info_bad_detector_mask(tamasis_dir, channel, transparent_mode, r
     end if
     
     ! mask erratic line
-    if (reject_bad_line .and. channel /= 'red') then
+    if (reject_bad_line .and. band /= 'red') then
         detector_mask(12,17:32) = .true.
     end if
 
@@ -248,7 +248,7 @@ subroutine pacs_info(tamasis_dir, filename, nfilenames, transparent_mode, fine_s
     if (status /= 0) return
 
     allocate(pacs)
-    call pacs%init(obs%channel, transparent_mode, fine_sampling_factor, detector_mask, status)
+    call pacs%init(obs%band, transparent_mode, fine_sampling_factor, detector_mask, status)
     if (status /= 0) return
 
     call obs%print()
@@ -268,24 +268,24 @@ end subroutine pacs_info
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine pacs_read_filter_calibration_ncorrelations(tamasis_dir, channel, ncorrelations, status)
+subroutine pacs_read_filter_calibration_ncorrelations(tamasis_dir, band, ncorrelations, status)
 
     use module_pacsinstrument, only : read_filter_calibration_ncorrelations
     use module_tamasis,        only : init_tamasis
     implicit none
 
     !f2py intent(in)   tamasis_dir
-    !f2py intent(in)   channel
+    !f2py intent(in)   band
     !f2py intent(out)  ncorrelations
     !f2py intent(out)  status
     
     character(len=*), intent(in) :: tamasis_dir
-    character(len=*), intent(in) :: channel
+    character(len=*), intent(in) :: band
     integer, intent(out)         :: ncorrelations
     integer, intent(out)         :: status
     
     call init_tamasis(tamasis_dir)
-    ncorrelations = read_filter_calibration_ncorrelations(channel, status)
+    ncorrelations = read_filter_calibration_ncorrelations(band, status)
 
 end subroutine pacs_read_filter_calibration_ncorrelations
 
@@ -293,7 +293,7 @@ end subroutine pacs_read_filter_calibration_ncorrelations
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine pacs_read_filter_calibration(tamasis_dir, channel, ncorrelations, ndetectors, mask, nrows, ncolumns, data, status)
+subroutine pacs_read_filter_calibration(tamasis_dir, band, ncorrelations, ndetectors, mask, nrows, ncolumns, data, status)
 
     use iso_fortran_env,       only : ERROR_UNIT
     use module_filtering,      only : FilterUncorrelated
@@ -303,7 +303,7 @@ subroutine pacs_read_filter_calibration(tamasis_dir, channel, ncorrelations, nde
 
     !f2py threadsafe
     !f2py intent(in)   tamasis_dir
-    !f2py intent(in)   channel
+    !f2py intent(in)   band
     !f2py intent(in)   ncorrelations
     !f2py intent(in)   ndetectors
     !f2py intent(in)   mask
@@ -313,7 +313,7 @@ subroutine pacs_read_filter_calibration(tamasis_dir, channel, ncorrelations, nde
     !f2py intent(out)  status
 
     character(len=*), intent(in) :: tamasis_dir
-    character(len=*), intent(in) :: channel
+    character(len=*), intent(in) :: band
     integer, intent(in)          :: ncorrelations
     integer, intent(in)          :: ndetectors
     logical*1, intent(in)        :: mask(nrows,ncolumns)
@@ -325,7 +325,7 @@ subroutine pacs_read_filter_calibration(tamasis_dir, channel, ncorrelations, nde
     type(FilterUncorrelated)     :: filter
 
     call init_tamasis(tamasis_dir)
-    call read_filter_calibration(channel, mask, filter, status)
+    call read_filter_calibration(band, mask, filter, status)
     if (status /= 0) return
 
     if (filter%ndetectors /= ndetectors) then
@@ -408,7 +408,7 @@ subroutine pacs_map_header(tamasis_dir, filename, nfilenames, oversampling, fine
     if (status /= 0) go to 999
 
     allocate(pacs)
-    call pacs%init(obs%channel, obs%slice(1)%observing_mode == 'Transparent', fine_sampling_factor, detector_mask, status)
+    call pacs%init(obs%band, obs%slice(1)%observing_mode == 'Transparent', fine_sampling_factor, detector_mask, status)
     if (status /= 0) go to 999
     
     call pacs%compute_map_header(obs, oversampling, resolution, header, status)
@@ -488,7 +488,7 @@ subroutine pacs_timeline(tamasis_dir, filename, nfilenames, nsamples, ndetectors
 
     ! initialise pacs instrument
     allocate(pacs)
-    call pacs%init(obs%channel, obs%slice(1)%observing_mode == 'Transparent', 1, detector_mask, status)
+    call pacs%init(obs%band, obs%slice(1)%observing_mode == 'Transparent', 1, detector_mask, status)
     if (status /= 0) go to 999
 
     ! read timeline
@@ -592,7 +592,7 @@ subroutine pacs_pointing_matrix_filename(tamasis_dir, filename, nfilenames, meth
 
     ! initialise pacs instrument
     allocate(pacs)
-    call pacs%init(obs%channel, obs%slice(1)%observing_mode == 'Transparent', fine_sampling_factor, detector_mask, status)
+    call pacs%init(obs%band, obs%slice(1)%observing_mode == 'Transparent', fine_sampling_factor, detector_mask, status)
     if (status /= 0) return
 
     ! check number of detectors

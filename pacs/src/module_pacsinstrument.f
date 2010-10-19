@@ -48,7 +48,7 @@ module module_pacsinstrument
 
     type pacsinstrument
  
-        character              :: channel
+        character              :: band
         integer                :: nrows
         integer                :: ncolumns
         integer                :: ndetectors
@@ -102,19 +102,19 @@ module module_pacsinstrument
 contains
 
 
-    subroutine init(this, channel, transparent_mode, fine_sampling_factor, detector_mask, status)
+    subroutine init(this, band, transparent_mode, fine_sampling_factor, detector_mask, status)
 
         class(pacsinstrument), intent(inout) :: this
-        character, intent(in)                :: channel
+        character, intent(in)                :: band
         logical, intent(in)                  :: transparent_mode
         integer, intent(in)                  :: fine_sampling_factor
         logical*1, intent(in), optional      :: detector_mask(:,:) ! if all bad, use the calibration mask
         integer, intent(out)                 :: status
 
-        ! check channel
-        if (index('rgb', channel) == 0) then
+        ! check band
+        if (index('rgb', band) == 0) then
             status = 1
-            write (ERROR_UNIT,'(a)') "ERROR: Invalid channel '" // channel // "'. Valid values are 'r', 'g' and 'b'."
+            write (ERROR_UNIT,'(a)') "ERROR: Invalid band '" // band // "'. Valid values are 'r', 'g' and 'b'."
             return
         end if
 
@@ -126,11 +126,11 @@ contains
             return
         end if
 
-        this%channel              = channel
+        this%band                 = band
         this%fine_sampling_factor = fine_sampling_factor
         this%transparent_mode     = transparent_mode
 
-        if (channel /= 'r') then
+        if (band /= 'r') then
             this%nrows = shape_blue(1)
             this%ncolumns = shape_blue(2)
         else
@@ -166,29 +166,29 @@ contains
         integer, parameter     :: hdu_blue(4) = [8, 12, 16, 20]
         integer, parameter     :: hdu_red (4) = [6, 10, 14, 18]
 
-        character(len=5)       :: channel_name
+        character(len=5)       :: band_name
         integer                :: ivertex, unit
         logical*1, allocatable :: tmplogical(:,:)
         real(p), allocatable   :: tmp2(:,:)
         real(p), allocatable   :: tmp3(:,:,:)
 
         allocate (this%flatfield_total(this%nrows,this%ncolumns))
-        select case (this%channel)
+        select case (this%band)
 
             case ('b')
-                channel_name = 'blue'
+                band_name = 'blue'
                 call ft_read_image(get_calfile(filename_ff) // '+12',  tmp2, status)
                 if (status /= 0) return
                 this%flatfield_total = transpose(tmp2)
 
             case ('g')
-                channel_name = 'green'
+                band_name = 'green'
                 call ft_read_image(get_calfile(filename_ff) // '+7',  tmp2, status)
                 if (status /= 0) return
                 this%flatfield_total = transpose(tmp2)
 
             case ('r')
-                channel_name = 'red'
+                band_name = 'red'
                 call ft_read_image(get_calfile(filename_ff) // '+2',  tmp2, status)
                 if (status /= 0) return
                 this%flatfield_total = transpose(tmp2)
@@ -197,7 +197,7 @@ contains
 
         allocate (this%centers_uv_all(ndims,this%nrows,this%ncolumns))
         allocate (this%corners_uv_all(ndims,nvertices,this%nrows,this%ncolumns))
-        if (this%channel /= 'r') then
+        if (this%band /= 'r') then
 
             ! UV centers
             call ft_read_image(get_calfile(filename_saa) // '[ublue]', tmp2, status)
@@ -257,13 +257,13 @@ contains
 
         ! Bad pixel mask
         allocate (this%mask(this%nrows,this%ncolumns))
-        call ft_read_image(get_calfile(filename_bpm) // '[' // trim(channel_name) // ']', tmplogical, status)
+        call ft_read_image(get_calfile(filename_bpm) // '[' // trim(band_name) // ']', tmplogical, status)
         if (status /= 0) return
         this%mask = transpose(tmplogical)
 
         ! mask detectors rejected in transparent mode
         if (this%transparent_mode) then
-            if (this%channel /= 'r') then
+            if (this%band /= 'r') then
                 this%mask(1:16,1:16) = .true.
                 this%mask(1:16,33:)  = .true.
                 this%mask(17:,:)     = .true.
@@ -275,7 +275,7 @@ contains
         end if
 
         ! Responsivity
-        call ft_open(get_calfile(filename_res) // '[' // trim(channel_name) // ']', unit, status)
+        call ft_open(get_calfile(filename_res) // '[' // trim(band_name) // ']', unit, status)
         if (status /= 0) return
         call ft_read_keyword_hcss(unit, 'Responsivity', this%responsivity, status=status)
         if (status /= 0) return
@@ -975,16 +975,16 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    function read_filter_calibration_ncorrelations(channel, status) result (ncorrelations)
+    function read_filter_calibration_ncorrelations(band, status) result (ncorrelations)
 
-        character(len=*), intent(in) :: channel
+        character(len=*), intent(in) :: band
         integer, intent(out)         :: status
         integer                      :: ncorrelations
 
         integer           :: unit
         character(len=70) :: comment
 
-        select case (channel)
+        select case (band)
             case ('blue')
                 call ft_open(get_calfile(filename_ib), unit, status)
             case ('green')
@@ -993,7 +993,7 @@ contains
                 call ft_open(get_calfile(filename_ir), unit, status)
             case default
                 status = 1
-                write (ERROR_UNIT,'(a)') "READ_FILTER_CALIBRATION_NCORRELATIONS: invalid channel: '" // channel // "'."
+                write (ERROR_UNIT,'(a)') "READ_FILTER_CALIBRATION_NCORRELATIONS: invalid band: '" // band // "'."
         end select
         if (status /= 0) return
 
@@ -1010,14 +1010,14 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine read_filter_calibration(channel, mask, filter, status)
+    subroutine read_filter_calibration(band, mask, filter, status)
 
-        character(len=*), intent(in)          :: channel
+        character(len=*), intent(in)          :: band
         logical*1, intent(in)                 :: mask(:,:)
         type(FilterUncorrelated), intent(out) :: filter
         integer, intent(out)                  :: status
 
-        select case (channel)
+        select case (band)
             case ('blue')
                 call read_filter_filename(get_calfile(filename_ib), mask, filter, status)
             case ('green')
@@ -1026,7 +1026,7 @@ contains
                 call read_filter_filename(get_calfile(filename_ir), mask, filter, status)
             case default
                 status = 1
-                write (ERROR_UNIT,'(a)') "READ_FILTER_CALIBRATION: invalid channel: '" // channel // "'."
+                write (ERROR_UNIT,'(a)') "READ_FILTER_CALIBRATION: invalid band: '" // band // "'."
         end select
 
     end subroutine read_filter_calibration

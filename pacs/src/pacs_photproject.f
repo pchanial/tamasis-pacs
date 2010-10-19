@@ -99,7 +99,7 @@ program pacs_photproject
 
     ! get npixels_per_sample
     if (parser%get_option('npixels-per-sample') == '') then
-        if (obs%channel == 'r') then
+        if (obs%band == 'r') then
             npixels_per_sample = 11
         else
             npixels_per_sample = 5
@@ -110,7 +110,7 @@ program pacs_photproject
 
     ! initialise pacs instrument
     allocate(pacs)
-    call pacs%init(obs%channel, obs%observing_mode == 'Transparent', 1, status=status)
+    call pacs%init(obs%band, obs%observing_mode == 'Transparent', 1, status=status)
     if (status /= 0) go to 999
 
     ! get FITS header

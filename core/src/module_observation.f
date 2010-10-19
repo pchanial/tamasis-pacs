@@ -51,7 +51,7 @@ public :: PacsObservation
 !!$    type observationslice
 !!$        integer            :: first, last, nsamples
 !!$        character(len=256) :: filename
-!!$        character          :: channel
+!!$        character          :: band
 !!$        character(len=80)  :: observing_mode
 !!$        integer            :: compression_factor
 !!$        real(dp)           :: sampling_interval
@@ -64,7 +64,7 @@ public :: PacsObservation
 
         integer            :: first, last, nsamples, nvalids
         character(len=256) :: filename
-        character          :: channel
+        character          :: band
         character(len=70)  :: observing_mode
         character(len=70)  :: unit
         integer            :: compression_factor
@@ -73,7 +73,7 @@ public :: PacsObservation
 
     contains
         
-        procedure :: set_channel
+        procedure :: set_band
         procedure :: set_compression_mode
         procedure :: set_filename
         procedure :: set_policy
@@ -90,7 +90,7 @@ public :: PacsObservation
         integer           :: nslices
         integer           :: nsamples  ! number of pointings
         integer           :: nvalids   ! number of non-removed pointings, to be included in tod & pmatrix
-        character         :: channel
+        character         :: band
         character(len=70) :: observing_mode
         character(len=70) :: unit
         type(MaskPolicy)  :: policy
@@ -426,31 +426,31 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    ! sets 'b', 'g' or 'r' for a blue, green or red channel observation
-    subroutine set_channel(this, status)
+    ! sets 'b', 'g' or 'r' for a blue, green or red band observation
+    subroutine set_band(this, status)
 
         class(PacsObservationSlice), intent(inout) :: this
         integer, intent(out)                       :: status
 
         integer                       :: isample, length, nbs, nbl, nr, nu, nmax, nsamples, unit
-        character(len=5), allocatable :: channels(:)
-        character(len=5)              :: channel
+        character(len=5), allocatable :: bands(:)
+        character(len=5)              :: band
 
-        this%channel = ' '
+        this%band = ' '
 
         ! old style file format
         length = len_trim(this%filename)
         if (this%filename(length-4:length) /= '.fits') then
             status = 0
             if (strlowcase(this%filename(length-3:length)) == 'blue') then
-               this%channel = 'b'
+               this%band = 'b'
             else if (strlowcase(this%filename(length-4:length)) == 'green') then
-               this%channel = 'g'
+               this%band = 'g'
             else if (strlowcase(this%filename(length-2:length)) == 'red') then
-               this%channel = 'r'
+               this%band = 'r'
             else
                status = 1
-               write (ERROR_UNIT,'(a)') 'File name does not contain the array channel identifier (blue, green, red).'
+               write (ERROR_UNIT,'(a)') 'File name does not contain the array band identifier (blue, green, red).'
             end if
             return
         endif
@@ -458,8 +458,8 @@ contains
         call ft_open_bintable(trim(this%filename) // '[Status]', unit, nsamples, status)
         if (status /= 0) return
 
-        allocate(channels(nsamples))
-        call ft_read_column(unit, 'BAND', 1, nsamples, channels, status)
+        allocate(bands(nsamples))
+        call ft_read_column(unit, 'BAND', 1, nsamples, bands, status)
         if (status /= 0) return
 
         call ft_close(unit, status)
@@ -467,7 +467,7 @@ contains
 
         ! get first defined BAND
         do isample=1, nsamples
-            if (channels(isample) /= 'UNDEF') exit
+            if (bands(isample) /= 'UNDEF') exit
         end do
 
         nbs = 0
@@ -475,7 +475,7 @@ contains
         nr  = 0
         nu  = 0
         do isample=1, nsamples
-            select case (channels(isample))
+            select case (bands(isample))
                 case ('BS')
                     nbs = nbs + 1
                 case ('BL')
@@ -486,7 +486,7 @@ contains
                     nu = nu + 1
                 case default
                     status = 1
-                    write (ERROR_UNIT, '(a)') "Invalid channel '" // channels(isample) // "'."
+                    write (ERROR_UNIT, '(a)') "Invalid band '" // bands(isample) // "'."
                     return
             end select
         end do
@@ -509,31 +509,31 @@ contains
 
         ! mark other BAND as invalid
         if (nmax == nbs) then
-            channel = 'BS'
+            band = 'BS'
         else if (nmax == nbl) then
-            channel = 'BL'
+            band = 'BL'
         else
-            channel = 'R'
+            band = 'R'
         end if
-        this%p%invalid = this%p%invalid .or. channels /= channel
+        this%p%invalid = this%p%invalid .or. bands /= band
 
-        ! get channel
+        ! get band
         if (nmax == nbs) then
-            channel = 'blue'
+            band = 'blue'
         else if (nmax == nbl) then
-            channel = 'green'
+            band = 'green'
         else
-            channel = 'red'
+            band = 'red'
         end if
-        this%channel = channel(1:1)
+        this%band = band(1:1)
 
         ! check observation only has one band
         if (nsamples /= nmax + nu) then
-            write (OUTPUT_UNIT, '(a)') "Warning: some samples do not come from the '" // trim(channel) //                          &
-                  "' channel. They have been marked as invalid."
+            write (OUTPUT_UNIT, '(a)') "Warning: some samples do not come from the '" // trim(band) //                             &
+                  "' band. They have been marked as invalid."
         end if
 
-    end subroutine set_channel
+    end subroutine set_band
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
@@ -826,8 +826,6 @@ contains
 
         call ft_read_keyword(unit, 'QTTY____', this%unit, found, status)
         if (status /= 0) return
-        print *, 'module_observation::set_unit: check me'
-!!$        this%unit = trim(this%unit)
 
         call ft_close(unit, status)
 
@@ -959,7 +957,7 @@ contains
             call this%slice(islice)%set_flags(status)
             if (status /= 0) return
 
-            call this%slice(islice)%set_channel(status)
+            call this%slice(islice)%set_band(status)
             if (status /= 0) return
                 
             call this%slice(islice)%set_compression_mode(status)
@@ -982,11 +980,11 @@ contains
 
         end do
 
-        ! make sure the channel is the same for all observations
-        this%channel = this%slice(1)%channel
-        if (any(this%slice%channel /= this%channel)) then
+        ! make sure the band is the same for all observations
+        this%band = this%slice(1)%band
+        if (any(this%slice%band /= this%band)) then
             status = 1
-            write (ERROR_UNIT,'(a)') 'ERROR: Observations do not have the same channel: ', this%slice%channel, '.'
+            write (ERROR_UNIT,'(a)') 'ERROR: Observations do not have the same band: ', this%slice%band, '.'
             return
         end if
 
@@ -1078,7 +1076,7 @@ contains
 
         this%nslices      = 1
         this%nsamples = nsamples
-        this%channel      = ' '
+        this%band      = ' '
         this%observing_mode = 'Unknown'
         this%policy = MaskPolicy()
 
@@ -1087,7 +1085,7 @@ contains
         this%slice(1)%last     = nsamples
         this%slice(1)%nsamples = nsamples
         this%slice(1)%filename = 'simulation'
-        this%slice(1)%channel  = ' '
+        this%slice(1)%band  = ' '
         this%slice(1)%observing_mode = 'Unknown'
         this%slice(1)%compression_factor = nint((time(2)-time(1)) / 0.024996_p)
         this%slice(1)%sampling_interval = time(2)-time(1)
@@ -1170,9 +1168,9 @@ contains
                   trim(this%slice(islice)%filename)
             write (OUTPUT_UNIT,'(6x,a)') 'Section: [' // strsection(this%slice(islice)%first,this%slice(islice)%last) // ']'
             
-            ! channel
-            write (OUTPUT_UNIT,'(a,$)') "      Channel: "
-            select case (this%slice(islice)%channel)
+            ! band
+            write (OUTPUT_UNIT,'(a,$)') "      Band: "
+            select case (this%slice(islice)%band)
                 case ('b')
                     write (OUTPUT_UNIT,'(a)') 'Blue'
                 case ('g')

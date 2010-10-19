@@ -28,7 +28,7 @@ $(SDIR)/module_tamasis := $(SDIR)/module_precision
 $(SDIR)/module_wcs := $(SDIR)/module_fitstools $(SDIR)/module_math $(SDIR)/module_string $(SDIR)/module_tamasis $(SDIR)/module_wcslib
 
 .PHONY: core test-core clean-core distclean-core
-core: ranlib lib/libtamasiscore.so
+core: lib/libtamasiscore.so
 
 lib/libtamasiscore.so: $(MODULESOURCES:.f=.o)
 	@if ! test -e lib; then mkdir lib; fi

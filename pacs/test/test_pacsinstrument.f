@@ -34,7 +34,7 @@ program test_pacsinstrument
 
     ! initialise pacs instrument
     allocate(pacs)
-    call pacs%init(obs%channel, obs%observing_mode == 'Transparent', 1, status=status)
+    call pacs%init(obs%band, obs%observing_mode == 'Transparent', 1, status=status)
     if (status /= 0) stop 'FAILED: pacsinstrument%init'
 
     allocate(time(obs%nsamples))
@@ -190,7 +190,7 @@ end program test_pacsinstrument
 !!$ Dec :    61.500650548286465      ...   61.529470882067791     
 !!$ PA  :    219.88090872523742      ...   219.92216426552577     
 !!$ Chop:  -6.50595714733942510E-004 ...  6.50599516571009895E-004
-!!$Info: Channel: 'Blue'
+!!$Info: Band: 'Blue'
 !!$Info: Compression mode: 'Photometry Default Mode'
 !!$ Number of valid detectors:        1998
 !!$ Number of samples:         360
