@@ -39,12 +39,12 @@ def minmax_degrees(array):
 
 class FlatField(object):
     def __init__(self, optical, detector):
-        self.optical = Map(optical)
-        self.detector = Map(detector)
+        self.optical = Map(optical, origin='upper')
+        self.detector = Map(detector, origin='upper')
 
     @property
     def total(self):
-        return Map(self.optical * self.detector)
+        return Map(self.optical * self.detector, origin='upper')
 
 
 #-------------------------------------------------------------------------------

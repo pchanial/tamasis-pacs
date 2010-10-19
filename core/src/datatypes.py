@@ -53,7 +53,7 @@ class FitsArray(Quantity):
                 result._header = data._header.copy()
             else:
                 result._header = data._header
-        elif str(result.dtype) not in ('complex64', 'complex128', 'complex256'):
+        elif not numpy.iscomplexobj(result):
             result._header = create_fitsheader(result)
         else:
             result._header = None
@@ -131,7 +131,7 @@ class FitsArray(Quantity):
         fig.savefig(filename)
         matplotlib.interactive(is_interactive)
 
-    def imshow(self, mask=None, title=None, colorbar=True, aspect=None, interpolation='nearest', origin='lower', xlabel='', ylabel='', new_figure=True, **kw):
+    def imshow(self, mask=None, title=None, colorbar=True, aspect=None, interpolation='nearest', origin=None, xlabel='', ylabel='', new_figure=True, **kw):
         """
         A simple graphical display function for the Tod class
 
@@ -145,7 +145,7 @@ class FitsArray(Quantity):
             mask = numpy.logical_or(mask, ~numpy.isfinite(self))
 
         data = numpy.ma.MaskedArray(self, mask=mask, copy=False)
-        if str(data.dtype) in ('complex64', 'complex128', 'complex256'):
+        if numpy.iscomplexobj(data):
             data = abs(data)
         mean   = numpy.mean(data)
         stddev = numpy.std(data)
@@ -243,12 +243,12 @@ class FitsArray(Quantity):
 
 class Map(FitsArray):
 
-    __slots__ = ['coverage', 'error']
+    __slots__ = ['coverage', 'error', 'origin']
 
     """
     Represent a map, complemented with unit and FITS header.
     """
-    def __new__(cls, data, coverage=None, error=None, header=None, unit=None, dtype=None, copy=True, order='C', subok=False, ndmin=0):
+    def __new__(cls, data, coverage=None, error=None, origin='lower', header=None, unit=None, dtype=None, copy=True, order='C', subok=False, ndmin=0):
 
         # get a new Map instance (or a subclass if subok is True)
         result = FitsArray(data, header, unit, dtype, copy, order, True, ndmin)
@@ -265,9 +265,15 @@ class Map(FitsArray):
 
         if not subok and result.__class__ is not cls or not issubclass(result.__class__, cls):
             result = result.view(cls)
+
+        if origin is not None:
+            origin = origin.strip().lower()
+            if origin not in ('upper', 'lower'):
+                raise ValueError("Invalid origin '"+origin+"'. Valid values are None, 'upper' or 'lower'.")
         
         result.coverage = coverage
         result.error = error
+        result.origin = origin
 
         return result
 
@@ -276,6 +282,7 @@ class Map(FitsArray):
         if obj is None:
             self.coverage = None
             self.error = None
+            self.origin = 'lower'
             return
 
         # coverage
@@ -290,16 +297,22 @@ class Map(FitsArray):
         else:
             self.error = None
 
+        # origin
+        if hasattr(obj, 'origin'):
+            self.origin = obj.origin
+        else:
+            self.origin = 'lower'
+
     @staticmethod
-    def empty(shape, coverage=None, error=None, header=None, unit=None, dtype=None, order=None):
+    def empty(shape, coverage=None, error=None, origin='lower', header=None, unit=None, dtype=None, order=None):
         return Map(numpy.empty(shape, dtype, order), coverage, error, header, unit, copy=False)
 
     @staticmethod
-    def ones(shape, coverage=None, error=None, header=None, unit=None, dtype=None, order=None):
+    def ones(shape, coverage=None, error=None, origin='lower', header=None, unit=None, dtype=None, order=None):
         return Map(numpy.ones(shape, dtype, order), coverage, error, header, unit, copy=False)
 
     @staticmethod
-    def zeros(shape, coverage=None, error=None, header=None, unit=None, dtype=None, order=None):
+    def zeros(shape, coverage=None, error=None, origin='lower', header=None, unit=None, dtype=None, order=None):
         return Map(numpy.zeros(shape, dtype, order), coverage, error, header, unit, copy=False)
 
     def copy(self, order='C'):
@@ -322,7 +335,7 @@ class Map(FitsArray):
                 kw['xlabel'] = 'X'
             if 'ylabel' not in kw:
                 kw['ylabel'] = 'Y'
-            image = super(Map, self).imshow(title=title, new_figure=new_figure, **kw)
+            image = super(Map, self).imshow(title=title, new_figure=new_figure, origin=self.origin, **kw)
             return image
 
         fitsobj = kapteyn.maputils.FITSimage(externaldata=data, externalheader=self.header)
@@ -486,7 +499,7 @@ class Tod(FitsArray):
 
     def __str__(self):
         if numpy.rank(self) == 0:
-            if self.dtype.type in (numpy.complex64, numpy.complex128, numpy.complex256):
+            if numpy.iscomplexobj(self):
                 return 'Tod ' + str(complex(self))
             else:
                 return 'Tod ' + str(float(self))

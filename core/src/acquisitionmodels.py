@@ -897,7 +897,7 @@ class Masking(Symmetric):
 
     @property
     def dtype(self):
-        if self.mask is not None and self.mask.dtype.type in (numpy.complex64, numpy.complex128, numpy.complex256):
+        if self.mask is not None and numpy.iscomplexobj(self.mask):
             return self.mask.dtype.type
         return get_default_dtype_float()
 

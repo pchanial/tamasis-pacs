@@ -11,9 +11,7 @@ __all__ = [ 'get_default_dtype', 'get_default_dtype_complex', 'get_default_dtype
 
 def get_default_dtype(data):
     import numpy
-    iscomplex = isinstance(data, numpy.ndarray) and data.dtype.type in (numpy.complex64, numpy.complex128, numpy.complex256) or \
-        type(data) is complex
-    if iscomplex:
+    if numpy.iscomplexobj(data):
         return get_default_dtype_complex()
     else:
         return get_default_dtype_float()
