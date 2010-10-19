@@ -66,7 +66,7 @@ class _Pacs(object):
             npixels_per_sample = self.default_npixels_per_sample if method != 'nearest neighbour' else 1
         if header is None:
             if MPI.COMM_WORLD.Get_size() > 1:
-                raise ValueError('In parallel mode, the map header must be speficied.')
+                raise ValueError('With MPI, the map header must be specified.')
             header = self.get_map_header(resolution, oversampling)
         elif isinstance(header, str):
             header = _str2fitsheader(header)
