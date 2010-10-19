@@ -30,7 +30,7 @@ def hs(array):
         return
     length = numpy.max(map(len, names))
     lnames = numpy.array([names[i].ljust(length)+': ' for i in range(len(names))])
-    print str(array.size) + ' elements'
+    print str(array.size) + ' element' + ('s' if array.size > 1 else '')
 
     for name, lname in zip(names, lnames):
         value = str(array[name])[0:72-length-2]
