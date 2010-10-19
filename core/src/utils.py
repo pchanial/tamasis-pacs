@@ -11,8 +11,32 @@ from matplotlib import pyplot
 from numpyutils import _my_isscalar
 from unit import Quantity
 
-__all__ = [ 'FlatField', 'MaskPolicy', 'Pointing', 'mean_degrees', 'minmax_degrees', 'plot_scan', 'airy_disk', 'aperture_circular', 'distance', 'gaussian', 'phasemask_fourquadrant' ]
+__all__ = [ 'FlatField', 'MaskPolicy', 'Pointing', 'hs', 'mean_degrees', 'minmax_degrees', 'plot_scan', 'airy_disk', 'aperture_circular', 'distance', 'gaussian', 'phasemask_fourquadrant' ]
 
+
+#-------------------------------------------------------------------------------
+
+
+def hs(array):
+    """
+    Display the content of an ndarray with composite dtype alongside the
+    names of the records. The display is truncated so that each name fits
+    in one line.
+    """
+    array = numpy.asarray(array)
+    names = array.dtype.names
+    if names is None:
+        print array
+        return
+    length = numpy.max(map(len, names))
+    lnames = numpy.array([names[i].ljust(length)+': ' for i in range(len(names))])
+    print str(array.size) + ' elements'
+
+    for name, lname in zip(names, lnames):
+        value = str(array[name])[0:72-length-2]
+        if len(value) == 72-length-2:
+            value = value[0:-3] + '...'
+        print lname+value
 
 def mean_degrees(array):
     """
