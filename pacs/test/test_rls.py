@@ -4,16 +4,16 @@ import scipy
 from scipy.sparse import dia_matrix
 from scipy.sparse.linalg import LinearOperator, cgs
 
-pacs = PacsObservation(filename=tamasis_dir+'pacs/test/data/frames_blue.fits',
+obs = PacsObservation(filename=tamasis_dir+'pacs/test/data/frames_blue.fits',
                        fine_sampling_factor=1)
 
-tod = pacs.get_tod()
+tod = obs.get_tod()
 
 telescope    = Identity('Telescope PSF')
-projection   = Projection(pacs, resolution=3.2, oversampling=False, npixels_per_sample=6)
-multiplexing = CompressionAverage(pacs.fine_sampling_factor, 'Multiplexing')
+projection   = Projection(obs, resolution=3.2, oversampling=False, npixels_per_sample=6)
+multiplexing = CompressionAverage(obs.fine_sampling_factor, 'Multiplexing')
 crosstalk    = Identity('Crosstalk')
-compression  = CompressionAverage(pacs.compression_factor)
+compression  = CompressionAverage(obs)
 masking_tod  = Masking(tod.mask)
 
 model = masking_tod * crosstalk * multiplexing * projection * telescope

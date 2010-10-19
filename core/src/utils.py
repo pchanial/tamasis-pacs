@@ -9,10 +9,9 @@ import time
 from datatypes import Map, create_fitsheader
 from matplotlib import pyplot
 from numpyutils import _my_isscalar
+from unit import Quantity
 
-__all__ = [ 'FlatField', 'MaskPolicy', 'mean_degrees', 'minmax_degrees', 'pointing', 'plot_scan', 'airy_disk', 'aperture_circular', 'distance', 'gaussian', 'phasemask_fourquadrant' ]
-
-pointing = numpy.dtype([('time', numpy.float64), ('ra', numpy.float64), ('dec', numpy.float64), ('pa', numpy.float64), ('flag', numpy.int64)])
+__all__ = [ 'FlatField', 'MaskPolicy', 'Pointing', 'mean_degrees', 'minmax_degrees', 'plot_scan', 'airy_disk', 'aperture_circular', 'distance', 'gaussian', 'phasemask_fourquadrant' ]
 
 
 def mean_degrees(array):
@@ -51,6 +50,9 @@ class FlatField(object):
 
 
 class MaskPolicy(object):
+    KEEP   = 0
+    MASK   = 1
+    REMOVE = 2
     def __init__(self, flags, values, description=None):
         self._description = description
         if _my_isscalar(flags):
@@ -78,7 +80,7 @@ class MaskPolicy(object):
         self._policy = tuple(self._policy)
 
     def __array__(self, dtype=int):
-        conversion = { 'keep':0, 'mask':1, 'remove':2 }
+        conversion = { 'keep':self.KEEP, 'mask':self.MASK, 'remove':self.REMOVE }
         return numpy.array([conversion[policy.values()[0]] for policy in self._policy], dtype=dtype)
 
     def __str__(self):
@@ -91,9 +93,56 @@ class MaskPolicy(object):
 
 
 #-------------------------------------------------------------------------------
-        
 
-def plot_scan(ra, dec, title=None, new_figure=True):
+
+class Pointing(numpy.ndarray):
+    def __new__(cls, time, ra, dec, pa, flag, nsamples=None):
+        if nsamples is None:
+            nsamples = (time.size,)
+        else:
+            if _my_isscalar(nsamples):
+                nsamples = (nsamples,)
+            else:
+                nsamples = tuple(nsamples)
+        nsamples_tot = numpy.sum(nsamples)
+        if numpy.any(numpy.array([ra.size,dec.size,pa.size,flag.size]) != nsamples_tot):
+            raise ValueError('The pointing inputs do not have the same size.')
+
+        ftype = config.get_default_dtype_float()
+        dtype = numpy.dtype([('time', ftype), ('ra', ftype), ('dec', ftype), ('pa', ftype), ('flag', numpy.int64)])
+        result = numpy.recarray(nsamples_tot, dtype=dtype)
+        result.time = time
+        result.ra   = ra
+        result.dec  = dec
+        result.pa   = pa
+        result.flag = flag
+        result.nsamples = nsamples
+        return result
+
+    @property
+    def velocity(self):
+        dra  = numpy.diff(self.ra)
+        ddec = numpy.diff(self.dec)
+        dtime = numpy.diff(self.time)
+        vel = numpy.sqrt((dra*numpy.cos(self.dec[0:-1].inunit('rad')))**2 + ddec**2) / dtime
+        vel.unit = 'arcsec/s'
+        u = vel._unit
+        vel = numpy.append(vel, vel[-1])
+        # BUG: append eats the unit...
+        vel._unit = u
+        return vel
+
+
+#-------------------------------------------------------------------------------
+
+
+def plot_scan(ra, dec=None, title=None, new_figure=True):
+    if hasattr(ra, 'pointing'):
+        ra = ra.pointing
+    if hasattr(ra, 'ra') and hasattr(ra, 'dec'):
+        dec = ra.dec
+        ra = ra.ra
+
     crval = [mean_degrees(ra), numpy.mean(dec)]
     ra_min,  ra_max  = minmax_degrees(ra)
     dec_min, dec_max = numpy.min(dec), numpy.max(dec)

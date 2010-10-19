@@ -733,6 +733,10 @@ class Compression(AcquisitionModel):
     """
     def __init__(self, compression_factor, description):
         AcquisitionModel.__init__(self, description)
+        if hasattr(compression_factor, 'compression_factor'):
+            compression_factor = compression_factor.compression_factor
+        elif hasattr(compression_factor, 'slice'):
+            compression_factor = compression_factor.slice.compression_factor
         if _my_isscalar(compression_factor):
             self.factor = int(compression_factor)
         else:

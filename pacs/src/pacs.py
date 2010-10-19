@@ -1,23 +1,24 @@
 import glob
 import kapteyn
 import numpy
+import numpyutils
 import os
 import pyfits
 import re
 import tamasisfortran as tmf
 import tempfile
-import utils
 
 from acquisitionmodels import AcquisitionModel, CompressionAverage, Masking, Projection, ValidationError
-from config import __version__, tamasis_dir
+from config import __version__, tamasis_dir, get_default_dtype_float
 from datatypes import Map, Tod, create_fitsheader
 from mappers import mapper_naive
 from matplotlib import pyplot
 from mpi4py import MPI
 from processing import deglitch_l2mad, filter_median
 from unit import Quantity
+from utils import FlatField, MaskPolicy, Pointing, plot_scan
 
-__all__ = [ 'PacsObservation', 'PacsSimulation', 'pacs_plot_scan', 'pacs_preprocess', 'pacs_status' ]
+__all__ = [ 'PacsObservation', 'PacsPointing', 'PacsSimulation', 'pacs_plot_scan', 'pacs_preprocess' ]
 
 
 class _Pacs(object):
@@ -26,10 +27,10 @@ class _Pacs(object):
         Returns the signal and mask timelines.
         """
         filename_, nfilenames = _files2tmf(self.filename)
-        signal, mask, status = tmf.pacs_timeline(tamasis_dir, filename_, self.nobservations, numpy.sum(self.nsamples), self.ndetectors, numpy.array(self.frame_policy), numpy.asfortranarray(self.detector_mask), flatfielding, subtraction_mean)
+        signal, mask, status = tmf.pacs_timeline(tamasis_dir, filename_, self.slice.size, numpy.sum(self.slice.nsamples), self.ndetectors, numpy.array(self.frame_policy), numpy.asfortranarray(self.detector_mask), flatfielding, subtraction_mean)
         if status != 0: raise RuntimeError()
        
-        tod = Tod(signal.T, mask.T, nsamples=self.nsamples, unit=self.unit)
+        tod = Tod(signal.T, mask.T, nsamples=self.slice.nsamples, unit=self.unit)
 
         # the flux calibration has been done by using HCSS photproject and assuming that the central detectors had a size of 3.2x3.2
         # squared arcseconds. To be consistent with detector sharp edge model, we need to adjust the Tod.
@@ -60,7 +61,7 @@ class _Pacs(object):
         if method not in ('nearest neighbour', 'sharp edges'):
             raise ValueError("Invalid method '" + method + "'. Valids methods are 'nearest neighbour' or 'sharp edges'")
 
-        nsamples = self.nfinesamples if oversampling else self.nsamples
+        nsamples = self.slice.nfinesamples if oversampling else self.slice.nsamples
         if npixels_per_sample is None:
             npixels_per_sample = self.default_npixels_per_sample if method != 'nearest neighbour' else 1
         if header is None:
@@ -75,7 +76,7 @@ class _Pacs(object):
         print 'Info: Allocating '+str(sizeofpmatrix/2.**17)+' MiB for the pointing matrix.'
         pmatrix = numpy.zeros(sizeofpmatrix, dtype=numpy.int64)
         
-        status = tmf.pacs_pointing_matrix_filename(tamasis_dir, filename_, self.nobservations, method, oversampling, self.fine_sampling_factor, npixels_per_sample, numpy.sum(nsamples), self.ndetectors, numpy.array(self.frame_policy), numpy.asfortranarray(self.detector_mask), str(header).replace('\n', ''), pmatrix)
+        status = tmf.pacs_pointing_matrix_filename(tamasis_dir, filename_, self.slice.size, method, oversampling, self.fine_sampling_factor, npixels_per_sample, numpy.sum(nsamples), self.ndetectors, numpy.array(self.frame_policy), numpy.asfortranarray(self.detector_mask), str(header).replace('\n', ''), pmatrix)
         if status != 0: raise RuntimeError()
 
         return pmatrix, header, self.ndetectors, nsamples, npixels_per_sample
@@ -91,6 +92,29 @@ class _Pacs(object):
         if status != 0: raise RuntimeError()
 
         return data.T
+
+    @property
+    def status(self):
+        if self._status is not None:
+            return self._status
+        
+        status = []
+        dest = 0
+        for filename, nsamples in zip(self.filename, self.slice.nsamples):
+            hdu = pyfits.open(filename)['STATUS']
+            while True:
+                try:
+                    s = hdu.data
+                    break
+                except IndexError, errmsg:
+                    pass
+            
+            s = s.base
+            w = numpy.where(self.pointing.flag[dest:dest+nsamples] != MaskPolicy.REMOVE)
+            status.append(s[w])
+            dest = dest + nsamples
+        self._status = numpy.concatenate(status).view(numpy.recarray)
+        return self._status
 
    
 #-------------------------------------------------------------------------------
@@ -117,7 +141,7 @@ class PacsObservation(_Pacs):
             filename = (filename,)
         filename_, nfilenames = _files2tmf(filename)
 
-        band, transparent_mode, status = tmf.pacs_info_band(filename_, nfilenames)
+        band, transparent_mode, nsamples_tot_max, status = tmf.pacs_info_init(filename_, nfilenames)
         if status != 0: raise RuntimeError()
         band = band.strip()
 
@@ -144,12 +168,12 @@ class PacsObservation(_Pacs):
         ndetectors = int(numpy.sum(detector_mask == 0))
 
         # frame policy
-        frame_policy = utils.MaskPolicy('inscan,turnaround,other,invalid', (frame_policy_inscan, frame_policy_turnaround, frame_policy_other, frame_policy_invalid), 'Frame Policy')
+        frame_policy = MaskPolicy('inscan,turnaround,other,invalid', (frame_policy_inscan, frame_policy_turnaround, frame_policy_other, frame_policy_invalid), 'Frame Policy')
 
         # retrieve information from the observations
         nthreads = tmf.info_nthreads()
         print 'Info: ' + MPI.Get_processor_name() + ' (' + str(nthreads) + ' core' + ('s' if nthreads > 1 else '') + ' handling ' + str(ndetectors) + ' detector' + ('s' if ndetectors > 1 else '') + ')'
-        compression_factor, nsamples, unit, responsivity, detector_area, dflat, oflat, status = tmf.pacs_info(tamasis_dir, filename_, nfilenames, transparent_mode, fine_sampling_factor, numpy.array(frame_policy, dtype='int32'), numpy.asfortranarray(detector_mask))
+        compression_factor, nsamples, unit, responsivity, detector_area, dflat, oflat, frame_time, frame_ra, frame_dec, frame_pa, frame_chop, frame_flag, status = tmf.pacs_info(tamasis_dir, filename_, nfilenames, transparent_mode, fine_sampling_factor, numpy.array(frame_policy, dtype='int32'), numpy.asfortranarray(detector_mask), nsamples_tot_max)
         if status != 0: raise RuntimeError()
 
         self.filename = filename
@@ -158,9 +182,6 @@ class PacsObservation(_Pacs):
         self.ncolumns = ncolumns
         self.default_npixels_per_sample = 11 if band == 'red' else 6
         self.default_resolution = 6.4 if band == 'red' else 3.2
-        self.nobservations = nfilenames
-        self.nsamples = tuple(nsamples)
-        self.nfinesamples = tuple(nsamples * compression_factor * fine_sampling_factor)
         self.ndetectors = ndetectors
         self.detector_mask = Map(detector_mask, origin='upper')
         self.reject_bad_line = reject_bad_line
@@ -168,13 +189,21 @@ class PacsObservation(_Pacs):
         self.fine_sampling_factor = fine_sampling_factor
         self.mode = '' #XXX FIX ME!
         self.transparent_mode = False if transparent_mode == 0 else True
-        self.compression_factor = compression_factor
         self.unit = unit.strip()
         if self.unit.find('/') == -1:
             self.unit += ' / detector'
         self.responsivity = Quantity(responsivity, 'V/Jy')
         self.detector_area = Map(detector_area, unit='arcsec^2/detector', origin='upper')
-        self.flatfield = utils.FlatField(oflat, dflat)
+        self.flatfield = FlatField(oflat, dflat)
+
+        self.slice = numpy.recarray(nfilenames, dtype=numpy.dtype([('filename', 'S256'), ('nsamples', int), ('nfinesamples', int), ('compression_factor', int)]))
+        self.slice.filename = filename
+        self.slice.nsamples = tuple(nsamples)
+        self.slice.nfinesamples = tuple(nsamples * compression_factor * fine_sampling_factor) 
+        self.slice.compression_factor = compression_factor
+        self._status = None
+        w = slice(0, numpy.sum(nsamples))
+        self.pointing = PacsPointing(frame_time[w].copy(), frame_ra[w].copy(), frame_dec[w].copy(), frame_pa[w].copy(), frame_chop[w].copy(), frame_flag[w].copy(), nsamples=self.slice.nsamples)
 
     def get_map_header(self, resolution=None, oversampling=True):
         if MPI.COMM_WORLD.Get_size() > 1:
@@ -191,6 +220,35 @@ class PacsObservation(_Pacs):
 #-------------------------------------------------------------------------------
 
 
+class PacsPointing(Pointing):
+    def __new__(cls, time, ra, dec, pa, chop, flag, nsamples=None):
+        if nsamples is None:
+            nsamples = (time.size,)
+        else:
+            if numpyutils._my_isscalar(nsamples):
+                nsamples = (nsamples,)
+            else:
+                nsamples = tuple(nsamples)
+        nsamples_tot = numpy.sum(nsamples)
+        if numpy.any(numpy.array([ra.size,dec.size,pa.size,flag.size]) != nsamples_tot):
+            raise ValueError('The pointing inputs do not have the same size.')
+
+        ftype = get_default_dtype_float()
+        dtype = numpy.dtype([('time', ftype), ('ra', ftype), ('dec', ftype), ('pa', ftype), ('chop', ftype), ('flag', numpy.int64)])
+        result = numpy.recarray(nsamples_tot, dtype=dtype)
+        result.time = time
+        result.ra   = ra
+        result.dec  = dec
+        result.pa   = pa
+        result.chop = chop
+        result.flag = flag
+        result.nsamples = nsamples
+        return result
+
+
+#-------------------------------------------------------------------------------
+
+
 class PacsSimulation(_Pacs):
     def __init__(self, band, mode, ra0, dec0, pa0=0., scan_angle=0., scan_length=30., scan_nlegs=3, scan_step=20., scan_speed=10., fine_sampling_factor=1):
         band = band.lower()
@@ -203,6 +261,7 @@ class PacsSimulation(_Pacs):
         
         compression_factor = 8 if mode == 'parallel' and band != 'red' else 1 if mode == 'transparent' else 4
         self._file = tempfile.NamedTemporaryFile('w', suffix='.fits')
+        # FIX ME!!!
         self.pointing = _generate_pointing(ra0, dec0, pa0, scan_angle, scan_length, scan_nlegs, scan_step, scan_speed, compression_factor)
         self.ra0 = ra0
         self.dec0 = dec0
@@ -218,17 +277,13 @@ class PacsSimulation(_Pacs):
         self.nrows, self.ncolumns = (16,32) if band == 'red' else (32,64)
         self.default_npixels_per_sample = 11 if band == 'red' else 6
         self.default_resolution = 6.4 if band == 'red' else 3.2
-        self.nobservations = 1
-        self.nsamples = (self.pointing.size,)
-        self.nfinesamples = (self.pointing.size * compression_factor * fine_sampling_factor,)
         self.ndetectors = self.nrows * self.ncolumns
         self.detector_mask = numpy.zeros((self.nrows, self.ncolumns), dtype='int8')
         self.reject_bad_line = False
-        self.frame_policy = utils.MaskPolicy('inscan,turnaround,other,invalid', 4*('keep',), 'Frame Policy')
+        self.frame_policy = MaskPolicy('inscan,turnaround,other,invalid', 4*('keep',), 'Frame Policy')
         self.fine_sampling_factor = fine_sampling_factor
         self.mode = mode
         self.transparent_mode = mode == 'transparent'
-        self.compression_factor = compression_factor
 #        self.unit = unit.strip()
 #        if self.unit.find('/') == -1:
 #            self.unit += ' / detector'
@@ -240,14 +295,18 @@ class PacsSimulation(_Pacs):
 #            'optical' : Map(numpy.ascontiguousarray(oflat))
 #            }
 
-        _write_status(self, self.filename)
+        self.slice = numpy.recarray(1, dtype=numpy.dtype([('filename', 'S256'), ('nsamples', int), ('nfinesamples', int), ('compression_factor', int)]))
+        self.slice.nsamples = self.pointing.size
+        self.slice.nfinesamples = self.pointing.size * compression_factor * fine_sampling_factor
+        self.slice.compression_factor = compression_factor
+        self._status = _write_status(self, self.filename)
 
     def plot(self, map=None, title=None, color='magenta', linewidth=2):
         if map is None:
             if title is not None:
                 frame = pyplot.gca()
                 frame.set_title(title)
-            utils.plot_scan(self.pointing.ra, self.pointing.dec, title=title)
+            plot_scan(self.pointing.ra, self.pointing.dec, title=title)
         else:
             image = map.imshow(title=title)
             x, y = image.topixel(self.pointing.ra, self.pointing.dec)
@@ -341,62 +400,12 @@ def pacs_plot_scan(patterns, title=None, new_figure=True):
                 pass
 
         if ifile == 0:
-            image = utils.plot_scan(status.RaArray, status.DecArray, title=title, new_figure=new_figure)
+            image = plot_scan(status.RaArray, status.DecArray, title=title, new_figure=new_figure)
         else:
             x, y = image.topixel(status.RaArray, status.DecArray)
             p = pyplot.plot(x, y, linewidth=2)
             pyplot.plot(x[0], y[0], 'o', color = p[0]._color)
 
-
-#-------------------------------------------------------------------------------
-
-
-class pacs_status(object):
-    def __init__(self, filename):
-        hdu = pyfits.open(filename)['STATUS']
-        while True:
-            try:
-                self.status = hdu.data
-                break
-            except IndexError, errmsg:
-                pass
-
-    def __getitem__(self, key):
-        if key == 'ra':
-            return Quantity(self.status.field('RaArray'), 'deg')
-        if key == 'dec':
-            return Quantity(self.status.field('DecArray'), 'deg')
-        if key == 'pa':
-            return Quantity(self.status.field('PaArray'), 'deg')
-        if key == 'time':
-            return Quantity(self.status.field('FineTime')*1.e-6, 's')
-        if key == 'velocity':
-            ra = self['ra']
-            dec = self['dec']
-            time = self['time']
-            dra  = numpy.diff(ra)
-            ddec = numpy.diff(dec)
-            dtime = numpy.diff(time)
-            vel = numpy.sqrt((dra*numpy.cos(dec[0:-1].inunit('rad')))**2 + ddec**2) / dtime
-            vel.unit = 'arcsec/s'
-            u = vel._unit
-            vel = numpy.append(vel, vel[-1])
-            # BUG: append eats the unit...
-            vel._unit = u
-            return vel
-        return self.status.field(key)
-    
-    def __getattr__(self, attr):
-        if attr in ('ra', 'dec', 'pa', 'time', 'velocity'):
-            return self[attr]
-        return getattr(self.status, attr)
-
-    def __str__(self):
-        names = ['ra', 'dec', 'pa', 'time', 'velocity']
-        for n in self.status.names:
-            names.append(n)
-        return 'PACS status: ' + str(names)
-        
 
 #-------------------------------------------------------------------------------
 
@@ -419,12 +428,12 @@ def pacs_preprocess(obs, projection_method='sharp edges', oversampling=True, npi
         masking = Masking(tod.mask)
     
     # get the proper projector
-    if projection is None or projection_method != 'sharp edges' or oversampling and numpy.any(obs.compression_factor * obs.fine_sampling_factor > 1):
+    if projection is None or projection_method != 'sharp edges' or oversampling and numpy.any(obs.slice.compression_factor * obs.fine_sampling_factor > 1):
         projection = Projection(obs, method=projection_method, oversampling=oversampling, npixels_per_sample=npixels_per_sample)
 
     # bail out if not in transparent mode
     if not obs.transparent_mode or compression_factor == 1:
-        model = CompressionAverage(obs.compression_factor) * projection
+        model = CompressionAverage(obs.slice.compression_factor) * projection
         map_mask = model.T(Tod(tod.mask, nsamples=tod.nsamples))
         model = masking * model
         return tod, model, mapper_naive(tod, model), map_mask
@@ -630,7 +639,7 @@ def _generate_pointing(ra0, dec0, pa0, scan_angle, scan_length=30., scan_nlegs=3
     # Convert the longitude and latitude *expressed in degrees) to ra and dec
     ra, dec = _change_coord(ra0, dec0, scan_angle, -longitude/3600., latitude/3600.)
 
-    p = numpy.recarray(nsamples, dtype=utils.pointing)
+    p = numpy.recarray(nsamples, dtype=Pointing)
     p.time = time
     p.ra = ra
     p.dec = dec
@@ -737,7 +746,7 @@ def _write_status(obs, filename):
             cc('META_0', obs.nrows), 
             cc('META_1', obs.ncolumns), 
             cc('META_2', obs.band.title()+' Photometer'), 
-            cc('META_3', ('Floating Average  : '+str(obs.compression_factor)) if obs.compression_factor > 1 else 'None'), 
+            cc('META_3', ('Floating Average  : '+str(obs.slice[0].compression_factor)) if obs.slice[0].compression_factor > 1 else 'None'), 
             cc('META_4', observing_mode),
             cc('META_5', obs.scan_angle),
             cc('META_6', obs.scan_length),
@@ -757,7 +766,7 @@ def _write_status(obs, filename):
     fits.append(hdu)
     
     # write status
-    table = numpy.recarray(obs.nsamples[0], dtype=[('BBID', numpy.int64), ('FINETIME', numpy.int64), ('BAND', 'S2'), ('CHOPFPUANGLE', numpy.float64), ('RaArray', numpy.float64), ('DecArray', numpy.float64), ('PaArray', numpy.float64)])
+    table = numpy.recarray(obs.slice[0].nsamples, dtype=[('BBID', numpy.int64), ('FINETIME', numpy.int64), ('BAND', 'S2'), ('CHOPFPUANGLE', numpy.float64), ('RaArray', numpy.float64), ('DecArray', numpy.float64), ('PaArray', numpy.float64)])
     table.BAND = band
     table.FINETIME = numpy.round(obs.pointing.time*1000000.)
     table.RaArray = obs.pointing.ra
@@ -769,5 +778,7 @@ def _write_status(obs, filename):
     status = pyfits.BinTableHDU(table, None, 'STATUS')
     fits.append(status)
     fits.writeto(filename)
+
+    return table
 
 

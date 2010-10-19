@@ -2,65 +2,90 @@
 !
 ! Author: P. Chanial
 
-subroutine pacs_info_band(filename, nfilenames, band, transparent_mode, status)
+subroutine pacs_info_init(filename, nfilenames, band, transparent_mode, nsamples_max, status)
 
     use iso_fortran_env,        only : ERROR_UNIT
     use module_fitstools,       only : ft_close, ft_open, ft_read_keyword
-    use module_pacsobservation, only : PacsObservation, MaskPolicy
+    use module_pacsobservation, only : PacsObservation, PacsObservationSlice, MaskPolicy
     use module_string,          only : strlowcase
     implicit none
 
     !f2py threadsafe
-    !f2py intent(in)   filename
-    !f2py intent(in)   nfilenames
-    !f2py intent(out)  band
-    !f2py intent(out)  status
+    !f2py intent(in)  filename
+    !f2py intent(in)  nfilenames
+    !f2py intent(out) band
+    !f2py intent(out) nsamplesmax
+    !f2py intent(out) status
 
     character(len=*), intent(in)  :: filename
     integer, intent(in)           :: nfilenames
     character(len=7), intent(out) :: band
     logical, intent(out)          :: transparent_mode
+    integer, intent(out)          :: nsamples_max
     integer, intent(out)          :: status
 
-    character(len=len(filename)/nfilenames) :: filename_
-    integer                                 :: iobs, length, pos, unit
-    character(len=10)                       :: obstype
-    character(len=7)                        :: band_
+    class(PacsObservationSlice), allocatable :: slice
+    integer                                  :: iobs, length, unit, first, last
+    character(len=10)                        :: obstype
+    character(len=7)                         :: band_
 
     ! split input filename
     if (mod(len(filename), nfilenames) /= 0) then
-        stop 'PACS_INFO_BAND: Invalid filename length.'
+        stop 'PACS_INFO_INIT: Invalid filename length.'
     end if
 
     band = 'unknown'
     transparent_mode = .true.
+    nsamples_max = 0
+    allocate (slice)
 
     do iobs = 1, nfilenames
 
-        filename_ = filename((iobs-1)*len(filename_)+1:iobs*len(filename_))
+        call slice%set_filename(filename((iobs-1)*len(filename)/nfilenames+1:iobs*len(filename)/nfilenames), first, last, status)
+        if (status /= 0) return
 
-        ! remove trailing section
-        pos = index(filename_, '[', back=.true.)
-        if (pos > 0) filename_(pos:) = ' '
+        if (first == 0) then
+            first = 1
+        end if
 
         ! old style file format
-        length = len_trim(filename_)
-        if (filename_(length-4:length) /= '.fits') then
+        length = len_trim(slice%filename)
+        if (slice%filename(length-4:length) /= '.fits') then
             status = 0
-            if (strlowcase(filename_(length-3:length)) == 'blue') then
+            if (strlowcase(slice%filename(length-3:length)) == 'blue') then
                band_ = 'blue'
-            else if (strlowcase(filename_(length-4:length)) == 'green') then
+            else if (strlowcase(slice%filename(length-4:length)) == 'green') then
                band_ = 'green'
-            else if (strlowcase(filename_(length-2:length)) == 'red') then
+            else if (strlowcase(slice%filename(length-2:length)) == 'red') then
                band_ = 'red'
             else
                status = 1
                write (ERROR_UNIT,'(a)') 'File name does not contain the array band identifier (blue, green, red).'
             end if
-            return
+
+            if (last == 0) then
+                stop
+            end if
+
+            nsamples_max = nsamples_max + last - first + 1
+            cycle
+
         endif
 
-        call ft_open(trim(filename_), unit, status)
+        if (last == 0) then
+            call ft_open(trim(slice%filename) // '[Signal]', unit, status)
+            if (status /= 0) return
+
+            call ft_read_keyword(unit, 'NAXIS1', last, status=status)
+            if (status /= 0) return
+
+            call ft_close(unit, status)
+            if (status /= 0) return
+        end if
+
+        nsamples_max = nsamples_max + last - first + 1
+
+        call ft_open(trim(slice%filename), unit, status)
         if (status /= 0) return
 
         call ft_read_keyword(unit, 'TYPE', obstype, status=status)
@@ -86,11 +111,12 @@ subroutine pacs_info_band(filename, nfilenames, band, transparent_mode, status)
                 band_ = 'red'
                 transparent_mode = .false.
             case default
-                write (ERROR_UNIT, '(a)') "Unknown observation type '" // trim(obstype) // "' in file '" // filename_ // "'."
+                write (ERROR_UNIT, '(a)') "Unknown observation type '" // trim(obstype) // "' in file '" // trim(slice%filename)   &
+                      // "'."
                 status = 1
                 return
         end select
-        
+
         if (iobs == 1) then
             band = band_
             cycle
@@ -104,7 +130,7 @@ subroutine pacs_info_band(filename, nfilenames, band, transparent_mode, status)
 
     end do
 
-end subroutine pacs_info_band
+end subroutine pacs_info_init
 
 
 !-----------------------------------------------------------------------------------------------------------------------------------
@@ -177,13 +203,14 @@ end subroutine pacs_info_bad_detector_mask
 
 
 subroutine pacs_info(tamasis_dir, filename, nfilenames, transparent_mode, fine_sampling_factor, frame_policy, detector_mask,       &
-                     nrows, ncolumns, compression_factor, nsamples, unit, responsivity, detector_area, flatfield_detector,         &
-                     flatfield_optical, status)
+                     nsamples_tot_max, nrows, ncolumns, compression_factor, nsamples, unit, responsivity, detector_area,           &
+                     flatfield_detector, flatfield_optical, frame_time, frame_ra, frame_dec, frame_pa, frame_chop, frame_flag,     &
+                     status)
 
     use iso_fortran_env,        only : OUTPUT_UNIT
     use module_pacsinstrument,  only : PacsInstrument
     use module_pacsobservation, only : PacsObservation, MaskPolicy
-    use module_tamasis,         only : init_tamasis, p
+    use module_tamasis,         only : init_tamasis, p, POLICY_KEEP, POLICY_MASK, POLICY_REMOVE
     implicit none
 
     !f2py threadsafe
@@ -194,6 +221,7 @@ subroutine pacs_info(tamasis_dir, filename, nfilenames, transparent_mode, fine_s
     !f2py intent(in)   fine_sampling_factor
     !f2py intent(in)   frame_policy
     !f2py intent(in)   detector_mask
+    !f2py intent(in)   nsamples_tot_max
     !f2py intent(hide) nrows = shape(bad_detector_mask,0)
     !f2py intent(hide) ncolumns = shape(bad_detector_mask,1)
     !f2py intent(out)  compression_factor
@@ -203,6 +231,7 @@ subroutine pacs_info(tamasis_dir, filename, nfilenames, transparent_mode, fine_s
     !f2py intent(out)  detector_area
     !f2py intent(out)  flatfield_detector
     !f2py intent(out)  flatfield_optical
+    !f2py intent(out)  frame_time, frame_ra, frame_dec, frame_pa, frame_chop, frame_flag
     !f2py intent(out)  status
 
     character(len=*), intent(in)   :: tamasis_dir
@@ -212,6 +241,7 @@ subroutine pacs_info(tamasis_dir, filename, nfilenames, transparent_mode, fine_s
     integer, intent(in)            :: fine_sampling_factor
     integer, intent(in)            :: frame_policy(4)
     logical*1, intent(in)          :: detector_mask(nrows,ncolumns)
+    integer, intent(in)            :: nsamples_tot_max
     integer, intent(in)            :: nrows, ncolumns
     integer, intent(out)           :: compression_factor(nfilenames)
     integer*8, intent(out)         :: nsamples(nfilenames)
@@ -220,13 +250,16 @@ subroutine pacs_info(tamasis_dir, filename, nfilenames, transparent_mode, fine_s
     real(p), intent(out)           :: detector_area(nrows,ncolumns)
     real(p), intent(out)           :: flatfield_detector(nrows,ncolumns)
     real(p), intent(out)           :: flatfield_optical(nrows,ncolumns)
+    real(p), intent(out)           :: frame_time(nsamples_tot_max), frame_ra(nsamples_tot_max), frame_dec(nsamples_tot_max)
+    real(p), intent(out)           :: frame_pa(nsamples_tot_max), frame_chop(nsamples_tot_max)
+    integer, intent(out)           :: frame_flag(nsamples_tot_max)
     integer, intent(out)           :: status
 
     character(len=len(filename)/nfilenames), allocatable :: filename_(:)
     class(PacsObservation), allocatable :: obs
     class(PacsInstrument), allocatable  :: pacs
     type(MaskPolicy)                    :: policy
-    integer                             :: iobs
+    integer                             :: iobs, isample, dest
 
     ! initialise tamasis
     call init_tamasis(tamasis_dir)
@@ -246,6 +279,24 @@ subroutine pacs_info(tamasis_dir, filename, nfilenames, transparent_mode, fine_s
     allocate(obs)
     call obs%init(filename_, policy, status, verbose=.true.)
     if (status /= 0) return
+
+    frame_flag = POLICY_KEEP
+    dest = 0
+    do iobs = 1, obs%nslices
+        do isample = 1, obs%slice(iobs)%nsamples
+            dest = dest + 1
+            frame_time(dest) = obs%slice(iobs)%p(isample)%time
+            frame_ra(dest)   = obs%slice(iobs)%p(isample)%ra
+            frame_dec(dest)  = obs%slice(iobs)%p(isample)%dec
+            frame_pa(dest)   = obs%slice(iobs)%p(isample)%pa
+            frame_chop(dest) = obs%slice(iobs)%p(isample)%chop
+            if (obs%slice(iobs)%p(isample)%removed) then
+                frame_flag(dest) = POLICY_REMOVE
+            else if (obs%slice(iobs)%p(isample)%masked) then
+                frame_flag(dest) = POLICY_MASK
+            end if
+        end do
+    end do
 
     allocate(pacs)
     call pacs%init(obs%band, transparent_mode, fine_sampling_factor, detector_mask, status)

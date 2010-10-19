@@ -6,8 +6,7 @@ from tamasis import *
 class TestFailure(Exception): pass
 
 datadir = tamasis_dir + 'pacs/test/data/'
-obs = PacsObservation(datadir+'frames_blue.fits',
-                      fine_sampling_factor=1)
+obs = PacsObservation(datadir+'frames_blue.fits', fine_sampling_factor=1)
 
 tod = obs.get_tod()
 
@@ -15,7 +14,7 @@ telescope    = Identity('Telescope PSF')
 projection   = Projection(obs, resolution=3.2, oversampling=False, npixels_per_sample=6)
 multiplexing = CompressionAverage(obs.fine_sampling_factor, 'Multiplexing')
 crosstalk    = Identity('Crosstalk')
-compression  = CompressionAverage(obs.compression_factor)
+compression  = CompressionAverage(obs)
 masking      = Masking(tod.mask)
 
 model = masking * crosstalk * multiplexing * projection * telescope
