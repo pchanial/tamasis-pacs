@@ -316,10 +316,19 @@ class Map(FitsArray):
         else:
             data = numpy.asarray(self)
 
+        # check if the map has no astrometry information
+        if not all([self.header.has_key(key) for key in 'CRPIX1,CRPIX2,CRVAL1,CRVAL2,CTYPE1,CTYPE2'.split(',')]):
+            if 'xlabel' not in kw:
+                kw['xlabel'] = 'X'
+            if 'ylabel' not in kw:
+                kw['ylabel'] = 'Y'
+            image = super(Map, self).imshow(title=title, new_figure=new_figure, **kw)
+            return image
+
         fitsobj = kapteyn.maputils.FITSimage(externaldata=data, externalheader=self.header)
         if new_figure:
             fig = pyplot.figure()
-            frame = fig.add_axes(0.1, 0.1, 0.8, 0.8)
+            frame = fig.add_axes((0.1, 0.1, 0.8, 0.8))
         else:
             frame = pyplot.gca()
         if title is not None:
