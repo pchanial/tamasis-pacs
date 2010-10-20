@@ -305,20 +305,20 @@ class Map(FitsArray):
 
     @staticmethod
     def empty(shape, coverage=None, error=None, origin='lower', header=None, unit=None, dtype=None, order=None):
-        return Map(numpy.empty(shape, dtype, order), coverage, error, header, unit, copy=False)
+        return Map(numpy.empty(shape, dtype, order), coverage, error, origin, header, unit, copy=False)
 
     @staticmethod
     def ones(shape, coverage=None, error=None, origin='lower', header=None, unit=None, dtype=None, order=None):
-        return Map(numpy.ones(shape, dtype, order), coverage, error, header, unit, copy=False)
+        return Map(numpy.ones(shape, dtype, order), coverage, error, origin, header, unit, copy=False)
 
     @staticmethod
     def zeros(shape, coverage=None, error=None, origin='lower', header=None, unit=None, dtype=None, order=None):
-        return Map(numpy.zeros(shape, dtype, order), coverage, error, header, unit, copy=False)
+        return Map(numpy.zeros(shape, dtype, order), coverage, error, origin, header, unit, copy=False)
 
     def copy(self, order='C'):
         return Map(self, copy=True, order=order)
 
-    def imshow(self, mask=None, title=None, new_figure=True, **kw):
+    def imshow(self, mask=None, title=None, new_figure=True, origin=None, **kw):
         """A simple graphical display function for the Map class"""
 
         if mask is None and self.coverage is not None:
@@ -329,13 +329,16 @@ class Map(FitsArray):
         else:
             data = numpy.asarray(self)
 
+        if origin is None:
+            origin = self.origin
+
         # check if the map has no astrometry information
         if not all([self.header.has_key(key) for key in 'CRPIX1,CRPIX2,CRVAL1,CRVAL2,CTYPE1,CTYPE2'.split(',')]):
             if 'xlabel' not in kw:
                 kw['xlabel'] = 'X'
             if 'ylabel' not in kw:
                 kw['ylabel'] = 'Y'
-            image = super(Map, self).imshow(title=title, new_figure=new_figure, origin=self.origin, **kw)
+            image = super(Map, self).imshow(title=title, new_figure=new_figure, origin=origin, **kw)
             return image
 
         fitsobj = kapteyn.maputils.FITSimage(externaldata=data, externalheader=self.header)
