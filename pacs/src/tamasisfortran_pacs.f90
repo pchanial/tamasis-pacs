@@ -688,10 +688,10 @@ subroutine pacs_pointing_matrix_filename(tamasis_dir, filename, nfilenames, meth
     ! get method id
     select case (method)
 
-        case ('nearest neighbour')
+        case ('nearest')
             method_ = NEAREST_NEIGHBOUR
 
-        case ('sharp edges')
+        case ('sharp')
             method_ = SHARP_EDGES
 
         case default

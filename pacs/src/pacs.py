@@ -28,14 +28,14 @@ class _Pacs(object):
 
     def get_pointing_matrix(self, header, resolution, npixels_per_sample, method=None, oversampling=True):
         if method is None:
-            method = 'sharp edges'
-        method = method.lower().replace('_', ' ').strip()
-        if method not in ('nearest neighbour', 'sharp edges'):
-            raise ValueError("Invalid method '" + method + "'. Valids methods are 'nearest neighbour' or 'sharp edges'")
+            method = 'sharp'
+        method = method.lower()
+        if method not in ('nearest', 'sharp'):
+            raise ValueError("Invalid method '" + method + "'. Valids methods are 'nearest' or 'sharp'")
 
         nsamples = self.slice.nfinesamples if oversampling else self.slice.nsamples
         if npixels_per_sample is None:
-            npixels_per_sample = self.default_npixels_per_sample if method != 'nearest neighbour' else 1
+            npixels_per_sample = self.default_npixels_per_sample if method != 'nearest' else 1
         if header is None:
             if MPI.COMM_WORLD.Get_size() > 1:
                 raise ValueError('With MPI, the map header must be specified.')
