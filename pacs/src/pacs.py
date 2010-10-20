@@ -27,7 +27,7 @@ class _Pacs(object):
         Returns the signal and mask timelines.
         """
         filename_, nfilenames = _files2tmf(self.filename)
-        signal, mask, status = tmf.pacs_timeline(tamasis_dir, filename_, self.slice.size, numpy.sum(self.slice.nsamples), self.ndetectors, numpy.array(self.frame_policy), numpy.asfortranarray(self.detector_mask), flatfielding, subtraction_mean)
+        signal, mask, status = tmf.pacs_timeline(tamasis_dir, filename_, self.slice.size, numpy.sum(self.slice.nsamples), self.ndetectors, numpy.array(self.frame_policy, dtype='int32'), numpy.asfortranarray(self.detector_mask), flatfielding, subtraction_mean)
         if status != 0: raise RuntimeError()
        
         tod = Tod(signal.T, mask.T, nsamples=self.slice.nsamples, unit=self.unit)
@@ -76,7 +76,7 @@ class _Pacs(object):
         print 'Info: Allocating '+str(sizeofpmatrix/2.**17)+' MiB for the pointing matrix.'
         pmatrix = numpy.zeros(sizeofpmatrix, dtype=numpy.int64)
         
-        status = tmf.pacs_pointing_matrix_filename(tamasis_dir, filename_, self.slice.size, method, oversampling, self.fine_sampling_factor, npixels_per_sample, numpy.sum(nsamples), self.ndetectors, numpy.array(self.frame_policy), numpy.asfortranarray(self.detector_mask), str(header).replace('\n', ''), pmatrix)
+        status = tmf.pacs_pointing_matrix_filename(tamasis_dir, filename_, self.slice.size, method, oversampling, self.fine_sampling_factor, npixels_per_sample, numpy.sum(nsamples), self.ndetectors, numpy.array(self.frame_policy, dtype='int32'), numpy.asfortranarray(self.detector_mask), str(header).replace('\n', ''), pmatrix)
         if status != 0: raise RuntimeError()
 
         return pmatrix, header, self.ndetectors, nsamples, npixels_per_sample
@@ -175,7 +175,7 @@ class PacsObservation(_Pacs):
         if detector_mask is not None:
             if detector_mask.shape != (nrows, ncolumns):
                 raise ValueError('Invalid shape of the input detector mask: ' + str(detector_mask.shape) + ' for the ' + band + ' band.')
-            detector_mask = numpy.array(detector_mask, dtype='int8', copy=False)
+            detector_mask = numpy.array(detector_mask, dtype='uint8', copy=False)
 
         else:
             detector_mask, status = tmf.pacs_info_bad_detector_mask(tamasis_dir, band, transparent_mode, reject_bad_line, nrows, ncolumns)
@@ -186,7 +186,7 @@ class PacsObservation(_Pacs):
         slice_observation, slice_detector = _split_observation(nfilenames, int(numpy.sum(detector_mask == 0)))
         filename = filename[slice_observation]
         igood = numpy.where(detector_mask.flat == 0)[0]
-        detector_mask = numpy.ones(detector_mask.shape, dtype='int8')
+        detector_mask = numpy.ones(detector_mask.shape, dtype='uint8')
         detector_mask.flat[igood[slice_detector]] = 0
         filename_, nfilenames = _files2tmf(filename)
         ndetectors = int(numpy.sum(detector_mask == 0))
@@ -205,7 +205,7 @@ class PacsObservation(_Pacs):
         self.default_npixels_per_sample = 11 if band == 'red' else 6
         self.default_resolution = 6.4 if band == 'red' else 3.2
         self.ndetectors = ndetectors
-        self.detector_mask = Map(detector_mask, origin='upper')
+        self.detector_mask = Map(detector_mask, origin='upper', dtype=detector_mask.dtype)
         self.reject_bad_line = reject_bad_line
         self.frame_policy = frame_policy
         self.fine_sampling_factor = fine_sampling_factor
@@ -242,7 +242,7 @@ class PacsObservation(_Pacs):
         if resolution is None:
             resolution = self.default_resolution
         filename_, nfilenames = _files2tmf(self.filename)
-        header, status = tmf.pacs_map_header(tamasis_dir, filename_, nfilenames, oversampling, self.fine_sampling_factor, numpy.array(self.frame_policy), numpy.asfortranarray(self.detector_mask), resolution)
+        header, status = tmf.pacs_map_header(tamasis_dir, filename_, nfilenames, oversampling, self.fine_sampling_factor, numpy.array(self.frame_policy, dtype='int32'), numpy.asfortranarray(self.detector_mask), resolution)
         if status != 0: raise RuntimeError()
         header = _str2fitsheader(header)
         return header
@@ -310,7 +310,7 @@ class PacsSimulation(_Pacs):
         self.default_npixels_per_sample = 11 if band == 'red' else 6
         self.default_resolution = 6.4 if band == 'red' else 3.2
         self.ndetectors = self.nrows * self.ncolumns
-        self.detector_mask = numpy.zeros((self.nrows, self.ncolumns), dtype='int8')
+        self.detector_mask = numpy.zeros((self.nrows, self.ncolumns), dtype='uint8')
         self.reject_bad_line = False
         self.frame_policy = MaskPolicy('inscan,turnaround,other,invalid', 4*('keep',), 'Frame Policy')
         self.fine_sampling_factor = fine_sampling_factor
@@ -475,7 +475,7 @@ def pacs_preprocess(obs, projection_method='sharp edges', oversampling=True, npi
     todc = compression(tod)
     mask = compression(tod.mask)
     mask[mask != 0] = 1
-    todc.mask = numpy.array(mask, dtype='int8')
+    todc.mask = numpy.array(mask, dtype='uint8')
     maskingc = Masking(todc.mask)
 
     model = compression * projection
