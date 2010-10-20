@@ -73,15 +73,15 @@ class FitsArray(Quantity):
 
     @staticmethod
     def empty(shape, header=None, unit=None, dtype=None, order=None):
-        return FitsArray(numpy.empty(shape, dtype, order), header, unit, copy=False)
+        return FitsArray(numpy.empty(shape, dtype, order), header, unit, dtype, copy=False)
 
     @staticmethod
     def ones(shape, header=None, unit=None, dtype=None, order=None):
-        return FitsArray(numpy.ones(shape, dtype, order), header, unit, copy=False)
+        return FitsArray(numpy.ones(shape, dtype, order), header, unit, dtype, copy=False)
 
     @staticmethod
     def zeros(shape, header=None, unit=None, dtype=None, order=None):
-        return FitsArray(numpy.zeros(shape, dtype, order), header, unit, copy=False)
+        return FitsArray(numpy.zeros(shape, dtype, order), header, unit, dtype, copy=False)
 
     @property
     def header(self):
@@ -305,15 +305,15 @@ class Map(FitsArray):
 
     @staticmethod
     def empty(shape, coverage=None, error=None, origin='lower', header=None, unit=None, dtype=None, order=None):
-        return Map(numpy.empty(shape, dtype, order), coverage, error, origin, header, unit, copy=False)
+        return Map(numpy.empty(shape, dtype, order), coverage, error, origin, header, unit, dtype, copy=False)
 
     @staticmethod
     def ones(shape, coverage=None, error=None, origin='lower', header=None, unit=None, dtype=None, order=None):
-        return Map(numpy.ones(shape, dtype, order), coverage, error, origin, header, unit, copy=False)
+        return Map(numpy.ones(shape, dtype, order), coverage, error, origin, header, unit, dtype, copy=False)
 
     @staticmethod
     def zeros(shape, coverage=None, error=None, origin='lower', header=None, unit=None, dtype=None, order=None):
-        return Map(numpy.zeros(shape, dtype, order), coverage, error, origin, header, unit, copy=False)
+        return Map(numpy.zeros(shape, dtype, order), coverage, error, origin, header, unit, dtype, copy=False)
 
     def copy(self, order='C'):
         return Map(self, copy=True, order=order)
@@ -457,19 +457,19 @@ class Tod(FitsArray):
     def empty(shape, mask=None, nsamples=None, header=None, unit=None, dtype=None, order=None):
         shape = validate_sliced_shape(shape, nsamples)
         shape_flat = flatten_sliced_shape(shape)
-        return Tod(numpy.empty(shape_flat, dtype, order), mask, shape[-1], header, unit, copy=False)
+        return Tod(numpy.empty(shape_flat, dtype, order), mask, shape[-1], header, unit, dtype, copy=False)
 
     @staticmethod
     def ones(shape, mask=None, nsamples=None, header=None, unit=None, dtype=None, order=None):
         shape = validate_sliced_shape(shape, nsamples)
         shape_flat = flatten_sliced_shape(shape)
-        return Tod(numpy.ones(shape_flat, dtype, order), mask, shape[-1], header, unit, copy=False)
+        return Tod(numpy.ones(shape_flat, dtype, order), mask, shape[-1], header, unit, dtype, copy=False)
 
     @staticmethod
     def zeros(shape, mask=None, nsamples=None, header=None, unit=None, dtype=None, order=None):
         shape = validate_sliced_shape(shape, nsamples)
         shape_flat = flatten_sliced_shape(shape)
-        return Tod(numpy.zeros(shape_flat, dtype, order), mask, shape[-1], header, unit, copy=False)
+        return Tod(numpy.zeros(shape_flat, dtype, order), mask, shape[-1], header, unit, dtype, copy=False)
    
     def copy(self, order='C'):
         return Tod(self, copy=True, order=order)
