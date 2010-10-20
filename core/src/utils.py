@@ -120,7 +120,10 @@ class MaskPolicy(object):
 
 
 class Pointing(numpy.ndarray):
-    def __new__(cls, time, ra, dec, pa, flag, nsamples=None):
+    INSCAN     = 1
+    TURNAROUND = 2
+    OTHER      = 3
+    def __new__(cls, time, ra, dec, pa, info=None, policy=None, nsamples=None):
         if nsamples is None:
             nsamples = (time.size,)
         else:
@@ -129,17 +132,31 @@ class Pointing(numpy.ndarray):
             else:
                 nsamples = tuple(nsamples)
         nsamples_tot = numpy.sum(nsamples)
-        if numpy.any(numpy.array([ra.size,dec.size,pa.size,flag.size]) != nsamples_tot):
+
+        if info is None:
+            info = Pointing.INSCAN
+
+        if policy is None:
+            policy = MaskPolicy.KEEP
+
+        time   = numpy.asarray(time)
+        ra     = numpy.asarray(ra)
+        dec    = numpy.asarray(dec)
+        pa     = numpy.asarray(pa)
+        info   = numpy.asarray(info)
+        policy = numpy.asarray(policy)
+        if numpy.any(map(lambda x: x.size not in (1, nsamples_tot), [ra,dec,pa,info,policy])):
             raise ValueError('The pointing inputs do not have the same size.')
 
         ftype = config.get_default_dtype_float()
-        dtype = numpy.dtype([('time', ftype), ('ra', ftype), ('dec', ftype), ('pa', ftype), ('flag', numpy.int64)])
+        dtype = numpy.dtype([('time', ftype), ('ra', ftype), ('dec', ftype), ('pa', ftype), ('info', numpy.int64), ('policy', numpy.int64)])
         result = numpy.recarray(nsamples_tot, dtype=dtype)
         result.time = time
         result.ra   = ra
         result.dec  = dec
         result.pa   = pa
-        result.flag = flag
+        result.info = info
+        result.policy = policy
         result.nsamples = nsamples
         return result
 
@@ -160,12 +177,23 @@ class Pointing(numpy.ndarray):
 #-------------------------------------------------------------------------------
 
 
-def plot_scan(ra, dec=None, title=None, new_figure=True):
-    if hasattr(ra, 'pointing'):
-        ra = ra.pointing
-    if hasattr(ra, 'ra') and hasattr(ra, 'dec'):
-        dec = ra.dec
-        ra = ra.ra
+def plot_scan(input, map=None, title=None, new_figure=True, color='magenta', linewidth=2):
+    if hasattr(input, 'pointing'):
+        ra  = input.pointing.ra
+        dec = input.pointing.dec
+    elif hasattr(input, 'ra') and hasattr(input, 'dec'):
+        ra  = input.ra
+        dec = input.dec
+    else:
+        ra  = input[0]
+        dec = input[1]
+
+    if map is not None and map.header is not None and map.header.has_key('CRVAL1'):
+        image = map.imshow(title=title)
+        x, y = image.topixel(ra, dec)
+        p = pyplot.plot(x, y, color=color, linewidth=linewidth)
+        pyplot.plot(x[0], y[0], 'o', color=p[0]._color)
+        return image
 
     crval = [mean_degrees(ra), numpy.mean(dec)]
     ra_min,  ra_max  = minmax_degrees(ra)
@@ -203,7 +231,7 @@ def plot_scan(ra, dec=None, title=None, new_figure=True):
     image.interact_writepos()
     pyplot.show()
     x, y = image.topixel(ra, dec)
-    p = pyplot.plot(x, y, linewidth=2)
+    p = pyplot.plot(x, y, color=color, linewidth=linewidth)
     pyplot.plot(x[0], y[0], 'o', color = p[0]._color)
     return image
 

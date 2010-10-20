@@ -21,6 +21,11 @@ module module_observation
 public :: PacsObservationSlice
 public :: PacsObservation    
     public :: Pointing
+    public :: POINTING_INSCAN, POINTING_TURNOVER, POINTING_OTHER
+
+    integer, parameter :: POINTING_INSCAN = 1
+    integer, parameter :: POINTING_TURNOVER = 2
+    integer, parameter :: POINTING_OTHER = 3
 
     type MaskPolicy
         integer :: inscan = POLICY_KEEP

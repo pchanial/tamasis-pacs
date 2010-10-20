@@ -22,37 +22,9 @@ __all__ = [ 'PacsObservation', 'PacsPointing', 'PacsSimulation', 'pacs_plot_scan
 
 
 class _Pacs(object):
+
     def get_tod(self, unit=None, flatfielding=True, subtraction_mean=True):
-        """
-        Returns the signal and mask timelines.
-        """
-        filename_, nfilenames = _files2tmf(self.filename)
-        signal, mask, status = tmf.pacs_timeline(tamasis_dir, filename_, self.slice.size, numpy.sum(self.slice.nsamples), self.ndetectors, numpy.array(self.frame_policy, dtype='int32'), numpy.asfortranarray(self.detector_mask), flatfielding, subtraction_mean)
-        if status != 0: raise RuntimeError()
-       
-        tod = Tod(signal.T, mask.T, nsamples=self.slice.nsamples, unit=self.unit)
-
-        # the flux calibration has been done by using HCSS photproject and assuming that the central detectors had a size of 3.2x3.2
-        # squared arcseconds. To be consistent with detector sharp edge model, we need to adjust the Tod.
-        if tod.unit == 'Jy / detector' or tod.unit == 'V / detector':
-            i = self.nrows    / 2 - 1
-            j = self.ncolumns / 2 - 1
-            tod *= numpy.mean(self.detector_area[i:i+2,j:j+2]) / Quantity(3.2**2, 'arcsec^2/detector')
-
-        if unit is None:
-            return tod
-
-        newunit = Quantity(1., unit)
-        newunit_si = newunit.SI._unit
-        if 'sr' in newunit_si and newunit_si['sr'] == -1:
-            area = self.detector_area[self.detector_mask == 0].reshape((self.ndetectors,1))
-            tod /= area
-           
-        if 'V' in tod._unit and tod._unit['V'] == 1 and 'V' not in newunit_si:
-            tod /= self.responsivity
-
-        tod.unit = newunit._unit
-        return tod
+        raise NotImplementedError()
 
     def get_pointing_matrix(self, header, resolution, npixels_per_sample, method=None, oversampling=True):
         if method is None:
@@ -71,19 +43,22 @@ class _Pacs(object):
         elif isinstance(header, str):
             header = _str2fitsheader(header)
 
-        filename_, nfilenames = _files2tmf(self.filename)
+        filename_, nfilenames = _files2tmf(self.slice.filename)
         sizeofpmatrix = npixels_per_sample * numpy.sum(nsamples) * self.ndetectors
         print 'Info: Allocating '+str(sizeofpmatrix/2.**17)+' MiB for the pointing matrix.'
         pmatrix = numpy.zeros(sizeofpmatrix, dtype=numpy.int64)
         
-        status = tmf.pacs_pointing_matrix_filename(tamasis_dir, filename_, self.slice.size, method, oversampling, self.fine_sampling_factor, npixels_per_sample, numpy.sum(nsamples), self.ndetectors, numpy.array(self.frame_policy, dtype='int32'), numpy.asfortranarray(self.detector_mask), str(header).replace('\n', ''), pmatrix)
+        status = tmf.pacs_pointing_matrix_filename(tamasis_dir, filename_, self.slice.size, method, oversampling, self.fine_sampling_factor, npixels_per_sample, numpy.sum(nsamples), self.ndetectors, numpy.array(self.policy, dtype='int32'), numpy.asfortranarray(self.detector_mask), str(header).replace('\n', ''), pmatrix)
         if status != 0: raise RuntimeError()
 
         return pmatrix, header, self.ndetectors, nsamples, npixels_per_sample
 
+    def get_map_header(self, resolution=None, oversampling=True):
+        raise NotImplementedError()
+
     def get_filter_uncorrelated(self):
         """
-        Reads an inverse noise time-time correlation matrix from a calibration file, in PACS-DP format.
+        Read an inverse noise time-time correlation matrix from a calibration file, in PACS-DP format.
         """
         ncorrelations, status = tmf.pacs_read_filter_calibration_ncorrelations(tamasis_dir, self.band)
         if status != 0: raise RuntimeError()
@@ -92,6 +67,9 @@ class _Pacs(object):
         if status != 0: raise RuntimeError()
 
         return data.T
+
+    def save(self, filename, tod):
+        raise NotImplementedError()
 
     @property
     def status(self):
@@ -110,12 +88,124 @@ class _Pacs(object):
                     pass
             
             s = s.base
-            w = numpy.where(self.pointing.flag[dest:dest+nsamples] != MaskPolicy.REMOVE)
+            w = numpy.where(self.pointing.policy[dest:dest+nsamples] != MaskPolicy.REMOVE)
             status.append(s[w])
             dest = dest + nsamples
         self._status = numpy.concatenate(status).view(numpy.recarray)
         return self._status
 
+    def unpack(self, tod):
+        """
+        Convert a Tod which only includes the valid detectors into 
+        another Tod which contains all the detectors under the control
+        of the detector mask
+
+        Parameters
+        ----------
+        tod : Tod
+              rank-2 Tod to be unpacked.
+
+        Returns
+        -------
+        unpacked_tod : Tod
+              This will be a new view object if possible; otherwise, it will
+              be a copy.
+
+        See Also
+        --------
+        pack: inverse method
+
+        """
+        if numpy.rank(tod) != 2:
+            raise ValueError('The input Tod is not packed.')
+        ndetectors = self.detector_mask.size
+        nvalids  = numpy.sum(self.detector_mask == 0)
+        nsamples = tod.shape[-1]
+
+        newshape = numpy.concatenate((self.detector_mask.shape, (nsamples,)))
+        if nvalids != tod.shape[0]:
+            raise ValueError("The detector mask has a number of valid detectors '" + str(numpy.sum(mask == 0)) + 
+                             "' incompatible with the packed input '" + str(tod.shape[0]) + "'.")
+
+        # return a view if all detectors are valid
+        if nvalids == ndetectors:
+            return tod.reshape(newshape)
+
+        # otherwise copy the detector timelines one by one
+        mask = self.detector_mask.ravel()
+        utod = Tod.zeros(newshape, nsamples=tod.nsamples, unit=tod.unit, dtype=tod.dtype, 
+                         mask=numpy.ones(newshape, dtype='int8'))
+        rtod = utod.reshape((ndetectors, nsamples))
+        
+        i = 0
+        for iall in range(mask.size):
+            if mask[iall] != 0:
+                rtod[iall,:] = 0
+                rtod.mask[iall,:] = 1
+                continue
+            rtod[iall,:] = tod[i,:]
+            if tod.mask is not None:
+                rtod.mask[iall,:] = tod.mask[i,:]
+            else:
+                rtod.mask[iall,:] = 0
+            i += 1
+        return utod
+
+
+    def pack(self, tod):
+        """
+        Convert a Tod which only includes all the detectors into 
+        another Tod which contains only the valid ones under the control
+        of the detector mask
+
+        Parameters
+        ----------
+        tod : Tod
+              rank-2 Tod to be packed.
+
+        Returns
+        -------
+        packed_tod : Tod
+              This will be a new view object if possible; otherwise, it will
+              be a copy.
+
+        See Also
+        --------
+        unpack: inverse method
+
+        """
+        if numpy.rank(tod) != numpy.rank(self.detector_mask)+1:
+            raise ValueError('The input Tod is not unpacked.')
+        ndetectors = self.detector_mask.size
+        nvalids = numpy.sum(self.detector_mask == 0)
+        nsamples = tod.shape[-1]
+
+        newshape = (nvalids, nsamples)
+        if tod.shape[0:-1] != self.detector_mask.shape:
+            raise ValueError("The detector mask has a shape '" + str(self.detector_mask.shape) + 
+                             "' incompatible with the unpacked input '" + str(tod.shape[0:-1]) + "'.")
+
+        # return a view if all detectors are valid
+        if nvalids == ndetectors:
+            return tod.reshape((ndetectors, nsamples))
+
+        # otherwise copy the detector timelines one by one
+        mask = self.detector_mask.ravel()
+        ptod = Tod.empty(newshape, nsamples=tod.nsamples, unit=tod.unit, dtype=tod.dtype, 
+                         mask=numpy.empty(newshape, dtype='int8'))
+        rtod = tod.reshape((ndetectors, nsamples))
+        
+        i = 0
+        for iall in range(mask.size):
+            if mask[iall] != 0:
+                 continue
+            ptod[i,:] = rtod[iall,:]
+            if tod.mask is not None:
+                ptod.mask[i,:] = rtod.mask[iall,:]
+            else:
+                ptod.mask[i,:] = 0
+            i += 1
+        return ptod
 
     def __str__(self):
         nthreads = tmf.info_nthreads()
@@ -123,10 +213,10 @@ class _Pacs(object):
         result = 'Setup: ' + str(nthreads) + ' core' + ('s' if nthreads > 1 else '') + ' handling ' + str(self.ndetectors) + ' detector' + ('s' if self.ndetectors > 1 else '') + ' on node ' + MPI.Get_processor_name() + '\n'
         result += sp + self.band + ' band, unit is ' + self.unit + '\n'
         convert = {'keep': 'kept', 'mask':'masked', 'remove':'removed'}
-        p_inscan     = ' ' + convert[self.frame_policy.inscan]     + '\n'
-        p_turnaround = ' ' + convert[self.frame_policy.turnaround] + '\n'
-        p_other      = ' ' + convert[self.frame_policy.other]      + '\n'
-        p_invalid    = ' ' + convert[self.frame_policy.invalid]
+        p_inscan     = ' ' + convert[self.policy.inscan]     + '\n'
+        p_turnaround = ' ' + convert[self.policy.turnaround] + '\n'
+        p_other      = ' ' + convert[self.policy.other]      + '\n'
+        p_invalid    = ' ' + convert[self.policy.invalid]
         for islice, slice in enumerate(self.slice):
             result += 'Observation'
             if self.slice.size > 1:
@@ -141,6 +231,7 @@ class _Pacs(object):
             if islice + 1 < self.slice.size:
                 result += '\n'
         return result
+
 
 #-------------------------------------------------------------------------------
 
@@ -192,10 +283,10 @@ class PacsObservation(_Pacs):
         ndetectors = int(numpy.sum(detector_mask == 0))
 
         # frame policy
-        frame_policy = MaskPolicy('inscan,turnaround,other,invalid', (policy_inscan, policy_turnaround, policy_other, policy_invalid), 'Frame Policy')
+        policy = MaskPolicy('inscan,turnaround,other,invalid', (policy_inscan, policy_turnaround, policy_other, policy_invalid), 'Frame Policy')
 
         # retrieve information from the observations
-        compression_factor, nsamples, npointings, offset, inscan, turnaround, other, invalid, unit, responsivity, detector_area, dflat, oflat, frame_time, frame_ra, frame_dec, frame_pa, frame_chop, frame_flag, status = tmf.pacs_info(tamasis_dir, filename_, nfilenames, transparent_mode, fine_sampling_factor, numpy.array(frame_policy, dtype='int32'), numpy.asfortranarray(detector_mask), nsamples_tot_max)
+        compression_factor, nsamples, npointings, offset, inscan, turnaround, other, invalid, unit, responsivity, detector_area, dflat, oflat, frame_time, frame_ra, frame_dec, frame_pa, frame_chop, frame_info, frame_policy, status = tmf.pacs_info(tamasis_dir, filename_, nfilenames, transparent_mode, fine_sampling_factor, numpy.array(policy, dtype='int32'), numpy.asfortranarray(detector_mask), nsamples_tot_max)
         if status != 0: raise RuntimeError()
 
         self.filename = filename
@@ -207,7 +298,7 @@ class PacsObservation(_Pacs):
         self.ndetectors = ndetectors
         self.detector_mask = Map(detector_mask, origin='upper', dtype=detector_mask.dtype)
         self.reject_bad_line = reject_bad_line
-        self.frame_policy = frame_policy
+        self.policy = policy
         self.fine_sampling_factor = fine_sampling_factor
         self.mode = '' #XXX FIX ME!
         self.transparent_mode = False if transparent_mode == 0 else True
@@ -233,8 +324,46 @@ class PacsObservation(_Pacs):
         
         self._status = None
         w = slice(0, numpy.sum(npointings))
-        self.pointing = PacsPointing(frame_time[w].copy(), frame_ra[w].copy(), frame_dec[w].copy(), frame_pa[w].copy(), frame_chop[w].copy(), frame_flag[w].copy(), nsamples=npointings, first_sample_offset=offset)
+        self.pointing = PacsPointing(frame_time[w].copy(), frame_ra[w].copy(), frame_dec[w].copy(), frame_pa[w].copy(), frame_chop[w].copy(), frame_info[w].copy(), frame_policy[w].copy(), nsamples=npointings, first_sample_offset=offset)
         print self
+
+    def get_tod(self, unit=None, flatfielding=True, subtraction_mean=True, raw_data=False):
+        """
+        Returns the signal and mask timelines.
+        """
+
+        if raw_data:
+            flatfielding = False
+            subtraction_mean = False
+
+        filename_, nfilenames = _files2tmf(self.filename)
+        signal, mask, status = tmf.pacs_timeline(tamasis_dir, filename_, self.slice.size, numpy.sum(self.slice.nsamples), self.ndetectors, numpy.array(self.policy, dtype='int32'), numpy.asfortranarray(self.detector_mask), flatfielding, subtraction_mean)
+        if status != 0: raise RuntimeError()
+       
+        tod = Tod(signal.T, mask.T, nsamples=self.slice.nsamples, unit=self.unit)
+
+        # the flux calibration has been done by using HCSS photproject and assuming that the central detectors had a size of 3.2x3.2
+        # squared arcseconds. To be consistent with detector sharp edge model, we need to adjust the Tod.
+        if not raw_data and tod.unit in ('Jy / detector', 'V / detector'):
+            i = self.nrows    / 2 - 1
+            j = self.ncolumns / 2 - 1
+            nominal_area = (6.4 if self.band == 'red' else 3.2)**2
+            tod *= numpy.mean(self.detector_area[i:i+2,j:j+2]) / Quantity(nominal_area, 'arcsec^2/detector')
+
+        if unit is None:
+            return tod
+
+        newunit = Quantity(1., unit)
+        newunit_si = newunit.SI._unit
+        if 'sr' in newunit_si and newunit_si['sr'] == -1:
+            area = self.detector_area[self.detector_mask == 0].reshape((self.ndetectors,1))
+            tod /= area
+           
+        if 'V' in tod._unit and tod._unit['V'] == 1 and 'V' not in newunit_si:
+            tod /= self.responsivity
+
+        tod.unit = newunit._unit
+        return tod
 
     def get_map_header(self, resolution=None, oversampling=True):
         if MPI.COMM_WORLD.Get_size() > 1:
@@ -242,7 +371,7 @@ class PacsObservation(_Pacs):
         if resolution is None:
             resolution = self.default_resolution
         filename_, nfilenames = _files2tmf(self.filename)
-        header, status = tmf.pacs_map_header(tamasis_dir, filename_, nfilenames, oversampling, self.fine_sampling_factor, numpy.array(self.frame_policy, dtype='int32'), numpy.asfortranarray(self.detector_mask), resolution)
+        header, status = tmf.pacs_map_header(tamasis_dir, filename_, nfilenames, oversampling, self.fine_sampling_factor, numpy.array(self.policy, dtype='int32'), numpy.asfortranarray(self.detector_mask), resolution)
         if status != 0: raise RuntimeError()
         header = _str2fitsheader(header)
         return header
@@ -252,7 +381,10 @@ class PacsObservation(_Pacs):
 
 
 class PacsPointing(Pointing):
-    def __new__(cls, time, ra, dec, pa, chop, flag, nsamples=None, first_sample_offset=None):
+    """
+    This class subclasses tamasis.Pointing, by adding the chopper information.
+    """
+    def __new__(cls, time, ra, dec, pa, chop, info=None, policy=None, nsamples=None, first_sample_offset=None):
         if nsamples is None:
             nsamples = (time.size,)
         else:
@@ -261,18 +393,25 @@ class PacsPointing(Pointing):
             else:
                 nsamples = tuple(nsamples)
         nsamples_tot = numpy.sum(nsamples)
-        if numpy.any(numpy.array([ra.size,dec.size,pa.size,flag.size]) != nsamples_tot):
+        if numpy.any(numpy.array([ra.size,dec.size,pa.size,info.size,policy.size]) != nsamples_tot):
             raise ValueError('The pointing inputs do not have the same size.')
 
+        if info is None:
+            info = Pointing.INSCAN
+
+        if policy is None:
+            policy = MaskPolicy.KEEP
+
         ftype = get_default_dtype_float()
-        dtype = numpy.dtype([('time', ftype), ('ra', ftype), ('dec', ftype), ('pa', ftype), ('chop', ftype), ('flag', numpy.int64)])
+        dtype = numpy.dtype([('time', ftype), ('ra', ftype), ('dec', ftype), ('pa', ftype), ('chop', ftype), ('info', numpy.int64), ('policy', numpy.int64)])
         result = numpy.recarray(nsamples_tot, dtype=dtype)
         result.time = time
         result.ra   = ra
         result.dec  = dec
         result.pa   = pa
         result.chop = chop
-        result.flag = flag
+        result.info = info
+        result.policy = policy
         result.nsamples = nsamples
         result.first_sample_offset = first_sample_offset
         return result
@@ -282,7 +421,10 @@ class PacsPointing(Pointing):
 
 
 class PacsSimulation(_Pacs):
-    def __init__(self, band, mode, ra0, dec0, pa0=0., scan_angle=0., scan_length=30., scan_nlegs=3, scan_step=20., scan_speed=10., fine_sampling_factor=1):
+    """
+    This class creates a simulated PACS observation.
+    """
+    def __init__(self, band, center, mode='prime', cam_angle=0., scan_angle=0., scan_length=30., scan_nlegs=3, scan_step=20., scan_speed=10., fine_sampling_factor=1):
         band = band.lower()
         if band not in ('blue', 'green', 'red'):
             raise ValueError("Band is not 'blue', 'green', nor 'red'.")
@@ -293,11 +435,11 @@ class PacsSimulation(_Pacs):
         
         compression_factor = 8 if mode == 'parallel' and band != 'red' else 1 if mode == 'transparent' else 4
         self._file = tempfile.NamedTemporaryFile('w', suffix='.fits')
-        # FIX ME!!!
-        self.pointing = _generate_pointing(ra0, dec0, pa0, scan_angle, scan_length, scan_nlegs, scan_step, scan_speed, compression_factor)
-        self.ra0 = ra0
-        self.dec0 = dec0
-        self.pa0 = pa0
+        self.pointing = _generate_pointing(center[0], center[1], cam_angle, scan_angle, scan_length, scan_nlegs, scan_step, scan_speed, compression_factor)
+        self.pointing.policy = MaskPolicy.KEEP
+        self.ra0 = center[0]
+        self.dec0 = center[1]
+        self.cam_angle = cam_angle
         self.scan_angle = scan_angle
         self.scan_length = scan_length
         self.scan_nlegs = scan_nlegs
@@ -310,9 +452,9 @@ class PacsSimulation(_Pacs):
         self.default_npixels_per_sample = 11 if band == 'red' else 6
         self.default_resolution = 6.4 if band == 'red' else 3.2
         self.ndetectors = self.nrows * self.ncolumns
-        self.detector_mask = numpy.zeros((self.nrows, self.ncolumns), dtype='uint8')
+        self.detector_mask = Map.zeros((self.nrows, self.ncolumns), dtype='uint8', origin='upper')
         self.reject_bad_line = False
-        self.frame_policy = MaskPolicy('inscan,turnaround,other,invalid', 4*('keep',), 'Frame Policy')
+        self.policy = MaskPolicy('inscan,turnaround,other,invalid', 4*('keep',), 'Frame Policy')
         self.fine_sampling_factor = fine_sampling_factor
         self.mode = mode
         self.transparent_mode = mode == 'transparent'
@@ -327,23 +469,17 @@ class PacsSimulation(_Pacs):
 #            'optical' : Map(numpy.ascontiguousarray(oflat))
 #            }
 
-        self.slice = numpy.recarray(1, dtype=numpy.dtype([('filename', 'S256'), ('nsamples', int), ('nfinesamples', int), ('compression_factor', int)]))
+        self.slice = numpy.recarray(1, dtype=numpy.dtype([('filename', 'S256'), ('nsamples', int), ('nfinesamples', int), ('compression_factor', int), ('inscan', int), ('turnaround', int), ('other', int), ('invalid', int)]))
+        self.slice.filename = self._file.name
         self.slice.nsamples = self.pointing.size
         self.slice.nfinesamples = self.pointing.size * compression_factor * fine_sampling_factor
         self.slice.compression_factor = compression_factor
+        self.slice.inscan = numpy.sum(self.pointing.info == Pointing.INSCAN)
+        self.slice.turnaround = numpy.sum(self.pointing.info == Pointing.TURNAROUND)
+        self.slice.other = numpy.sum(self.pointing.info == Pointing.OTHER)
+        self.slice.invalid = 0
+        
         self._status = _write_status(self, self.filename)
-
-    def plot(self, map=None, title=None, color='magenta', linewidth=2):
-        if map is None:
-            if title is not None:
-                frame = pyplot.gca()
-                frame.set_title(title)
-            plot_scan(self.pointing.ra, self.pointing.dec, title=title)
-        else:
-            image = map.imshow(title=title)
-            x, y = image.topixel(self.pointing.ra, self.pointing.dec)
-            p = pyplot.plot(x, y, color=color, linewidth=linewidth)
-            pyplot.plot(x[0], y[0], 'o', color=p[0]._color)
 
     def save(self, filename, tod):
         _write_status(self, filename)
@@ -351,13 +487,14 @@ class PacsSimulation(_Pacs):
             header = create_fitsheader(tod, extname='Signal')
         else:
             header = tod.header.copy()
-            header['EXTNAME'] = 'Signal'
+            header.update('EXTNAME', 'Signal')
 
-        pyfits.append(filename, tod, header)
-        if tod.mask is not None:
-            mask = numpy.abs(self.mask).view('uint8')
+        utod = self.unpack(tod)
+        pyfits.append(filename, utod, header)
+        if utod.mask is not None:
+            mask = numpy.abs(utod.mask).view('uint8')
             header = create_fitsheader(mask, extname='Mask')
-            pyfits.append(filename, mask)
+            pyfits.append(filename, mask, header)
         
    
 #-------------------------------------------------------------------------------
@@ -608,7 +745,7 @@ def _generate_pointing(ra0, dec0, pa0, scan_angle, scan_length=30., scan_nlegs=3
     time          = numpy.zeros(nsamples)
     latitude      = numpy.zeros(nsamples)
     longitude     = numpy.zeros(nsamples)
-    flags         = numpy.zeros(nsamples, dtype=int)
+    infos         = numpy.zeros(nsamples, dtype=int)
     line_counters = numpy.zeros(nsamples, dtype=int)
 
     # Start of computations, alpha and delta are the longitude and
@@ -621,7 +758,7 @@ def _generate_pointing(ra0, dec0, pa0, scan_angle, scan_length=30., scan_nlegs=3
     working_time = 0.
 
     for i in xrange(nsamples):
-        flag = 255
+        info = 0
    
         # check if new line
         if working_time > full_line_time:
@@ -635,51 +772,43 @@ def _generate_pointing(ra0, dec0, pa0, scan_angle, scan_length=30., scan_nlegs=3
         # scan_speed. 
         if working_time < extra_time1:
             delta = -signe*(extralength + scan_length/2) + signe * 0.5 * gamma * working_time * working_time
-            flag  = 0
+            info  = Pointing.TURNAROUND
    
         # constant speed
         if working_time >=  extra_time1 and working_time < extra_time1+line_time:
             delta = signe*(-scan_length/2+ (working_time-extra_time1)*scan_speed)
-            flag  = 1
+            info  = Pointing.INSCAN
  
         # Deceleration at then end of the scanline to stop
         if working_time >= extra_time1+line_time and working_time < extra_time1+line_time+extra_time1:
             dt = working_time - extra_time1 - line_time
             delta = signe * (scan_length/2 + scan_speed*dt - 0.5 * gamma*dt*dt)
-            flag  = 2
+            info  = Pointing.TURNAROUND
   
         # Acceleration to go toward the next scan line
         if working_time >= 2*extra_time1+line_time and working_time < 2*extra_time1+line_time+extra_time2:
             dt = working_time-2*extra_time1-line_time
             alpha = alpha0 + 0.5*gamma*dt*dt
-            flag  = 3
+            info  = Pointing.TURNAROUND
    
         # Deceleration to stop at the next scan line
         if working_time >= 2*extra_time1+line_time+extra_time2 and working_time < full_line_time:
             dt = working_time-2*extra_time1-line_time-extra_time2
             speed = gamma*extra_time2
             alpha = (alpha0+scan_step/2.) + speed*dt - 0.5*gamma*dt*dt
-            flag  = 4
+            info  = Pointing.TURNAROUND
 
         time[i] = i / sampling_frequency
-        flags[i] = flag
+        infos[i] = info
         latitude[i] = delta
         longitude[i] = alpha
         line_counters[i] = line_counter
         working_time = working_time + sampling_period
 
     # Convert the longitude and latitude *expressed in degrees) to ra and dec
-    ra, dec = _change_coord(ra0, dec0, scan_angle, -longitude/3600., latitude/3600.)
+    ra, dec = _change_coord(ra0, dec0, scan_angle, longitude/3600., latitude/3600.)
 
-    p = numpy.recarray(nsamples, dtype=Pointing)
-    p.time = time
-    p.ra = ra
-    p.dec = dec
-    p.pa = pa0
-    p[flags == 1].flag = 0xcd2
-    p[flags != 1].flag = 0x4000
-
-    return p
+    return Pointing(time, ra, dec, pa0, infos)
 
 
 #-------------------------------------------------------------------------------
@@ -751,7 +880,8 @@ def _str2fitsheader(string):
 
 def _write_status(obs, filename):
 
-    band = 'BS' if obs.band == 'blue' else 'BL' if obs.band == 'green' else 'R '
+    band_status = 'BS' if obs.band == 'blue' else 'BL' if obs.band == 'green' else 'R '
+    band_type   = 'BS' if obs.band == 'blue' else 'BL' if obs.band == 'green' else 'RS'
 
     if obs.mode == 'prime':
         observing_mode = 'Photometry Default Mode'
@@ -768,14 +898,17 @@ def _write_status(obs, filename):
             cc('simple', True), 
             cc('BITPIX', 32), 
             cc('NAXIS', 0), 
-            cc('EXTEND', True), 
-            cc('TYPE', 'HPPAVG'+band.strip()), 
-            cc('CREATOR', 'TAMASIS v' + __version__), 
-            cc('INSTRUME', 'PACS    '), 
-            cc('SOURCE', 'largeScan'), 
+            cc('EXTEND', True, 'May contain datasets'), 
+            cc('TYPE', 'HPPAVG'+band_type, 'Product Type Identification'), 
+            cc('CREATOR', 'TAMASIS v' + __version__, 'Generator of this file'), 
+            cc('INSTRUME', 'PACS', 'Instrument attached to this file'), 
+            cc('TELESCOP', 'Herschel Space Observatory', 'Name of telescope'),
+            cc('OBS_MODE', 'Scan map', 'Observation mode name'),
             cc('RA', obs.ra0),
             cc('DEC', obs.dec0),
-            cc('META_0', obs.nrows), 
+            cc('EQUINOX', 2000., 'Equinox of celestial coordinate system'),
+            cc('RADESYS', 'ICRS', 'Coordinate reference frame for the RA and DEC'),
+            cc('META_0', obs.nrows),
             cc('META_1', obs.ncolumns), 
             cc('META_2', obs.band.title()+' Photometer'), 
             cc('META_3', ('Floating Average  : '+str(obs.slice[0].compression_factor)) if obs.slice[0].compression_factor > 1 else 'None'), 
@@ -797,20 +930,22 @@ def _write_status(obs, filename):
     hdu = pyfits.PrimaryHDU(None, header)
     fits.append(hdu)
     
+    p = obs.pointing[numpy.where(obs.pointing.policy != MaskPolicy.REMOVE)]
+
     # write status
     table = numpy.recarray(obs.slice[0].nsamples, dtype=[('BBID', numpy.int64), ('FINETIME', numpy.int64), ('BAND', 'S2'), ('CHOPFPUANGLE', numpy.float64), ('RaArray', numpy.float64), ('DecArray', numpy.float64), ('PaArray', numpy.float64)])
-    table.BAND = band
-    table.FINETIME = numpy.round(obs.pointing.time*1000000.)
-    table.RaArray = obs.pointing.ra
-    table.DecArray = obs.pointing.dec
-    table.PaArray = obs.pointing.pa
-    table.CHOPFPUANGLE = 0.
-    table.BBID = obs.pointing.flag
+    table.BAND     = band_status
+    table.FINETIME = numpy.round(p.time*1000000.)
+    table.RaArray  = p.ra
+    table.DecArray = p.dec
+    table.PaArray  = p.pa
+    table.CHOPFPUANGLE = 0. if not hasattr(p, 'chop') else p.chop
+    table.BBID = 0
+    table[p.info == Pointing.INSCAN].BBID = 0xcd2
+    table[p.info == Pointing.TURNAROUND].BBID = 0x4000
 
     status = pyfits.BinTableHDU(table, None, 'STATUS')
     fits.append(status)
-    fits.writeto(filename)
+    fits.writeto(filename, clobber=True)
 
     return table
-
-

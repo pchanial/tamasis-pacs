@@ -202,14 +202,15 @@ end subroutine pacs_info_bad_detector_mask
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine pacs_info(tamasis_dir, filename, nfilenames, transparent_mode, fine_sampling_factor, frame_policy, detector_mask,       &
+subroutine pacs_info(tamasis_dir, filename, nfilenames, transparent_mode, fine_sampling_factor, policy, detector_mask,       &
                      nsamples_tot_max, nrows, ncolumns, compression_factor, nsamples, npointings, offset, inscan, turnaround,      &
                      other, invalid, unit, responsivity, detector_area, flatfield_detector, flatfield_optical, frame_time,         &
-                     frame_ra, frame_dec, frame_pa, frame_chop, frame_flag, status)
+                     frame_ra, frame_dec, frame_pa, frame_chop, frame_info, frame_policy, status)
 
     use iso_fortran_env,        only : OUTPUT_UNIT
     use module_pacsinstrument,  only : PacsInstrument
-    use module_pacsobservation, only : PacsObservation, MaskPolicy
+    use module_observation,     only : POINTING_INSCAN, POINTING_TURNOVER, POINTING_OTHER, MaskPolicy
+    use module_pacsobservation, only : PacsObservation
     use module_tamasis,         only : init_tamasis, p, POLICY_KEEP, POLICY_MASK, POLICY_REMOVE
     implicit none
 
@@ -219,7 +220,7 @@ subroutine pacs_info(tamasis_dir, filename, nfilenames, transparent_mode, fine_s
     !f2py intent(in)   nfilenames
     !f2py intent(in)   transparent_mode
     !f2py intent(in)   fine_sampling_factor
-    !f2py intent(in)   frame_policy
+    !f2py intent(in)   policy
     !f2py intent(in)   detector_mask
     !f2py intent(in)   nsamples_tot_max
     !f2py intent(hide) nrows = shape(bad_detector_mask,0)
@@ -231,7 +232,7 @@ subroutine pacs_info(tamasis_dir, filename, nfilenames, transparent_mode, fine_s
     !f2py intent(out)  detector_area
     !f2py intent(out)  flatfield_detector
     !f2py intent(out)  flatfield_optical
-    !f2py intent(out)  frame_time, frame_ra, frame_dec, frame_pa, frame_chop, frame_flag
+    !f2py intent(out)  frame_time, frame_ra, frame_dec, frame_pa, frame_chop, frame_info, frame_policy
     !f2py intent(out)  status
 
     character(len=*), intent(in)   :: tamasis_dir
@@ -239,7 +240,7 @@ subroutine pacs_info(tamasis_dir, filename, nfilenames, transparent_mode, fine_s
     integer, intent(in)            :: nfilenames
     logical, intent(in)            :: transparent_mode
     integer, intent(in)            :: fine_sampling_factor
-    integer, intent(in)            :: frame_policy(4)
+    integer, intent(in)            :: policy(4)
     logical*1, intent(in)          :: detector_mask(nrows,ncolumns)
     integer, intent(in)            :: nsamples_tot_max
     integer, intent(in)            :: nrows, ncolumns
@@ -253,13 +254,13 @@ subroutine pacs_info(tamasis_dir, filename, nfilenames, transparent_mode, fine_s
     real(p), intent(out)           :: flatfield_optical(nrows,ncolumns)
     real(p), intent(out)           :: frame_time(nsamples_tot_max), frame_ra(nsamples_tot_max), frame_dec(nsamples_tot_max)
     real(p), intent(out)           :: frame_pa(nsamples_tot_max), frame_chop(nsamples_tot_max)
-    integer, intent(out)           :: frame_flag(nsamples_tot_max)
+    integer, intent(out)           :: frame_info(nsamples_tot_max), frame_policy(nsamples_tot_max)
     integer, intent(out)           :: status
 
     character(len=len(filename)/nfilenames), allocatable :: filename_(:)
     class(PacsObservation), allocatable :: obs
     class(PacsInstrument), allocatable  :: pacs
-    type(MaskPolicy)                    :: policy
+    type(MaskPolicy)                    :: mask_policy
     integer                             :: iobs, isample, dest
 
     ! initialise tamasis
@@ -275,13 +276,13 @@ subroutine pacs_info(tamasis_dir, filename, nfilenames, transparent_mode, fine_s
     end do
 
     ! initialise policy
-    policy = MaskPolicy(inscan=frame_policy(1), turnaround=frame_policy(2), other=frame_policy(3), invalid=frame_policy(4))
+    mask_policy = MaskPolicy(inscan=policy(1), turnaround=policy(2), other=policy(3), invalid=policy(4))
 
     allocate(obs)
-    call obs%init(filename_, policy, status, verbose=.true.)
+    call obs%init(filename_, mask_policy, status, verbose=.true.)
     if (status /= 0) return
 
-    frame_flag = POLICY_KEEP
+    frame_policy = POLICY_KEEP
     dest = 0
     do iobs = 1, obs%nslices
         inscan    (iobs) = count(obs%slice(iobs)%p%inscan)
@@ -296,9 +297,16 @@ subroutine pacs_info(tamasis_dir, filename, nfilenames, transparent_mode, fine_s
             frame_pa(dest)   = obs%slice(iobs)%p(isample)%pa
             frame_chop(dest) = obs%slice(iobs)%p(isample)%chop
             if (obs%slice(iobs)%p(isample)%removed) then
-                frame_flag(dest) = POLICY_REMOVE
+                frame_policy(dest) = POLICY_REMOVE
             else if (obs%slice(iobs)%p(isample)%masked) then
-                frame_flag(dest) = POLICY_MASK
+                frame_policy(dest) = POLICY_MASK
+            end if
+            if (obs%slice(iobs)%p(isample)%inscan) then
+                frame_info(dest) = POINTING_INSCAN
+            else if (obs%slice(iobs)%p(isample)%masked) then
+                frame_info(dest) = POINTING_TURNOVER
+            else
+                frame_info(dest) = POINTING_OTHER
             end if
         end do
     end do
