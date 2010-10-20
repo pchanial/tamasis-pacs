@@ -26,6 +26,23 @@ class _Pacs(object):
     def get_tod(self, unit=None, flatfielding=True, subtraction_mean=True):
         raise NotImplementedError()
 
+    def get_detector_mask(self, band, detector_mask, transparent_mode, reject_bad_line):
+        shape = (16,32) if band == 'red' else (32,64)
+        if type(detector_mask) is str:
+            if detector_mask == 'calibration':
+                detector_mask, status = tmf.pacs_info_bad_detector_mask(tamasis_dir, band, transparent_mode, reject_bad_line, shape[0], shape[1])
+                if status != 0: raise RuntimeError()
+                detector_mask = numpy.ascontiguousarray(detector_mask)
+            else:
+                raise ValueError('Invalid specification for the detector_mask.')
+        elif detector_mask is None:
+            detector_mask = numpy.zeros(shape, dtype='uint8')
+        else:
+            if detector_mask.shape != shape:
+                raise ValueError('Invalid shape of the input detector mask: ' + str(detector_mask.shape) + ' for the ' + band + ' band.')
+            detector_mask = numpy.array(detector_mask, dtype='uint8', copy=False)
+        return detector_mask
+
     def get_pointing_matrix(self, header, resolution, npixels_per_sample, method=None, oversampling=True):
         if method is None:
             method = 'sharp'
@@ -78,7 +95,11 @@ class _Pacs(object):
         
         status = []
         dest = 0
-        for filename, nsamples in zip(self.slice.filename, self.pointing.nsamples):
+        if hasattr(self.pointing, 'first_sample_offset'):
+            offsets = self.pointing.first_sample_offset
+        else:
+            offsets = self.pointing.nsamples * 0
+        for filename, npointings, offset in zip(self.slice.filename, self.pointing.nsamples, offsets):
             hdu = pyfits.open(filename)['STATUS']
             while True:
                 try:
@@ -88,9 +109,10 @@ class _Pacs(object):
                     pass
             
             s = s.base
-            w = numpy.where(self.pointing.policy[dest:dest+nsamples] != MaskPolicy.REMOVE)
+            s = s[offset:offset+npointings]
+            w = numpy.where(self.pointing[dest:dest+npointings].policy != MaskPolicy.REMOVE)
             status.append(s[w])
-            dest = dest + nsamples
+            dest = dest + npointings
         self._status = numpy.concatenate(status).view(numpy.recarray)
         return self._status
 
@@ -222,7 +244,11 @@ class _Pacs(object):
             if self.slice.size > 1:
                 result += ' #' + str(islice+1)
             result += ': ' + slice.filename
-            result += '[' + str(self.pointing.first_sample_offset[islice]+1) + ':' + str(self.pointing.first_sample_offset[islice]+self.pointing.nsamples[islice]) + ']' + '\n'
+            if hasattr(self.pointing, 'first_sample_offset'):
+                offset = self.pointing.first_sample_offset[islice]
+            else:
+                offset = 0
+            result += '[' + str(offset+1) + ':' + str(offset+self.pointing.nsamples[islice]) + ']' + '\n'
             result += sp + 'Compression: x' + str(slice.compression_factor) + '\n'
             result += sp + 'In-scan:     ' + str(slice.inscan) + p_inscan
             result += sp + 'Turnaround:  ' + str(slice.turnaround) + p_turnaround
@@ -271,22 +297,8 @@ class PacsObservation(_Pacs):
         if status != 0: raise RuntimeError()
         band = band.strip()
 
-        nrows, ncolumns = (16,32) if band == 'red' else (32,64)
-
-        # get the detector mask, before distributing to the processors
-        if type(detector_mask) is str:
-            if detector_mask == 'calibration':
-                detector_mask, status = tmf.pacs_info_bad_detector_mask(tamasis_dir, band, transparent_mode, reject_bad_line, nrows, ncolumns)
-                if status != 0: raise RuntimeError()
-                detector_mask = numpy.ascontiguousarray(detector_mask)
-            else:
-                raise ValueError('Invalid specification for the detector_mask.')
-        elif detector_mask is None:
-            detector_mask = numpy.zeros((nrows,ncolumns), dtype='uint8')
-        else:
-            if detector_mask.shape != (nrows, ncolumns):
-                raise ValueError('Invalid shape of the input detector mask: ' + str(detector_mask.shape) + ' for the ' + band + ' band.')
-            detector_mask = numpy.array(detector_mask, dtype='uint8', copy=False)
+        # get the detector mask, before distributing the detectors to the processors
+        detector_mask = self.get_detector_mask(band, detector_mask, transparent_mode, reject_bad_line)
 
         # get the observations and detector mask for the current processor
         slice_observation, slice_detector = _split_observation(nfilenames, int(numpy.sum(detector_mask == 0)))
@@ -304,10 +316,9 @@ class PacsObservation(_Pacs):
         compression_factor, nsamples, npointings, offset, inscan, turnaround, other, invalid, unit, responsivity, detector_area, dflat, oflat, frame_time, frame_ra, frame_dec, frame_pa, frame_chop, frame_info, frame_policy, status = tmf.pacs_info(tamasis_dir, filename_, nfilenames, transparent_mode, fine_sampling_factor, numpy.array(policy, dtype='int32'), numpy.asfortranarray(detector_mask), nsamples_tot_max)
         if status != 0: raise RuntimeError()
 
-        self.filename = filename
+        self.filename = filename #XXX REMOVE ME!
         self.band = band
-        self.nrows = nrows
-        self.ncolumns = ncolumns
+        self.nrows, self.ncolumns = (16,32) if band == 'red' else (32,64)
         self.default_npixels_per_sample = 11 if band == 'red' else 6
         self.default_resolution = 6.4 if band == 'red' else 3.2
         self.ndetectors = ndetectors
@@ -324,7 +335,7 @@ class PacsObservation(_Pacs):
         self.detector_area = Map(detector_area, unit='arcsec^2/detector', origin='upper')
         self.flatfield = FlatField(oflat, dflat)
 
-        self.slice = numpy.recarray(nfilenames, dtype=numpy.dtype([('filename', 'S256'), ('nsamples', int), ('nfinesamples', int), ('compression_factor', int), ('inscan', int), ('turnaround', int), ('other', int), ('invalid', int)]))
+        self.slice = numpy.recarray(nfilenames, dtype=[('filename', 'S256'), ('nsamples', int), ('nfinesamples', int), ('compression_factor', int), ('inscan', int), ('turnaround', int), ('other', int), ('invalid', int)])
         regex = re.compile(r'(.*?)(\[[0-9]*:?[0-9]*\])? *$')
         for ifile, file in enumerate(filename):
             match = regex.match(file)
@@ -418,7 +429,7 @@ class PacsPointing(Pointing):
             policy = MaskPolicy.KEEP
 
         ftype = get_default_dtype_float()
-        dtype = numpy.dtype([('time', ftype), ('ra', ftype), ('dec', ftype), ('pa', ftype), ('chop', ftype), ('info', numpy.int64), ('policy', numpy.int64)])
+        dtype = [('time', ftype), ('ra', ftype), ('dec', ftype), ('pa', ftype), ('chop', ftype), ('info', numpy.int64), ('policy', numpy.int64)]
         result = numpy.recarray(nsamples_tot, dtype=dtype)
         result.time = time
         result.ra   = ra
@@ -439,7 +450,7 @@ class PacsSimulation(_Pacs):
     """
     This class creates a simulated PACS observation.
     """
-    def __init__(self, band, center, mode='prime', cam_angle=0., scan_angle=0., scan_length=30., scan_nlegs=3, scan_step=20., scan_speed=10., fine_sampling_factor=1):
+    def __init__(self, band, center, mode='prime', cam_angle=0., scan_angle=0., scan_length=30., scan_nlegs=3, scan_step=20., scan_speed=10., fine_sampling_factor=1, detector_mask='calibration', reject_bad_line=False):
         band = band.lower()
         if band not in ('blue', 'green', 'red'):
             raise ValueError("Band is not 'blue', 'green', nor 'red'.")
@@ -464,18 +475,16 @@ class PacsSimulation(_Pacs):
         self.filename = self._file.name
         self.band = band
         self.nrows, self.ncolumns = (16,32) if band == 'red' else (32,64)
+        self.detector_mask = self.get_detector_mask(self.band, detector_mask, mode == 'transparent', reject_bad_line)
         self.default_npixels_per_sample = 11 if band == 'red' else 6
         self.default_resolution = 6.4 if band == 'red' else 3.2
-        self.ndetectors = self.nrows * self.ncolumns
-        self.detector_mask = Map.zeros((self.nrows, self.ncolumns), dtype='uint8', origin='upper')
-        self.reject_bad_line = False
-        self.policy = MaskPolicy('inscan,turnaround,other,invalid', 4*('keep',), 'Frame Policy')
+        self.ndetectors = numpy.sum(self.detector_mask == 0)
+        self.reject_bad_line = reject_bad_line
+        self.policy = MaskPolicy('inscan,turnaround,other,invalid', 'keep,keep,remove,mask', 'Frame Policy')
         self.fine_sampling_factor = fine_sampling_factor
         self.mode = mode
         self.transparent_mode = mode == 'transparent'
-#        self.unit = unit.strip()
-#        if self.unit.find('/') == -1:
-#            self.unit += ' / detector'
+        self.unit = ''
 #        self.responsivity = Quantity(responsivity, 'V/Jy')
 #        self.detector_area = Map(detector_area, unit='arcsec^2/detector')
 #        self.flatfield = {
@@ -484,7 +493,7 @@ class PacsSimulation(_Pacs):
 #            'optical' : Map(numpy.ascontiguousarray(oflat))
 #            }
 
-        self.slice = numpy.recarray(1, dtype=numpy.dtype([('filename', 'S256'), ('nsamples', int), ('nfinesamples', int), ('compression_factor', int), ('inscan', int), ('turnaround', int), ('other', int), ('invalid', int)]))
+        self.slice = numpy.recarray(1, dtype=[('filename', 'S256'), ('nsamples', int), ('nfinesamples', int), ('compression_factor', int), ('inscan', int), ('turnaround', int), ('other', int), ('invalid', int)])
         self.slice.filename = self._file.name
         self.slice.nsamples = self.pointing.size
         self.slice.nfinesamples = self.pointing.size * compression_factor * fine_sampling_factor
@@ -895,6 +904,10 @@ def _str2fitsheader(string):
 
 def _write_status(obs, filename):
 
+    if any(obs.slice.compression_factor != obs.slice[0].compression_factor):
+        raise ValueError('Unable to save into a single file. The observations do not have the same compression factor.')
+
+    compression_factor = obs.slice[0].compression_factor
     band_status = 'BS' if obs.band == 'blue' else 'BL' if obs.band == 'green' else 'R '
     band_type   = 'BS' if obs.band == 'blue' else 'BL' if obs.band == 'green' else 'RS'
 
@@ -926,7 +939,7 @@ def _write_status(obs, filename):
             cc('META_0', obs.nrows),
             cc('META_1', obs.ncolumns), 
             cc('META_2', obs.band.title()+' Photometer'), 
-            cc('META_3', ('Floating Average  : '+str(obs.slice[0].compression_factor)) if obs.slice[0].compression_factor > 1 else 'None'), 
+            cc('META_3', ('Floating Average  : ' + str(compression_factor)) if compression_factor > 1 else 'None'), 
             cc('META_4', observing_mode),
             cc('META_5', obs.scan_angle),
             cc('META_6', obs.scan_length),
@@ -945,10 +958,12 @@ def _write_status(obs, filename):
     hdu = pyfits.PrimaryHDU(None, header)
     fits.append(hdu)
     
-    p = obs.pointing[numpy.where(obs.pointing.policy != MaskPolicy.REMOVE)]
+    p = obs.pointing[obs.pointing.policy != MaskPolicy.REMOVE]
+    if p.size != numpy.sum(obs.slice.nsamples):
+        raise ValueError('The pointing and slice attribute are incompatible. This case should not happen.')
 
     # write status
-    table = numpy.recarray(obs.slice[0].nsamples, dtype=[('BBID', numpy.int64), ('FINETIME', numpy.int64), ('BAND', 'S2'), ('CHOPFPUANGLE', numpy.float64), ('RaArray', numpy.float64), ('DecArray', numpy.float64), ('PaArray', numpy.float64)])
+    table = numpy.recarray(p.size, dtype=[('BBID', numpy.int64), ('FINETIME', numpy.int64), ('BAND', 'S2'), ('CHOPFPUANGLE', numpy.float64), ('RaArray', numpy.float64), ('DecArray', numpy.float64), ('PaArray', numpy.float64)])
     table.BAND     = band_status
     table.FINETIME = numpy.round(p.time*1000000.)
     table.RaArray  = p.ra
@@ -956,8 +971,9 @@ def _write_status(obs, filename):
     table.PaArray  = p.pa
     table.CHOPFPUANGLE = 0. if not hasattr(p, 'chop') else p.chop
     table.BBID = 0
-    table[p.info == Pointing.INSCAN].BBID = 0xcd2
-    table[p.info == Pointing.TURNAROUND].BBID = 0x4000
+    #XXX Numpy ticket #1645
+    table.BBID[p.info == Pointing.INSCAN] = 0xcd2
+    table.BBID[p.info == Pointing.TURNAROUND] = 0x4000
 
     status = pyfits.BinTableHDU(table, None, 'STATUS')
     fits.append(status)
