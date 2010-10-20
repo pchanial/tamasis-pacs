@@ -695,7 +695,7 @@ class Projection(AcquisitionModel):
         AcquisitionModel.__init__(self, description)
         self._pmatrix, self.header, ndetectors, nsamples, self.npixels_per_sample = \
             observation.get_pointing_matrix(header, resolution, npixels_per_sample, method=method, oversampling=oversampling)
-        self.pmatrix = self._pmatrix.view(dtype=[('weight', 'f4'), ('pixel', 'i4')])
+        self.pmatrix = self._pmatrix.view(dtype=[('weight', 'f4'), ('pixel', 'i4')]).view(numpy.recarray)
         self.pmatrix.resize((observation.ndetectors, numpy.sum(nsamples), self.npixels_per_sample))
         self.shapein = tuple([self.header['naxis'+str(i+1)] for i in reversed(range(self.header['naxis']))])
         self.shapeout = combine_sliced_shape(observation.ndetectors, nsamples)
