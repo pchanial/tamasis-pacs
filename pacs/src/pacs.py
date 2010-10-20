@@ -43,10 +43,10 @@ class _Pacs(object):
         elif isinstance(header, str):
             header = _str2fitsheader(header)
 
-        filename_, nfilenames = _files2tmf(self.slice.filename)
+        filename_, nfilenames = _files2tmf(self.filename)
         sizeofpmatrix = npixels_per_sample * numpy.sum(nsamples) * self.ndetectors
         print 'Info: Allocating '+str(sizeofpmatrix/2.**17)+' MiB for the pointing matrix.'
-        pmatrix = numpy.zeros(sizeofpmatrix, dtype=numpy.int64)
+        pmatrix = numpy.empty(sizeofpmatrix, dtype=numpy.int64)
         
         status = tmf.pacs_pointing_matrix_filename(tamasis_dir, filename_, self.slice.size, method, oversampling, self.fine_sampling_factor, npixels_per_sample, numpy.sum(nsamples), self.ndetectors, numpy.array(self.policy, dtype='int32'), numpy.asfortranarray(self.detector_mask), str(header).replace('\n', ''), pmatrix)
         if status != 0: raise RuntimeError()
@@ -248,10 +248,21 @@ class PacsObservation(_Pacs):
     - slice: recarray containing various information on the observations
     - status: the HCSS Frames' Status ArrayDataset, as a recarray
     - ij(2,ndetectors)   : the row and column number (starting from 0) of the detectors
+
+    
     Author: P. Chanial
     """
-    def __init__(self, filename, fine_sampling_factor=1, detector_mask=None, reject_bad_line=False, policy_inscan='keep', policy_turnaround='keep', policy_other='remove', policy_invalid='mask'):
-
+    def __init__(self, filename, fine_sampling_factor=1, detector_mask='calibration', reject_bad_line=False, policy_inscan='keep', policy_turnaround='keep', policy_other='remove', policy_invalid='mask'):
+        """
+        Parameters
+        ----------
+        detector_mask: None, 'calibration' or array
+              If None, no detector will be filtered out. if 'calibration',
+              the detector mask will be read from a calibration file.
+              Otherwise, it must be of the same shape as the camera:
+              (16,32) for the red band and (32,64) for the others.
+              Use 0 to keep a detector and 1 to filter it out.
+        """
         if type(filename) == str:
             filename = (filename,)
         filename_, nfilenames = _files2tmf(filename)
@@ -263,15 +274,19 @@ class PacsObservation(_Pacs):
         nrows, ncolumns = (16,32) if band == 'red' else (32,64)
 
         # get the detector mask, before distributing to the processors
-        if detector_mask is not None:
+        if type(detector_mask) is str:
+            if detector_mask == 'calibration':
+                detector_mask, status = tmf.pacs_info_bad_detector_mask(tamasis_dir, band, transparent_mode, reject_bad_line, nrows, ncolumns)
+                if status != 0: raise RuntimeError()
+                detector_mask = numpy.ascontiguousarray(detector_mask)
+            else:
+                raise ValueError('Invalid specification for the detector_mask.')
+        elif detector_mask is None:
+            detector_mask = numpy.zeros((nrows,ncolumns), dtype='uint8')
+        else:
             if detector_mask.shape != (nrows, ncolumns):
                 raise ValueError('Invalid shape of the input detector mask: ' + str(detector_mask.shape) + ' for the ' + band + ' band.')
             detector_mask = numpy.array(detector_mask, dtype='uint8', copy=False)
-
-        else:
-            detector_mask, status = tmf.pacs_info_bad_detector_mask(tamasis_dir, band, transparent_mode, reject_bad_line, nrows, ncolumns)
-            if status != 0: raise RuntimeError()
-            detector_mask = numpy.ascontiguousarray(detector_mask)
 
         # get the observations and detector mask for the current processor
         slice_observation, slice_detector = _split_observation(nfilenames, int(numpy.sum(detector_mask == 0)))
