@@ -270,7 +270,7 @@ def distance(shape, origin=None, resolution=1., dtype=None):
     shape : tuple of integer
         dimensions of the output array. For a 2d array, the first integer
         is for the Y-axis and the second one for the X-axis.
-    origin : array-like
+    origin : array-like of two elements (x0, y0)
         coordinates of the origin, for which the output array value is
         zero. Default value is the array center
     resolution : inter-pixel distance
@@ -289,7 +289,7 @@ def distance(shape, origin=None, resolution=1., dtype=None):
     if origin is None:
         origin = (numpy.array(shape) - 1) / 2.
     dim = []
-    for length, c in zip(reversed(shape), reversed(origin)):
+    for length, c in zip(reversed(shape), origin):
         dim.append((numpy.arange(length) - c) * resolution)
     return Map(numpy.sqrt(numpy.sum(numpy.square(numpy.meshgrid(*dim)), axis=0)), dtype=dtype)
     
