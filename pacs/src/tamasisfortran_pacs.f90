@@ -203,9 +203,9 @@ end subroutine pacs_info_bad_detector_mask
 
 
 subroutine pacs_info(tamasis_dir, filename, nfilenames, transparent_mode, fine_sampling_factor, frame_policy, detector_mask,       &
-                     nsamples_tot_max, nrows, ncolumns, compression_factor, nsamples, offset, inscan, turnaround, other, invalid,  &
-                     unit, responsivity, detector_area, flatfield_detector, flatfield_optical, frame_time, frame_ra, frame_dec,    &
-                     frame_pa, frame_chop, frame_flag, status)
+                     nsamples_tot_max, nrows, ncolumns, compression_factor, nsamples, npointings, offset, inscan, turnaround,      &
+                     other, invalid, unit, responsivity, detector_area, flatfield_detector, flatfield_optical, frame_time,         &
+                     frame_ra, frame_dec, frame_pa, frame_chop, frame_flag, status)
 
     use iso_fortran_env,        only : OUTPUT_UNIT
     use module_pacsinstrument,  only : PacsInstrument
@@ -225,7 +225,7 @@ subroutine pacs_info(tamasis_dir, filename, nfilenames, transparent_mode, fine_s
     !f2py intent(hide) nrows = shape(bad_detector_mask,0)
     !f2py intent(hide) ncolumns = shape(bad_detector_mask,1)
     !f2py intent(out)  compression_factor
-    !f2py intent(out)  nsamples, offset, inscan, turnaround, other, invalid
+    !f2py intent(out)  nsamples, npointings, offset, inscan, turnaround, other, invalid
     !f2py intent(out)  unit
     !f2py intent(out)  responsivity
     !f2py intent(out)  detector_area
@@ -244,7 +244,7 @@ subroutine pacs_info(tamasis_dir, filename, nfilenames, transparent_mode, fine_s
     integer, intent(in)            :: nsamples_tot_max
     integer, intent(in)            :: nrows, ncolumns
     integer, intent(out)           :: compression_factor(nfilenames)
-    integer, intent(out)           :: nsamples(nfilenames), offset(nfilenames)
+    integer, intent(out)           :: nsamples(nfilenames), npointings(nfilenames), offset(nfilenames)
     integer, intent(out)           :: inscan(nfilenames), turnaround(nfilenames), other(nfilenames), invalid(nfilenames)
     character(len=70), intent(out) :: unit
     real(p), intent(out)           :: responsivity
@@ -307,11 +307,9 @@ subroutine pacs_info(tamasis_dir, filename, nfilenames, transparent_mode, fine_s
     call pacs%init(obs%band, transparent_mode, fine_sampling_factor, detector_mask, status)
     if (status /= 0) return
 
-    call obs%print()
-    write (OUTPUT_UNIT,*)
-
     compression_factor = obs%slice%compression_factor
     nsamples = obs%slice%nvalids
+    npointings = obs%slice%nsamples
     offset = obs%slice%first - 1
     unit = obs%unit
     responsivity = pacs%responsivity

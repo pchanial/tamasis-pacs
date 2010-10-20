@@ -100,7 +100,7 @@ class _Pacs(object):
         
         status = []
         dest = 0
-        for filename, nsamples in zip(self.filename, self.slice.nsamples):
+        for filename, nsamples in zip(self.slice.filename, self.pointing.nsamples):
             hdu = pyfits.open(filename)['STATUS']
             while True:
                 try:
@@ -116,26 +116,50 @@ class _Pacs(object):
         self._status = numpy.concatenate(status).view(numpy.recarray)
         return self._status
 
-   
+
+    def __str__(self):
+        nthreads = tmf.info_nthreads()
+        sp = len('Setup: ')*' '
+        result = 'Setup: ' + str(nthreads) + ' core' + ('s' if nthreads > 1 else '') + ' handling ' + str(self.ndetectors) + ' detector' + ('s' if self.ndetectors > 1 else '') + ' on node ' + MPI.Get_processor_name() + '\n'
+        result += sp + self.band + ' band, unit is ' + self.unit + '\n'
+        convert = {'keep': 'kept', 'mask':'masked', 'remove':'removed'}
+        p_inscan     = ' ' + convert[self.frame_policy.inscan]     + '\n'
+        p_turnaround = ' ' + convert[self.frame_policy.turnaround] + '\n'
+        p_other      = ' ' + convert[self.frame_policy.other]      + '\n'
+        p_invalid    = ' ' + convert[self.frame_policy.invalid]
+        for islice, slice in enumerate(self.slice):
+            result += 'Observation'
+            if self.slice.size > 1:
+                result += ' #' + str(islice+1)
+            result += ': ' + slice.filename
+            result += '[' + str(self.pointing.first_sample_offset[islice]+1) + ':' + str(self.pointing.first_sample_offset[islice]+self.pointing.nsamples[islice]) + ']' + '\n'
+            result += sp + 'Compression: x' + str(slice.compression_factor) + '\n'
+            result += sp + 'In-scan:     ' + str(slice.inscan) + p_inscan
+            result += sp + 'Turnaround:  ' + str(slice.turnaround) + p_turnaround
+            result += sp + 'Other:       ' + str(slice.other) + p_other
+            result += sp + 'Invalid:     ' + str(slice.invalid) + p_invalid
+            if islice + 1 < self.slice.size:
+                result += '\n'
+        return result
+
 #-------------------------------------------------------------------------------
 
 
 class PacsObservation(_Pacs):
     """
-    Class which encapsulates handy information about the PACS instrument and the processed
-    observation.
-    It is assumed that the detectors have sharp edges, so that the integration is simply equal
-    to the sum of the sky pixels values weighted by their intersections with the detector surface.
+    Class which encapsulates handy information about the PACS instrument and 
+    the observations to be processed.
     It contains the following attributes:
-    - filename           : name of the file name, including the array colour, but excluding
-                           the type. Example: '1342184520_blue'.
-    - npixels_per_sample : number of sky pixels which intersect a PACS detector
-    - keep_bad_detectors : if set to True, force the processing to include all pixels
+    - default_npixels_per_sample : default number of sky pixels which intersect a PACS detector
     - detector_mask  : (nrows,ncolumns) mask of uint8 values (0 or 1). 1 means dead pixel.
+    - flatfield: contains the optical, detector and total flatfield
+    - pointing: recarray with fields time, ra, dec, pa, chop. The samples for which the policy is REMOVE are still available in the pointing array
+    - slice: recarray containing various information on the observations
+    - status: the HCSS Frames' Status ArrayDataset, as a recarray
     - ij(2,ndetectors)   : the row and column number (starting from 0) of the detectors
     Author: P. Chanial
     """
-    def __init__(self, filename, fine_sampling_factor=1, detector_mask=None, reject_bad_line=False, frame_policy_inscan='keep', frame_policy_turnaround='keep', frame_policy_other='remove', frame_policy_invalid='mask'):
+    def __init__(self, filename, fine_sampling_factor=1, detector_mask=None, reject_bad_line=False, policy_inscan='keep', policy_turnaround='keep', policy_other='remove', policy_invalid='mask'):
 
         if type(filename) == str:
             filename = (filename,)
@@ -168,12 +192,10 @@ class PacsObservation(_Pacs):
         ndetectors = int(numpy.sum(detector_mask == 0))
 
         # frame policy
-        frame_policy = MaskPolicy('inscan,turnaround,other,invalid', (frame_policy_inscan, frame_policy_turnaround, frame_policy_other, frame_policy_invalid), 'Frame Policy')
+        frame_policy = MaskPolicy('inscan,turnaround,other,invalid', (policy_inscan, policy_turnaround, policy_other, policy_invalid), 'Frame Policy')
 
         # retrieve information from the observations
-        nthreads = tmf.info_nthreads()
-        print 'Info: ' + MPI.Get_processor_name() + ' (' + str(nthreads) + ' core' + ('s' if nthreads > 1 else '') + ' handling ' + str(ndetectors) + ' detector' + ('s' if ndetectors > 1 else '') + ')'
-        compression_factor, nsamples, offset, inscan, turnaround, other, invalid, unit, responsivity, detector_area, dflat, oflat, frame_time, frame_ra, frame_dec, frame_pa, frame_chop, frame_flag, status = tmf.pacs_info(tamasis_dir, filename_, nfilenames, transparent_mode, fine_sampling_factor, numpy.array(frame_policy, dtype='int32'), numpy.asfortranarray(detector_mask), nsamples_tot_max)
+        compression_factor, nsamples, npointings, offset, inscan, turnaround, other, invalid, unit, responsivity, detector_area, dflat, oflat, frame_time, frame_ra, frame_dec, frame_pa, frame_chop, frame_flag, status = tmf.pacs_info(tamasis_dir, filename_, nfilenames, transparent_mode, fine_sampling_factor, numpy.array(frame_policy, dtype='int32'), numpy.asfortranarray(detector_mask), nsamples_tot_max)
         if status != 0: raise RuntimeError()
 
         self.filename = filename
@@ -196,11 +218,13 @@ class PacsObservation(_Pacs):
         self.detector_area = Map(detector_area, unit='arcsec^2/detector', origin='upper')
         self.flatfield = FlatField(oflat, dflat)
 
-        self.slice = numpy.recarray(nfilenames, dtype=numpy.dtype([('filename', 'S256'), ('nsamples', int), ('nfinesamples', int), ('offset', int), ('compression_factor', int), ('inscan', int), ('turnaround', int), ('other', int), ('invalid', int)]))
-        self.slice.filename = filename
+        self.slice = numpy.recarray(nfilenames, dtype=numpy.dtype([('filename', 'S256'), ('nsamples', int), ('nfinesamples', int), ('compression_factor', int), ('inscan', int), ('turnaround', int), ('other', int), ('invalid', int)]))
+        regex = re.compile(r'(.*?)(\[[0-9]*:?[0-9]*\])? *$')
+        for ifile, file in enumerate(filename):
+            match = regex.match(file)
+            self.slice[ifile].filename = match.group(1)
         self.slice.nsamples = nsamples
         self.slice.nfinesamples = nsamples * compression_factor * fine_sampling_factor
-        self.slice.offset = offset
         self.slice.compression_factor = compression_factor
         self.slice.inscan = inscan
         self.slice.turnaround = turnaround
@@ -208,8 +232,9 @@ class PacsObservation(_Pacs):
         self.slice.invalid = invalid
         
         self._status = None
-        w = slice(0, numpy.sum(nsamples))
-        self.pointing = PacsPointing(frame_time[w].copy(), frame_ra[w].copy(), frame_dec[w].copy(), frame_pa[w].copy(), frame_chop[w].copy(), frame_flag[w].copy(), nsamples=self.slice.nsamples)
+        w = slice(0, numpy.sum(npointings))
+        self.pointing = PacsPointing(frame_time[w].copy(), frame_ra[w].copy(), frame_dec[w].copy(), frame_pa[w].copy(), frame_chop[w].copy(), frame_flag[w].copy(), nsamples=npointings, first_sample_offset=offset)
+        print self
 
     def get_map_header(self, resolution=None, oversampling=True):
         if MPI.COMM_WORLD.Get_size() > 1:
@@ -227,7 +252,7 @@ class PacsObservation(_Pacs):
 
 
 class PacsPointing(Pointing):
-    def __new__(cls, time, ra, dec, pa, chop, flag, nsamples=None):
+    def __new__(cls, time, ra, dec, pa, chop, flag, nsamples=None, first_sample_offset=None):
         if nsamples is None:
             nsamples = (time.size,)
         else:
@@ -249,6 +274,7 @@ class PacsPointing(Pointing):
         result.chop = chop
         result.flag = flag
         result.nsamples = nsamples
+        result.first_sample_offset = first_sample_offset
         return result
 
 
