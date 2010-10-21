@@ -1,8 +1,7 @@
 import numpy
 import pyfits
 import re
-import tamasisfortran as tmf
-from datatypes import *
+from tamasis.core import *
 
 __all__ = [ 'MadMap1Observation' ]
 

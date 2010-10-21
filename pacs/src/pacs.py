@@ -1,22 +1,16 @@
 import glob
 import kapteyn
 import numpy
-import numpyutils
 import os
 import pyfits
 import re
-import tamasisfortran as tmf
 import tempfile
 
-from acquisitionmodels import AcquisitionModel, CompressionAverage, Masking, Projection, ValidationError
-from config import __version__, tamasis_dir, get_default_dtype_float
-from datatypes import Map, Tod, create_fitsheader
-from mappers import mapper_naive
 from matplotlib import pyplot
 from mpi4py import MPI
-from processing import deglitch_l2mad, filter_median
-from unit import Quantity
-from utils import FlatField, MaskPolicy, Pointing, plot_scan
+from tamasis import numpyutils
+from tamasis.core import *
+from tamasis.config import __version__ as tamasis_version
 
 __all__ = [ 'PacsObservation', 'PacsPointing', 'PacsSimulation', 'pacs_plot_scan', 'pacs_preprocess' ]
 
@@ -928,7 +922,7 @@ def _write_status(obs, filename):
             cc('NAXIS', 0), 
             cc('EXTEND', True, 'May contain datasets'), 
             cc('TYPE', 'HPPAVG'+band_type, 'Product Type Identification'), 
-            cc('CREATOR', 'TAMASIS v' + __version__, 'Generator of this file'), 
+            cc('CREATOR', 'TAMASIS v' + tamasis_version, 'Generator of this file'), 
             cc('INSTRUME', 'PACS', 'Instrument attached to this file'), 
             cc('TELESCOP', 'Herschel Space Observatory', 'Name of telescope'),
             cc('OBS_MODE', 'Scan map', 'Observation mode name'),
