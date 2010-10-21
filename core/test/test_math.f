@@ -88,10 +88,8 @@ program test_math
 
     allocate (x(5))
     x = [10._p, 350._p, 0._p, 340._p, 20._p]+1._p
-    print *,mean_degrees(x)
     if (mean_degrees(x) /= 1._p) stop 'FAILED: mean_degrees'
     call minmax_degrees(x, minv, maxv)
-    print *, minv, maxv
     if (minv /= 341._p .or. maxv /= 21._p) stop 'FAILED: minmax_degrees'
 
     stop 'OK.'
