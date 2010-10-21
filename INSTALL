@@ -1,6 +1,6 @@
 Requirements:
 =============
-o cfitsio 3.23
+o cfitsio >= 3.23 (shared library required, 'make shared')
 o FFTW3 3.2.2
 o Fortran 2003 compiler
     - gfortran 4.5
