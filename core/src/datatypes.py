@@ -102,7 +102,10 @@ class FitsArray(Quantity):
         If the same file already exist it overwrites it.
         """
 
-        header = self.header.copy()
+        if self.header is not None:
+            header = self.header.copy()
+        else:
+            header = create_fitsheader(self)
        
         unit = self.unit
         if unit != '':
