@@ -631,8 +631,8 @@ contains
                 ivalid = ivalid + 1
             end do
 
-            !$omp parallel do default(shared) firstprivate(chop_old)          &
-            !$omp private(ifine, itime, ra, dec, pa, chop, coords, coords_yz, x, y, s) &
+            !$omp parallel do default(shared) firstprivate(chop_old)                            &
+            !$omp private(ifine, isample, itime, ra, dec, pa, chop, coords, coords_yz, x, y, s) &
             !$omp reduction(max : npixels_per_sample) reduction(.or. : out)
             
             ! loop over the samples which have not been removed
@@ -645,16 +645,16 @@ contains
                          coords_yz = this%uv2yz(this%centers_uv, this%distortion_yz, chop)
                          chop_old = chop
                      end if
-                     itime  = (ivalid-1) * sampling_factor + ifine + dest
                      coords = this%yz2ad(coords_yz, ra, dec, pa)
                      call ad2xys_gnomonic(coords, x, y, s)
+                     !print *, ivalid, isample, ifine, itime, x, y
+                     itime  = (ivalid-1) * sampling_factor + ifine + dest
                      ! the input map has flux densities, not surface brightness
                      ! f_idetector = f_imap * weight
                      ! with weight = detector_area / pixel_area
                      ! and pixel_area = reference_area / s
-                     s = s * this%detector_area / reference_area
                      call xy2pmatrix(x, y, nx, ny, out, pmatrix(1,itime,:))
-                     pmatrix(1,itime,:)%weight = s
+                     pmatrix(1,itime,:)%weight = s * this%detector_area / reference_area
                  end do
              end do
 
@@ -716,8 +716,8 @@ contains
                 ivalid = ivalid + 1
             end do
 
-            !$omp parallel do default(shared) firstprivate(chop_old)   &
-            !$omp private(ifine, itime, ra, dec, pa, chop, coords, coords_yz, roi) &
+            !$omp parallel do default(shared) firstprivate(chop_old)                        &
+            !$omp private(ifine, isample, itime, ra, dec, pa, chop, coords, coords_yz, roi) &
             !$omp reduction(max : npixels_per_sample) reduction(.or. : out)
             
             ! loop over the samples which have not been removed
