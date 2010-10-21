@@ -20,7 +20,9 @@ def mapper_naive(tod, model, unit=None):
     have the TOD in unit of surface brightness.
     """
 
-    model = Masking(tod.mask) * model * AllReduce().T
+    model = model * AllReduce().T
+    if tod.mask is not None:
+        model = Masking(tod.mask) * model
     mymap = Map(model.transpose(tod), copy=False)
     unity = tod.copy()
     unity[:] = 1.
