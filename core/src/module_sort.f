@@ -479,11 +479,11 @@ contains
         else if (module_array_double(second) /= module_array_double(second) .or. module_mask(second)) then
             compare = 1
         else if (module_array_double(first) < module_array_double(second)) then
-           compare = 1
+            compare = 1
         else if (module_array_double(first) /= module_array_double(second)) then
-           compare = -1
+            compare = -1
         else
-           compare = 0
+            compare = 0
         end if
 
     end function compare_mask_double
