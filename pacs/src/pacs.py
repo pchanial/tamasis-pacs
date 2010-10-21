@@ -11,6 +11,7 @@ from mpi4py import MPI
 from tamasis import numpyutils
 from tamasis.core import *
 from tamasis.config import __version__ as tamasis_version
+from tamasis.generic import *
 
 __all__ = [ 'PacsObservation', 'PacsPointing', 'PacsSimulation', 'pacs_plot_scan', 'pacs_preprocess' ]
 

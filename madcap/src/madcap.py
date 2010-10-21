@@ -2,6 +2,7 @@ import numpy
 import pyfits
 import re
 from tamasis.core import *
+from tamasis.generic import *
 
 __all__ = [ 'MadMap1Observation' ]
 
