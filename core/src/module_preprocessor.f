@@ -264,8 +264,6 @@ contains
         logical                :: even
         integer, parameter     :: iNaN = huge(order)
 
-        integer, allocatable :: iw(:)
-
         ndata = size(data)
 
         if (ndata <= length) then
