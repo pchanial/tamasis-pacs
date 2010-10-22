@@ -206,7 +206,7 @@ class PacsObservation(_Pacs):
         self.instrument.responsivity = Quantity(responsivity, 'V/Jy')
 
         # Store slice information
-        self.slice = numpy.recarray(1, dtype=[('filename', 'S256'), ('nsamples', int), ('nfinesamples', int), ('mode', 'S32'), ('compression_factor', int), ('unit', 'S32'), ('ra', float), ('dec', float), ('cam_angle', float), ('scan_angle', float), ('scan_length', float), ('scan_nlegs', int), ('scan_step', float), ('scan_speed', float), ('ninscans', int), ('nturnarounds', int), ('nothers', int), ('ninvalids', int)])
+        self.slice = numpy.recarray(nfilenames, dtype=[('filename', 'S256'), ('nsamples', int), ('nfinesamples', int), ('mode', 'S32'), ('compression_factor', int), ('unit', 'S32'), ('ra', float), ('dec', float), ('cam_angle', float), ('scan_angle', float), ('scan_length', float), ('scan_nlegs', int), ('scan_step', float), ('scan_speed', float), ('ninscans', int), ('nturnarounds', int), ('nothers', int), ('ninvalids', int)])
 
         regex = re.compile(r'(.*?)(\[[0-9]*:?[0-9]*\])? *$')
         for ifile, file in enumerate(filename):
