@@ -17,23 +17,29 @@ __all__ = [ 'hs', 'mean_degrees', 'minmax_degrees', 'plot_scan', 'airy_disk', 'a
 #-------------------------------------------------------------------------------
 
 
-def hs(array):
+def hs(arg):
     """
-    Display the content of an ndarray with composite dtype alongside the
+    Display the attributes of an object (except methods and those starting
+    with an underscore) or an ndarray with composite dtype alongside the
     names of the records. The display is truncated so that each name fits
     in one line.
     """
-    array = numpy.asarray(array)
-    names = array.dtype.names
-    if names is None:
-        print array
-        return
+    import inspect
+    if isinstance(arg, numpy.ndarray):
+        names = arg.dtype.names
+        if names is None:
+            print arg
+            return
+        print str(arg.size) + ' element' + ('s' if arg.size > 1 else '')
+    else:
+        members = inspect.getmembers(arg, lambda x: not inspect.ismethod(x) and not inspect.isbuiltin(x))
+        members = filter(lambda x: x[0][0] != '_', members)
+        names = map(lambda x:x[0], members)
+
     length = numpy.max(map(len, names))
     lnames = numpy.array([names[i].ljust(length)+': ' for i in range(len(names))])
-    print str(array.size) + ' element' + ('s' if array.size > 1 else '')
-
     for name, lname in zip(names, lnames):
-        value = str(array[name])[0:72-length-2]
+        value = str(getattr(arg, name))[0:72-length-2]
         if len(value) == 72-length-2:
             value = value[0:-3] + '...'
         print lname+value
