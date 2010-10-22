@@ -261,7 +261,7 @@ contains
     function mean_degrees(array, mask)
 
         real(p), intent(in)           :: array(:)
-        logical, optional, intent(in) :: mask(size(array))
+        logical, optional, intent(in) :: mask(:)
         real(p)                       :: mean_degrees
         
         real(p) :: value
