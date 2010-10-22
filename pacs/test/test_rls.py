@@ -11,7 +11,7 @@ tod = obs.get_tod()
 
 telescope    = Identity('Telescope PSF')
 projection   = Projection(obs, resolution=3.2, oversampling=False, npixels_per_sample=6)
-multiplexing = CompressionAverage(obs.fine_sampling_factor, 'Multiplexing')
+multiplexing = CompressionAverage(obs.instrument.fine_sampling_factor, 'Multiplexing')
 crosstalk    = Identity('Crosstalk')
 compression  = CompressionAverage(obs)
 masking_tod  = Masking(tod.mask)

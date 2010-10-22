@@ -18,10 +18,10 @@ from processing import interpolate_linear
 
 __all__ = ['AcquisitionModel', 'AcquisitionModelTranspose', 'Composition', 
            'Addition', 'Square', 'Symmetric', 'Diagonal', 'Scalar', 'Identity',
-           'DiscreteDifference', 'Projection', 'Compression', 
-           'CompressionAverage', 'DownSampling', 'Masking', 'Unpacking', 'Unpacking2',  
-           'Reshaping', 'Padding', 'Fft', 'FftHalfComplex', 'InvNtt', 'InterpolationLinear', 'AllReduce', 'CircularShift', 'ValidationError', 
-           'asacquisitionmodel']
+           'DiscreteDifference', 'Projection', 'CompressionAverage', 'DownSampling', 
+           'Masking', 'Unpacking', 'Unpacking2', 'Reshaping', 'Padding', 'Fft', 
+           'FftHalfComplex', 'InvNtt', 'InterpolationLinear', 'AllReduce', 'CircularShift', 
+           'ValidationError', 'asacquisitionmodel']
 
 
 class ValidationError(Exception): pass
@@ -693,12 +693,13 @@ class Projection(AcquisitionModel):
     """
     def __init__(self, observation, method=None, header=None, resolution=None, npixels_per_sample=None, oversampling=True, description=None):
         AcquisitionModel.__init__(self, description)
-        self._pmatrix, self.header, ndetectors, nsamples, self.npixels_per_sample = \
+
+        self._pmatrix, self.header, nsamples, self.npixels_per_sample = \
             observation.get_pointing_matrix(header, resolution, npixels_per_sample, method=method, oversampling=oversampling)
         self.pmatrix = self._pmatrix.view(dtype=[('weight', 'f4'), ('pixel', 'i4')]).view(numpy.recarray)
-        self.pmatrix.resize((observation.ndetectors, numpy.sum(nsamples), self.npixels_per_sample))
+        self.pmatrix.resize((observation.instrument.ndetectors, numpy.sum(nsamples), self.npixels_per_sample))
         self.shapein = tuple([self.header['naxis'+str(i+1)] for i in reversed(range(self.header['naxis']))])
-        self.shapeout = combine_sliced_shape(observation.ndetectors, nsamples)
+        self.shapeout = combine_sliced_shape(observation.instrument.ndetectors, nsamples)
 
     def direct(self, map2d, reusein=False, reuseout=False):
         map2d, shapeout = self.validate_input_direct(Map, map2d, reusein)
@@ -1182,7 +1183,7 @@ class InvNtt(Diagonal):
         nslices = nsamples.size
         if numpy.rank(filter) == 2:
             filter = numpy.resize(filter, (nslices, ndetectors, ncorrelations+1))
-        tod_filter, status = tmf.fft_filter_uncorrelated(filter.T, numpy.ascontiguousarray(nsamples), numpy.sum(nsamples))
+        tod_filter, status = tmf.fft_filter_uncorrelated(filter.T, numpy.asarray(nsamples, dtype='int32'), numpy.sum(nsamples))
         if status != 0: raise RuntimeError()
         Diagonal.__init__(self, tod_filter.T, nsamples, description)
         self.ncorrelations = ncorrelations

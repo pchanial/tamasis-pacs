@@ -1,12 +1,12 @@
 from tamasis import *
 import numpy
 
-obs = PacsObservation(tamasis_dir+'pacs/test/data/frames_blue.fits')
+obs = PacsObservation(tamasis_dir+'pacs/test/data/frames_blue.fits', fine_sampling_factor=1)
 tod = obs.get_tod()
 
 telescope    = Identity('Telescope PSF')
 projection   = Projection(obs, oversampling=False, npixels_per_sample=6)
-multiplexing = CompressionAverage(obs.fine_sampling_factor, 'Multiplexing')
+multiplexing = CompressionAverage(obs.instrument.fine_sampling_factor, 'Multiplexing')
 crosstalk    = Identity('Crosstalk')
 compression  = CompressionAverage(obs)
 masking_tod  = Masking(tod.mask)

@@ -61,6 +61,7 @@ subroutine pacs_info_init(filename, nfilenames, band, transparent_mode, nsamples
             else
                status = 1
                write (ERROR_UNIT,'(a)') 'File name does not contain the array band identifier (blue, green, red).'
+               return
             end if
 
             if (last == 0) then
