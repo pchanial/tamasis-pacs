@@ -87,7 +87,6 @@ public :: PacsObservation
         procedure :: set_unit
         procedure :: set_flags
         procedure :: set_sampling_interval
-        procedure :: set_astrometry_oldstyle
 
     end type PacsObservationSlice
 
@@ -437,28 +436,11 @@ contains
         class(PacsObservationSlice), intent(inout) :: this
         integer, intent(out)                       :: status
 
-        integer                       :: isample, length, nbs, nbl, nr, nu, nmax, nsamples, unit
+        integer                       :: isample, nbs, nbl, nr, nu, nmax, nsamples, unit
         character(len=5), allocatable :: bands(:)
         character(len=5)              :: band
 
         this%band = ' '
-
-        ! old style file format
-        length = len_trim(this%filename)
-        if (this%filename(length-4:length) /= '.fits') then
-            status = 0
-            if (strlowcase(this%filename(length-3:length)) == 'blue') then
-               this%band = 'b'
-            else if (strlowcase(this%filename(length-4:length)) == 'green') then
-               this%band = 'g'
-            else if (strlowcase(this%filename(length-2:length)) == 'red') then
-               this%band = 'r'
-            else
-               status = 1
-               write (ERROR_UNIT,'(a)') 'File name does not contain the array band identifier (blue, green, red).'
-            end if
-            return
-        endif
 
         call ft_open_bintable(trim(this%filename) // '[Status]', unit, nsamples, status)
         if (status /= 0) return
@@ -549,20 +531,10 @@ contains
         class(PacsObservationSlice), intent(inout) :: this
         integer, intent(out)                       :: status
 
-        integer           :: unit, length
+        integer           :: unit
         character(len=70) :: algorithm
 
         this%compression_factor = 0
-
-        ! old style file format
-        length = len_trim(this%filename)
-        if (this%filename(length-4:length) /= '.fits') then
-            status = 0
-            this%compression_factor = 1
-            write (*,'(a)') 'Warning: Assuming compression factor of one for ob&
-                &solete file format.'
-            return
-        end if
 
         call ft_open(trim(this%filename), unit, status)
         if (status /= 0) return
@@ -592,19 +564,10 @@ contains
     subroutine set_observing_mode(this, status)
         class(PacsObservationSlice), intent(inout) :: this
         integer, intent(out)                       :: status
-        integer           :: unit, length
+        integer           :: unit
         character(len=70) :: compression
 
         this%observing_mode = 'Unknown'
-
-        ! old style file format
-        length = len_trim(this%filename)
-        if (this%filename(length-4:length) /= '.fits') then
-            status = 0
-            this%observing_mode = 'Transparent'
-            write (*,'(a)') 'Warning: Transparent mode assumed for obsolete file format.'
-            return
-        end if
 
         call ft_open(trim(this%filename), unit, status)
         if (status /= 0) return
@@ -642,38 +605,25 @@ contains
 
         logical(1), allocatable :: inscan(:)
         logical(1), allocatable :: turnaround(:)
-        integer                 :: length
         integer                 :: unit
         integer                 :: isample, itarget
         integer*8, allocatable  :: bbid(:)
         real(p), allocatable    :: chop(:)
 
-        length = len_trim(this%filename)
-        if (this%filename(length-4:length) /= '.fits') then
-            write (OUTPUT_UNIT,'(a)') 'Warning: Obsolete file format.'
-            call ft_read_image(trim(this%filename) // '_ChopFpuAngle.fits', chop, status)
-            if (status /= 0) return
-            this%nsamples = size(chop)
-            allocate (bbid(this%nsamples))
-            bbid = 0
-        else
+        call ft_open_bintable(trim(this%filename) // '[Status]', unit, this%nsamples, status)
+        if (status /= 0) return
 
-            call ft_open_bintable(trim(this%filename) // '[Status]', unit, this%nsamples, status)
-            if (status /= 0) return
+        allocate (bbid(this%nsamples))
+        call ft_read_column(unit, 'BBID', 1, this%nsamples, bbid, status)
+        if (status /= 0) return
+        bbid = ishft(bbid, -16)
 
-            allocate (bbid(this%nsamples))
-            call ft_read_column(unit, 'BBID', 1, this%nsamples, bbid, status)
-            if (status /= 0) return
-            bbid = ishft(bbid, -16)
+        allocate (chop(this%nsamples))
+        call ft_read_column(unit, 'CHOPFPUANGLE', 1, this%nsamples, chop, status)
+        if (status /= 0) return
 
-            allocate (chop(this%nsamples))
-            call ft_read_column(unit, 'CHOPFPUANGLE', 1, this%nsamples, chop, status)
-            if (status /= 0) return
-
-            call ft_close(unit, status)
-            if (status /= 0) return
-
-        end if
+        call ft_close(unit, status)
+        if (status /= 0) return
 
         if (this%nsamples == 0) then
             status = 1
@@ -734,13 +684,7 @@ contains
 
         integer*8, allocatable :: timeus(:)
         integer                :: nsamples
-        integer                :: length, unit
-        
-        length = len_trim(this%filename)
-        if (this%filename(length-4:length) /= '.fits') then
-            call this%set_astrometry_oldstyle(status)
-            return
-        end if
+        integer                :: unit
         
         call ft_open_bintable(trim(this%filename) // '[Status]', unit, nsamples, status)
         if (status /= 0) return
@@ -778,53 +722,15 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine set_astrometry_oldstyle(this, status)
-
-        class(PacsObservationSlice), intent(inout) :: this
-        integer, intent(out)                       :: status
-
-        real(p), allocatable   :: buffer(:)
-        integer*8, allocatable :: timeus(:)
-        
-        call ft_read_image(trim(this%filename)//'_Time.fits', timeus, status)
-        if (status /= 0) return
-        this%p%time = (timeus - timeus(1)) * 1.e-6_p
-
-        call ft_read_image(trim(this%filename) // '_RaArray.fits', buffer, status)
-        if (status /= 0) return
-        this%p%ra = buffer
-
-        call ft_read_image(trim(this%filename) // '_DecArray.fits', buffer, status)
-        if (status /= 0) return
-        this%p%dec = buffer
-
-        call ft_read_image(trim(this%filename) // '_PaArray.fits', buffer, status)
-        if (status /= 0) return
-        this%p%pa = buffer
-
-        call ft_read_image(trim(this%filename) // '_ChopFpuAngle.fits', buffer, status)
-        if (status /= 0) return
-        this%p%chop = buffer
-
-    end subroutine set_astrometry_oldstyle
-
-
-    !-------------------------------------------------------------------------------------------------------------------------------
-
-
     subroutine set_unit(this, status)
 
         class(PacsObservationSlice), intent(inout) :: this
         integer, intent(out)                       :: status
 
-        integer :: length, unit
+        integer :: unit
         logical :: found
 
         this%unit = ''
-        length = len_trim(this%filename)
-        if (this%filename(length-4:length) /= '.fits') then
-            return
-        end if
 
         call ft_open(trim(this%filename) // '[Signal]', unit, found, status)
         if (status /= 0 .or. .not. found) return

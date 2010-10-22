@@ -25,7 +25,7 @@ subroutine pacs_info_init(filename, nfilenames, band, transparent_mode, nsamples
     integer, intent(out)          :: status
 
     class(PacsObservationSlice), allocatable :: slice
-    integer                                  :: iobs, length, unit, first, last
+    integer                                  :: iobs, unit, first, last
     character(len=10)                        :: obstype
     character(len=7)                         :: band_
 
@@ -47,31 +47,6 @@ subroutine pacs_info_init(filename, nfilenames, band, transparent_mode, nsamples
         if (first == 0) then
             first = 1
         end if
-
-        ! old style file format
-        length = len_trim(slice%filename)
-        if (slice%filename(length-4:length) /= '.fits') then
-            status = 0
-            if (strlowcase(slice%filename(length-3:length)) == 'blue') then
-               band_ = 'blue'
-            else if (strlowcase(slice%filename(length-4:length)) == 'green') then
-               band_ = 'green'
-            else if (strlowcase(slice%filename(length-2:length)) == 'red') then
-               band_ = 'red'
-            else
-               status = 1
-               write (ERROR_UNIT,'(a)') 'File name does not contain the array band identifier (blue, green, red).'
-               return
-            end if
-
-            if (last == 0) then
-                stop
-            end if
-
-            nsamples_max = nsamples_max + last - first + 1
-            cycle
-
-        endif
 
         if (last == 0) then
             call ft_open(trim(slice%filename) // '[Signal]', unit, status)

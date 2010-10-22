@@ -93,7 +93,6 @@ module module_pacsinstrument
         procedure :: compute_projection_sharp_edges
         procedure :: filter_detectors
         procedure :: read_one
-        procedure :: read_oldstyle
         procedure :: read_calibration_files
 
     end type pacsinstrument
@@ -815,7 +814,7 @@ contains
         integer, intent(out)                    :: status
 
         integer                :: ip, iq
-        integer                :: idetector, ndetectors, unit, length
+        integer                :: idetector, ndetectors, unit
         integer, allocatable   :: imageshape(:)
         logical                :: mask_found
         integer*4, allocatable :: maskcompressed(:)
@@ -830,13 +829,6 @@ contains
 
         ! set mask from policy
         mask = spread(pack(obs%p%masked, .not. obs%p%removed), 2, ndetectors)
-
-        ! old style file format
-        length = len_trim(obs%filename)
-        if (obs%filename(length-4:length) /= '.fits') then
-            call this%read_oldstyle(obs, signal, mask, status)
-            return
-        end if
 
         ! read signal HDU
         call ft_open_image(trim(obs%filename) // '[Signal]', unit, 3, imageshape, status)
@@ -913,63 +905,6 @@ contains
         call ft_close(unit, status)
 
     end subroutine read_one
-
-
-    !-------------------------------------------------------------------------------------------------------------------------------
-
-
-    subroutine read_oldstyle(this, obs, signal, mask, status)
-
-        class(pacsinstrument), intent(in)       :: this
-!!$        class(observationslice), intent(in) :: obs
-        class(pacsobservationslice), intent(in) :: obs
-        real(p), intent(inout)                  :: signal(:,:)
-        logical*1, intent(inout)                :: mask(:,:)
-        integer, intent(out)                    :: status
-
-        integer              :: ip, iq
-        integer              :: idetector, unit
-        real(p)              :: signal_(obs%nsamples)
-        logical*1            :: mask_(obs%nsamples)
-        integer, allocatable :: imageshape(:)
-
-        ! handle signal
-        call ft_open_image(trim(obs%filename) // '_Signal.fits', unit, 3, imageshape, status)
-        if (status /= 0) return
-
-        do idetector = 1, size(signal,2)
-
-            ip = this%pq(1,idetector)
-            iq = this%pq(2,idetector)
-            call ft_read_slice(unit, obs%first, obs%last, iq+1, ip+1, imageshape, signal_, status)
-            if (status /= 0) return
-
-            signal(:, idetector) = pack(signal_, .not. obs%p%removed)
-
-        end do
-
-        call ft_close(unit, status)
-        if (status /= 0) return
-
-        ! handle mask
-        call ft_open_image(trim(obs%filename) // '_Mask.fits', unit, 3, imageshape, status)
-        if (status /= 0) return
-
-        do idetector = 1, size(mask,2)
-
-            ip = this%pq(1,idetector)
-            iq = this%pq(2,idetector)
-
-            call ft_read_slice(unit, obs%first, obs%last, iq+1, ip+1, imageshape, mask_, status)
-            if (status /= 0) return
-
-            mask(:, idetector) = pack(mask_, .not. obs%p%removed)
-
-        end do
-
-        call ft_close(unit, status)
-
-    end subroutine read_oldstyle
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
