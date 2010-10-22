@@ -1,5 +1,5 @@
 import numpy
-from tamasis.generic import *
+from tamasis.observations import *
 
 flags = ['bad', 'u1', 'u2']
 good_policy = ['kEep', 'removE', 'MASK']
