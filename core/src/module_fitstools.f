@@ -15,6 +15,12 @@ module module_fitstools
     public :: CFITSIO_ANY_HDU
     public :: CFITSIO_READONLY
     public :: CFITSIO_READWRITE
+    public :: FLEN_KEYWORD
+    public :: FLEN_CARD
+    public :: FLEN_VALUE
+    public :: FLEN_COMMENT
+    public :: FLEN_ERRMSG
+    public :: FLEN_STATUS
     public :: ft_check_error_cfitsio
     public :: ft_close
     public :: ft_create_header
@@ -34,12 +40,12 @@ module module_fitstools
     integer, private, parameter :: NULLVAL = 0
     integer, private, parameter :: BUFFERSIZE = 1024
 
-    integer, private, parameter :: FLEN_KEYWORD = 71
-    integer, private, parameter :: FLEN_CARD    = 80
-    integer, private, parameter :: FLEN_VALUE   = 70
-    integer, private, parameter :: FLEN_COMMENT = 72
-    integer, private, parameter :: FLEN_ERRMSG  = 80
-    integer, private, parameter :: FLEN_STATUS  = 30
+    integer, parameter :: FLEN_KEYWORD = 71
+    integer, parameter :: FLEN_CARD    = 80
+    integer, parameter :: FLEN_VALUE   = 70
+    integer, parameter :: FLEN_COMMENT = 72
+    integer, parameter :: FLEN_ERRMSG  = 80
+    integer, parameter :: FLEN_STATUS  = 30
 
     interface ft_open
         module procedure ft_open_must_exist, ft_open_must_not_exist
@@ -2129,21 +2135,19 @@ contains
         integer, intent(out)                               :: status
         character(len=FLEN_COMMENT), optional, intent(out) :: comment
 
-        logical                     :: found_
+        logical                     :: found_, junk
         character(len=FLEN_COMMENT) :: comment_
         
-        found_ = .false.
         status = 0
-
         call ftgkyl(unit, keyword, value, comment_, status)
-        if (status /= 0) then
+        found_ = status == 0
+        if (.not. found_) then
+            value = .false.
             if (status == 202 .and. present(found)) status = 0
-            if (ft_check_error_cfitsio(status, unit)) return
-        else
-            found_ = .true.
+            junk = ft_check_error_cfitsio(status, unit)
         end if
 
-        if (present(found)) found = found_
+        if (present(found))   found = found_
         if (present(comment)) comment = comment_
 
     end subroutine ft_read_keyword_unit_logical
@@ -2161,21 +2165,19 @@ contains
         integer, intent(out)                               :: status
         character(len=FLEN_COMMENT), optional, intent(out) :: comment
 
-        logical                     :: found_
+        logical                     :: found_, junk
         character(len=FLEN_COMMENT) :: comment_
         
-        found_ = .false.
         status = 0
-
         call ftgkyj(unit, keyword, value, comment_, status)
-        if (status /= 0) then
+        found_ = status == 0
+        if (.not. found_) then
+            value = 0
             if (status == 202 .and. present(found)) status = 0
-            if (ft_check_error_cfitsio(status, unit)) return
-        else
-            found_ = .true.
+            junk = ft_check_error_cfitsio(status, unit)
         end if
 
-        if (present(found)) found = found_
+        if (present(found))   found = found_
         if (present(comment)) comment = comment_
 
     end subroutine ft_read_keyword_unit_int4
@@ -2193,21 +2195,19 @@ contains
         integer, intent(out)                               :: status
         character(len=FLEN_COMMENT), optional, intent(out) :: comment
 
-        logical                     :: found_
+        logical                     :: found_, junk
         character(len=fLEN_COMMENT) :: comment_
                 
-        found_ = .false.
         status = 0
-
         call ftgkyk(unit, keyword, value, comment_, status)
-        if (status /= 0) then
+        found_ = status == 0
+        if (.not. found_) then
+            value = 0
             if (status == 202 .and. present(found)) status = 0
-            if (ft_check_error_cfitsio(status, unit)) return
-        else
-            found_ = .true.
+            junk = ft_check_error_cfitsio(status, unit)
         end if
 
-        if (present(found)) found = found_
+        if (present(found))   found = found_
         if (present(comment)) comment = comment_
 
     end subroutine ft_read_keyword_unit_int8
@@ -2245,21 +2245,19 @@ contains
         integer, intent(out)                               :: status
         character(len=FLEN_COMMENT), optional, intent(out) :: comment
 
-        logical                     :: found_
+        logical                     :: found_, junk
         character(len=FLEN_COMMENT) :: comment_
         
-        found_ = .false.
         status = 0
-
         call ftgkyd(unit, keyword, value, comment_, status)
-        if (status /= 0) then
+        found_ = status == 0
+        if (.not. found_) then
+            value = 0._dp
             if (status == 202 .and. present(found)) status = 0
-            if (ft_check_error_cfitsio(status, unit)) return
-        else
-            found_ = .true.
+            junk = ft_check_error_cfitsio(status, unit)
         end if
 
-        if (present(found)) found = found_
+        if (present(found))   found = found_
         if (present(comment)) comment = comment_
 
     end subroutine ft_read_keyword_unit_real8
@@ -2299,21 +2297,18 @@ contains
         integer, intent(out)                               :: status
         character(len=FLEN_COMMENT), optional, intent(out) :: comment
 
-        logical                     :: found_
+        logical                     :: found_, junk
         character(len=FLEN_COMMENT) :: comment_
         
-        found_ = .false.
         status = 0
-
         call ftgkys(unit, keyword, value, comment_, status)
-        if (status /= 0) then
+        found_ = status == 0
+        if (.not. found_) then
             if (status == 202 .and. present(found)) status = 0
-            if (ft_check_error_cfitsio(status, unit)) return
-        else
-            found_ = .true.
+            junk = ft_check_error_cfitsio(status, unit)
         end if
 
-        if (present(found)) found = found_
+        if (present(found))   found = found_
         if (present(comment)) comment = comment_
 
     end subroutine ft_read_keyword_unit_character
@@ -2336,8 +2331,6 @@ contains
         character(len=FLEN_COMMENT) :: comment_
         character(len=FLEN_KEYWORD) :: kwd
         
-        if (present(found)) found = .false.
-
         ikey = 0
         do
             call ft_read_keyword(unit, 'key.META_' // strinteger(ikey), kwd, found_, status)
@@ -2355,7 +2348,11 @@ contains
         if (present(comment)) comment = comment_
         return
 
-    999 if (present(found)) return
+    999 value = .false.
+        if (present(found)) then
+            found = .false.
+            return
+        end if
         status = 1
         write (ERROR_UNIT,'(a)') "FT_READ_KEYWORD_HCSS: FITS keyword '" // keyword // "' is not found."
 
@@ -2379,8 +2376,6 @@ contains
         character(len=FLEN_COMMENT) :: comment_
         character(len=FLEN_KEYWORD) :: kwd
         
-        if (present(found)) found = .false.
-
         ikey = 0
         do
             call ft_read_keyword(unit, 'key.META_' // strinteger(ikey), kwd, found_, status)
@@ -2398,7 +2393,11 @@ contains
         if (present(comment)) comment = comment_
         return
 
-    999 if (present(found)) return
+    999 value = 0
+        if (present(found)) then
+            found = .false.
+            return
+        end if
         status = 1
         write (ERROR_UNIT,'(a)') "FT_READ_KEYWORD_HCSS: FITS keyword '" // keyword // "' is not found."
 
@@ -2422,8 +2421,6 @@ contains
         character(len=FLEN_COMMENT) :: comment_
         character(len=FLEN_KEYWORD) :: kwd
         
-        if (present(found)) found = .false.
-
         ikey = 0
         do
             call ft_read_keyword(unit, 'key.META_' // strinteger(ikey), kwd, found_, status)
@@ -2441,7 +2438,11 @@ contains
         if (present(comment)) comment = comment_
         return
 
-    999 if (present(found)) return
+    999 value = 0
+        if (present(found)) then
+            found = .false.
+            return
+        end if
         status = 1
         write (ERROR_UNIT,'(a)') "FT_READ_KEYWORD_HCSS: FITS keyword '" // keyword // "' is not found."
 
@@ -2485,8 +2486,6 @@ contains
         character(len=FLEN_COMMENT) :: comment_
         character(len=FLEN_KEYWORD) :: kwd
         
-        if (present(found)) found = .false.
-
         ikey = 0
         do
             call ft_read_keyword(unit, 'key.META_' // strinteger(ikey), kwd, found_, status)
@@ -2504,7 +2503,11 @@ contains
         if (present(comment)) comment = comment_
         return
 
-    999 if (present(found)) return
+    999 value = 0._dp
+        if (present(found)) then
+            found = .false.
+            return
+        end if
         status = 1
         write (ERROR_UNIT,'(a)') "FT_READ_KEYWORD_HCSS: FITS keyword '" // keyword // "' is not found."
 
@@ -2550,8 +2553,6 @@ contains
         character(len=FLEN_COMMENT) :: comment_
         character(len=FLEN_KEYWORD) :: kwd
         
-        if (present(found)) found = .false.
-
         ikey = 0
         do
             call ft_read_keyword(unit, 'key.META_' // strinteger(ikey), kwd, found_, status)
@@ -2569,7 +2570,11 @@ contains
         if (present(comment)) comment = comment_
         return
 
-    999 if (present(found)) return
+    999 value = ''
+        if (present(found)) then
+            found = .false.
+            return
+        end if
         status = 1
         write (ERROR_UNIT,'(a)') "FT_READ_KEYWORD_HCSS: FITS keyword '" // keyword // "' is not found."
 
