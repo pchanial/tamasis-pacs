@@ -270,7 +270,7 @@ class Pointing(numpy.ndarray):
 
         ftype = get_default_dtype_float()
         dtype = numpy.dtype([('time', ftype), ('ra', ftype), ('dec', ftype), ('pa', ftype), ('info', numpy.int64), ('policy', numpy.int64)])
-        result = numpy.recarray(nsamples_tot, dtype=dtype)
+        result = numpy.recarray(nsamples_tot, dtype=dtype).view(cls)
         result.time = time
         result.ra   = ra
         result.dec  = dec
@@ -282,18 +282,15 @@ class Pointing(numpy.ndarray):
 
     @property
     def velocity(self):
-        dra  = Quantity(numpy.diff(self.ra), 'deg')
-        ddec = Quantity(numpy.diff(self.dec), 'deg')
+        ra = Quantity(self.ra, 'deg')
+        dec = Quantity(self.dec, 'deg')
+        dra  = numpy.diff(ra)
+        ddec = numpy.diff(dec)
         dtime = Quantity(numpy.diff(self.time), 's')
-        vel = numpy.sqrt((dra*numpy.cos(self.dec[0:-1].inunit('rad')))**2 + ddec**2) / dtime
+        vel = numpy.sqrt((dra*numpy.cos(dec[0:-1].inunit('rad')))**2 + ddec**2) / dtime
         vel.unit = 'arcsec/s'
         u = vel._unit
         vel = numpy.append(vel, vel[-1])
         # BUG: append eats the unit...
         vel._unit = u
         return vel
-
-
-#-------------------------------------------------------------------------------
-
-
