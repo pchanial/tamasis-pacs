@@ -46,7 +46,7 @@ def mapper_naive(tod, model, unit=None):
         mymap *= pixel_area
        
     mymap.unit = newunit._unit
-       
+    
     return mymap
 
 
