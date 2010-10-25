@@ -7,7 +7,7 @@
 module module_observation
 
     use iso_fortran_env,  only : ERROR_UNIT, OUTPUT_UNIT
-    use module_fitstools, only : ft_close, ft_open, ft_open_bintable, ft_read_column, ft_read_image, ft_read_keyword,              &
+    use module_fitstools, only : FLEN_VALUE, ft_close, ft_open, ft_open_bintable, ft_read_column, ft_read_image, ft_read_keyword,  &
                                  ft_read_keyword_hcss
     use module_math,      only : NaN, mean, mean_degrees, median, neq_real
     use module_string,    only : strinteger, strlowcase, strreal, strsection, strternary
@@ -21,10 +21,10 @@ module module_observation
 public :: PacsObservationSlice
 public :: PacsObservation    
     public :: Pointing
-    public :: POINTING_INSCAN, POINTING_TURNOVER, POINTING_OTHER
+    public :: POINTING_INSCAN, POINTING_TURNAROUND, POINTING_OTHER
 
     integer, parameter :: POINTING_INSCAN = 1
-    integer, parameter :: POINTING_TURNOVER = 2
+    integer, parameter :: POINTING_TURNAROUND = 2
     integer, parameter :: POINTING_OTHER = 3
 
     type MaskPolicy
@@ -54,32 +54,33 @@ public :: PacsObservation
     end type Pointing
 
 !!$    type observationslice
-!!$        integer            :: first, last, nsamples
-!!$        character(len=256) :: filename
-!!$        character          :: band
-!!$        character(len=80)  :: observing_mode
-!!$        integer            :: compression_factor
-!!$        real(dp)           :: sampling_interval
+!!$        integer                     :: first, last, nsamples
+!!$        character(len=256)          :: filename
+!!$        character                   :: band
+!!$        character(len=FLEN_VALUE)   :: observing_mode
+!!$        integer                     :: compression_factor
+!!$        real(dp)                    :: sampling_interval
 !!$        type(pointing), allocatable :: p(:)
-!!$
 !!$    end type observationslice
 
 !!$ type, extends(observationslice) :: PacsObservationSlice
     type :: PacsObservationSlice
 
-        integer            :: first, last, nsamples, nvalids
-        character(len=256) :: filename
-        character          :: band
-        character(len=70)  :: observing_mode
-        character(len=70)  :: unit
-        integer            :: compression_factor
-        real(p)            :: sampling_interval
+        integer                     :: first, last, nsamples, nvalids
+        character(len=256)          :: filename
+        character                   :: band
+        character(len=FLEN_VALUE)   :: observing_mode
+        real(p)                     :: ra, dec
+        real(p)                     :: cam_angle, scan_angle, scan_length, scan_speed, scan_step
+        integer                     :: scan_nlegs
+        character(len=FLEN_VALUE)   :: unit
+        integer                     :: compression_factor
+        real(p)                     :: sampling_interval
         type(pointing), allocatable :: p(:)
 
     contains
         
         procedure :: set_band
-        procedure :: set_compression_mode
         procedure :: set_filename
         procedure :: set_policy
         procedure :: set_observing_mode
@@ -91,13 +92,12 @@ public :: PacsObservation
     end type PacsObservationSlice
 
     type :: Observation
-        integer           :: nslices
-        integer           :: nsamples  ! number of pointings
-        integer           :: nvalids   ! number of non-removed pointings, to be included in tod & pmatrix
-        character         :: band
-        character(len=70) :: observing_mode
-        character(len=70) :: unit
-        type(MaskPolicy)  :: policy
+        integer                   :: nslices
+        integer                   :: nsamples  ! number of pointings
+        integer                   :: nvalids   ! number of non-removed pointings, to be included in tod & pmatrix
+        character                 :: band
+        character(len=FLEN_VALUE) :: unit
+        type(MaskPolicy)          :: policy
         type(PacsObservationSlice), allocatable :: slice(:)
     contains
         procedure :: compute_center
@@ -183,6 +183,7 @@ contains
     ! corrected beforehand), it will not be taken into account so that finer
     ! sampling will be interpolated using the start and end of the gap.
     subroutine get_position_index(this, islice, itime, sampling_factor, ra, dec, pa, chop)
+
         class(observation), intent(in) :: this
         integer, intent(in)            :: islice, itime, sampling_factor
         real(p), intent(out)           :: ra, dec, pa, chop
@@ -240,6 +241,7 @@ contains
 
 
     subroutine print_pointing(this)
+
         type(pointing), intent(in) :: this(:)
 
         write (*,*) 'Time: ', minval(this%time), '...', maxval(this%time)
@@ -526,23 +528,19 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine set_compression_mode(this, status)
+    subroutine set_observing_mode(this, status)
 
         class(PacsObservationSlice), intent(inout) :: this
         integer, intent(out)                       :: status
 
-        integer           :: unit
-        character(len=70) :: algorithm
-
-        this%compression_factor = 0
+        logical                   :: found
+        integer                   :: unit
+        character(len=FLEN_VALUE) :: algorithm, mode, scan_speed
 
         call ft_open(trim(this%filename), unit, status)
         if (status /= 0) return
 
         call ft_read_keyword_hcss(unit, 'algorithm', algorithm, status=status)
-        if (status /= 0) return
-
-        call ft_close(unit, status)
         if (status /= 0) return
 
         if (algorithm(1:19) == 'Floating Average  :') then
@@ -553,40 +551,124 @@ contains
             end if
         else if (algorithm == 'None') then
             this%compression_factor = 1
+        else
+            status = 1
+            write (ERROR_UNIT, '(a)') "ERROR: The compression algorithm '" // trim(algorithm) // "' is not understood."
         end if
-        
-    end subroutine set_compression_mode
 
-
-    !-------------------------------------------------------------------------------------------------------------------------------
-
-
-    subroutine set_observing_mode(this, status)
-        class(PacsObservationSlice), intent(inout) :: this
-        integer, intent(out)                       :: status
-        integer           :: unit
-        character(len=70) :: compression
-
-        this%observing_mode = 'Unknown'
-
-        call ft_open(trim(this%filename), unit, status)
+        call ft_read_keyword_hcss(unit, 'mapScanAngle',     this%scan_angle, found, status)
         if (status /= 0) return
 
-        call ft_read_keyword_hcss(unit, 'compMode', compression, status=status)
+        call ft_read_keyword_hcss(unit, 'mapScanLegLength', this%scan_length, found, status)
         if (status /= 0) return
+
+        call ft_read_keyword(unit, '__mapScanSpeed',    this%scan_speed, found, status)
+        if (status /= 0) return
+
+        if (.not. found) then
+            call ft_read_keyword_hcss(unit, 'mapScanRate',     scan_speed, found, status)
+            if (status /= 0) return
+            if (found) then                
+                select case (strlowcase(scan_speed))
+                    case ('slow')
+                        write (OUTPUT_UNIT,'(a)') 'CHECKME: SCAN_SPEED LOW=10arcsec/s'
+                        this%scan_speed = 10._p
+                    case ('medium')
+                        this%scan_speed = 20._p
+                    case ('fast')
+                        this%scan_speed = 60._p
+                    case default
+                        status = 1
+                        write (ERROR_UNIT, '(a)') "email-me pierre.chanial@cea.fr: mapscanrate: '" // trim(scan_speed) // "'."
+                end select
+            else
+                call ft_read_keyword_hcss(unit, 'mapScanSpeed',     scan_speed, found, status)
+                if (status /= 0) return
+                if (found) then
+                    select case (strlowcase(scan_speed))
+                        case ('low')
+                            write (OUTPUT_UNIT,'(a)') 'CHECKME: SCAN_SPEED LOW=10arcsec/s'
+                            this%scan_speed = 10._p
+                        case ('medium')
+                            this%scan_speed = 20._p
+                        case ('high')
+                            this%scan_speed = 60._p
+                        case default
+                            status = 1
+                            write (ERROR_UNIT, '(a)') "email-me pierre.chanial@cea.fr: mapscanspeed: '" // trim(scan_speed) // "'."
+                    end select
+                end if
+            end if
+        end if
+
+        call ft_read_keyword_hcss(unit, 'mapScanNumLegs',   this%scan_nlegs, found, status)
+        if (status /= 0) return
+
+        call ft_read_keyword(unit, 'ra', this%ra, found, status)
+        if (status /= 0) return
+
+        call ft_read_keyword(unit, 'dec', this%dec, found, status)
+        if (status /= 0) return
+
+        call ft_read_keyword(unit, 'cusmode', mode, found, status)
+        if (status /= 0) return
+        if (.not. found) then
+
+            call ft_read_keyword_hcss(unit, 'compMode', mode, status=status)
+            if (status /= 0) return
+
+            select case (mode)
+                case ('Photometry Lossless Compression Mode')
+                    this%observing_mode = 'transparent'
+                case ('Photometry Default Mode')
+                    if (this%band == 'r') then
+                        write (OUTPUT_UNIT,'(a)') 'Warning: Prime or parallel mode cannot be inferred.'
+                    end if
+                    this%observing_mode = 'prime'
+                case ('Photometry Double Compression Mode')
+                    this%observing_mode = 'parallel'
+                case default
+                    status = 1
+                    write (ERROR_UNIT,'(a)') "SET_OBSERVING_MODE: In file '" // trim(this%filename) // "', unhandled value '" //   &
+                          trim(mode) // "' for keyword 'compMode'."
+                    return
+            end select
+
+        else
+            
+            select case (mode)
+                case ('PacsPhoto')
+                    this%observing_mode = 'prime'
+                case ('SpirePacsParallel')
+                    this%observing_mode = 'parallel'
+                case ('__PacsTranspScan')
+                    this%observing_mode = 'transparent'
+                case ('__Calibration')
+                    this%observing_mode = 'unknown'
+                case default
+                    status = 1
+                    write (ERROR_UNIT,'(a)') "SET_OBSERVING_MODE: In file '" // this%filename // "', unhandled value '" //         &
+                          trim(mode) // "' for keyword 'CUSMODE'."
+                    return
+            end select
+
+        end if
+
+        this%cam_angle = 0.
+        this%scan_step = 0.
 
         call ft_close(unit, status)
         if (status /= 0) return
 
-        if (compression == 'Photometry Lossless Compression Mode') then
-            this%observing_mode = 'Transparent'
-        else if (compression == 'Photometry Default Mode') then
-            this%observing_mode = 'Prime'
-        else if (compression == 'Photometry Double Compression Mode') then
-            this%observing_mode = 'Parallel'
-        else
-            write (OUTPUT_UNIT,'(a)') "Warning: Unknown compression mode: '" // trim(compression) // "'."
-        end if
+!!$        if (compression == 'Photometry Lossless Compression Mode') then
+!!$            this%observing_mode = 'transparent'
+!!$        else if (compression == 'Photometry Default Mode') then
+!!$            this%observing_mode = 'prime'
+!!$        else if (compression == 'Photometry Double Compression Mode') then
+!!$            this%observing_mode = 'parallel'
+!!$        else
+!!$            write (OUTPUT_UNIT,'(a)') "Warning: Unknown compression mode: '" // trim(compression) // "'."
+!!$        end if
 
     end subroutine set_observing_mode
 
@@ -871,9 +953,6 @@ contains
             call this%slice(islice)%set_band(status)
             if (status /= 0) return
                 
-            call this%slice(islice)%set_compression_mode(status)
-            if (status /= 0) return
-        
             call this%slice(islice)%set_observing_mode(status)
             if (status /= 0) return
 
@@ -896,15 +975,6 @@ contains
         if (any(this%slice%band /= this%band)) then
             status = 1
             write (ERROR_UNIT,'(a)') 'ERROR: Observations do not have the same band: ', this%slice%band, '.'
-            return
-        end if
-
-        ! make sure the observing mode is the same for all observations
-        ! that could be relaxed, but we would need to properly handle the bad detector mask for transparent observations
-        this%observing_mode = this%slice(1)%observing_mode
-        if (any(this%slice%observing_mode /= this%observing_mode)) then
-            status = 1
-            write (ERROR_UNIT,'(a)') 'ERROR: Observations do not have the same observing mode.'
             return
         end if
 
@@ -988,7 +1058,6 @@ contains
         this%nslices      = 1
         this%nsamples = nsamples
         this%band      = ' '
-        this%observing_mode = 'Unknown'
         this%policy = MaskPolicy()
 
         allocate (this%slice(1))
@@ -1093,7 +1162,7 @@ contains
             end select
 
             ! observing mode
-            write (OUTPUT_UNIT,'(a)') '      Observing mode: ' // trim(this%observing_mode)
+            write (OUTPUT_UNIT,'(a)') '      Observing mode: ' // trim(this%slice(islice)%observing_mode)
 
             ! compression factor
             write (OUTPUT_UNIT,'(a,i0)') '      Compression factor: ', this%slice(islice)%compression_factor
