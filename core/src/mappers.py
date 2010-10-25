@@ -28,7 +28,9 @@ def mapper_naive(tod, model, unit=None):
     unity[:] = 1.
     unity.unit = ''
     map_weights = model.transpose(unity, reusein=True)
+    old_settings = numpy.seterr(divide='ignore', invalid='ignore')
     mymap /= map_weights
+    numpy.seterr(**old_settings)
     mymap.coverage = map_weights
    
     if unit is None:
@@ -131,7 +133,6 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None, tol=
             print 'Warning: mapper_rls: maxiter != niter...'
 
     output = Map(C.unpacking(solution))
-
     if output.header is None:
         output.header = create_fitsheader(solution)
 
