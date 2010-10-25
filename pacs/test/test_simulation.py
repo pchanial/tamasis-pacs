@@ -12,6 +12,7 @@ mymap = gaussian(2*(msize*2+1,), 10)
 cd = numpy.array([[-1., 0.],[0., 1.]]) / 3600.
 header = create_fitsheader(mymap, crval=[53.,27.], cd=cd)
 mymap.header = header
+mymap.unit='Jy/pixel'
 
 # creation of the simulation
 simul = PacsSimulation('red', (header['CRVAL1'],header['CRVAL2']), scan_length=60, scan_nlegs=1, scan_angle=20., detector_mask=None)
@@ -41,7 +42,7 @@ for field in simul.status.dtype.names:
     if not numpy.allclose(simul.status[field], status2[field]): raise TestFailure('Status problem with: '+field)
 
 if not numpy.allclose(tod, tod2): raise TestFailure()
-fields='nsamples,nfinesamples,mode,compression_factor,unit,ra,dec,cam_angle,scan_angle,scan_length,scan_nlegs,scan_step,scan_speed,ninscans,nturnarounds,nothers,ninvalids'.split(',')
+fields = filter(lambda x: x not in ('filename',), simul.slice.dtype.names)
 ok = True
 for field in fields:
     if getattr(simul.slice[0], field) != getattr(simul2.slice[0], field):
