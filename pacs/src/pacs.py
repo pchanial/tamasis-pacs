@@ -66,12 +66,7 @@ class _Pacs(Observation):
             return self._status
         
         status = []
-        dest = 0
-        if hasattr(self.pointing, 'first_sample_offset'):
-            offsets = self.pointing.first_sample_offset
-        else:
-            offsets = self.pointing.nsamples * 0
-        for filename, npointings, offset in zip(self.slice.filename, self.pointing.nsamples, offsets):
+        for filename in self.slice.filename:
             hdu = pyfits.open(filename)['STATUS']
             while True:
                 try:
@@ -80,11 +75,7 @@ class _Pacs(Observation):
                 except IndexError, errmsg:
                     pass
             
-            s = s.base
-            s = s[offset:offset+npointings]
-            w = numpy.where(self.pointing[dest:dest+npointings].policy != MaskPolicy.REMOVE)
-            status.append(s[w])
-            dest = dest + npointings
+            status.append(s.base)
         self._status = numpy.concatenate(status).view(numpy.recarray)
         return self._status
 
