@@ -112,6 +112,114 @@ end subroutine pacs_info_init
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
+subroutine pacs_info_observation(filename, nfilenames, policy, nsamples_max, cusmode, compression, unit, ra, dec, cam_angle,       &
+                                 scan_angle, scan_length, scan_speed, scan_step, scan_nlegs, nsamples, npointings, offset,         &
+                                 ninscans, nturnarounds, nothers, ninvalids, frame_time, frame_ra, frame_dec, frame_pa, frame_chop,&
+                                 frame_info, frame_policy, status)
+
+    use module_observation,     only : POINTING_INSCAN, POINTING_TURNAROUND, POINTING_OTHER, MaskPolicy
+    use module_pacsobservation, only : PacsObservation
+    use module_tamasis,         only : POLICY_KEEP, POLICY_MASK, POLICY_REMOVE, p
+    implicit none
+
+    !f2py threadsafe
+    !f2py intent(in)  filename
+    !f2py intent(in)  nfilenames
+    !f2py intent(in)  policy
+    !f2py intent(in)  nsamples_max
+    !f2py character(len=70*nfilenames), intent(out), depend(nfilenames) :: cusmode, unit
+    !f2py intent(out) compression, ra, dec, cam_angle, scan_angle, scan_length, scan_speed, scan_step
+    !f2py intent(out) scan_nlegs, nsamples, npointings, offset, ninscans, nturnarounds, nothers, ninvalids
+    !f2py intent(out) frame_time, frame_ra, frame_dec, frame_pa, frame_chop, frame_info, frame_policy
+    !f2py intent(out) status
+
+    character(len=*), intent(in)                  :: filename
+    integer, intent(in)                           :: nfilenames
+    integer, intent(in)                           :: policy(4)
+    integer, intent(in)                           :: nsamples_max
+    character(len=70*nfilenames), intent(out)     :: cusmode, unit !XXX hack around f2py bug with array of characters
+    real(p), intent(out), dimension(nfilenames)   :: ra, dec, cam_angle, scan_angle, scan_length, scan_speed, scan_step
+    integer, intent(out), dimension(nfilenames)   :: compression, scan_nlegs
+    integer, intent(out), dimension(nfilenames)   :: nsamples, npointings, offset, ninscans, nturnarounds, nothers, ninvalids
+    real(p), intent(out), dimension(nsamples_max) :: frame_time, frame_ra, frame_dec, frame_pa, frame_chop, frame_info, frame_policy
+    integer, intent(out)                          :: status
+
+    class(PacsObservation), allocatable :: obs
+    type(MaskPolicy)                    :: mask_policy
+    integer                             :: iobs, isample, dest
+    character(len=len(filename)/nfilenames), allocatable :: filename_(:)
+
+    ! split input filename
+    if (mod(len(filename), nfilenames) /= 0) then
+        stop 'PACS_INFO: Invalid filename length.'
+    end if
+    allocate(filename_(nfilenames))
+    do iobs = 1, nfilenames
+        filename_(iobs) = filename((iobs-1)*len(filename_)+1:iobs*len(filename_))
+    end do
+
+    ! initialise policy
+    mask_policy = MaskPolicy(inscan=policy(1), turnaround=policy(2), other=policy(3), invalid=policy(4))
+
+    ! read observations
+    allocate (obs)
+    call obs%init(filename_, mask_policy, status, verbose=.true.)
+    if (status /= 0) return
+
+    frame_policy = POLICY_KEEP
+    dest = 0
+    do iobs = 1, obs%nslices
+        ninscans    (iobs) = count(obs%slice(iobs)%p%inscan)
+        nturnarounds(iobs) = count(obs%slice(iobs)%p%turnaround)
+        nothers     (iobs) = count(obs%slice(iobs)%p%other)
+        ninvalids   (iobs) = count(obs%slice(iobs)%p%invalid)
+        do isample = 1, obs%slice(iobs)%nsamples
+            dest = dest + 1
+            frame_time(dest) = obs%slice(iobs)%p(isample)%time
+            frame_ra(dest)   = obs%slice(iobs)%p(isample)%ra
+            frame_dec(dest)  = obs%slice(iobs)%p(isample)%dec
+            frame_pa(dest)   = obs%slice(iobs)%p(isample)%pa
+            frame_chop(dest) = obs%slice(iobs)%p(isample)%chop
+            if (obs%slice(iobs)%p(isample)%removed) then
+                frame_policy(dest) = POLICY_REMOVE
+            else if (obs%slice(iobs)%p(isample)%masked) then
+                frame_policy(dest) = POLICY_MASK
+            end if
+            if (obs%slice(iobs)%p(isample)%inscan) then
+                frame_info(dest) = POINTING_INSCAN
+            else if (obs%slice(iobs)%p(isample)%turnaround) then
+                frame_info(dest) = POINTING_TURNAROUND
+            else
+                frame_info(dest) = POINTING_OTHER
+            end if
+        end do
+    end do
+
+    cusmode = ''
+    unit = ''
+    do iobs = 1, nfilenames
+        cusmode((iobs-1)*70+1:iobs*70) = obs%slice(iobs)%observing_mode
+        unit   ((iobs-1)*70+1:iobs*70) = obs%slice(iobs)%unit
+    end do
+    compression = obs%slice%compression_factor
+    ra          = obs%slice%ra
+    dec         = obs%slice%dec
+    cam_angle   = obs%slice%cam_angle
+    scan_angle  = obs%slice%scan_angle
+    scan_length = obs%slice%scan_length
+    scan_speed  = obs%slice%scan_speed
+    scan_step   = obs%slice%scan_step
+    scan_nlegs  = obs%slice%scan_nlegs
+    nsamples    = obs%slice%nvalids
+    npointings  = obs%slice%nsamples
+    offset      = obs%slice%first - 1
+    
+end subroutine pacs_info_observation
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
 subroutine pacs_info_bad_detector_mask(tamasis_dir, band, transparent_mode, reject_bad_line, nrows, ncolumns, detector_mask,    &
                                        status)
 
@@ -178,130 +286,55 @@ end subroutine pacs_info_bad_detector_mask
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine pacs_info(tamasis_dir, filename, nfilenames, transparent_mode, fine_sampling_factor, policy, detector_mask,       &
-                     nsamples_tot_max, nrows, ncolumns, compression_factor, nsamples, npointings, offset, inscan, turnaround,      &
-                     other, invalid, unit, responsivity, detector_area, flatfield_detector, flatfield_optical, frame_time,         &
-                     frame_ra, frame_dec, frame_pa, frame_chop, frame_info, frame_policy, status)
+subroutine pacs_info_instrument(tamasis_dir, band, transparent_mode, fine_sampling_factor, detector_mask, nrows, ncolumns,         &
+                                responsivity, detector_area, flatfield_detector, flatfield_optical, status)
 
-    use iso_fortran_env,        only : OUTPUT_UNIT
     use module_pacsinstrument,  only : PacsInstrument
-    use module_observation,     only : POINTING_INSCAN, POINTING_TURNOVER, POINTING_OTHER, MaskPolicy
-    use module_pacsobservation, only : PacsObservation
-    use module_tamasis,         only : init_tamasis, p, POLICY_KEEP, POLICY_MASK, POLICY_REMOVE
+    use module_string,          only : strlowcase
+    use module_tamasis,         only : init_tamasis, p
     implicit none
 
     !f2py threadsafe
     !f2py intent(in)   tamasis_dir
-    !f2py intent(in)   filename
-    !f2py intent(in)   nfilenames
+    !f2py intent(in)   band
     !f2py intent(in)   transparent_mode
     !f2py intent(in)   fine_sampling_factor
-    !f2py intent(in)   policy
     !f2py intent(in)   detector_mask
-    !f2py intent(in)   nsamples_tot_max
     !f2py intent(hide) nrows = shape(bad_detector_mask,0)
     !f2py intent(hide) ncolumns = shape(bad_detector_mask,1)
-    !f2py intent(out)  compression_factor
-    !f2py intent(out)  nsamples, npointings, offset, inscan, turnaround, other, invalid
-    !f2py intent(out)  unit
     !f2py intent(out)  responsivity
     !f2py intent(out)  detector_area
     !f2py intent(out)  flatfield_detector
     !f2py intent(out)  flatfield_optical
-    !f2py intent(out)  frame_time, frame_ra, frame_dec, frame_pa, frame_chop, frame_info, frame_policy
     !f2py intent(out)  status
 
     character(len=*), intent(in)   :: tamasis_dir
-    character(len=*), intent(in)   :: filename
-    integer, intent(in)            :: nfilenames
+    character(len=*), intent(in)   :: band
     logical, intent(in)            :: transparent_mode
     integer, intent(in)            :: fine_sampling_factor
-    integer, intent(in)            :: policy(4)
     logical*1, intent(in)          :: detector_mask(nrows,ncolumns)
-    integer, intent(in)            :: nsamples_tot_max
     integer, intent(in)            :: nrows, ncolumns
-    integer, intent(out)           :: compression_factor(nfilenames)
-    integer, intent(out)           :: nsamples(nfilenames), npointings(nfilenames), offset(nfilenames)
-    integer, intent(out)           :: inscan(nfilenames), turnaround(nfilenames), other(nfilenames), invalid(nfilenames)
-    character(len=70), intent(out) :: unit
     real(p), intent(out)           :: responsivity
     real(p), intent(out)           :: detector_area(nrows,ncolumns)
     real(p), intent(out)           :: flatfield_detector(nrows,ncolumns)
     real(p), intent(out)           :: flatfield_optical(nrows,ncolumns)
-    real(p), intent(out)           :: frame_time(nsamples_tot_max), frame_ra(nsamples_tot_max), frame_dec(nsamples_tot_max)
-    real(p), intent(out)           :: frame_pa(nsamples_tot_max), frame_chop(nsamples_tot_max)
-    integer, intent(out)           :: frame_info(nsamples_tot_max), frame_policy(nsamples_tot_max)
     integer, intent(out)           :: status
 
-    character(len=len(filename)/nfilenames), allocatable :: filename_(:)
-    class(PacsObservation), allocatable :: obs
-    class(PacsInstrument), allocatable  :: pacs
-    type(MaskPolicy)                    :: mask_policy
-    integer                             :: iobs, isample, dest
+    class(PacsInstrument), allocatable :: pacs
 
     ! initialise tamasis
     call init_tamasis(tamasis_dir)
 
-    ! split input filename
-    if (mod(len(filename), nfilenames) /= 0) then
-        stop 'PACS_INFO: Invalid filename length.'
-    end if
-    allocate(filename_(nfilenames))
-    do iobs = 1, nfilenames
-        filename_(iobs) = filename((iobs-1)*len(filename_)+1:iobs*len(filename_))
-    end do
-
-    ! initialise policy
-    mask_policy = MaskPolicy(inscan=policy(1), turnaround=policy(2), other=policy(3), invalid=policy(4))
-
-    allocate(obs)
-    call obs%init(filename_, mask_policy, status, verbose=.true.)
-    if (status /= 0) return
-
-    frame_policy = POLICY_KEEP
-    dest = 0
-    do iobs = 1, obs%nslices
-        inscan    (iobs) = count(obs%slice(iobs)%p%inscan)
-        turnaround(iobs) = count(obs%slice(iobs)%p%turnaround)
-        other     (iobs) = count(obs%slice(iobs)%p%other)
-        invalid   (iobs) = count(obs%slice(iobs)%p%invalid)
-        do isample = 1, obs%slice(iobs)%nsamples
-            dest = dest + 1
-            frame_time(dest) = obs%slice(iobs)%p(isample)%time
-            frame_ra(dest)   = obs%slice(iobs)%p(isample)%ra
-            frame_dec(dest)  = obs%slice(iobs)%p(isample)%dec
-            frame_pa(dest)   = obs%slice(iobs)%p(isample)%pa
-            frame_chop(dest) = obs%slice(iobs)%p(isample)%chop
-            if (obs%slice(iobs)%p(isample)%removed) then
-                frame_policy(dest) = POLICY_REMOVE
-            else if (obs%slice(iobs)%p(isample)%masked) then
-                frame_policy(dest) = POLICY_MASK
-            end if
-            if (obs%slice(iobs)%p(isample)%inscan) then
-                frame_info(dest) = POINTING_INSCAN
-            else if (obs%slice(iobs)%p(isample)%masked) then
-                frame_info(dest) = POINTING_TURNOVER
-            else
-                frame_info(dest) = POINTING_OTHER
-            end if
-        end do
-    end do
-
     allocate(pacs)
-    call pacs%init(obs%band, transparent_mode, fine_sampling_factor, detector_mask, status)
+    call pacs%init(strlowcase(band(1:1)), transparent_mode, fine_sampling_factor, detector_mask, status)
     if (status /= 0) return
 
-    compression_factor = obs%slice%compression_factor
-    nsamples = obs%slice%nvalids
-    npointings = obs%slice%nsamples
-    offset = obs%slice%first - 1
-    unit = obs%unit
     responsivity = pacs%responsivity
     detector_area = pacs%detector_area_all
     flatfield_detector = pacs%flatfield_detector
     flatfield_optical = pacs%flatfield_optical
 
-end subroutine pacs_info
+end subroutine pacs_info_instrument
 
 
 !-----------------------------------------------------------------------------------------------------------------------------------

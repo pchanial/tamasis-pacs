@@ -18,12 +18,10 @@ print model
 map_naive = mapper_naive(tod, model)
 map_mask = map_naive.coverage == 0
 
-
 # iterative map, restricting oneself to observed map pixels
 unpacking = Unpacking(map_mask)
 M = unpacking.T(1./map_naive.coverage)
 map_iter1 = unpacking(mapper_ls(tod, model * unpacking, tol=1.e-4, M=M))
-
 
 # iterative map, taking all map pixels
 unpacking = Masking(map_mask)

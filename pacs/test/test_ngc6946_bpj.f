@@ -1,4 +1,5 @@
 program test_ngc6946_bpj
+    use module_sort, only : where
 
     use iso_fortran_env,        only : ERROR_UNIT, OUTPUT_UNIT
     use module_fitstools,       only : ft_read_keyword
@@ -34,6 +35,8 @@ program test_ngc6946_bpj
     real(p), allocatable                :: map1d(:)
     type(pointingelement), allocatable  :: pmatrix(:,:,:)
 
+    integer, allocatable:: i1(:), i2(:)
+
     call system_clock(count0, count_rate, count_max)
 
     ! initialise tamasis
@@ -49,7 +52,7 @@ program test_ngc6946_bpj
 
     ! initialise pacs instrument
     allocate (pacs)
-    call pacs%init(obs%band, obs%observing_mode == 'Transparent', 1, status=status)
+    call pacs%init(obs%band, obs%slice(1)%observing_mode == 'Transparent', 1, status=status)
     if (status /= 0) stop 'FAILED: pacsinstrument%init'
 
     ! get header map
@@ -151,8 +154,10 @@ program test_ngc6946_bpj
 
     ! test the back projected map
     if (any(neq_real(signal, surface1, 10._p * epsilon(1.0)))) then
-        write (ERROR_UNIT,*) 'Invalid signal.'
-        stop 'FAILED.'
+        write (OUTPUT_UNIT,*), 'max N*epsilon:', maxval((signal-surface1)/signal/epsilon(1.0), signal==signal                      &
+              .and. surface1 == surface1), ' instead of 6.07.'
+        write (OUTPUT_UNIT,*), 'NaN:', count(signal/=signal), count(surface1/=surface1)
+        stop 'FAILED. wrong back projection.'
     end if
 
     call system_clock(count2, count_rate, count_max)

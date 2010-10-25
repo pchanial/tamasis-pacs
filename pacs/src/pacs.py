@@ -184,15 +184,16 @@ class PacsObservation(_Pacs):
         # frame policy
         policy = MaskPolicy('inscan,turnaround,other,invalid', (policy_inscan, policy_turnaround, policy_other, policy_invalid), 'Frame Policy')
 
-        # retrieve information from the observations
-        compression_factor, nsamples, npointings, offset, ninscans, nturnarounds, nothers, ninvalids, unit, responsivity, detector_area, dflat, oflat, frame_time, frame_ra, frame_dec, frame_pa, frame_chop, frame_info, frame_policy, status = tmf.pacs_info(tamasis_dir, filename_, nfilenames, transparent_mode, fine_sampling_factor, numpy.array(policy, dtype='int32'), numpy.asfortranarray(detector_mask), nsamples_tot_max)
-        if status != 0: raise RuntimeError()
+        # retrieve information from the observation
+        mode, compression_factor, unit, ra, dec, cam_angle, scan_angle, scan_length, scan_speed, scan_step, scan_nlegs, nsamples, npointings, offset, ninscans, nturnarounds, nothers, ninvalids, frame_time, frame_ra, frame_dec, frame_pa, frame_chop, frame_info, frame_policy, status = tmf.pacs_info_observation(filename_, nfilenames, numpy.array(policy, dtype='int32'), nsamples_tot_max)
+        flen_value = len(unit) // nfilenames
+        mode = [mode[i*flen_value:(i+1)*flen_value].strip() for i in range(nfilenames)]
+        unit = [unit[i*flen_value:(i+1)*flen_value].strip() for i in range(nfilenames)]
+        unit = map(lambda x: x if x.find('/') != -1 else x + ' / detector', unit)
 
-        mode = '' #fix me
-        ra = dec = cam_angle = scan_angle = scan_length = scan_nlegs = scan_step = scan_speed = 0
-        unit = unit.strip()
-        if unit.find('/') == -1:
-            unit += ' / detector'
+        # retrieve information from the instrument
+        responsivity, detector_area, dflat, oflat, status = tmf.pacs_info_instrument(tamasis_dir, band, transparent_mode, fine_sampling_factor, numpy.asfortranarray(detector_mask))
+        if status != 0: raise RuntimeError()
 
         self._filename = filename #XXX REMOVE ME!
 
@@ -327,6 +328,7 @@ class PacsPointing(Pointing):
         result.chop = chop
         result.info = info
         result.policy = policy
+        result = result.view(cls)
         result.nsamples = nsamples
         result.first_sample_offset = first_sample_offset
         return result
@@ -408,6 +410,9 @@ class PacsSimulation(_Pacs):
         else:
             header = tod.header.copy()
             header.update('EXTNAME', 'Signal')
+
+        if tod.unit != '':
+            header.update('QTTY____', tod.unit)
 
         pyfits.append(filename, tod, header)
         if tod.mask is not None:
@@ -811,20 +816,30 @@ def _write_status(obs, filename):
     band_status = {'blue':'BS', 'green':'BL', 'red':'R '}[obs.instrument.band]
     band_type   = {'blue':'BS', 'green':'BL', 'red':'RS'}[obs.instrument.band]
 
-
-    if mode == 'prime':
-        observing_mode = 'Photometry Default Mode'
+    cusmode = {'prime':'PacsPhoto', 'parallel':'SpirePacsParallel', 'transparent':'__PacsTranspScan', 'unknown':'__Calibration'}
+    if mode == 'prime' or obs.instrument.band == 'red':
+        comp_mode = 'Photometry Default Mode'
     elif mode == 'parallel':
-        observing_mode = 'Photometry Double Compression Mode'
+        comp_mode = 'Photometry Double Compression Mode'
     elif mode == 'transparent':
-        observing_mode = 'Photometry Lossless Compression Mode'
-    elif mode != 'unknown' and mode != '':
-        raise ValueError("Invalid mode '" + str(mode) + "'.")
+        comp_mode = 'Photometry Lossless Compression Mode'
+    else:
+        comp_mode = ''
 
+    if obs.slice[0].scan_speed == 10.:
+        scan_speed = 'low'
+    elif obs.slice[0].scan_speed == 20.:
+        scan_speed = 'medium'
+    elif obs.slice[0].scan_speed == 60.:
+        scan_speed = 'high'
+    else:
+        scan_speed = 'unknown'
+        
     fits = pyfits.HDUList()
 
     # Primary header
     cc = pyfits.createCard
+    
     header = pyfits.Header([
             cc('simple', True), 
             cc('BITPIX', 32), 
@@ -839,15 +854,17 @@ def _write_status(obs, filename):
             cc('DEC', s.dec),
             cc('EQUINOX', 2000., 'Equinox of celestial coordinate system'),
             cc('RADESYS', 'ICRS', 'Coordinate reference frame for the RA and DEC'),
+            cc('CUSMODE', cusmode[mode], 'CUS observation mode'),
             cc('META_0', obs.instrument.shape[0]),
             cc('META_1', obs.instrument.shape[1]), 
             cc('META_2', obs.instrument.band.title()+' Photometer'), 
             cc('META_3', ('Floating Average  : ' + str(compression_factor)) if compression_factor > 1 else 'None'), 
-            cc('META_4', observing_mode),
+            cc('META_4', comp_mode),
             cc('META_5', s.scan_angle),
             cc('META_6', s.scan_length),
             cc('META_7', s.scan_nlegs),
-            cc('META_8', s.scan_speed),
+            cc('META_8', scan_speed),
+            cc('META_9', s.scan_speed),
             cc('HIERARCH key.META_0', 'detRow'), 
             cc('HIERARCH key.META_1', 'detCol'), 
             cc('HIERARCH key.META_2', 'camName'), 
@@ -857,6 +874,7 @@ def _write_status(obs, filename):
             cc('HIERARCH key.META_6', 'mapScanLegLength'),
             cc('HIERARCH key.META_7', 'mapScanNumLegs'),
             cc('HIERARCH key.META_8', 'mapScanSpeed'),
+            cc('HIERARCH key.META_8', '__mapScanSpeed'),
             ])
     hdu = pyfits.PrimaryHDU(None, header)
     fits.append(hdu)
@@ -875,8 +893,8 @@ def _write_status(obs, filename):
     table.CHOPFPUANGLE = 0. if not hasattr(p, 'chop') else p.chop
     table.BBID = 0
     #XXX Numpy ticket #1645
-    table.BBID[p.info == Pointing.INSCAN] = 0xcd2
-    table.BBID[p.info == Pointing.TURNAROUND] = 0x4000
+    table.BBID[p.info == Pointing.INSCAN] = 0xcd2 << 16
+    table.BBID[p.info == Pointing.TURNAROUND] = 0x4000 << 16
 
     status = pyfits.BinTableHDU(table, None, 'STATUS')
     fits.append(status)
