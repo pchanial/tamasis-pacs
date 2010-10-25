@@ -37,16 +37,16 @@ class _Pacs(Observation):
             header = self.get_map_header(resolution, oversampling)
         elif isinstance(header, str):
             header = _str2fitsheader(header)
-
+        ndetectors = self.get_ndetectors()
         filename_, nfilenames = _files2tmf(self._filename)
-        sizeofpmatrix = npixels_per_sample * numpy.sum(nsamples) * self.instrument.ndetectors
+        sizeofpmatrix = npixels_per_sample * numpy.sum(nsamples) * ndetectors
         print 'Info: Allocating '+str(sizeofpmatrix/2.**17)+' MiB for the pointing matrix.'
         pmatrix = numpy.empty(sizeofpmatrix, dtype=numpy.int64)
         
-        status = tmf.pacs_pointing_matrix_filename(tamasis_dir, filename_, self.slice.size, method, oversampling, self.instrument.fine_sampling_factor, npixels_per_sample, numpy.sum(nsamples), self.instrument.ndetectors, numpy.array(self.policy, dtype='int32'), numpy.asfortranarray(self.instrument.detector_mask), str(header).replace('\n', ''), pmatrix)
+        status = tmf.pacs_pointing_matrix_filename(tamasis_dir, filename_, self.slice.size, method, oversampling, self.instrument.fine_sampling_factor, npixels_per_sample, numpy.sum(nsamples), ndetectors, numpy.array(self.policy, dtype='int32'), numpy.asfortranarray(self.instrument.detector_mask), str(header).replace('\n', ''), pmatrix)
         if status != 0: raise RuntimeError()
 
-        return pmatrix, header, nsamples, npixels_per_sample
+        return pmatrix, header, ndetectors, nsamples, npixels_per_sample
 
     def get_filter_uncorrelated(self):
         """
@@ -55,7 +55,7 @@ class _Pacs(Observation):
         ncorrelations, status = tmf.pacs_read_filter_calibration_ncorrelations(tamasis_dir, self.instrument.band)
         if status != 0: raise RuntimeError()
 
-        data, status = tmf.pacs_read_filter_calibration(tamasis_dir, self.instrument.band, ncorrelations, self.instrument.ndetectors, numpy.asfortranarray(self.instrument.detector_mask))
+        data, status = tmf.pacs_read_filter_calibration(tamasis_dir, self.instrument.band, ncorrelations, self.get_ndetectors(), numpy.asfortranarray(self.instrument.detector_mask))
         if status != 0: raise RuntimeError()
 
         return data.T
@@ -81,9 +81,10 @@ class _Pacs(Observation):
 
     def __str__(self):
         nthreads = tmf.info_nthreads()
+        ndetectors = self.get_ndetectors()
         sp = len('Setup: ')*' '
         unit = 'unknown' if self.slice[0].unit == '' else self.slice[0].unit
-        result = 'Setup: ' + str(nthreads) + ' core' + ('s' if nthreads > 1 else '') + ' handling ' + str(self.instrument.ndetectors) + ' detector' + ('s' if self.instrument.ndetectors > 1 else '') + ' on node ' + MPI.Get_processor_name() + '\n'
+        result = 'Setup: ' + str(nthreads) + ' core' + ('s' if nthreads > 1 else '') + ' handling ' + str(ndetectors) + ' detector' + ('s' if ndetectors > 1 else '') + ' on node ' + MPI.Get_processor_name() + '\n'
         result += sp + self.instrument.band + ' band, unit is ' + unit + '\n'
         dest = 0
         for islice, slice in enumerate(self.slice):
@@ -251,7 +252,8 @@ class PacsObservation(_Pacs):
             subtraction_mean = False
 
         filename_, nfilenames = _files2tmf(self._filename)
-        signal, mask, status = tmf.pacs_timeline(tamasis_dir, filename_, self.slice.size, numpy.sum(self.get_nsamples()), self.instrument.ndetectors, numpy.array(self.policy, dtype='int32'), numpy.asfortranarray(self.instrument.detector_mask), flatfielding, subtraction_mean)
+        ndetectors = self.get_ndetectors()
+        signal, mask, status = tmf.pacs_timeline(tamasis_dir, filename_, self.slice.size, numpy.sum(self.get_nsamples()), ndetectors, numpy.array(self.policy, dtype='int32'), numpy.asfortranarray(self.instrument.detector_mask), flatfielding, subtraction_mean)
         if status != 0: raise RuntimeError()
        
         tod = Tod(signal.T, mask.T, nsamples=self.get_nsamples(), unit=self.slice[0].unit)
@@ -270,7 +272,7 @@ class PacsObservation(_Pacs):
         newunit = Quantity(1., unit)
         newunit_si = newunit.SI._unit
         if 'sr' in newunit_si and newunit_si['sr'] == -1:
-            area = self.instrument.detector_area[self.instrument.detector_mask == 0].reshape((self.instrument.ndetectors,1))
+            area = self.instrument.detector_area[self.instrument.detector_mask == 0].reshape((ndetectors,1))
             tod /= area
            
         if 'V' in tod._unit and tod._unit['V'] == 1 and 'V' not in newunit_si:

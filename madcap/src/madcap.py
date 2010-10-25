@@ -52,10 +52,13 @@ class MadMap1Observation(Observation):
         self.info.mapmask = mapmask
 
         # Store slice information
-        self.slice = numpy.recarray(nslices, dtype=[('nsamples', int), ('invnttfile', 'S256')])
-        self.slice.nsamples = nsamples
+        self.slice = numpy.recarray(nslices, dtype=[('nsamples_all', int), ('invnttfile', 'S256')])
+        self.slice.nsamples_all = nsamples
         self.slice.nfinesamples = nsamples
         self.slice.invnttfile = [invnttfile+'.'+str(i) for i in range(nslices)]        
+        # Store pointing information
+        self.pointing = numpy.recarray(numpy.sum(nsamples), [('removed', numpy.bool_)])
+        self.pointing.removed = False
 
     def get_pointing_matrix(self, header, resolution, npixels_per_sample, method=None, oversampling=False):
         """
@@ -74,20 +77,23 @@ class MadMap1Observation(Observation):
         header.update('naxis', 1)
         header.update('naxis1', numpy.sum(self.info.mapmask == 0))
 
-        tod = Tod.zeros((self.instrument.ndetectors,self.slice.nsamples))
-        sizeofpmatrix = self.info.npixels_per_sample * numpy.sum(self.slice.nsamples) * self.instrument.ndetectors
+        ndetectors = self.get_ndetectors()
+        nsamples   = self.get_nsamples()
+        tod = Tod.zeros((ndetectors,nsamples))
+
+        sizeofpmatrix = self.info.npixels_per_sample * tod.size
         print 'Info: Allocating '+str(sizeofpmatrix/2.**17)+' MiB for the pointing matrix.'
         pmatrix = numpy.zeros(sizeofpmatrix, dtype=numpy.int64)
         status = tmf.madmap1_read_tod(self.info.todfile, self.info.invnttfile, self.info.convert, self.info.npixels_per_sample, tod.T, pmatrix)
         if status != 0: raise RuntimeError()
-        return pmatrix, header, self.slice.nsamples, self.info.npixels_per_sample
+        return pmatrix, header, ndetectors, nsamples, self.info.npixels_per_sample
 
     def get_tod(self):
         """
         Method to get the Tod from this observation
         """
-        tod = Tod.zeros((self.instrument.ndetectors, self.slice.nsamples))
-        sizeofpmatrix = self.info.npixels_per_sample * numpy.sum(self.slice.nsamples) * self.instrument.ndetectors
+        tod = Tod.zeros((self.get_ndetectors(), self.get_nsamples()))
+        sizeofpmatrix = self.info.npixels_per_sample * tod.size
         pmatrix = numpy.zeros(sizeofpmatrix, dtype=int)
         status = tmf.madmap1_read_tod(self.info.todfile, self.info.invnttfile, self.info.convert, self.info.npixels_per_sample, tod.T, pmatrix)
         if status != 0: raise RuntimeError()
@@ -97,6 +103,12 @@ class MadMap1Observation(Observation):
         """
         Method to get the invNtt for uncorrelated detectors.
         """
-        data, nsamples, status = tmf.madmap1_read_filter(self.info.invnttfile, self.info.convert, self.info.ncorrelations, self.instrument.ndetectors, self.slice.size)
+        data, nsamples, status = tmf.madmap1_read_filter(self.info.invnttfile, self.info.convert, self.info.ncorrelations, self.get_ndetectors(), self.slice.size)
         if status != 0: raise RuntimeError()
         return data.T
+
+    def get_nsamples(self):
+        nsamples = numpy.sum(~self.pointing.removed)
+        if nsamples != numpy.sum(self.pointing.size):
+            raise ValueError("The pointing attribute 'removed' cannot be set to True.")
+        return self.slice.nsamples_all

@@ -694,12 +694,12 @@ class Projection(AcquisitionModel):
     def __init__(self, observation, method=None, header=None, resolution=None, npixels_per_sample=None, oversampling=True, description=None):
         AcquisitionModel.__init__(self, description)
 
-        self._pmatrix, self.header, nsamples, self.npixels_per_sample = \
+        self._pmatrix, self.header, ndetectors, nsamples, self.npixels_per_sample = \
             observation.get_pointing_matrix(header, resolution, npixels_per_sample, method=method, oversampling=oversampling)
         self.pmatrix = self._pmatrix.view(dtype=[('weight', 'f4'), ('pixel', 'i4')]).view(numpy.recarray)
-        self.pmatrix.resize((observation.instrument.ndetectors, numpy.sum(nsamples), self.npixels_per_sample))
+        self.pmatrix.resize((ndetectors, numpy.sum(nsamples), self.npixels_per_sample))
         self.shapein = tuple([self.header['naxis'+str(i+1)] for i in reversed(range(self.header['naxis']))])
-        self.shapeout = combine_sliced_shape(observation.instrument.ndetectors, nsamples)
+        self.shapeout = combine_sliced_shape(ndetectors, nsamples)
 
     def direct(self, map2d, reusein=False, reuseout=False):
         map2d, shapeout = self.validate_input_direct(Map, map2d, reusein)

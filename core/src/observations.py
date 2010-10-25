@@ -14,6 +14,12 @@ class Observation(object):
         self.policy = None
         self.slice = None
 
+    def get_ndetectors(self):
+        """
+        Method to get the number of detectors, accordingly to the detector mask.
+        """
+        return numpy.sum(self.instrument.detector_mask == 0)
+
     def get_filter_uncorrelated(self):
         """
         Method to get the invNtt for uncorrelated detectors.
@@ -94,7 +100,7 @@ class Observation(object):
         if numpy.rank(tod) != 2:
             raise ValueError('The input Tod is not packed.')
         ndetectors = self.instrument.detector_mask.size
-        nvalids  = self.instrument.ndetectors
+        nvalids  = self.get_ndetectors()
         nsamples = tod.shape[-1]
 
         newshape = numpy.concatenate((self.instrument.shape, (nsamples,)))
@@ -151,7 +157,7 @@ class Observation(object):
         if numpy.rank(tod) != numpy.rank(self.instrument.detector_mask)+1:
             raise ValueError('The input Tod is not unpacked.')
         ndetectors = self.instrument.detector_mask.size
-        nvalids = self.instrument.ndetectors
+        nvalids = self.get_ndetectors()
         nsamples = tod.shape[-1]
 
         newshape = (nvalids, nsamples)
@@ -193,7 +199,6 @@ class Instrument(object):
     def __init__(self, name, detector_mask):
         self.name = name
         self.detector_mask = Map(detector_mask, origin='upper', dtype='uint8', copy=True)
-        self.ndetectors = int(numpy.sum(self.detector_mask == 0))
         self.shape = detector_mask.shape
 
 
