@@ -239,7 +239,7 @@ class MaskPolicy(object):
 #-------------------------------------------------------------------------------
 
 
-class Pointing(numpy.ndarray):
+class Pointing(numpy.recarray):
     INSCAN     = 1
     TURNAROUND = 2
     OTHER      = 3
@@ -270,13 +270,14 @@ class Pointing(numpy.ndarray):
 
         ftype = get_default_dtype_float()
         dtype = numpy.dtype([('time', ftype), ('ra', ftype), ('dec', ftype), ('pa', ftype), ('info', numpy.int64), ('policy', numpy.int64)])
-        result = numpy.recarray(nsamples_tot, dtype=dtype).view(cls)
-        result.time = time
-        result.ra   = ra
-        result.dec  = dec
-        result.pa   = pa
-        result.info = info
+        result = numpy.recarray(nsamples_tot, dtype=dtype)
+        result.time   = time
+        result.ra     = ra
+        result.dec    = dec
+        result.pa     = pa
+        result.info   = info
         result.policy = policy
+        result = result.view(cls)
         result.nsamples = nsamples
         return result
 
