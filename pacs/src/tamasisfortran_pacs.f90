@@ -2,10 +2,10 @@
 !
 ! Author: P. Chanial
 
-subroutine pacs_info_init(filename, nfilenames, band, transparent_mode, nsamples_max, status)
+subroutine pacs_info_init(filename, nfilenames, band, transparent_mode, nsamples, status)
 
     use iso_fortran_env,        only : ERROR_UNIT
-    use module_fitstools,       only : ft_close, ft_open, ft_read_keyword
+    use module_fitstools,       only : FLEN_VALUE, ft_close, ft_open, ft_read_keyword, ft_read_keyword_hcss
     use module_pacsobservation, only : PacsObservation, PacsObservationSlice, MaskPolicy
     use module_string,          only : strlowcase
     implicit none
@@ -14,19 +14,19 @@ subroutine pacs_info_init(filename, nfilenames, band, transparent_mode, nsamples
     !f2py intent(in)  filename
     !f2py intent(in)  nfilenames
     !f2py intent(out) band
-    !f2py intent(out) nsamplesmax
+    !f2py intent(out) nsamples(nfilenames)
     !f2py intent(out) status
 
     character(len=*), intent(in)  :: filename
     integer, intent(in)           :: nfilenames
     character(len=7), intent(out) :: band
     logical, intent(out)          :: transparent_mode
-    integer, intent(out)          :: nsamples_max
+    integer, intent(out)          :: nsamples(nfilenames)
     integer, intent(out)          :: status
 
     class(PacsObservationSlice), allocatable :: slice
     integer                                  :: iobs, unit, first, last
-    character(len=10)                        :: obstype
+    character(len=FLEN_VALUE)                :: obstype, compmode
     character(len=7)                         :: band_
 
     ! split input filename
@@ -36,7 +36,6 @@ subroutine pacs_info_init(filename, nfilenames, band, transparent_mode, nsamples
 
     band = 'unknown'
     transparent_mode = .true.
-    nsamples_max = 0
     allocate (slice)
 
     do iobs = 1, nfilenames
@@ -44,22 +43,14 @@ subroutine pacs_info_init(filename, nfilenames, band, transparent_mode, nsamples
         call slice%set_filename(filename((iobs-1)*len(filename)/nfilenames+1:iobs*len(filename)/nfilenames), first, last, status)
         if (status /= 0) return
 
-        if (first == 0) then
-            first = 1
-        end if
+        call ft_open(trim(slice%filename) // '[Signal]', unit, status)
+        if (status /= 0) return
 
-        if (last == 0) then
-            call ft_open(trim(slice%filename) // '[Signal]', unit, status)
-            if (status /= 0) return
+        call ft_read_keyword(unit, 'NAXIS1', nsamples(iobs), status=status)
+        if (status /= 0) return
 
-            call ft_read_keyword(unit, 'NAXIS1', last, status=status)
-            if (status /= 0) return
-
-            call ft_close(unit, status)
-            if (status /= 0) return
-        end if
-
-        nsamples_max = nsamples_max + last - first + 1
+        call ft_close(unit, status)
+        if (status /= 0) return
 
         call ft_open(trim(slice%filename), unit, status)
         if (status /= 0) return
@@ -67,10 +58,13 @@ subroutine pacs_info_init(filename, nfilenames, band, transparent_mode, nsamples
         call ft_read_keyword(unit, 'TYPE', obstype, status=status)
         if (status /= 0) return
 
+        call ft_read_keyword_hcss(unit, 'compMode', compmode, status=status)
+        if (status /= 0) return
+
         call ft_close(unit, status)
         if (status /= 0) return
 
-        select case (trim(obstype))
+        select case (obstype)
             case ('HPPRAWBS')
                 band_ = 'blue'
             case ('HPPRAWBL')
@@ -79,13 +73,10 @@ subroutine pacs_info_init(filename, nfilenames, band, transparent_mode, nsamples
                 band_ = 'red'
             case ('HPPAVGBS')
                 band_ = 'blue'
-                transparent_mode = .false.
             case ('HPPAVGBL')
                 band_ = 'green'
-                transparent_mode = .false.
             case ('HPPAVGRS')
                 band_ = 'red'
-                transparent_mode = .false.
             case default
                 write (ERROR_UNIT, '(a)') "Unknown observation type '" // trim(obstype) // "' in file '" // trim(slice%filename)   &
                       // "'."
@@ -95,13 +86,14 @@ subroutine pacs_info_init(filename, nfilenames, band, transparent_mode, nsamples
 
         if (iobs == 1) then
             band = band_
-            cycle
-        end if
-
-        if (band_ /= band) then
+        else if (band_ /= band) then
             write (ERROR_UNIT, '(a)') "Error: Observations are not performed with the same band."
             status = 1
             return
+        end if
+
+        if (compmode /= 'Photometry Lossless Compression Mode') then
+            transparent_mode = .false.
         end if
 
     end do
@@ -112,10 +104,9 @@ end subroutine pacs_info_init
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine pacs_info_observation(filename, nfilenames, policy, nsamples_max, cusmode, compression, unit, ra, dec, cam_angle,       &
-                                 scan_angle, scan_length, scan_speed, scan_step, scan_nlegs, nsamples, npointings, offset,         &
-                                 ninscans, nturnarounds, nothers, ninvalids, frame_time, frame_ra, frame_dec, frame_pa, frame_chop,&
-                                 frame_info, frame_policy, status)
+subroutine pacs_info_observation(filename, nfilenames, policy, nsamples_tot, cusmode, compression, unit, ra, dec, cam_angle,       &
+                                 scan_angle, scan_length, scan_speed, scan_step, scan_nlegs, frame_time, frame_ra, frame_dec,      &
+                                 frame_pa, frame_chop, frame_info, frame_masked, frame_removed, status)
 
     use module_observation,     only : POINTING_INSCAN, POINTING_TURNAROUND, POINTING_OTHER, MaskPolicy
     use module_pacsobservation, only : PacsObservation
@@ -126,27 +117,27 @@ subroutine pacs_info_observation(filename, nfilenames, policy, nsamples_max, cus
     !f2py intent(in)  filename
     !f2py intent(in)  nfilenames
     !f2py intent(in)  policy
-    !f2py intent(in)  nsamples_max
+    !f2py intent(in)  nsamples_tot
     !f2py character(len=70*nfilenames), intent(out), depend(nfilenames) :: cusmode, unit
     !f2py intent(out) compression, ra, dec, cam_angle, scan_angle, scan_length, scan_speed, scan_step
-    !f2py intent(out) scan_nlegs, nsamples, npointings, offset, ninscans, nturnarounds, nothers, ninvalids
-    !f2py intent(out) frame_time, frame_ra, frame_dec, frame_pa, frame_chop, frame_info, frame_policy
+    !f2py intent(out) scan_nlegs
+    !f2py intent(out) frame_time, frame_ra, frame_dec, frame_pa, frame_chop, frame_info, frame_masked, frame_removed
     !f2py intent(out) status
 
-    character(len=*), intent(in)                  :: filename
-    integer, intent(in)                           :: nfilenames
-    integer, intent(in)                           :: policy(4)
-    integer, intent(in)                           :: nsamples_max
-    character(len=70*nfilenames), intent(out)     :: cusmode, unit !XXX hack around f2py bug with array of characters
-    real(p), intent(out), dimension(nfilenames)   :: ra, dec, cam_angle, scan_angle, scan_length, scan_speed, scan_step
-    integer, intent(out), dimension(nfilenames)   :: compression, scan_nlegs
-    integer, intent(out), dimension(nfilenames)   :: nsamples, npointings, offset, ninscans, nturnarounds, nothers, ninvalids
-    real(p), intent(out), dimension(nsamples_max) :: frame_time, frame_ra, frame_dec, frame_pa, frame_chop, frame_info, frame_policy
-    integer, intent(out)                          :: status
+    character(len=*), intent(in)                    :: filename
+    integer, intent(in)                             :: nfilenames
+    integer, intent(in)                             :: policy(4)
+    integer, intent(in)                             :: nsamples_tot
+    character(len=70*nfilenames), intent(out)       :: cusmode, unit !XXX hack around f2py bug with array of characters
+    real(p), intent(out), dimension(nfilenames)     :: ra, dec, cam_angle, scan_angle, scan_length, scan_speed, scan_step
+    integer, intent(out), dimension(nfilenames)     :: compression, scan_nlegs
+    real(p), intent(out), dimension(nsamples_tot)   :: frame_time, frame_ra, frame_dec, frame_pa, frame_chop, frame_info
+    logical*1, intent(out), dimension(nsamples_tot) :: frame_masked, frame_removed
+    integer, intent(out)                            :: status
 
     class(PacsObservation), allocatable :: obs
     type(MaskPolicy)                    :: mask_policy
-    integer                             :: iobs, isample, dest
+    integer                             :: iobs, isample, nsamples, dest
     character(len=len(filename)/nfilenames), allocatable :: filename_(:)
 
     ! split input filename
@@ -166,35 +157,6 @@ subroutine pacs_info_observation(filename, nfilenames, policy, nsamples_max, cus
     call obs%init(filename_, mask_policy, status, verbose=.true.)
     if (status /= 0) return
 
-    frame_policy = POLICY_KEEP
-    dest = 0
-    do iobs = 1, obs%nslices
-        ninscans    (iobs) = count(obs%slice(iobs)%p%inscan)
-        nturnarounds(iobs) = count(obs%slice(iobs)%p%turnaround)
-        nothers     (iobs) = count(obs%slice(iobs)%p%other)
-        ninvalids   (iobs) = count(obs%slice(iobs)%p%invalid)
-        do isample = 1, obs%slice(iobs)%nsamples
-            dest = dest + 1
-            frame_time(dest) = obs%slice(iobs)%p(isample)%time
-            frame_ra(dest)   = obs%slice(iobs)%p(isample)%ra
-            frame_dec(dest)  = obs%slice(iobs)%p(isample)%dec
-            frame_pa(dest)   = obs%slice(iobs)%p(isample)%pa
-            frame_chop(dest) = obs%slice(iobs)%p(isample)%chop
-            if (obs%slice(iobs)%p(isample)%removed) then
-                frame_policy(dest) = POLICY_REMOVE
-            else if (obs%slice(iobs)%p(isample)%masked) then
-                frame_policy(dest) = POLICY_MASK
-            end if
-            if (obs%slice(iobs)%p(isample)%inscan) then
-                frame_info(dest) = POINTING_INSCAN
-            else if (obs%slice(iobs)%p(isample)%turnaround) then
-                frame_info(dest) = POINTING_TURNAROUND
-            else
-                frame_info(dest) = POINTING_OTHER
-            end if
-        end do
-    end do
-
     cusmode = ''
     unit = ''
     do iobs = 1, nfilenames
@@ -210,18 +172,36 @@ subroutine pacs_info_observation(filename, nfilenames, policy, nsamples_max, cus
     scan_speed  = obs%slice%scan_speed
     scan_step   = obs%slice%scan_step
     scan_nlegs  = obs%slice%scan_nlegs
-    nsamples    = obs%slice%nvalids
-    npointings  = obs%slice%nsamples
-    offset      = obs%slice%first - 1
     
+    dest = 1
+    do iobs = 1, obs%nslices
+        nsamples = obs%slice(iobs)%nsamples
+        frame_time   (dest:dest+nsamples-1) = obs%slice(iobs)%p%time
+        frame_ra     (dest:dest+nsamples-1) = obs%slice(iobs)%p%ra
+        frame_dec    (dest:dest+nsamples-1) = obs%slice(iobs)%p%dec
+        frame_pa     (dest:dest+nsamples-1) = obs%slice(iobs)%p%pa
+        frame_chop   (dest:dest+nsamples-1) = obs%slice(iobs)%p%chop
+        frame_masked (dest:dest+nsamples-1) = obs%slice(iobs)%p%masked
+        frame_removed(dest:dest+nsamples-1) = obs%slice(iobs)%p%removed
+        do isample = 1, nsamples
+            if (obs%slice(iobs)%p(isample)%inscan) then
+                frame_info(dest) = POINTING_INSCAN
+            else if (obs%slice(iobs)%p(isample)%turnaround) then
+                frame_info(dest) = POINTING_TURNAROUND
+            else
+                frame_info(dest) = POINTING_OTHER
+            end if
+            dest = dest + 1
+        end do
+    end do
+
 end subroutine pacs_info_observation
 
 
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine pacs_info_bad_detector_mask(tamasis_dir, band, transparent_mode, reject_bad_line, nrows, ncolumns, detector_mask,    &
-                                       status)
+subroutine pacs_info_detector_mask(tamasis_dir, band, transparent_mode, reject_bad_line, nrows, ncolumns, detector_mask, status)
 
     use iso_fortran_env,       only : ERROR_UNIT
     use module_fitstools,      only : ft_read_image
@@ -280,7 +260,7 @@ subroutine pacs_info_bad_detector_mask(tamasis_dir, band, transparent_mode, reje
         detector_mask(12,17:32) = .true.
     end if
 
-end subroutine pacs_info_bad_detector_mask
+end subroutine pacs_info_detector_mask
 
 
 !-----------------------------------------------------------------------------------------------------------------------------------

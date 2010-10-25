@@ -35,6 +35,26 @@ class Observation(object):
         """
         raise NotImplementedError()
 
+    def get_nsamples(self):
+        """
+        Method to get the number of valid pointings for each slice
+        They are those for which self.pointing.removed is False
+        """
+        result = []
+        dest = 0
+        for slice in self.slice:
+            result.append(numpy.sum(~self.pointing[dest:dest+slice.nsamples_all].removed))
+            dest += slice.nsamples_all
+        return tuple(result)
+
+    def get_nfinesamples(self):
+        """
+        Method to get the number of valid samplings for each slice, by taking
+        into account compression factor and fine sampling.
+        They are those whose self.pointing is not removed.
+        """
+        return tuple(numpy.asarray(self.get_nsamples()) * self.slice.compression_factor * self.instrument.fine_sampling_factor)
+
     def get_tod(self, unit=None, flatfielding=True, subtraction_mean=True):
         """
         Method to get the Tod from this observation
@@ -243,7 +263,7 @@ class Pointing(numpy.recarray):
     INSCAN     = 1
     TURNAROUND = 2
     OTHER      = 3
-    def __new__(cls, time, ra, dec, pa, info=None, policy=None, nsamples=None):
+    def __new__(cls, time, ra, dec, pa, info=None, masked=None, removed=None, nsamples=None):
         if nsamples is None:
             nsamples = (time.size,)
         else:
@@ -256,27 +276,32 @@ class Pointing(numpy.recarray):
         if info is None:
             info = Pointing.INSCAN
 
-        if policy is None:
-            policy = MaskPolicy.KEEP
+        if masked is None:
+            masked = False
 
-        time   = numpy.asarray(time)
-        ra     = numpy.asarray(ra)
-        dec    = numpy.asarray(dec)
-        pa     = numpy.asarray(pa)
-        info   = numpy.asarray(info)
-        policy = numpy.asarray(policy)
-        if numpy.any(map(lambda x: x.size not in (1, nsamples_tot), [ra,dec,pa,info,policy])):
+        if removed is None:
+            removed = False
+
+        time    = numpy.asarray(time)
+        ra      = numpy.asarray(ra)
+        dec     = numpy.asarray(dec)
+        pa      = numpy.asarray(pa)
+        info    = numpy.asarray(info)
+        masked  = numpy.asarray(masked)
+        removed = numpy.asarray(removed)
+        if numpy.any(map(lambda x: x.size not in (1, nsamples_tot), [ra,dec,pa,info,masked,removed])):
             raise ValueError('The pointing inputs do not have the same size.')
 
         ftype = get_default_dtype_float()
-        dtype = numpy.dtype([('time', ftype), ('ra', ftype), ('dec', ftype), ('pa', ftype), ('info', numpy.int64), ('policy', numpy.int64)])
+        dtype = numpy.dtype([('time', ftype), ('ra', ftype), ('dec', ftype), ('pa', ftype), ('info', numpy.int64), ('masked', numpy.bool_), ('removed', numpy.bool_)])
         result = numpy.recarray(nsamples_tot, dtype=dtype)
-        result.time   = time
-        result.ra     = ra
-        result.dec    = dec
-        result.pa     = pa
-        result.info   = info
-        result.policy = policy
+        result.time    = time
+        result.ra      = ra
+        result.dec     = dec
+        result.pa      = pa
+        result.info    = info
+        result.masked  = masked
+        result.removed = removed
         result = result.view(cls)
         result.nsamples = nsamples
         return result

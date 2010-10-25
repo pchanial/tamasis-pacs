@@ -54,7 +54,7 @@ public :: PacsObservation
     end type Pointing
 
 !!$    type observationslice
-!!$        integer                     :: first, last, nsamples
+!!$        integer                     :: nsamples, nvalids
 !!$        character(len=256)          :: filename
 !!$        character                   :: band
 !!$        character(len=FLEN_VALUE)   :: observing_mode
@@ -66,7 +66,7 @@ public :: PacsObservation
 !!$ type, extends(observationslice) :: PacsObservationSlice
     type :: PacsObservationSlice
 
-        integer                     :: first, last, nsamples, nvalids
+        integer                     :: nsamples, nvalids
         character(len=256)          :: filename
         character                   :: band
         character(len=FLEN_VALUE)   :: observing_mode
@@ -130,7 +130,7 @@ contains
         real(p), intent(in)            :: time
         real(p), intent(out)           :: ra, dec, pa, chop
         integer, intent(inout)         :: index
-        integer                        :: i, first, last, nsamples
+        integer                        :: i, nsamples
         real(p)                        :: frac
 
         if (islice < 1 .or. islice > this%nslices) then
@@ -138,9 +138,7 @@ contains
             stop
         end if
 
-        first = this%slice(islice)%first
-        last  = this%slice(islice)%last
-        nsamples = last - first + 1
+        nsamples = this%slice(islice)%nsamples
 
         if (time > 2._p * this%slice(islice)%p(nsamples)%time - this%slice(islice)%p(nsamples-1)%time .or.                         &
             time < 2._p * this%slice(islice)%p(1)%time - this%slice(islice)%p(2)%time) then
@@ -152,12 +150,12 @@ contains
         end if
 
         if (index == 0 .or. index-1 > nsamples) then
-            index = first + 1
+            index = 2
         else if (time <= this%slice(islice)%p(index-1)%time) then
-            index = first + 1
+            index = 2
         end if
 
-        do i = index, last
+        do i = index, nsamples
             if (time <= this%slice(islice)%p(i)%time) go to 100
         end do
         i = i - 1
@@ -372,59 +370,32 @@ contains
         integer, intent(in)                        :: first, last
         integer, intent(out)                       :: status
 
-        type(pointing), allocatable :: p_(:)
-        integer                     :: isample
-
         status = 0
 
-        this%p%masked  = (policy%inscan     == POLICY_MASK)   .and. this%p%inscan     .or. &
-                         (policy%turnaround == POLICY_MASK)   .and. this%p%turnaround .or. &
-                         (policy%other      == POLICY_MASK)   .and. this%p%other      .or. &
+        this%p%masked  = (policy%inscan     == POLICY_MASK)   .and. this%p%inscan     .or.                                         &
+                         (policy%turnaround == POLICY_MASK)   .and. this%p%turnaround .or.                                         &
+                         (policy%other      == POLICY_MASK)   .and. this%p%other      .or.                                         &
                          (policy%invalid    == POLICY_MASK)   .and. this%p%invalid
 
-        this%p%removed = (policy%inscan     == POLICY_REMOVE) .and. this%p%inscan     .or. &
-                         (policy%turnaround == POLICY_REMOVE) .and. this%p%turnaround .or. &
-                         (policy%other      == POLICY_REMOVE) .and. this%p%other      .or. &
+        this%p%removed = (policy%inscan     == POLICY_REMOVE) .and. this%p%inscan     .or.                                         &
+                         (policy%turnaround == POLICY_REMOVE) .and. this%p%turnaround .or.                                         &
+                         (policy%other      == POLICY_REMOVE) .and. this%p%other      .or.                                         &
                          (policy%invalid    == POLICY_REMOVE) .and. this%p%invalid
         
-        ! if a slice is specified, remove its complement otherwise, search for it
-        this%first = first
-        if (first /= 0) then
-            this%p(1:first-1)%removed = .true.
-        else
-            do isample = 1, size(this%p)
-                if (.not. this%p(isample)%removed) exit
-            end do
-            this%first = isample
+        ! if a slice is specified, remove its complement
+        this%p(1:first-1)%removed = .true.
+        if (last > this%nsamples) then
+            status = 1
+            write (ERROR_UNIT,'(a,2(i0,a))') "ERROR: In file '" // trim(this%filename) // "', the last sample '", last,        &
+                 "' exceeds the size of the observation '", this%nsamples, "'."
+            return
         end if
-
-        this%last = last
         if (last /= 0) then
-            if (last > this%nsamples) then
-                status = 1
-                write (ERROR_UNIT,'(a,2(i0,a))') "ERROR: The last sample '", last, "' exceeds the size of the observation '",      &
-                     this%nsamples, "'."
-                return
-            end if
             this%p(last+1:)%removed = .true.
-        else
-            do isample = size(this%p), 1, -1
-                if (.not. this%p(isample)%removed) exit
-            end do
-            this%last = isample
-        end if
-
-        if (this%first > this%last) then
-            this%first = 1
-            this%last  = this%nsamples
         end if
         
-        ! retain pointings bracketed by [first,last]
-        this%nsamples = this%last - this%first + 1
-        allocate (p_(this%nsamples))
-        p_ = this%p(this%first:this%last)
-        call move_alloc(p_, this%p)
-        this%nvalids = count(.not. this%p%removed)
+        ! get number of valid pointings
+        this%nvalids  = count(.not. this%p%removed)
 
     end subroutine set_policy
 
@@ -1049,8 +1020,6 @@ contains
         this%policy = MaskPolicy()
 
         allocate (this%slice(1))
-        this%slice(1)%first    = 1
-        this%slice(1)%last     = nsamples
         this%slice(1)%nsamples = nsamples
         this%slice(1)%filename = 'simulation'
         this%slice(1)%band  = ' '
@@ -1134,7 +1103,6 @@ contains
             ! observation number & file name
             write (OUTPUT_UNIT,'(a6,a)') strternary(this%nslices>1, '  #' // strinteger(islice,3), ''), 'Observation: ' //         &
                   trim(this%slice(islice)%filename)
-            write (OUTPUT_UNIT,'(6x,a)') 'Section: [' // strsection(this%slice(islice)%first,this%slice(islice)%last) // ']'
             
             ! band
             write (OUTPUT_UNIT,'(a,$)') "      Band: "

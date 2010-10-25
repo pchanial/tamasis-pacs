@@ -806,13 +806,13 @@ contains
 
     subroutine read_one(this, obs, signal, mask, status)
 
-        class(pacsinstrument), intent(in)       :: this
-!!$        class(observationslice), intent(in) :: obs
-        class(pacsobservationslice), intent(in) :: obs
+        class(PacsInstrument), intent(in)       :: this
+        class(PacsObservationSlice), intent(in) :: obs
         real(p), intent(out)                    :: signal(:,:)
         logical*1, intent(out)                  :: mask  (:,:)
         integer, intent(out)                    :: status
 
+        integer                :: first, last
         integer                :: ip, iq
         integer                :: idetector, ndetectors, unit
         integer, allocatable   :: imageshape(:)
@@ -822,27 +822,36 @@ contains
         integer                :: ncompressed
         integer                :: isample, icompressed, ibit
         integer                :: firstcompressed, lastcompressed
-        real(p)                :: signal_(obs%nsamples)
-        logical*1              :: mask_(obs%nsamples)
+        real(p), allocatable   :: signal_(:)
+        logical*1, allocatable :: mask_(:)
 
         ndetectors = size(signal, 2)
 
+        ! get first and last valid pointing, to decrease I/O
+        do first = 1, obs%nsamples
+            if (.not. obs%p(first)%removed) exit
+        end do
+        do last = obs%nsamples, 1, -1
+            if (.not. obs%p(last)%removed) exit
+        end do
+
         ! set mask from policy
-        mask = spread(pack(obs%p%masked, .not. obs%p%removed), 2, ndetectors)
+        mask = spread(pack(obs%p(first:last)%masked, .not. obs%p(first:last)%removed), 2, ndetectors)
 
         ! read signal HDU
         call ft_open_image(trim(obs%filename) // '[Signal]', unit, 3, imageshape, status)
         if (status /= 0) return
 
+        allocate (signal_(last - first + 1), mask_(last - first + 1))
         do idetector = 1, ndetectors
 
             ip = this%pq(1,idetector)
             iq = this%pq(2,idetector)
 
-            call ft_read_slice(unit, obs%first, obs%last, iq+1, ip+1, imageshape, signal_, status)
+            call ft_read_slice(unit, first, last, iq+1, ip+1, imageshape, signal_, status)
             if (status /= 0) return
 
-            signal(:,idetector) = pack(signal_, .not. obs%p%removed)
+            signal(:,idetector) = pack(signal_, .not. obs%p(first:last)%removed)
 
         end do
 
@@ -861,8 +870,8 @@ contains
         call ft_open_image(trim(obs%filename) // '[Master]', unit, 3, imageshape, status)
         if (status /= 0) return
 
-        firstcompressed = (obs%first - 1) / 32 + 1
-        lastcompressed  = (obs%last  - 1) / 32 + 1
+        firstcompressed = (first - 1) / 32 + 1
+        lastcompressed  = (last  - 1) / 32 + 1
         ncompressed = lastcompressed - firstcompressed + 1
 
         if (lastcompressed > imageshape(1)) then
@@ -889,16 +898,16 @@ contains
                 maskval = maskcompressed(icompressed-firstcompressed+1)
                 if (maskval == 0) cycle
 
-                isample = (icompressed-1)*32 - obs%first + 2
+                isample = (icompressed-1)*32 - first + 2
 
                 ! loop over the bits of a compressed mask byte
-                do ibit = max(0, obs%first - (icompressed-1)*32 - 1), min(31, obs%last - (icompressed-1)*32 - 1)
+                do ibit = max(0, first - (icompressed-1)*32 - 1), min(31, last - (icompressed-1)*32 - 1)
                     mask_(isample+ibit) = btest(maskval,ibit)
                 end do
 
             end do
             
-            mask(:,idetector) = mask(:,idetector) .or. pack(mask_, .not. obs%p%removed)
+            mask(:,idetector) = mask(:,idetector) .or. pack(mask_, .not. obs%p(first:last)%removed)
 
         end do
 

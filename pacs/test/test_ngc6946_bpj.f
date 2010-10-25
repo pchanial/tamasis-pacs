@@ -1,5 +1,4 @@
 program test_ngc6946_bpj
-    use module_sort, only : where
 
     use iso_fortran_env,        only : ERROR_UNIT, OUTPUT_UNIT
     use module_fitstools,       only : ft_read_keyword
@@ -30,12 +29,10 @@ program test_ngc6946_bpj
     integer                             :: nx, ny
     integer                             :: status, count0, count1
     integer                             :: count2, count_rate, count_max
-    integer                             :: idetector, isample
+    integer                             :: idetector, isample, ipointing
     integer*8                           :: nsamples
     real(p), allocatable                :: map1d(:)
     type(pointingelement), allocatable  :: pmatrix(:,:,:)
-
-    integer, allocatable:: i1(:), i2(:)
 
     call system_clock(count0, count_rate, count_max)
 
@@ -46,7 +43,7 @@ program test_ngc6946_bpj
     allocate (obs)
     call obs%init(filename, policy, status, verbose=.true.)
     if (status /= 0) stop 'FAILED: pacsobservation%init'
-    nsamples = obs%slice(1)%nsamples
+    nsamples = obs%slice(1)%nvalids
 
     call obs%print()
 
@@ -105,9 +102,11 @@ program test_ngc6946_bpj
 
     write (*,*) 'surfaces:'
     !XXX IFORT bug
-    !!$omp parallel do default(shared) firstprivate(chop_old) private(isample, ra, dec, pa, chop, coords, coords_yz)
-    do isample = 1, nsamples
-        call obs%get_position_index(1, isample, 1, ra, dec, pa, chop)
+    !!$omp parallel do default(shared) firstprivate(chop_old) private(ipointing, isample, ra, dec, pa, chop, coords, coords_yz)
+    isample = 1
+    do ipointing = 1, obs%slice(1)%nsamples
+        if (obs%slice(1)%p(ipointing)%removed) cycle
+        call obs%get_position_index(1, ipointing, 1, ra, dec, pa, chop)
         if (abs(chop-chop_old) > 1.e-2_p) then
             coords_yz = pacs%uv2yz(pacs%corners_uv, pacs%distortion_yz, chop)
             chop_old = chop
@@ -119,6 +118,7 @@ program test_ngc6946_bpj
                                           real(coords(:,(idetector-1)*NVERTICES+1:idetector*NVERTICES),p)))
             surface2(isample,idetector) = sum_kahan(real(pmatrix(:,isample,idetector)%weight, p))
         end do
+        isample = isample + 1
     end do
     !!$omp end parallel do
 

@@ -9,7 +9,6 @@ program test_pacsobservation
 
     class(PacsObservation), allocatable :: obs
     class(PacsInstrument), allocatable  :: pacs
-    type(Pointing), allocatable         :: p_(:)
     type(MaskPolicy)                    :: policy
     character(len=*), parameter         :: filename = 'pacs/test/data/frames_blue.fits'
     character(len=255), allocatable     :: afilename(:)
@@ -29,27 +28,33 @@ program test_pacsobservation
     afilename(1) = get_tamasis_path() // filename
 
     call obs%init(afilename, policy, status)
-    if (status /= 0 .or. obs%slice(1)%first /= 1 .or. obs%slice(1)%last /= 360) stop 'FAILED: init1'
+    call get_first_last(obs%slice(1)%p%removed, first, last)
+    if (status /= 0 .or. first /= 1 .or. last /= 360) stop 'FAILED: init1'
 
     afilename(1) = get_tamasis_path() // filename // '[23:23]'
     call obs%init(afilename, policy, status)
-    if (status /= 0 .or. obs%slice(1)%first /= 23 .or. obs%slice(1)%last /= 23) stop 'FAILED: init2'
+    call get_first_last(obs%slice(1)%p%removed, first, last)
+    if (status /= 0 .or. first /= 23 .or. last /= 23) stop 'FAILED: init2'
 
     afilename(1) = get_tamasis_path() // filename // '[200:]'
     call obs%init(afilename, policy, status)
-    if (status /= 0 .or. obs%slice(1)%first /= 200 .or. obs%slice(1)%last /= 360) stop 'FAILED: init3'
+    call get_first_last(obs%slice(1)%p%removed, first, last)
+    if (status /= 0 .or. first /= 200 .or. last /= 360) stop 'FAILED: init3'
 
     afilename(1) = get_tamasis_path() // filename // '[:130]'
     call obs%init(afilename, policy, status)
-    if (status /= 0 .or. obs%slice(1)%first /= 1 .or. obs%slice(1)%last /= 130) stop 'FAILED: init4'
+    call get_first_last(obs%slice(1)%p%removed, first, last)
+    if (status /= 0 .or. first /= 1 .or. last /= 130) stop 'FAILED: init4'
 
     afilename(1) = get_tamasis_path() // filename // '[:]'
     call obs%init(afilename, policy, status)
-    if (status /= 0 .or. obs%slice(1)%first /= 1 .or. obs%slice(1)%last /= 360) stop 'FAILED: init5'
+    call get_first_last(obs%slice(1)%p%removed, first, last)
+    if (status /= 0 .or. first /= 1 .or. last /= 360) stop 'FAILED: init5'
 
     afilename(1) = get_tamasis_path() // filename // '[]'
     call obs%init(afilename, policy, status)
-    if (status /= 0 .or. obs%slice(1)%first /= 1 .or. obs%slice(1)%last /= 360) stop 'FAILED: init6'
+    call get_first_last(obs%slice(1)%p%removed, first, last)
+    if (status /= 0 .or. first /= 1 .or. last /= 360) stop 'FAILED: init6'
    
     ! invalid calls
     afilename(1) = get_tamasis_path() // filename // '[32:23]'
@@ -74,9 +79,12 @@ program test_pacsobservation
     afilename(1) = get_tamasis_path() // filename // '[3:100]'
     afilename(2) = get_tamasis_path() // filename // '[201:300]'
     call obs%init(afilename, policy, status)
-    if (status /= 0 .or. sum(obs%slice%nsamples) /= 198 .or.                     &
-        obs%slice(1)%first /= 3   .or. obs%slice(1)%last /= 100 .or.             &
-        obs%slice(2)%first /= 201 .or. obs%slice(2)%last /= 300) stop 'FAILED: ainit1'
+    if (status /= 0 .or. sum(obs%slice%nsamples) /= 360*2 .or. &
+         count(.not. obs%slice(1)%p%removed) + count(.not. obs%slice(2)%p%removed) /= 198) stop 'FAILED:ainit1'
+    call get_first_last(obs%slice(1)%p%removed, first, last)
+    if (first /= 3 .or. last /= 100) stop 'FAILED: ainit1b'
+    call get_first_last(obs%slice(2)%p%removed, first, last)
+    if (first /= 201 .or. last /= 300) stop 'FAILED: ainit1c'
     deallocate(afilename)
  
     allocate(afilename(0))
@@ -95,8 +103,8 @@ program test_pacsobservation
     call pacs%init(obs%band, obs%slice(1)%observing_mode == 'transparent', 1, status=status)
     if (status /= 0 .or. pacs%band /= 'b' .or. pacs%transparent_mode) stop 'FAILED: pacs%init'
 
-    allocate(signal(obs%slice(1)%nsamples,pacs%ndetectors))
-    allocate(mask  (obs%slice(1)%nsamples,pacs%ndetectors))
+    allocate (signal(obs%slice(1)%nsamples,pacs%ndetectors))
+    allocate (mask  (obs%slice(1)%nsamples,pacs%ndetectors))
     call pacs%read(obs, signal, mask, status)
 
     ! get a detector that has been hit by a glitch
@@ -110,23 +118,14 @@ program test_pacsobservation
     if (any(mask_ref .neqv. mask(:,idetector))) stop 'FAILED: mask ref'
     deallocate (mask, signal)
     
-    call move_alloc (obs%slice(1)%p, p_)
-    
     do first = 1, 360, 7
         do last = first, 360, 11
-           allocate (obs%slice(1)%p(last-first+1))
-           obs%slice(1)%p = p_(first:last)
-           obs%slice(1)%first = first
-           obs%slice(1)%last = last
-           obs%slice(1)%nsamples = last - first + 1
-           obs%slice(1)%nvalids = count(.not. obs%slice(1)%p%invalid)
-           obs%nsamples = obs%slice(1)%nsamples
+           obs%slice(1)%p%removed = .true.
+           obs%slice(1)%p(first:last)%removed = .false.
+           obs%slice(1)%nvalids = count(.not. obs%slice(1)%p%removed)
            obs%nvalids = obs%slice(1)%nvalids
-           if (allocated(obs%slice(1)%p)) deallocate (obs%slice(1)%p)
-           allocate (obs%slice(1)%p(last-first+1))
-           obs%slice(1)%p%invalid = .false.
-           allocate(signal(obs%slice(1)%nsamples,pacs%ndetectors))
-           allocate(mask  (obs%slice(1)%nsamples,pacs%ndetectors))
+           allocate(signal(obs%slice(1)%nvalids,pacs%ndetectors))
+           allocate(mask  (obs%slice(1)%nvalids,pacs%ndetectors))
            call pacs%read(obs, signal, mask, status)
            if (status /= 0) stop 'FAILED: read_pacsobservation loop'
            if (any(signal(:,idetector) /= signal_ref(first:last))) stop 'FAILED: read signal'
@@ -140,10 +139,26 @@ program test_pacsobservation
            end if
            deallocate (signal)
            deallocate (mask)
-           deallocate (obs%slice(1)%p)
         end do
-    end do    
+    end do
 
     stop 'OK.'
-   
+
+contains
+
+    subroutine get_first_last(removed, first, last)
+
+        logical*1, intent(in) :: removed(:)
+        integer, intent(out)  :: first, last
+
+        do first = 1, size(removed)
+            if (.not. removed(first)) exit
+        end do
+
+        do last = size(removed), 1, -1
+            if (.not. removed(last)) exit
+        end do
+
+    end subroutine get_first_last
+
 end program test_pacsobservation
