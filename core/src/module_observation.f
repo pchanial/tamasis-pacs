@@ -571,7 +571,6 @@ contains
             if (found) then                
                 select case (strlowcase(scan_speed))
                     case ('slow')
-                        write (OUTPUT_UNIT,'(a)') 'CHECKME: SCAN_SPEED LOW=10arcsec/s'
                         this%scan_speed = 10._p
                     case ('medium')
                         this%scan_speed = 20._p
@@ -587,7 +586,6 @@ contains
                 if (found) then
                     select case (strlowcase(scan_speed))
                         case ('low')
-                            write (OUTPUT_UNIT,'(a)') 'CHECKME: SCAN_SPEED LOW=10arcsec/s'
                             this%scan_speed = 10._p
                         case ('medium')
                             this%scan_speed = 20._p
@@ -659,16 +657,6 @@ contains
 
         call ft_close(unit, status)
         if (status /= 0) return
-
-!!$        if (compression == 'Photometry Lossless Compression Mode') then
-!!$            this%observing_mode = 'transparent'
-!!$        else if (compression == 'Photometry Default Mode') then
-!!$            this%observing_mode = 'prime'
-!!$        else if (compression == 'Photometry Double Compression Mode') then
-!!$            this%observing_mode = 'parallel'
-!!$        else
-!!$            write (OUTPUT_UNIT,'(a)') "Warning: Unknown compression mode: '" // trim(compression) // "'."
-!!$        end if
 
     end subroutine set_observing_mode
 
