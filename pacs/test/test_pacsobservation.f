@@ -13,12 +13,13 @@ program test_pacsobservation
     character(len=*), parameter         :: filename = 'pacs/test/data/frames_blue.fits'
     character(len=255), allocatable     :: afilename(:)
     integer                :: status, idetector
+    logical*1, allocatable :: detector_mask(:,:)
     real(p), allocatable   :: signal(:,:)
     logical*1, allocatable :: mask(:,:)
     integer                :: first, last
     real(p)                :: signal_ref(360)
     logical*1              :: mask_ref(360)
-
+ 
     ! initialise tamasis
     call init_tamasis
 
@@ -97,11 +98,15 @@ program test_pacsobservation
     afilename(1) = get_tamasis_path() // filename
     call obs%init(afilename, policy, status)
     if (status /= 0) stop 'FAILED: init_pacsobservation loop'
+    if (obs%band /= 'blue' .or. obs%slice(1)%observing_mode /= 'prime') stop 'FAILED: obs%init'
     deallocate (afilename)
 
     allocate (pacs)
-    call pacs%init(obs%band, obs%slice(1)%observing_mode == 'transparent', 1, status=status)
-    if (status /= 0 .or. pacs%band /= 'b' .or. pacs%transparent_mode) stop 'FAILED: pacs%init'
+    call pacs%read_detector_mask(obs%band, detector_mask, status,                                                                  &
+         transparent_mode=obs%slice(1)%observing_mode=='transparent')
+    if (status /= 0) stop 'FAILED: pacs%read_detector_mask'
+    call pacs%init_with_calfiles(obs%band, detector_mask, 1, status)
+    if (status /= 0) stop 'FAILED: pacs%init_with_calfiles'
 
     allocate (signal(obs%slice(1)%nsamples,pacs%ndetectors))
     allocate (mask  (obs%slice(1)%nsamples,pacs%ndetectors))

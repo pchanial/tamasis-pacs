@@ -18,7 +18,7 @@ class Observation(object):
         """
         Method to get the number of detectors, accordingly to the detector mask.
         """
-        return numpy.sum(self.instrument.detector_mask == 0)
+        return int(numpy.sum(self.instrument.detector_mask == 0))
 
     def get_filter_uncorrelated(self):
         """
@@ -268,7 +268,8 @@ class Pointing(numpy.recarray):
     INSCAN     = 1
     TURNAROUND = 2
     OTHER      = 3
-    def __new__(cls, time, ra, dec, pa, info=None, masked=None, removed=None, nsamples=None):
+    def __new__(cls, time, ra, dec, pa, info=None, masked=None, removed=None, nsamples=None, dtype=None):
+
         if nsamples is None:
             nsamples = (time.size,)
         else:
@@ -287,6 +288,12 @@ class Pointing(numpy.recarray):
         if removed is None:
             removed = False
 
+        if dtype is None:
+            ftype = get_default_dtype_float()
+            dtype = numpy.dtype([('time', ftype), ('ra', ftype), ('dec', ftype), ('pa', ftype), ('info', numpy.int64),
+                                 ('masked', numpy.bool_), ('removed', numpy.bool_)])
+
+
         time    = numpy.asarray(time)
         ra      = numpy.asarray(ra)
         dec     = numpy.asarray(dec)
@@ -297,8 +304,6 @@ class Pointing(numpy.recarray):
         if numpy.any(map(lambda x: x.size not in (1, nsamples_tot), [ra,dec,pa,info,masked,removed])):
             raise ValueError('The pointing inputs do not have the same size.')
 
-        ftype = get_default_dtype_float()
-        dtype = numpy.dtype([('time', ftype), ('ra', ftype), ('dec', ftype), ('pa', ftype), ('info', numpy.int64), ('masked', numpy.bool_), ('removed', numpy.bool_)])
         result = numpy.recarray(nsamples_tot, dtype=dtype)
         result.time    = time
         result.ra      = ra

@@ -17,9 +17,9 @@ module module_observation
 
     public :: MaskPolicy
     public :: Observation
-!!$    public :: observationslice
-public :: PacsObservationSlice
+!!$    public :: ObservationSlice
 public :: PacsObservation    
+public :: PacsObservationSlice
     public :: Pointing
     public :: POINTING_INSCAN, POINTING_TURNAROUND, POINTING_OTHER
 
@@ -64,11 +64,11 @@ public :: PacsObservation
 !!$    end type observationslice
 
 !!$ type, extends(observationslice) :: PacsObservationSlice
-    type :: PacsObservationSlice
+    type PacsObservationSlice
 
         integer                     :: nsamples, nvalids
         character(len=256)          :: filename
-        character                   :: band
+        character(len=FLEN_VALUE)   :: band
         character(len=FLEN_VALUE)   :: observing_mode
         real(p)                     :: ra, dec
         real(p)                     :: cam_angle, scan_angle, scan_length, scan_speed, scan_step
@@ -91,11 +91,11 @@ public :: PacsObservation
 
     end type PacsObservationSlice
 
-    type :: Observation
+    type Observation
         integer                   :: nslices
         integer                   :: nsamples  ! number of pointings
         integer                   :: nvalids   ! number of non-removed pointings, to be included in tod & pmatrix
-        character                 :: band
+        character(len=FLEN_VALUE) :: band
         character(len=FLEN_VALUE) :: unit
         type(MaskPolicy)          :: policy
         type(PacsObservationSlice), allocatable :: slice(:)
@@ -108,12 +108,12 @@ public :: PacsObservation
 
     ! the following belongs to module_PacsObservation.f
     ! moved here because of gfortran bug #44065
-    type, extends(observation) :: PacsObservation
+    type, extends(Observation) :: PacsObservation
 
     contains
 
         procedure :: init
-        procedure :: init_sim
+        procedure :: init_with_variables
         procedure :: print
 
     end type PacsObservation
@@ -413,7 +413,7 @@ contains
         character(len=5), allocatable :: bands(:)
         character(len=5)              :: band
 
-        this%band = ' '
+        this%band = ''
 
         call ft_open_bintable(trim(this%filename) // '[Status]', unit, nsamples, status)
         if (status /= 0) return
@@ -485,7 +485,7 @@ contains
         else
             band = 'red'
         end if
-        this%band = band(1:1)
+        this%band = band
 
         ! check observation only has one band
         if (nsamples /= nmax + nu) then
@@ -590,7 +590,7 @@ contains
                 case ('Photometry Lossless Compression Mode')
                     this%observing_mode = 'transparent'
                 case ('Photometry Default Mode')
-                    if (this%band == 'r') then
+                    if (this%band == 'red') then
                         write (OUTPUT_UNIT,'(a)') 'Warning: Prime or parallel mode cannot be inferred.'
                     end if
                     this%observing_mode = 'prime'
@@ -783,6 +783,7 @@ contains
 
     end subroutine set_unit
 
+
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
@@ -866,9 +867,11 @@ contains
     end subroutine set_sampling_interval
 
 
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
     ! the following belongs to module_PacsObservation.f
     ! moved here because of gfortran bug #44065
-
     subroutine init(this, filename, policy, status, verbose)
 
         class(PacsObservation), intent(inout) :: this
@@ -876,6 +879,7 @@ contains
         type(MaskPolicy), intent(in)          :: policy
         integer, intent(out)                  :: status
         logical, intent(in), optional         :: verbose
+
         integer                               :: first, last
         integer                               :: islice
         logical                               :: verbose_
@@ -933,7 +937,10 @@ contains
         this%band = this%slice(1)%band
         if (any(this%slice%band /= this%band)) then
             status = 1
-            write (ERROR_UNIT,'(a)') 'ERROR: Observations do not have the same band: ', this%slice%band, '.'
+            write (ERROR_UNIT,'(a)') 'ERROR: Observations do not have the same band: '
+            do islice = 1, this%nslices
+                write (ERROR_UNIT,'(a)') '- ' // trim(this%slice(islice)%band)
+            end do
             return
         end if
 
@@ -978,71 +985,88 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine init_sim(this, time, ra, dec, pa, chop, status, verbose)
+    subroutine init_with_variables(this, time, ra, dec, pa, chop, masked, removed, nsamples, compression_factor, status)
+
         class(PacsObservation), intent(inout) :: this
         real(p), intent(in)                   :: time(:),ra(:),dec(:),pa(:),chop(:)
+        logical*1, intent(in)                 :: masked(:), removed(:)
+        integer, intent(in)                   :: nsamples(:)
+        integer, intent(in)                   :: compression_factor(:)
         integer, intent(out)                  :: status
-        logical, intent(in), optional         :: verbose
-        integer                               :: nsamples
-        logical                               :: verbose_
 
-        if (present(verbose)) then
-            verbose_ = verbose
-        else
-            verbose_ = .false.
-        end if
+        integer :: islice, dest, nsamples_tot
 
         status = 1
 
-        ! check conformity of time, ra, dec, pa
-        nsamples = size(time)
+        ! check conformity of time, ra, dec, pa, etc.
+        nsamples_tot = size(time)
 
-        if (size(ra) /= nsamples) then
-            write (ERROR_UNIT,'(a)') "Input R.A. has an invalid number of samples."
+        if (size(ra) /= nsamples_tot) then
+            write (ERROR_UNIT,'(a)') "INIT_WITH_VAR: Input argument 'ra' has an invalid number of samples."
             return
-        endif
-        if (size(dec) /= nsamples) then
-            write (ERROR_UNIT,'(a)') "Input declination has an invalid number of samples."
+        end if
+        if (size(dec) /= nsamples_tot) then
+            write (ERROR_UNIT,'(a)') "INIT_WITH_VAR: Input argument 'dec' has an invalid number of samples."
             return
-        endif
-        if (size(pa) /= nsamples) then
-            write (ERROR_UNIT,'(a)') "Input P.A. has an invalid number of samples."
+        end if
+        if (size(pa) /= nsamples_tot) then
+            write (ERROR_UNIT,'(a)') "INIT_WITH_VAR: Input argument 'pa' has an invalid number of samples."
             return
-        endif
-        if (size(chop) /= nsamples) then
-            write (ERROR_UNIT,'(a)') "Input chop angle has an invalid number of samples."
+        end if
+        if (size(chop) /= nsamples_tot) then
+            write (ERROR_UNIT,'(a)') "INIT_WITH_VAR: Input argument 'chop' has an invalid number of samples."
             return
-        endif
+        end if
+        if (size(masked) /= nsamples_tot) then
+            write (ERROR_UNIT,'(a)') "INIT_WITH_VAR: Input argument 'masked' has an invalid number of samples."
+            return
+        end if
+        if (size(removed) /= nsamples_tot) then
+            write (ERROR_UNIT,'(a)') "INIT_WITH_VAR: Input argument 'removed' has an invalid number of samples."
+            return
+        end if
+        if (sum(nsamples) /= nsamples_tot) then
+            write (ERROR_UNIT,'(a)') "INIT_WITH_VAR: Input argument 'nsamples' has an invalid number of samples."
+            return
+        end if
+        if (size(compression_factor) /= size(nsamples)) then
+            write (ERROR_UNIT,'(a)') "INIT_WITH_VAR: Input argument 'compression_factor' has an invalid number of elements."
+            return
+        end if
 
-        this%nslices      = 1
-        this%nsamples = nsamples
-        this%band      = ' '
-        this%policy = MaskPolicy()
+        allocate (this%slice(size(nsamples)))
+        this%slice%nsamples = nsamples
+        this%slice%compression_factor = compression_factor
+        this%slice%filename = ''
+        this%slice%band  = ''
+        this%slice%observing_mode = ''
+        this%slice%sampling_interval = 0._p
 
-        allocate (this%slice(1))
-        this%slice(1)%nsamples = nsamples
-        this%slice(1)%filename = 'simulation'
-        this%slice(1)%band  = ' '
-        this%slice(1)%observing_mode = 'Unknown'
-        this%slice(1)%compression_factor = nint((time(2)-time(1)) / 0.024996_p)
-        this%slice(1)%sampling_interval = time(2)-time(1)
-        allocate (this%slice(1)%p(nsamples))
+        dest = 1
+        do islice = 1, size(nsamples)
 
-        this%slice(1)%p%time       = time
-        this%slice(1)%p%ra         = ra
-        this%slice(1)%p%dec        = dec
-        this%slice(1)%p%pa         = pa
-        this%slice(1)%p%chop       = chop
-        this%slice(1)%p%invalid    = .false.
-        this%slice(1)%p%inscan     = .true.
-        this%slice(1)%p%turnaround = .false.
+            this%slice(islice)%nvalids  = count(.not. removed(dest:dest+nsamples(islice)-1))
+            allocate (this%slice(islice)%p(nsamples(islice)))
+            this%slice(islice)%p%time    = time   (dest:dest+nsamples(islice)-1)
+            this%slice(islice)%p%ra      = ra     (dest:dest+nsamples(islice)-1)
+            this%slice(islice)%p%dec     = dec    (dest:dest+nsamples(islice)-1)
+            this%slice(islice)%p%pa      = pa     (dest:dest+nsamples(islice)-1)
+            this%slice(islice)%p%chop    = chop   (dest:dest+nsamples(islice)-1)
+            this%slice(islice)%p%masked  = masked (dest:dest+nsamples(islice)-1)
+            this%slice(islice)%p%removed = removed(dest:dest+nsamples(islice)-1)
+            dest = dest + nsamples(islice)
 
-        call this%slice(1)%set_sampling_interval(status, verbose_)
-        if (status /= 0) return
+        end do
 
-        call this%slice(1)%set_policy(this%policy, 1, nsamples, status)
+        this%nslices  = size(nsamples)
+        this%nsamples = nsamples_tot
+        this%nvalids  = sum(this%slice%nvalids)
+        this%band     = ''
+        this%unit     = ''
 
-    end subroutine init_sim
+        status = 0
+
+    end subroutine init_with_variables
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
@@ -1107,11 +1131,11 @@ contains
             ! band
             write (OUTPUT_UNIT,'(a,$)') "      Band: "
             select case (this%slice(islice)%band)
-                case ('b')
+                case ('blue')
                     write (OUTPUT_UNIT,'(a)') 'Blue'
-                case ('g')
+                case ('green')
                     write (OUTPUT_UNIT,'(a)') 'Green'
-                case ('r')
+                case ('red')
                     write (OUTPUT_UNIT,'(a)') 'Red'
                 case default
                     write (OUTPUT_UNIT,'(a)') 'Unknown'

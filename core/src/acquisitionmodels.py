@@ -18,7 +18,7 @@ from processing import interpolate_linear
 
 __all__ = ['AcquisitionModel', 'AcquisitionModelTranspose', 'Composition', 
            'Addition', 'Square', 'Symmetric', 'Diagonal', 'Scalar', 'Identity',
-           'DiscreteDifference', 'Projection', 'CompressionAverage', 'DownSampling', 
+           'DiscreteDifference', 'Projection', 'ProjectionFilename', 'CompressionAverage', 'DownSampling', 
            'Masking', 'Unpacking', 'Unpacking2', 'Reshaping', 'Padding', 'Fft', 
            'FftHalfComplex', 'InvNtt', 'InterpolationLinear', 'AllReduce', 'CircularShift', 
            'ValidationError', 'asacquisitionmodel']
@@ -696,6 +696,55 @@ class Projection(AcquisitionModel):
 
         self._pmatrix, self.header, ndetectors, nsamples, self.npixels_per_sample = \
             observation.get_pointing_matrix(header, resolution, npixels_per_sample, method=method, oversampling=oversampling)
+        self.pmatrix = self._pmatrix.view(dtype=[('weight', 'f4'), ('pixel', 'i4')]).view(numpy.recarray)
+        self.pmatrix.resize((ndetectors, numpy.sum(nsamples), self.npixels_per_sample))
+        self.shapein = tuple([self.header['naxis'+str(i+1)] for i in reversed(range(self.header['naxis']))])
+        self.shapeout = combine_sliced_shape(ndetectors, nsamples)
+
+    def direct(self, map2d, reusein=False, reuseout=False):
+        map2d, shapeout = self.validate_input_direct(Map, map2d, reusein)
+        output = self.validate_output_direct(Tod, shapeout, map2d.dtype, reuseout)
+        output.nsamples = self.shapeout[-1]
+        output._unit = map2d._unit
+        tmf.pointing_matrix_direct(self._pmatrix, map2d.T, output.T, self.npixels_per_sample)
+        return output
+
+    def transpose(self, signal, reusein=False, reuseout=False):
+        signal, shapein = self.validate_input_transpose(Tod, signal, reusein)
+        output = self.validate_output_transpose(Map, shapein, signal.dtype, reuseout)
+        output.header = self.header
+        output._unit = signal._unit
+        tmf.pointing_matrix_transpose(self._pmatrix, signal.T, output.T,  self.npixels_per_sample)
+        return output
+
+    def get_ptp(self):
+        ndetectors = self.shapeout[0]
+        nsamples = numpy.sum(self.shapeout[1])
+        npixels = numpy.product(self.shapein)
+        return tmf.pointing_matrix_ptp(self._pmatrix, self.npixels_per_sample, nsamples, ndetectors, npixels).T
+
+
+class ProjectionFilename(AcquisitionModel):
+    """
+    This class handles the direct and transpose operations by the pointing matrix
+    The input observation has the following required attributes/methods:
+        - nfinesamples
+        - nsamples
+        - ndetectors
+        - get_pointing_matrix()
+        - unit
+    The instance has the following specific attributes:
+        - header: the FITS header of the map
+        - pmatrix: transparent view of the pointing matrix
+        - _pmatrix: opaque representation of the pointing matrix
+        - npixels_per_sample: maximum number of sky map pixels that can be intercepted by a detector
+    Author: P. Chanial
+    """
+    def __init__(self, observation, method=None, header=None, resolution=None, npixels_per_sample=None, oversampling=True, description=None):
+        AcquisitionModel.__init__(self, description)
+
+        self._pmatrix, self.header, ndetectors, nsamples, self.npixels_per_sample = \
+            observation.get_pointing_matrix_filename(header, resolution, npixels_per_sample, method=method, oversampling=oversampling)
         self.pmatrix = self._pmatrix.view(dtype=[('weight', 'f4'), ('pixel', 'i4')]).view(numpy.recarray)
         self.pmatrix.resize((ndetectors, numpy.sum(nsamples), self.npixels_per_sample))
         self.shapein = tuple([self.header['naxis'+str(i+1)] for i in reversed(range(self.header['naxis']))])

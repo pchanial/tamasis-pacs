@@ -15,11 +15,21 @@ program test_pacsinstrument
     character(len=*), parameter :: filename(1) = 'pacs/test/data/frames_blue.fits'
     character(len=*), parameter :: filename_header = 'core/test/data/header.fits'
 
-    real(p), allocatable :: yz(:,:), ad(:,:), xy(:,:), time(:)
-    integer              :: status, i, j, nx, ny, index
-    integer              :: count1, count2, count_rate, count_max
-    real(p)              :: ra, dec, pa, chop, xmin, xmax, ymin, ymax, ra0, dec0
-    character(len=2880*2):: header
+    real(p), allocatable   :: yz(:,:), ad(:,:), xy(:,:), time(:)
+    integer                :: status, i, j, nx, ny, index
+    integer                :: count1, count2, count_rate, count_max
+    real(p)                :: ra, dec, pa, chop, xmin, xmax, ymin, ymax, ra0, dec0
+    character(len=2880*2)  :: header
+    logical*1, allocatable :: detector_mask(:,:)
+    logical*1              :: detector_mask_red(16,32)
+
+    real(p), allocatable :: detector_center_all(:,:,:)
+    real(p), allocatable :: detector_corner_all(:,:,:,:)
+    real(p), allocatable :: detector_area_all(:,:)
+    real(p), allocatable :: flatfield_optical_all(:,:)
+    real(p), allocatable :: flatfield_detector_all(:,:)
+    real(p)              :: distortion_yz(2,3,3,3)
+    real(p)              :: responsivity
 
     real(p), allocatable :: a_vect(:), d_vect(:), ad_vect(:,:)
     integer              :: n
@@ -34,15 +44,23 @@ program test_pacsinstrument
 
     ! initialise pacs instrument
     allocate(pacs)
-    call pacs%init(obs%band, obs%slice(1)%observing_mode == 'transparent', 1, status=status)
-    if (status /= 0) stop 'FAILED: pacsinstrument%init'
+    call pacs%read_detector_mask(obs%band, detector_mask, status,                                                                  &
+         transparent_mode=obs%slice(1)%observing_mode=='transparent')
+    if (status /= 0) stop 'FAILED: pacs%read_detector_mask'
+    call pacs%init_with_calfiles(obs%band, detector_mask, 1, status)
+    if (status /= 0) stop 'FAILED: pacs%init_with_calfiles'
+
+    ! read calibration files
+    call pacs%read_calibration_files_new(obs%band, detector_mask, detector_center_all, detector_corner_all, detector_area_all,     &
+                                         flatfield_optical_all, flatfield_detector_all, distortion_yz, responsivity, status)
+    if (status /= 0) return
 
     allocate(time(obs%nsamples))
     time = obs%slice(1)%p%time
 
     if (pacs%ndetectors /= 1997) stop 'FAILED: ndetectors'
     if (size(time) /= 360) stop 'FAILED: nsamples'
-    if (any(shape(pacs%corners_uv) /= [2,4*pacs%ndetectors])) stop 'FAILED: shape corners_uv'
+    if (any(shape(pacs%detector_corner) /= [2,4*pacs%ndetectors])) stop 'FAILED: shape detector_corner'
 
     i = count(.not. pacs%mask(1,:))
 
@@ -51,14 +69,14 @@ program test_pacsinstrument
     if (any(pacs%ij(:,2)   /= [0,1])) stop 'FAILED ij1'
     if (any(pacs%ij(:,1+i) /= [1,0])) stop 'FAILED ij2'
 
-    if (any(pacs%corners_uv(:,5:8) /= pacs%corners_uv_all(:,:,1,2)))          &
+    if (any(pacs%detector_corner(:,5:8) /= detector_corner_all(:,:,1,2)))          &
         stop 'FAILED uv1'
-    if (any(pacs%corners_uv(:,i*4+1:i*4+4) /= pacs%corners_uv_all(:,:,2,1)))  &
+    if (any(pacs%detector_corner(:,i*4+1:i*4+4) /= detector_corner_all(:,:,2,1)))  &
         stop 'FAILED uv2'
 
-    allocate(yz(ndims, size(pacs%corners_uv,2)))
-    allocate(ad(ndims, size(pacs%corners_uv,2)))
-    allocate(xy(ndims, size(pacs%corners_uv,2)))
+    allocate(yz(ndims, size(pacs%detector_corner,2)))
+    allocate(ad(ndims, size(pacs%detector_corner,2)))
+    allocate(xy(ndims, size(pacs%detector_corner,2)))
     call ft_header2str(filename_header, header, status)
     if (status /= 0) stop 'FAILED: ft_header2str.'
     call init_astrometry(header, status=status)
@@ -67,7 +85,7 @@ program test_pacsinstrument
     index = 0
     call obs%get_position_time(1, time(1), ra, dec, pa, chop, index)
 
-    yz = pacs%uv2yz(pacs%corners_uv, pacs%distortion_yz, chop)
+    yz = pacs%uv2yz(pacs%detector_corner, pacs%distortion_yz, chop)
 
     do i=1, 1
        write (*,*) 'Y: ', i, (yz(1, (i-1)*4+j), j = 1,4)
@@ -88,8 +106,8 @@ program test_pacsinstrument
         write (*,*) 'y: ', i, (xy(2, (i-1)*4+j), j = 1,4)
     end do
 
-    write(*,*) 'minmaxU', minval(pacs%corners_uv(1,:)), maxval(pacs%corners_uv(1,:))
-    write(*,*) 'minmaxV', minval(pacs%corners_uv(2,:)), maxval(pacs%corners_uv(2,:))
+    write(*,*) 'minmaxU', minval(pacs%detector_corner(1,:)), maxval(pacs%detector_corner(1,:))
+    write(*,*) 'minmaxV', minval(pacs%detector_corner(2,:)), maxval(pacs%detector_corner(2,:))
     write(*,*) 'minmaxY', minval(yz(1,:)), maxval(yz(1,:))
     write(*,*) 'minmaxZ', minval(yz(2,:)), maxval(yz(2,:))
     write(*,*) 'minmaxX', minval(xy(1,:)), maxval(xy(1,:))
@@ -123,7 +141,7 @@ program test_pacsinstrument
     call system_clock(count1, count_rate, count_max)
     do i = 1, size(time)
         call obs%get_position_time(1, time(i), ra, dec, pa, chop, index)
-        yz = pacs%uv2yz(pacs%corners_uv, pacs%distortion_yz, chop)
+        yz = pacs%uv2yz(pacs%detector_corner, pacs%distortion_yz, chop)
         ad = pacs%yz2ad(yz, ra, dec, pa)
         xy = ad2xy_gnomonic(ad)
         if (any(xy(1,:) < 0.5_p .or. xy(1,:) > nx+0.5_p .or. xy(2,:) < 0.5_p .or. xy(2,:) > ny+0.5_p)) then
@@ -160,22 +178,23 @@ program test_pacsinstrument
     write(*,'(a)') 'yz2ad: ' // strreal(real(count2-count1,p)/count_rate,4) // 's'
     call pacs%destroy()
 
-    call pacs%init('r', .true., 1, status=status)
+    detector_mask_red = .false.
+    call pacs%init_with_calfiles('red', detector_mask_red, 1, status)
     if (status /= 0) stop 'FAILED: pacs%init 1'
     call pacs%destroy()
 
-    call pacs%init('g', .true., 1, status=status)
+    call pacs%init_with_calfiles('green', detector_mask, 1, status)
     if (status /= 0) stop 'FAILED: pacs%init 2'
     call pacs%destroy()
 
-    call pacs%init('b', .true., 1, status=status)
+    call pacs%init_with_calfiles('blue', detector_mask, 1, status)
     if (status /= 0) stop 'FAILED: pacs%init 3'
     call pacs%destroy()
 
-    call pacs%init('x', .true., 1, status=status)
+    call pacs%init_with_calfiles('x', detector_mask, 1, status)
     if (status == 0) stop 'FAILED: pacs%init 4'
 
-    call pacs%init('b', .true., 3, status=status)
+    call pacs%init_with_calfiles('blue', detector_mask, 3, status)
     if (status == 0) stop 'FAILED: pacs%init 5'
 
     stop "OK."
@@ -194,7 +213,7 @@ end program test_pacsinstrument
 !!$Info: Compression mode: 'Photometry Default Mode'
 !!$ Number of valid detectors:        1998
 !!$ Number of samples:         360
-!!$ shape corners_uv:            2        7992
+!!$ shape detector_corner:            2        7992
 !!$ Detector 1 p,q,i,j:            0           0           0           0
 !!$ uv(1,1:4)  -11.536449432373047       -11.556140899658203       -10.916444778442383       -10.896753311157227     
 !!$ uv(2,1:4)  -25.931186676025391       -25.291488647460938       -25.271797180175781       -25.911495208740234     

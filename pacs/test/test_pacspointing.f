@@ -8,6 +8,7 @@ program test_pacspointing
     class(pacsobservation), allocatable :: obs
     type(MaskPolicy)            :: policy
     character(len=*), parameter :: filename(1) = 'pacs/test/data/frames_blue.fits'
+    logical*1, parameter        :: FALSE = .false.
     real(p), parameter          :: rtol = 100._p * epsilon(1._p)
     integer                     :: i, index
     real(p)                     :: time(12), ra(12), dec(12), pa(12), chop(12)
@@ -39,8 +40,9 @@ program test_pacspointing
     time = [(i * 0.5_p, i = -2, 9)]
 
     ! test interpolation (evenly spaced sampling)
-    call obs%init_sim([1._p, 2._p], [0._p, 1._p], [3._p, 3._p], [2._p, 1._p], [0._p, 0._p], status)
-    if (status /= 0) stop 'FAILED: init_sim 1'
+    call obs%init_with_variables([1._p, 2._p], [0._p, 1._p], [3._p, 3._p], [2._p, 1._p], [0._p, 0._p], [FALSE, FALSE],             &
+                                 [FALSE, FALSE], [2], [1], status)
+    if (status /= 0) stop 'FAILED: init_with_var 1'
 
     index = 0
     do i = 1, size(time)
@@ -53,9 +55,10 @@ program test_pacspointing
     call obs%destructor()
 
     ! test slow interpolation (unevenly spaced sampling)
-    call obs%init_sim([0.5_p, 1.5_p, 2.5_p, 3._p], [0._p, 1._p, 2._p, 2.5_p], [3._p, 3._p, 3._p, 3._p],                            &
-                      [3._p, 2._p, 1._p, 0.5_p], [0._p, 0._p, 0._p, 1._p], status)
-    if (status /= 0) stop 'FAILED: init_sim 2'
+    call obs%init_with_variables([0.5_p, 1.5_p, 2.5_p, 3._p], [0._p, 1._p, 2._p, 2.5_p], [3._p, 3._p, 3._p, 3._p],                 &
+                                 [3._p, 2._p, 1._p, 0.5_p], [0._p, 0._p, 0._p, 1._p], [(FALSE, i=1, 4)], [(FALSE, i=1, 4)], [4],   &
+                                 [1], status)
+    if (status /= 0) stop 'FAILED: init_with_var 2'
 
     index = 0
     do i = 1, size(time)

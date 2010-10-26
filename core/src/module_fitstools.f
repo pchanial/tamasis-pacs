@@ -1229,7 +1229,7 @@ contains
 
     function check_duplicate_keywords(keyword) result (is_dup)
 
-        character(len=FLEN_KEYWORD), intent(in) :: keyword
+        character(len=*), intent(in) :: keyword
         logical                                 :: is_dup
 
         is_dup = keyword == 'SIMPLE' .or. keyword == 'BITPIX' .or. keyword == 'NAXIS' .or. keyword == 'EXTEND'

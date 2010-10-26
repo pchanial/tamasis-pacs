@@ -33,6 +33,7 @@ program test_ngc6946_bpj
     integer*8                           :: nsamples
     real(p), allocatable                :: map1d(:)
     type(pointingelement), allocatable  :: pmatrix(:,:,:)
+    logical*1, allocatable              :: detector_mask(:,:)
 
     call system_clock(count0, count_rate, count_max)
 
@@ -49,8 +50,11 @@ program test_ngc6946_bpj
 
     ! initialise pacs instrument
     allocate (pacs)
-    call pacs%init(obs%band, obs%slice(1)%observing_mode == 'transparent', 1, status=status)
-    if (status /= 0) stop 'FAILED: pacsinstrument%init'
+    call pacs%read_detector_mask(obs%band, detector_mask, status,                                                                  &
+         transparent_mode=obs%slice(1)%observing_mode=='transparent')
+    if (status /= 0) stop 'FAILED: pacs%read_detector_mask'
+    call pacs%init_with_calfiles(obs%band, detector_mask, 1, status)
+    if (status /= 0) stop 'FAILED: pacs%init_with_calfiles'
 
     ! get header map
     call pacs%compute_map_header(obs, .false., 3._p, header, status)
@@ -76,7 +80,7 @@ program test_ngc6946_bpj
 
     ! remove flat field
     write (*,'(a)') 'Flat-fielding... '
-    call divide_vectordim2(signal, pack(pacs%flatfield_detector, .not. pacs%mask))
+    call divide_vectordim2(signal, pacs%flatfield_detector)
 
     ! remove mean value in timeline
     write (*,'(a)') 'Removing mean value... '
@@ -108,7 +112,7 @@ program test_ngc6946_bpj
         if (obs%slice(1)%p(ipointing)%removed) cycle
         call obs%get_position_index(1, ipointing, 1, ra, dec, pa, chop)
         if (abs(chop-chop_old) > 1.e-2_p) then
-            coords_yz = pacs%uv2yz(pacs%corners_uv, pacs%distortion_yz, chop)
+            coords_yz = pacs%uv2yz(pacs%detector_corner, pacs%distortion_yz, chop)
             chop_old = chop
         end if
         coords = pacs%yz2ad(coords_yz, ra, dec, pa)
