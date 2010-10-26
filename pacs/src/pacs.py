@@ -381,7 +381,7 @@ class PacsObservation(_Pacs):
         newunit = Quantity(1., unit)
         newunit_si = newunit.SI._unit
         if 'sr' in newunit_si and newunit_si['sr'] == -1:
-            area = self.instrument.detector_area[self.instrument.detector_mask == 0].reshape((ndetectors,1))
+            area = self.instrument.detector_area[self.instrument.detector_mask == 0].reshape((self.get_ndetectors(),1))
             tod /= area
            
         if 'V' in tod._unit and tod._unit['V'] == 1 and 'V' not in newunit_si:

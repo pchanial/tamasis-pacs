@@ -39,7 +39,7 @@ map_naive3 = map_naive2[:,250:header['NAXIS1']+250]
 if any_neq(map_naive, map_naive3, 1.e-7): raise TestFailure('mapper_naive, with custom header')
 
 # test compatibility with photproject
-tod = obs.get_tod('Jy/arcsec^2')
+tod = obs.get_tod('Jy/arcsec^2', flatfielding=False, subtraction_mean=False)
 map_naive4 = mapper_naive(tod, projection, unit='Jy/pixel')
 hdu_ref = pyfits.open(datadir + 'frames_blue_map_hcss_photproject.fits')[1]
 map_ref = Map(hdu_ref.data, hdu_ref.header, unit=hdu_ref.header['qtty____']+'/pixel')
