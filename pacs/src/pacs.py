@@ -70,33 +70,6 @@ class _Pacs(Observation):
 
         return pmatrix, header, ndetectors, nsamples, npixels_per_sample
 
-    def get_pointing_matrix_filename(self, header, resolution, npixels_per_sample, method=None, oversampling=True):
-        if method is None:
-            method = 'sharp'
-        method = method.lower()
-        if method not in ('nearest', 'sharp'):
-            raise ValueError("Invalid method '" + method + "'. Valids methods are 'nearest' or 'sharp'")
-
-        nsamples = self.get_nfinesamples() if oversampling else self.get_nsamples()
-        if npixels_per_sample is None:
-            npixels_per_sample = DEFAULT_NPIXELS_PER_SAMPLE[self.instrument.band] if method != 'nearest' else 1
-        if header is None:
-            if MPI.COMM_WORLD.Get_size() > 1:
-                raise ValueError('With MPI, the map header must be specified.')
-            header = self.get_map_header_filename(resolution, oversampling)
-        elif isinstance(header, str):
-            header = _str2fitsheader(header)
-        ndetectors = self.get_ndetectors()
-        filename_, nfilenames = _files2tmf(self._filename)
-        sizeofpmatrix = npixels_per_sample * numpy.sum(nsamples) * ndetectors
-        print 'Info: Allocating '+str(sizeofpmatrix/2.**17)+' MiB for the pointing matrix.'
-        pmatrix = numpy.empty(sizeofpmatrix, dtype=numpy.int64)
-        
-        status = tmf.pacs_pointing_matrix_filename(tamasis_dir, filename_, self.slice.size, method, oversampling, self.instrument.fine_sampling_factor, npixels_per_sample, numpy.sum(nsamples), ndetectors, numpy.array(self.policy, dtype='int32'), numpy.asfortranarray(self.instrument.detector_mask), str(header).replace('\n', ''), pmatrix)
-        if status != 0: raise RuntimeError()
-
-        return pmatrix, header, ndetectors, nsamples, npixels_per_sample
-
     def get_filter_uncorrelated(self):
         """
         Read an inverse noise time-time correlation matrix from a calibration file, in PACS-DP format.
@@ -288,8 +261,6 @@ class PacsObservation(_Pacs):
         unit = [unit[i*flen_value:(i+1)*flen_value].strip() for i in range(nfilenames)]
         unit = map(lambda x: x if x.find('/') != -1 else x + ' / detector', unit)
 
-        self._filename = filename #XXX REMOVE ME!
-
         # Store instrument information
         detector_center, detector_corner, detector_area, distortion_yz, oflat, dflat, responsivity, status = tmf.pacs_info_instrument(tamasis_dir, band, numpy.asfortranarray(detector_mask))
         if status != 0: raise RuntimeError()
@@ -390,45 +361,6 @@ class PacsObservation(_Pacs):
         tod.unit = newunit._unit
         return tod
 
-    def get_tod_filename(self, unit=None, flatfielding=True, subtraction_mean=True, raw_data=False):
-        """
-        Returns the signal and mask timelines.
-        """
-
-        if raw_data:
-            flatfielding = False
-            subtraction_mean = False
-
-        filename_, nfilenames = _files2tmf(self._filename)
-        ndetectors = self.get_ndetectors()
-        signal, mask, status = tmf.pacs_timeline(tamasis_dir, filename_, self.slice.size, numpy.sum(self.get_nsamples()), ndetectors, numpy.array(self.policy, dtype='int32'), numpy.asfortranarray(self.instrument.detector_mask), flatfielding, subtraction_mean)
-        if status != 0: raise RuntimeError()
-
-        tod = Tod(signal.T, mask.T, nsamples=self.get_nsamples(), unit=self.slice[0].unit)
-       
-        # the flux calibration has been done by using HCSS photproject and assuming that the central detectors had a size of 3.2x3.2
-        # squared arcseconds. To be consistent with detector sharp edge model, we need to adjust the Tod.
-        if not raw_data and tod.unit in ('Jy / detector', 'V / detector'):
-            i = self.instrument.shape[0] / 2 - 1
-            j = self.instrument.shape[1] / 2 - 1
-            nominal_area = (6.4 if self.instrument.band == 'red' else 3.2)**2
-            tod *= numpy.mean(self.instrument.detector_area[i:i+2,j:j+2]) / Quantity(nominal_area, 'arcsec^2/detector')
-
-        if unit is None:
-            return tod
-
-        newunit = Quantity(1., unit)
-        newunit_si = newunit.SI._unit
-        if 'sr' in newunit_si and newunit_si['sr'] == -1:
-            area = self.instrument.detector_area[self.instrument.detector_mask == 0].reshape((ndetectors,1))
-            tod /= area
-           
-        if 'V' in tod._unit and tod._unit['V'] == 1 and 'V' not in newunit_si:
-            tod /= self.instrument.responsivity
-
-        tod.unit = newunit._unit
-        return tod
-
     def get_map_header(self, resolution=None, oversampling=True):
         if MPI.COMM_WORLD.Get_size() > 1:
             raise NotImplementedError('The common map header should be specified if more than one job is running.')
@@ -451,17 +383,6 @@ class PacsObservation(_Pacs):
                                              self.instrument.detector_corner.base.base.swapaxes(0,1).copy().T,
                                              self.instrument.distortion_yz.base.base.T,
                                              resolution)
-        if status != 0: raise RuntimeError()
-        header = _str2fitsheader(header)
-        return header
-
-    def get_map_header_filename(self, resolution=None, oversampling=True):
-        if MPI.COMM_WORLD.Get_size() > 1:
-            raise NotImplementedError('The common map header should be specified if more than one job is running.')
-        if resolution is None:
-            resolution = DEFAULT_RESOLUTION[self.instrument.band]
-        filename_, nfilenames = _files2tmf(self._filename)
-        header, status = tmf.pacs_map_header_filename(tamasis_dir, filename_, nfilenames, oversampling, self.instrument.fine_sampling_factor, numpy.array(self.policy, dtype='int32'), numpy.asfortranarray(self.instrument.detector_mask), resolution)
         if status != 0: raise RuntimeError()
         header = _str2fitsheader(header)
         return header
@@ -534,14 +455,10 @@ class PacsSimulation(_Pacs):
         detector_mask = self._get_detector_mask(band, detector_mask, mode == 'transparent', reject_bad_line)
         ftype = get_default_dtype_float()
 
-        self._file = tempfile.NamedTemporaryFile('w', suffix='.fits')
-
         # Store pointing information
         self.pointing = _generate_pointing(center[0], center[1], cam_angle, scan_angle, scan_length, scan_nlegs, scan_step,
                                            scan_speed, compression_factor, dtype=PacsPointing._dtype)
         self.pointing.chop = 0.
-
-        self._filename = self._file.name # remove me
 
         # Store instrument information
         detector_center, detector_corner, detector_area, distortion_yz, oflat, dflat, responsivity, status = tmf.pacs_info_instrument(tamasis_dir, band, numpy.asfortranarray(detector_mask))
@@ -558,7 +475,7 @@ class PacsSimulation(_Pacs):
         self.instrument.responsivity = Quantity(responsivity, 'V/Jy')
 
         self.slice = numpy.recarray(1, dtype=[('filename', 'S256'), ('nsamples_all', int), ('mode', 'S32'), ('compression_factor', int), ('unit', 'S32'), ('ra', float), ('dec', float), ('cam_angle', float), ('scan_angle', float), ('scan_length', float), ('scan_nlegs', int), ('scan_step', float), ('scan_speed', float)])
-        self.slice.filename = self._file.name
+        self.slice.filename = ''
         self.slice.nsamples_all = self.pointing.size
         self.slice.mode = mode
         self.slice.compression_factor = compression_factor

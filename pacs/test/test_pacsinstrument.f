@@ -51,7 +51,7 @@ program test_pacsinstrument
     if (status /= 0) stop 'FAILED: pacs%init_with_calfiles'
 
     ! read calibration files
-    call pacs%read_calibration_files_new(obs%band, detector_mask, detector_center_all, detector_corner_all, detector_area_all,     &
+    call pacs%read_calibration_files(obs%band, detector_mask, detector_center_all, detector_corner_all, detector_area_all,         &
                                          flatfield_optical_all, flatfield_detector_all, distortion_yz, responsivity, status)
     if (status /= 0) return
 
