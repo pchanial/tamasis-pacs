@@ -372,10 +372,15 @@ contains
         real(p), intent(out)              :: responsivity
         integer, intent(out)              :: status
 
-        integer, parameter   :: HDU_CORNER_BLUE(4) = [8, 12, 16, 20]
-        integer, parameter   :: HDU_CORNER_RED (4) = [6, 10, 14, 18]
+        
+        ! hdu extension for the blue, green and red band, in this order
+        integer, parameter   :: HDU_FLATFIELD(3)    = [12, 7, 2]                                    ! v3
+        integer, parameter   :: HDU_RESPONSIVITY(3) = [6, 4, 2]                                     ! v5
+        integer, parameter   :: HDU_CORNER(4,2)     = reshape([7, 11, 15, 19, 5, 9, 13, 17], [4,2]) ! v5
 
-        integer              :: ip, iq, ivertex, unit, ncolumns, nrows
+        integer              :: iband, ichannel, ip, iq, ivertex, ncolumns, nrows
+        character(len=4)     :: channel
+        real(p), allocatable :: tmp1(:)
         real(p), allocatable :: tmp2(:,:)
         real(p), allocatable :: tmp3(:,:,:)
         real(p), allocatable :: flatfield_total_all(:,:)
@@ -388,12 +393,19 @@ contains
             return
         end if
 
+        ! 1, 2, 3 for blue, green and red band
+        iband = index('bgr', band(1:1))
+
         if (band == 'red') then
             nrows    = SHAPE_RED(1)
             ncolumns = SHAPE_RED(2)
+            ichannel = 2
+            channel  = 'red'
         else
             nrows    = SHAPE_BLUE(1)
             ncolumns = SHAPE_BLUE(2)
+            ichannel = 1
+            channel  = 'blue'
         end if
 
         if (size(detector_mask,1) /= nrows .or. size(detector_mask,2) /= ncolumns) then
@@ -408,91 +420,42 @@ contains
         allocate (flatfield_optical_all (nrows,ncolumns))
         allocate (flatfield_detector_all(nrows,ncolumns))
         allocate (flatfield_total_all   (nrows,ncolumns))
-
-        select case (band)
-
-            case ('blue')
-                call ft_read_image(get_calfile(FILENAME_FF) // '+12',  tmp2, status)
-                if (status /= 0) return
-                flatfield_total_all = transpose(tmp2)
-
-            case ('green')
-                call ft_read_image(get_calfile(FILENAME_FF) // '+7',  tmp2, status)
-                if (status /= 0) return
-                flatfield_total_all = transpose(tmp2)
-
-            case ('red')
-                call ft_read_image(get_calfile(FILENAME_FF) // '+2',  tmp2, status)
-                if (status /= 0) return
-                flatfield_total_all = transpose(tmp2)
-
-        end select
-
-        if (band /= 'red') then
-
-            ! UV centers
-            call ft_read_image(get_calfile(FILENAME_SAA) // '[ublue]', tmp2, status)
-            if (status /= 0) return
-            detector_center_all(1,:,:) = transpose(tmp2)
-            call ft_read_image(get_calfile(FILENAME_SAA) // '[vblue]', tmp2, status)
-            if (status /= 0) return
-            detector_center_all(2,:,:) = transpose(tmp2)
-
-            ! UV corners
-            do ivertex=1, NVERTICES
-                call ft_read_image(get_calfile(FILENAME_SAA), tmp2, status, HDU_CORNER_BLUE(ivertex)  )
-                if (status /= 0) return
-                detector_corner_all(1,ivertex,:,:) = transpose(tmp2)
-                call ft_read_image(get_calfile(FILENAME_SAA), tmp2, status, HDU_CORNER_BLUE(ivertex)+1)
-                if (status /= 0) return
-                detector_corner_all(2,ivertex,:,:) = transpose(tmp2)
-            end do
-
-            ! Distortion coefficients in the (y,z) plane
-            call ft_read_image(get_calfile(FILENAME_AI) // '[ycoeffblue]', tmp3, status)
-            if (status /= 0) return
-            distortion_yz(1,:,:,:) = tmp3
-            call ft_read_image(get_calfile(FILENAME_AI) // '[zcoeffblue]', tmp3, status)
-            if (status /= 0) return
-            distortion_yz(2,:,:,:) = tmp3
-
-        else
-
-            ! UV centers
-            call ft_read_image(get_calfile(FILENAME_SAA) // '[ured]', tmp2, status)
-            if (status /= 0) return
-            detector_center_all(1,:,:) = transpose(tmp2)
-            call ft_read_image(get_calfile(FILENAME_SAA) // '[vred]', tmp2, status)
-            if (status /= 0) return
-            detector_center_all(2,:,:) = transpose(tmp2)
-
-            ! UV corners
-            do ivertex=1, NVERTICES
-                call ft_read_image(get_calfile(FILENAME_SAA), tmp2, status, HDU_CORNER_RED(ivertex)  )
-                if (status /= 0) return
-                detector_corner_all(1,ivertex,:,:) = transpose(tmp2)
-                call ft_read_image(get_calfile(FILENAME_SAA), tmp2, status, HDU_CORNER_RED(ivertex)+1)
-                if (status /= 0) return
-                detector_corner_all(2,ivertex,:,:) = transpose(tmp2)
-            end do
-
-            ! Distortion coefficients in the (y,z) plane
-            call ft_read_image(get_calfile(FILENAME_AI) // '[ycoeffred]', tmp3, status)
-            if (status /= 0) return
-            distortion_yz(1,:,:,:) = tmp3
-            call ft_read_image(get_calfile(FILENAME_AI) // '[zcoeffred]', tmp3, status)
-            if (status /= 0) return
-            distortion_yz(2,:,:,:) = tmp3
-
-        end if
-
-        ! Responsivity
-        call ft_open(get_calfile(FILENAME_RES) // '[' // trim(band) // ']', unit, status)
+        
+        ! UV centers
+        call ft_read_image(get_calfile(FILENAME_SAA) // '[u' // trim(channel) // ']', tmp2, status)
         if (status /= 0) return
-        call ft_read_keyword_hcss(unit, 'Responsivity', responsivity, status=status)
+        detector_center_all(1,:,:) = transpose(tmp2)
+        call ft_read_image(get_calfile(FILENAME_SAA) // '[v' // trim(channel) // ']', tmp2, status)
         if (status /= 0) return
-        call ft_close(unit, status)
+        detector_center_all(2,:,:) = transpose(tmp2)
+
+        ! UV corners
+        do ivertex=1, NVERTICES
+            call ft_read_image(get_calfile(FILENAME_SAA) // '+' // strinteger(HDU_CORNER(ivertex,ichannel)), tmp2, status)
+            if (status /= 0) return
+            detector_corner_all(1,ivertex,:,:) = transpose(tmp2)
+            call ft_read_image(get_calfile(FILENAME_SAA) // '+' // strinteger(HDU_CORNER(ivertex,ichannel)+1), tmp2, status)
+            if (status /= 0) return
+            detector_corner_all(2,ivertex,:,:) = transpose(tmp2)
+        end do
+
+        ! Distortion coefficients in the (y,z) plane
+        call ft_read_image(get_calfile(FILENAME_AI) // '[ycoeff' // trim(channel) // ']', tmp3, status)
         if (status /= 0) return
+        distortion_yz(1,:,:,:) = tmp3
+        call ft_read_image(get_calfile(FILENAME_AI) // '[zcoeff' // trim(channel) // ']', tmp3, status)
+        if (status /= 0) return
+        distortion_yz(2,:,:,:) = tmp3
+
+        ! detector flat field
+        call ft_read_image(get_calfile(FILENAME_FF) // '+' // strinteger(HDU_FLATFIELD(iband)),  tmp2, status)
+        if (status /= 0) return
+        flatfield_total_all = transpose(tmp2)
+
+        ! responsivity
+        call ft_read_image(get_calfile(FILENAME_RES) // '+' // strinteger(HDU_RESPONSIVITY(iband)), tmp1, status)
+        if (status /= 0) return
+        responsivity = tmp1(1)
 
         ! detector area
         do ip = 1, nrows
@@ -504,7 +467,7 @@ contains
         
         ! optical and detector flat fields
         center = detector_area_all(nrows/2:nrows/2+1,ncolumns/2:ncolumns/2+1)
-        flatfield_optical_all  = detector_area_all / mean(reshape(center,[4]))
+        flatfield_optical_all  = detector_area_all / mean(reshape(center, [4]))
         flatfield_detector_all = flatfield_total_all / flatfield_optical_all
         where (detector_mask)
             flatfield_optical_all  = 1._p
