@@ -183,7 +183,7 @@ class FitsArray(Quantity):
         pyplot.draw()
         return image
 
-    def ds9(self, xpamsg=None, **keywords):
+    def ds9(self, xpamsg=None, origin=None, **keywords):
         """
         Display the array using ds9.
 
@@ -204,12 +204,8 @@ class FitsArray(Quantity):
         xpamsg : string or tuple of string
             XPA access point message to be set after the array is loaded.
             (see http://hea-www.harvard.edu/RD/ds9/ref/xpa.html).
-        cmap : string, tuple of string
-            Specify the cmap access point (ex: 'heat') before loading
-        scale : string , tuple of string
-            Specify the scale access point (ex: 'mode 99') before loading
-        zoom : string
-            Specify the zoom access point (ex: 'to fit') before loading
+        origin: string
+            Set origin to 'upper' for Y increasing downwards
         **keywords : string or tuple of string
             Specify more access points to be set before array loading.
             a keyword such as 'height=400' will be appended to the command
@@ -240,7 +236,7 @@ class FitsArray(Quantity):
         if 'scale' not in keywords:
             keywords['scale'] = ('scope local', 'mode 99.5')
 
-        if 'orient' not in keywords and self.origin == 'upper':
+        if origin == 'upper' or 'orient' not in keywords and self.origin == 'upper':
             keywords['orient'] = 'y'
 
         wait = 10

@@ -11,8 +11,17 @@ from matplotlib import pyplot
 from numpyutils import _my_isscalar
 from unit import Quantity
 
-__all__ = [ 'hs', 'mean_degrees', 'minmax_degrees', 'plot_scan', 'airy_disk', 'aperture_circular', 'distance', 'gaussian', 'phasemask_fourquadrant' ]
+__all__ = [ 'ds9', 'hs', 'mean_degrees', 'minmax_degrees', 'plot_scan', 'airy_disk', 'aperture_circular', 'distance', 'gaussian', 'phasemask_fourquadrant' ]
 
+
+#-------------------------------------------------------------------------------
+
+
+def ds9(array, origin=None, **keywords):
+    array = numpy.asanyarray(array)
+    array = Map(array, dtype=array.dtype, copy=False)
+    array.ds9(origin=origin, **keywords)
+    
 
 #-------------------------------------------------------------------------------
 
