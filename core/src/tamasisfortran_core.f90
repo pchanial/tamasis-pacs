@@ -372,7 +372,7 @@ subroutine filter_median(data, mask, length, nsamples, nsamples_tot, nslices, nd
 
     status = 0
 
-    write (OUTPUT_UNIT,'(a,i0,a)', advance='no') 'Median filtering (length=', length, ')... '
+    write (OUTPUT_UNIT,'(a,i0,a)', advance='no') 'Info: Median filtering (length=', length, ')... '
     call system_clock(count1, count_rate, count_max)
     start = 1
     do islice = 1, nslices

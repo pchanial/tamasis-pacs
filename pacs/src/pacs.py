@@ -45,8 +45,8 @@ class _Pacs(Observation):
         
         status = tmf.pacs_pointing_matrix(self.instrument.band,
                                           nvalids,
-                                          numpy.asarray(self.slice.nsamples_all),
-                                          numpy.asarray(self.slice.compression_factor),
+                                          numpy.ascontiguousarray(self.slice.nsamples_all, dtype='int32'),
+                                          numpy.ascontiguousarray(self.slice.compression_factor, dtype='int32'),
                                           self.instrument.fine_sampling_factor,
                                           oversampling,
                                           numpy.ascontiguousarray(self.pointing.time),
@@ -104,10 +104,15 @@ class _Pacs(Observation):
     def __str__(self):
         nthreads = tmf.info_nthreads()
         ndetectors = self.get_ndetectors()
-        sp = len('Setup: ')*' '
+        sp = len('Info: ')*' '
         unit = 'unknown' if self.slice[0].unit == '' else self.slice[0].unit
-        result = 'Setup: ' + str(nthreads) + ' core' + ('s' if nthreads > 1 else '') + ' handling ' + str(ndetectors) + ' detector' + ('s' if ndetectors > 1 else '') + ' on node ' + MPI.Get_processor_name() + '\n'
-        result += sp + self.instrument.band + ' band, unit is ' + unit + '\n'
+        if MPI.COMM_WORLD.Get_size() > 1:
+            mpistr = 'Process '+str(MPI.COMM_WORLD.Get_rank()+1) + '/' + str(MPI.COMM_WORLD.Get_size()) + \
+                ' on node ' + MPI.Get_processor_name() + ', '
+        else:
+            mpistr = ''
+        result = '\nInfo: ' + mpistr + str(nthreads) + ' core' + ('s' if nthreads > 1 else '') + ' handling ' + str(ndetectors) + ' detector' + ('s' if ndetectors > 1 else '') + '\n'
+        result += sp + self.instrument.band.capitalize() + ' band, unit is ' + unit + '\n'
         dest = 0
         for islice, slice in enumerate(self.slice):
 
@@ -134,16 +139,20 @@ class _Pacs(Observation):
                     result.append(str(nremoved)+ ' removed')
                 return ', '.join(result)
 
-            result += 'Observation'
+            result += sp + 'Observation'
             if self.slice.size > 1:
                 result += ' #' + str(islice+1)
-            result += ': ' + slice.filename + '\n'
-            result += sp + 'Compression: x' + str(slice.compression_factor) + '\n'
-            result += sp + 'In-scan:     ' + _str_policy(p.info == Pointing.INSCAN) + '\n'
-            result += sp + 'Turnaround:  ' + _str_policy(p.info == Pointing.TURNAROUND) + '\n'
-            result += sp + 'Other:       ' + _str_policy(p.info == Pointing.OTHER)
+            result += ' ' + slice.filename
+            first = numpy.argmin(p.removed) + 1
+            last = p.size - numpy.argmin(p.removed[::-1]) + 1
+            result += '[' + str(first) + ':' + str(last) + ']:\n'
+            result += sp + '      Compression: x' + str(slice.compression_factor) + '\n'
+            result += sp + '      In-scan:     ' + _str_policy(p.info == Pointing.INSCAN) + '\n'
+            result += sp + '      Turnaround:  ' + _str_policy(p.info == Pointing.TURNAROUND) + '\n'
+            result += sp + '      Other:       ' + _str_policy(p.info == Pointing.OTHER)
             if islice + 1 < self.slice.size:
                 result += '\n'
+
         return result
 
     def _get_detector_mask(self, band, detector_mask, transparent_mode, reject_bad_line):
@@ -244,6 +253,8 @@ class PacsObservation(_Pacs):
         # get the observations and detector mask for the current processor
         slice_observation, slice_detector = _split_observation(nfilenames, int(numpy.sum(detector_mask == 0)))
         filename = filename[slice_observation]
+        nsamples_all = nsamples_all[slice_observation]
+        nfilenames = len(filename)
         igood = numpy.where(detector_mask.flat == 0)[0]
         detector_mask = numpy.ones(detector_mask.shape, dtype='uint8')
         detector_mask.flat[igood[slice_detector]] = 0
@@ -318,8 +329,8 @@ class PacsObservation(_Pacs):
 
         signal, mask, status = tmf.pacs_tod(self.instrument.band,
                                             _files2tmf(self.slice.filename)[0],
-                                            numpy.asarray(self.slice.nsamples_all),
-                                            numpy.asarray(self.slice.compression_factor),
+                                            numpy.asarray(self.slice.nsamples_all, dtype='int32'),
+                                            numpy.asarray(self.slice.compression_factor, dtype='int32'),
                                             self.instrument.fine_sampling_factor,
                                             numpy.ascontiguousarray(self.pointing.time),
                                             numpy.ascontiguousarray(self.pointing.ra),
@@ -368,8 +379,8 @@ class PacsObservation(_Pacs):
             resolution = DEFAULT_RESOLUTION[self.instrument.band]
 
         header, status = tmf.pacs_map_header(self.instrument.band,
-                                             numpy.asarray(self.slice.nsamples_all),
-                                             numpy.asarray(self.slice.compression_factor),
+                                             numpy.ascontiguousarray(self.slice.nsamples_all, dtype='int32'),
+                                             numpy.ascontiguousarray(self.slice.compression_factor, dtype='int32'),
                                              self.instrument.fine_sampling_factor,
                                              oversampling,
                                              numpy.ascontiguousarray(self.pointing.time),
@@ -442,7 +453,7 @@ class PacsSimulation(_Pacs):
     """
     This class creates a simulated PACS observation.
     """
-    def __init__(self, band, center, mode='prime', cam_angle=0., scan_angle=0., scan_length=30., scan_nlegs=3, scan_step=20., scan_speed=10., fine_sampling_factor=1, detector_mask='calibration', reject_bad_line=False):
+    def __init__(self, band, center, mode='prime', cam_angle=0., scan_angle=0., scan_length=30., scan_nlegs=3, scan_step=20., scan_speed=10., fine_sampling_factor=1, detector_mask='calibration', reject_bad_line=False, policy_inscan='keep', policy_turnaround='keep', policy_other='remove', policy_invalid='mask'):
         band = band.lower()
         if band not in ('blue', 'green', 'red'):
             raise ValueError("Band is not 'blue', 'green', nor 'red'.")
@@ -459,6 +470,8 @@ class PacsSimulation(_Pacs):
         self.pointing = _generate_pointing(center[0], center[1], cam_angle, scan_angle, scan_length, scan_nlegs, scan_step,
                                            scan_speed, compression_factor, dtype=PacsPointing._dtype)
         self.pointing.chop = 0.
+        self.pointing.removed = policy_inscan == 'remove' and self.pointing.info == Pointing.INSCAN or \
+                                policy_turnaround == 'remove' and self.pointing.info == Pointing.TURNAROUND
 
         # Store instrument information
         detector_center, detector_corner, detector_area, distortion_yz, oflat, dflat, responsivity, status = tmf.pacs_info_instrument(tamasis_dir, band, numpy.asfortranarray(detector_mask))
@@ -497,6 +510,8 @@ class PacsSimulation(_Pacs):
         self.policy = MaskPolicy('inscan,turnaround,other,invalid', 'keep,keep,remove,mask', 'Frame Policy')
 
         self._status = _write_status(self)
+
+        print self
 
     def save(self, filename, tod):
         

@@ -336,7 +336,7 @@ class Map(FitsArray):
             origin = self.origin
 
         # check if the map has no astrometry information
-        if not all([self.header.has_key(key) for key in 'CRPIX1,CRPIX2,CRVAL1,CRVAL2,CTYPE1,CTYPE2'.split(',')]):
+        if self.header is None or not all([self.header.has_key(key) for key in 'CRPIX1,CRPIX2,CRVAL1,CRVAL2,CTYPE1,CTYPE2'.split(',')]):
             if 'xlabel' not in kw:
                 kw['xlabel'] = 'X'
             if 'ylabel' not in kw:

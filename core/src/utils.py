@@ -66,13 +66,20 @@ def minmax_degrees(array):
 #-------------------------------------------------------------------------------
 
 
-def plot_scan(input, map=None, title=None, new_figure=True, color='magenta', linewidth=2):
+def plot_scan(input, map=None, mask=None, title=None, new_figure=True, color='magenta', linewidth=2):
     if hasattr(input, 'pointing'):
-        ra  = input.pointing.ra
-        dec = input.pointing.dec
+        ra   = input.pointing.ra
+        dec  = input.pointing.dec
+        if mask is None:
+            mask = input.pointing.removed
     elif hasattr(input, 'ra') and hasattr(input, 'dec'):
         ra  = input.ra
         dec = input.dec
+        if mask is None:
+            if hasattr(input, 'mask'):
+                mask = input.mask
+            elif hasattr(input, 'removed'):
+                mask = input.removed
     else:
         ra  = input[0]
         dec = input[1]
@@ -80,6 +87,7 @@ def plot_scan(input, map=None, title=None, new_figure=True, color='magenta', lin
     if map is not None and map.header is not None and map.header.has_key('CRVAL1'):
         image = map.imshow(title=title)
         x, y = image.topixel(ra, dec)
+        x[mask] = numpy.nan
         p = pyplot.plot(x, y, color=color, linewidth=linewidth)
         pyplot.plot(x[0], y[0], 'o', color=p[0]._color)
         return image
@@ -92,10 +100,11 @@ def plot_scan(input, map=None, title=None, new_figure=True, color='magenta', lin
     proj = kapteyn.wcs.Projection(header)
     coords = numpy.array([ra, dec]).T
     xy = proj.topixel(coords)
-    xmin = int(numpy.round(numpy.min(xy[:,0])))
-    xmax = int(numpy.round(numpy.max(xy[:,0])))
-    ymin = int(numpy.round(numpy.min(xy[:,1])))
-    ymax = int(numpy.round(numpy.max(xy[:,1])))
+    xy[mask,:] = numpy.nan
+    xmin = int(numpy.round(numpy.nanmin(xy[:,0])))
+    xmax = int(numpy.round(numpy.nanmax(xy[:,0])))
+    ymin = int(numpy.round(numpy.nanmin(xy[:,1])))
+    ymax = int(numpy.round(numpy.nanmax(xy[:,1])))
     xmargin = int(numpy.ceil((xmax - xmin + 1) / 10.))
     ymargin = int(numpy.ceil((ymax - ymin + 1) / 10.))
     xmin -= xmargin
@@ -197,7 +206,7 @@ def gaussian(shape, fwhm, origin=None, resolution=1., dtype=None):
 
 
 def phasemask_fourquadrant(shape, phase=-1):
-    array = Map.ones(shape, dtype=get_default_dtype_complex())
+    array = Map.ones(shape, dtype=config.get_default_dtype_complex())
     array[0:shape[0]//2,shape[1]//2:] = phase
     array[shape[0]//2:,0:shape[1]//2] = phase
     return array

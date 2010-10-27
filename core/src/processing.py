@@ -54,7 +54,7 @@ def filter_median(tod, length=10, mask=None):
             mask = numpy.zeros(tod.shape, dtype='int8')
     else:
         mask = numpy.ascontiguousarray(mask, dtype='int8')
-    status = tmf.filter_median(filtered.T, mask.T, length, numpy.array(tod.nsamples))
+    status = tmf.filter_median(filtered.T, mask.T, length, numpy.ascontiguousarray(tod.nsamples, dtype='int32'))
     if status != 0:
         raise RuntimeError()
     return filtered

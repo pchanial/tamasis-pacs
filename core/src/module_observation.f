@@ -831,7 +831,8 @@ contains
         
         if (njumps > 0) then
             if (verbose) then
-                write (OUTPUT_UNIT,'(a,i0,a)') 'Warning: The pointing fine time has ', njumps, ' negative jump(s). The affected fra&
+                write (OUTPUT_UNIT,'(a,i0,a)') "Warning: In observation '" // trim(this%filename) //         &
+                     "', the pointing fine time has ", njumps, ' negative jump(s). The affected fra&
                      &mes have been marked as invalid.'
             end if
             delta = this%p(2:this%nsamples)%time - this%p(1:this%nsamples-1)%time
