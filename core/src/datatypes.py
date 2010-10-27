@@ -183,61 +183,80 @@ class FitsArray(Quantity):
         pyplot.draw()
         return image
 
-    _ds9_id = 1
-    def ds9(self, id=None, cmap='heat', scale=('scope local', 'mode 99.5'), wait=10, zoom='to fit'):
+    def ds9(self, xpamsg=None, **keywords):
         """
-        Display the array using ds9
+        Display the array using ds9.
+
+        The ds9 process will be given an random id. By default, the
+        following access point are set before the array is loaded:
+            -cmap heat
+            -scale scope local
+            -scale mode 99.5
+            -zoom to fit
+        Other access points can be set before the data is loaded though
+        the keywords (see examples below).
+        After the array is loaded, the map's header is set and the user
+        may add other XPA messages through the xpamsg argument or by
+        setting them through the returned ds9 instance.
 
         Parameters
         ----------
-        id : string
-            A string which identifies the ds9 process. If not provided,
-            the id will be 'ds9_#', where '#' is incremented each time
-            a ds9 process is launched.
+        xpamsg : string or tuple of string
+            XPA access point message to be set after the array is loaded.
+            (see http://hea-www.harvard.edu/RD/ds9/ref/xpa.html).
         cmap : string, tuple of string
-            Specify the cmap access point (ex: 'heat')
+            Specify the cmap access point (ex: 'heat') before loading
         scale : string , tuple of string
-            Specify the scale access point (ex: 'mode 99')
-        wait : integer
-            Seconds to wait for ds9 to start
+            Specify the scale access point (ex: 'mode 99') before loading
         zoom : string
-            Specify the zoom access point (ex: 'to fit')
+            Specify the zoom access point (ex: 'to fit') before loading
+        **keywords : string or tuple of string
+            Specify more access points to be set before array loading.
+            a keyword such as 'height=400' will be appended to the command
+            that launches ds9 in the form 'ds9 [...] -height 400'
 
         Returns
         -------
         The returned object is a ds9 instance. It can be manipulated using
-        XPA access points (see http://hea-www.harvard.edu/RD/ds9/ref/xpa.html).
+        XPA access points.
 
         Examples
         --------
-        >>> map = Map('myfits.fits')
-        >>> d=map.ds9(id='myfits.fits', scale='histequ', cmap='invert yes')
-        >>> d.set('saveimage png myfits.png')
+        >>> m = Map('myfits.fits')
+        >>> d=m.ds9('saveimage png myfits.png', scale='histequ', 
+                    cmap='invert yes', height=400)
+        >>> d.set('exit')
         """
         if not _imported_ds9:
             raise RuntimeError('The library pyds9 has not been installed.')
-        import commands, ds9, os, time, sys, xpa
-        if isinstance(cmap, str):
-            cmap = (cmap,)
-        if isinstance(scale, str):
-            scale = (scale,)
+        import ds9, os, time, sys, uuid, xpa
 
-        if id is None:
-            id = 'ds9_' + str(self._ds9_id)
-            self._ds9_id += 1
+        if 'cmap' not in keywords:
+            keywords['cmap'] = 'heat'
 
+        if 'zoom' not in keywords:
+            keywords['zoom'] = 'to fit'
+
+        if 'scale' not in keywords:
+            keywords['scale'] = ('scope local', 'mode 99.5')
+
+        if 'orient' not in keywords and self.origin == 'upper':
+            keywords['orient'] = 'y'
+
+        wait = 10
+
+        id = 'ds9_' + str(uuid.uuid1())[4:8]
+        
         command = 'ds9 -title ' + id
-        for option in cmap:
-            command += ' -cmap ' + option
-        for option in scale:
-            command += ' -scale ' + option
-            
-        command += ' -zoom ' + zoom
-        if self.origin == 'upper':
-            command += ' -orient y'
 
-        command += ' &'
-        os.system(command)
+        for k,v in keywords.items():
+            k = str(k)
+            if type(v) is not tuple:
+                v = (v,)
+            command += reduce(lambda x,y: str(x) + ' -' + k + ' ' + str(y),v,'')
+
+        os.system(command + '&')
+
         # start the xpans name server
         if xpa.xpaaccess("xpans", None, 1) == None:
             _cmd = None
@@ -247,6 +266,7 @@ class FitsArray(Quantity):
                 if os.path.exists(_fname):
                     _cmd = _fname + " -e &"
             if _cmd:
+                print _cmd
                 os.system(_cmd)
 
         for i in range(wait):
@@ -254,14 +274,23 @@ class FitsArray(Quantity):
             if list: break
             time.sleep(1)
 	if not list:
-	    raise ValueError, 'no active ds9 running for target: %s' % list
+	    raise ValueError, 'No active ds9 running for target: %s' % list
+
         d = ds9.ds9(id)
         d.set_np2arr(self.view(numpy.ndarray).T)
 
         if self.header is not None:
             d.set('wcs append', str(self.header))
+    
+        if xpamsg is not None:
+            if isinstance(xpamsg, str):
+                xpamsg = (xpamsg,)
+            for v in xpamsg:
+                d.set(v)
 
         return d
+
+
 #-------------------------------------------------------------------------------
 
 
