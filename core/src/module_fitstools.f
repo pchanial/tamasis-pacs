@@ -451,17 +451,16 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_image_logical_1d(filename, output, status, hdu)
+    subroutine ft_read_image_logical_1d(filename, output, status)
 
         character(len=*), intent(in)        :: filename
         logical*1, allocatable, intent(out) :: output(:)
         integer, intent(out)                :: status
-        integer, optional, intent(in)       :: hdu
 
         integer                             :: unit, anynull
         integer, allocatable                :: imageshape(:)
 
-        call ft_open_image(filename, unit, 1, imageshape, status, hdu=hdu)
+        call ft_open_image(filename, unit, 1, imageshape, status)
         if (status /= 0) return
 
         !  Initialize variables
@@ -478,17 +477,16 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_image_int8_1d(filename, output, status, hdu)
+    subroutine ft_read_image_int8_1d(filename, output, status)
 
         character(len=*), intent(in)        :: filename
         integer*8, allocatable, intent(out) :: output(:)
         integer, intent(out)                :: status
-        integer, optional, intent(in)       :: hdu
 
         integer                             :: unit, anynull
         integer, allocatable                :: imageshape(:)
 
-        call ft_open_image(filename, unit, 1, imageshape, status, hdu=hdu)
+        call ft_open_image(filename, unit, 1, imageshape, status)
         if (status /= 0) return
 
         !  Initialize variables
@@ -505,17 +503,16 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_image_real4_1d(filename, output, status, hdu)
+    subroutine ft_read_image_real4_1d(filename, output, status)
 
         character(len=*), intent(in)       :: filename
         real(sp), allocatable, intent(out) :: output(:)
         integer, intent(out)               :: status
-        integer, optional, intent(in)      :: hdu
 
         integer                            :: unit, anynull
         integer, allocatable               :: imageshape(:)
 
-        call ft_open_image(filename, unit, 1, imageshape, status, hdu=hdu)
+        call ft_open_image(filename, unit, 1, imageshape, status)
         if (status /= 0) return
 
         !  Initialize variables
@@ -532,17 +529,16 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_image_real8_1d(filename, output, status, hdu)
+    subroutine ft_read_image_real8_1d(filename, output, status)
 
         character(len=*), intent(in)       :: filename
         real(dp), allocatable, intent(out) :: output(:)
         integer, intent(out)               :: status
-        integer, optional, intent(in)      :: hdu
 
         integer                            :: unit, anynull
         integer, allocatable               :: imageshape(:)
 
-        call ft_open_image(filename, unit, 1, imageshape, status, hdu=hdu)
+        call ft_open_image(filename, unit, 1, imageshape, status)
         if (status /= 0) return
 
         !  Initialize variables
@@ -560,16 +556,15 @@ contains
 
 
 #if PRECISION_REAL == 16
-    subroutine ft_read_image_real16_1d(filename, output, status, hdu)
+    subroutine ft_read_image_real16_1d(filename, output, status)
 
         character(len=*), intent(in)       :: filename
         real(qp), allocatable, intent(out) :: output(:)
         integer, intent(out)               :: status
-        integer, optional, intent(in)      :: hdu
 
         real(dp), allocatable              :: output_(:)
 
-        call ft_read_image(filename, output_, status, hdu)
+        call ft_read_image(filename, output_, status)
         if (status /= 0) return
 
         allocate(output(size(output_)))
@@ -582,17 +577,16 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_image_logical_2d(filename, output, status, hdu)
+    subroutine ft_read_image_logical_2d(filename, output, status)
 
         character(len=*), intent(in)        :: filename
         integer, intent(out)                :: status
         logical*1, allocatable, intent(out) :: output(:,:)
-        integer, optional, intent(in)       :: hdu
 
         integer                             :: unit, firstpix, anynull, j
         integer, allocatable                :: imageshape(:)
 
-        call ft_open_image(filename, unit, 2, imageshape, status, hdu=hdu)
+        call ft_open_image(filename, unit, 2, imageshape, status)
         if (status /= 0) return
 
         ! Initialize variables
@@ -616,17 +610,16 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_image_real4_2d(filename, output, status, hdu)
+    subroutine ft_read_image_real4_2d(filename, output, status)
     
         character(len=*), intent(in)       :: filename
         real(sp), allocatable, intent(out) :: output(:,:)
         integer, intent(out)               :: status
-        integer, optional, intent(in)      :: hdu
 
         integer                          :: unit, firstpix, anynull, j
         integer, allocatable             :: imageshape(:)
     
-        call ft_open_image(filename, unit, 2, imageshape, status, hdu=hdu)
+        call ft_open_image(filename, unit, 2, imageshape, status)
         if (status /= 0) return
 
         !  Initialize variables
@@ -650,17 +643,16 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_read_image_real8_2d(filename, output, status, hdu)
+    subroutine ft_read_image_real8_2d(filename, output, status)
     
         character(len=*), intent(in)       :: filename
         real(dp), allocatable, intent(out) :: output(:,:)
         integer, intent(out)               :: status
-        integer, optional, intent(in)      :: hdu
 
         integer                          :: unit, firstpix, anynull, j
         integer, allocatable             :: imageshape(:)
     
-        call ft_open_image(filename, unit, 2, imageshape, status, hdu=hdu)
+        call ft_open_image(filename, unit, 2, imageshape, status)
         if (status /= 0) return
 
         !  Initialize variables
@@ -685,16 +677,15 @@ contains
 
 
 #if PRECISION_REAL == 16
-    subroutine ft_read_image_real16_2d(filename, output, status, hdu)
+    subroutine ft_read_image_real16_2d(filename, output, status)
 
         character(len=*), intent(in)       :: filename
         real(qp), allocatable, intent(out) :: output(:,:)
         integer, intent(out)               :: status
-        integer, optional, intent(in)      :: hdu
 
         real(dp), allocatable              :: output_(:,:)
 
-        call ft_read_image(filename, output_, status, hdu)
+        call ft_read_image(filename, output_, status)
         if (status /= 0) return
 
         allocate(output(size(output_,1),size(output_,2)))
@@ -1063,16 +1054,15 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine ft_open_image(filename, unit, imagerank, imageshape, status, hdu)
+    subroutine ft_open_image(filename, unit, imagerank, imageshape, status)
 
         character(len=*), intent(in)      :: filename
         integer, intent(out)              :: unit
         integer, intent(in)               :: imagerank
         integer, allocatable, intent(out) :: imageshape(:)
         integer, intent(out)              :: status
-        integer, intent(in), optional     :: hdu
 
-        integer                           :: nfound, hdutype, blocksize
+        integer                           :: nfound
         integer                           :: imageshape_(8)
 
         status = 0
@@ -1081,29 +1071,10 @@ contains
         call ftgiou(unit, status)
         if (ft_check_error_cfitsio(status, filename=filename)) return
 
-        if (present(hdu)) then
-
-            ! open the fits file and point to the primary header
-            call ftopen(unit, filename, CFITSIO_READONLY, blocksize, status)
-            if (ft_check_error_cfitsio(status, unit, filename)) return
-
-            ! move to the specified HDU
-            call ftmahd(unit, hdu, hdutype, status)
-            if (status == 0 .and. hdutype /= CFITSIO_IMAGE_HDU) then
-                write (ERROR_UNIT,'(a,i0,a)') "FT_OPEN_IMAGE: HDU type is not an image: ", hdutype, " in file '" // filename // "'."
-                call ft_close(unit, status)
-                status = 1
-                return
-            endif
-
-        else
-
-            ! open the fits file and move to the HDU specified in the filename
-            ! otherwise, move to the first image in FITS file
-            call ftiopn(unit, filename, CFITSIO_READONLY, status)
-            if (ft_check_error_cfitsio(status, unit, filename)) return
-
-        end if
+        ! open the fits file and move to the HDU specified in the filename
+        ! otherwise, move to the first image in FITS file
+        call ftiopn(unit, filename, CFITSIO_READONLY, status)
+        if (ft_check_error_cfitsio(status, unit, filename)) return
 
         !  Determine the size of the image.
         call ftgknj(unit, 'NAXIS', 1, size(imageshape_), imageshape_, nfound, status)
@@ -2584,7 +2555,7 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    function ft_check_error_cfitsio(status, unit, filename, hdu)
+    function ft_check_error_cfitsio(status, unit, filename)
 
         !  This subroutine prints out the descriptive text corresponding to the
         !  error status value and prints out the contents of the internal
@@ -2593,7 +2564,6 @@ contains
         integer, intent(in)                    :: status
         integer, intent(in), optional          :: unit
         character(len=*), intent(in), optional :: filename
-        integer, intent(in), optional          :: hdu
 
         character(len=FLEN_STATUS)             :: errtext
         character(len=FLEN_ERRMSG)             :: errmessage
@@ -2614,9 +2584,6 @@ contains
         if (present(filename)) then
             write (ERROR_UNIT,*) 'In file ' // trim(filename) // ':'
         end if
-
-        !  Print the HDU number
-        if (present(hdu)) write (ERROR_UNIT,*) 'HDU: ', hdu
 
         !  The FTGERR subroutine returns a descriptive 30-character text string that
         !  corresponds to the integer error status number.  A complete list of all
