@@ -203,14 +203,20 @@ class FitsArray(Quantity):
         zoom : string
             Specify the zoom access point (ex: 'to fit')
 
+        Returns
+        -------
+        The returned object is a ds9 instance. It can be manipulated using
+        XPA access points (see http://hea-www.harvard.edu/RD/ds9/ref/xpa.html).
+
         Examples
         --------
         >>> map = Map('myfits.fits')
-        >>> map.ds9(id='myfits.fits', scale='histequ', cmap='invert yes')
+        >>> d=map.ds9(id='myfits.fits', scale='histequ', cmap='invert yes')
+        >>> d.set('saveimage png myfits.png')
         """
         if not _imported_ds9:
             raise RuntimeError('The library pyds9 has not been installed.')
-        import os, time, xpa
+        import commands, ds9, os, time, sys, xpa
         if isinstance(cmap, str):
             cmap = (cmap,)
         if isinstance(scale, str):
@@ -226,8 +232,23 @@ class FitsArray(Quantity):
         for option in scale:
             command += ' -scale ' + option
             
-        command += '&'
+        command += ' -zoom ' + zoom
+        if self.origin == 'upper':
+            command += ' -orient y'
+
+        command += ' &'
         os.system(command)
+        # start the xpans name server
+        if xpa.xpaaccess("xpans", None, 1) == None:
+            _cmd = None
+            # look in install directories
+            for _dir in sys.path:
+                _fname = os.path.join(_dir, "xpans")
+                if os.path.exists(_fname):
+                    _cmd = _fname + " -e &"
+            if _cmd:
+                os.system(_cmd)
+
         for i in range(wait):
             list = xpa.xpaaccess(id, None, 1024)
             if list: break
@@ -236,11 +257,11 @@ class FitsArray(Quantity):
 	    raise ValueError, 'no active ds9 running for target: %s' % list
         d = ds9.ds9(id)
         d.set_np2arr(self.view(numpy.ndarray).T)
-        d.set('zoom ' + zoom)
+
         if self.header is not None:
             d.set('wcs append', str(self.header))
-        return d
 
+        return d
 #-------------------------------------------------------------------------------
 
 
