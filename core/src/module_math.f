@@ -311,8 +311,8 @@ contains
 
     subroutine minmax_degrees(array, minv, maxv)
 
-        real(p), intent(in)           :: array(:)
-        real(p), intent(out)          :: minv, maxv
+        real(p), intent(in)  :: array(:)
+        real(p), intent(out) :: minv, maxv
         
         real(p) :: value, meanv
         integer :: isample
@@ -328,7 +328,9 @@ contains
         maxv = mInf
         !$omp parallel do default(shared) reduction(min:minv) reduction(max:maxv)
         do isample=1, size(array)
-            value = modulo(array(isample), 360._p)
+            value = array(isample)
+            if (value /= value) cycle
+            value = modulo(value, 360._p)
             if (value > meanv) then
                 if (abs(value-360._p-meanv) < abs(value-meanv)) value = value - 360._p
             else

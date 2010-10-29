@@ -79,12 +79,12 @@ def minmax_degrees(array):
 
 def plot_scan(input, map=None, mask=None, title=None, new_figure=True, color='magenta', linewidth=2):
     if hasattr(input, 'pointing'):
-        ra   = input.pointing.ra
+        ra   = input.pointing.ra.copy()
         dec  = input.pointing.dec
         if mask is None:
             mask = input.pointing.removed
     elif hasattr(input, 'ra') and hasattr(input, 'dec'):
-        ra  = input.ra
+        ra  = input.ra.copy()
         dec = input.dec
         if mask is None:
             if hasattr(input, 'mask'):
@@ -92,22 +92,32 @@ def plot_scan(input, map=None, mask=None, title=None, new_figure=True, color='ma
             elif hasattr(input, 'removed'):
                 mask = input.removed
     else:
-        ra  = input[0]
+        ra  = input[0].copy()
         dec = input[1]
+
+    nvalids = ra.size
+    if mask is not None:
+        nvalids -= numpy.sum(mask)
+    if nvalids == 0:
+        raise ValueError('There is no valid pointing.')
+
+    if mask is not None:
+        ra [mask] = numpy.nan
+        dec[mask] = numpy.nan
 
     if map is not None and map.has_wcs():
         image = map.imshow(title=title)
         x, y = image.topixel(ra, dec)
-        x[mask] = numpy.nan
         p = pyplot.plot(x, y, color=color, linewidth=linewidth)
         pyplot.plot(x[0], y[0], 'o', color=p[0]._color)
         return image
 
-    crval = [mean_degrees(ra), numpy.mean(dec)]
+    crval = [mean_degrees(ra), numpy.nansum(dec)/nvalids]
     ra_min,  ra_max  = minmax_degrees(ra)
-    dec_min, dec_max = numpy.min(dec), numpy.max(dec)
+    dec_min, dec_max = numpy.nanmin(dec), numpy.nanmax(dec)
     cdelt = numpy.max((ra_max-ra_min)/1000., (dec_max-dec_min)/1000.)
     header = create_fitsheader(None, naxis=[1,1], cdelt=cdelt, crval=crval, crpix=[1,1])
+
     proj = kapteyn.wcs.Projection(header)
     coords = numpy.array([ra, dec]).T
     xy = proj.topixel(coords)
