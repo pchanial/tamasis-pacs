@@ -18,7 +18,9 @@ obs = PacsObservation(frames_files,
 # 'oversampling=False' means that the acquisition model will not
 # try to sample at a frequency higher than that of the observation
 # (10Hz for prime mode, 5Hz for parallel mode)
-projection = Projection(obs, oversampling=False)
+projection = Projection(obs, 
+                        oversampling=False,
+                        npixels_per_sample=6)
 
 # Read the Time Ordered Data: the signal and mask
 tod = obs.get_tod(flatfielding=True,
@@ -40,7 +42,7 @@ tod = filter_median(tod, 10000)
 # the mean). We highpass filter the Tod using a short filtering 
 # window, to remove the low-frequency offsets
 tod_glitch = filter_median(tod, 100)
-tod.mask = deglitch_l2mad(tod, projection, nsigma=5.)
+tod.mask = deglitch_l2mad(tod_glitch, projection, nsigma=5.)
 
 # We solve the equation y = H x, where y is the Tod, x the unknown map
 # and H the acquisition model.
