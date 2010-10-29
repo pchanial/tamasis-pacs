@@ -620,3 +620,79 @@ subroutine minmax_degrees(array, n, min, max)
 end subroutine minmax_degrees
 
 
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine distance_1d(nx, origin, resolution, array)
+
+    use module_math,    only : distance
+    use module_tamasis, only : p
+    implicit none
+
+    !f2py threadsafe
+    !f2py intent(in)  :: nx = size(array,0)
+    !f2py intent(in)  :: origin
+    !f2py intent(in)  :: resolution
+    !f2py intent(out) :: array(nx)
+
+    integer, intent(in)  :: nx
+    real(p), intent(in)  :: origin
+    real(p), intent(in)  :: resolution
+    real(p), intent(out) :: array(nx)
+
+    call distance(array, origin, resolution)
+
+end subroutine distance_1d
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine distance_2d(nx, ny, origin, resolution, array)
+
+    use module_math,    only : distance
+    use module_tamasis, only : p
+    implicit none
+
+    !f2py threadsafe
+    !f2py intent(in)  :: nx = size(array,0)
+    !f2py intent(in)  :: ny = size(array,1)
+    !f2py intent(in)  :: origin(2)
+    !f2py intent(in)  :: resolution(2)
+    !f2py intent(out) :: array(nx,ny)
+
+    integer, intent(in)  :: nx, ny
+    real(p), intent(in)  :: origin(2)
+    real(p), intent(in)  :: resolution(2)
+    real(p), intent(out) :: array(nx,ny)
+
+    call distance(array, origin, resolution)
+
+end subroutine distance_2d
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine distance_3d(nx, ny, nz, origin, resolution, array)
+
+    use module_math,    only : distance
+    use module_tamasis, only : p
+    implicit none
+
+    !f2py threadsafe
+    !f2py intent(in)  :: nx = size(array,0)
+    !f2py intent(in)  :: ny = size(array,1)
+    !f2py intent(in)  :: nz = size(array,2)
+    !f2py intent(in)  :: origin(3)
+    !f2py intent(in)  :: resolution(3)
+    !f2py intent(out) :: array(nx,ny,nz)
+
+    integer, intent(in)  :: nx, ny, nz
+    real(p), intent(in)  :: origin(3)
+    real(p), intent(in)  :: resolution(3)
+    real(p), intent(out) :: array(nx,ny,nz)
+
+    call distance(array, origin, resolution)
+
+end subroutine distance_3d

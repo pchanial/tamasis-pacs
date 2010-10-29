@@ -12,6 +12,7 @@ module module_math
     public :: pInf
     public :: NaN
 
+    public :: distance
     public :: linspace
     public :: logspace
     public :: mad
@@ -29,6 +30,10 @@ module module_math
     public :: swap
     public :: eq_real
     public :: neq_real
+
+    interface distance
+        module procedure distance_1d, distance_2d, distance_3d
+    end interface distance
 
     interface sum_kahan
         module procedure sum_kahan_1d, sum_kahan_2d, sum_kahan_3d
@@ -338,6 +343,80 @@ contains
         maxv = modulo(maxv, 360._p)
             
     end subroutine minmax_degrees
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine distance_1d(distance, origin, resolution)
+    
+        real(p), intent(out) :: distance(:)
+        real(p), intent(in)  :: origin
+        real(p), intent(in)  :: resolution
+
+        integer :: i
+        real(p) :: resolution_
+
+        resolution_ = abs(resolution)
+
+        !$omp parallel do
+        do i = 1, size(distance,1)
+            distance(i) = resolution_ * abs(i - origin)
+        end do
+        !$omp end parallel do
+
+    end subroutine distance_1d
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine distance_2d(distance, origin, resolution)
+    
+        real(p), intent(out) :: distance(:,:)
+        real(p), intent(in)  :: origin(2)
+        real(p), intent(in)  :: resolution(2)
+
+        integer :: i, j
+        real(p) :: tmpj
+
+        !$omp parallel do private(tmpj)
+        do j = 1, size(distance,2)
+            tmpj = (resolution(2) * (j - origin(2)))**2
+            do i = 1, size(distance,1)
+                distance(i,j) = sqrt((resolution(1) * (i - origin(1)))**2 + tmpj)
+            end do
+        end do
+        !$omp end parallel do
+
+    end subroutine distance_2d
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine distance_3d(distance, origin, resolution)
+    
+        real(p), intent(out) :: distance(:,:,:)
+        real(p), intent(in)  :: origin(3)
+        real(p), intent(in)  :: resolution(3)
+
+        integer :: i, j, k
+        real(p) :: tmpj, tmpk
+
+        !$omp parallel do private(tmpj, tmpk)
+        do k = 1, size(distance,3)
+            tmpk = (resolution(3) * (k - origin(3)))**2
+            do j = 1, size(distance,2)
+                tmpj = (resolution(2) * (j - origin(2)))**2
+                do i = 1, size(distance,1)
+                    distance(i,j,k) = sqrt((resolution(1) * (i - origin(1)))**2 + tmpj + tmpk)
+                end do
+            end do
+        end do
+        !$omp end parallel do
+
+    end subroutine distance_3d
 
 
     !-------------------------------------------------------------------------------------------------------------------------------

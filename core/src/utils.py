@@ -13,6 +13,8 @@ from unit import Quantity
 
 __all__ = [ 'ds9', 'hs', 'mean_degrees', 'minmax_degrees', 'plot_scan', 'airy_disk', 'aperture_circular', 'distance', 'gaussian', 'phasemask_fourquadrant' ]
 
+_FTYPE = config.get_default_dtype_float()
+
 
 #-------------------------------------------------------------------------------
 
@@ -58,7 +60,7 @@ def mean_degrees(array):
     Returns the mean value of an array of values in degrees, by taking into 
     account the discrepancy at 0 degrees
     """
-    return tmf.mean_degrees(numpy.asarray(array, dtype=config.get_default_dtype_float()).ravel())
+    return tmf.mean_degrees(numpy.asarray(array, dtype=_FTYPE).ravel())
 
 
 #-------------------------------------------------------------------------------
@@ -69,7 +71,7 @@ def minmax_degrees(array):
     Returns the minimum and maximum value of an array of values in degrees, 
     by taking into account the discrepancy at 0 degrees
     """
-    return tmf.minmax_degrees(numpy.asarray(array, dtype=config.get_default_dtype_float()).ravel())
+    return tmf.minmax_degrees(numpy.asarray(array, dtype=_FTYPE).ravel())
 
 
 #-------------------------------------------------------------------------------
@@ -170,18 +172,21 @@ def aperture_circular(shape, diameter, origin=None, resolution=1., dtype=None):
 
 def distance(shape, origin=None, resolution=1., dtype=None):
     """
-    Returns an array whose values are the distances to a given origin
+    Returns an array whose values are the distances to a given origin.
     
     Parameters
     ----------
     shape : tuple of integer
         dimensions of the output array. For a 2d array, the first integer
         is for the Y-axis and the second one for the X-axis.
-    origin : array-like of two elements (x0, y0)
-        coordinates of the origin, for which the output array value is
-        zero. Default value is the array center
-    resolution : inter-pixel distance
-    dtype : type of the output array
+    origin : array-like in the form of (x0, y0, ...), optional
+        The coordinates, according to the FITS convention (i.e. first
+        column and row is one), from which the distance is calculated.
+        Default value is the array center.
+    resolution : array-like in the form of (dx, dy, ...), optional
+        Inter-pixel distance. Default is one.
+    dtype : data-type, optional
+        Data type of the output array.
 
     Example
     -------
@@ -191,14 +196,57 @@ def distance(shape, origin=None, resolution=1., dtype=None):
     [ 1.          0.          1.        ]
     [ 1.41421356  1.          1.41421356]]
     """
-    if type(shape) is not tuple and type(shape) is not list:
+    if _my_isscalar(shape):
         shape = (shape,)
+    else:
+        shape = tuple(shape)
+    rank = len(shape)
+
     if origin is None:
-        origin = (numpy.array(shape) - 1) / 2.
+        origin = (numpy.asanyarray(list(reversed(shape)), dtype=_FTYPE) - 1.) / 2.
+    else:
+        origin = numpy.asanyarray(origin, dtype=_FTYPE)
+    if _my_isscalar(resolution):
+        resolution = rank * (resolution,)
+    resolution = numpy.asanyarray(resolution, dtype=_FTYPE)
+
+    if rank == 1:
+        d = tmf.distance_1d(shape[0], origin[0], resolution[0])
+    elif rank == 2:
+        d = tmf.distance_2d(shape[1], shape[0], origin, resolution).T
+    elif rank == 3:
+        d = tmf.distance_3d(shape[2], shape[1], shape[0], origin, resolution).T
+    else:
+        d = _distance_slow(shape, origin, resolution, dtype=dtype)
+        
+    return Map(d, dtype=dtype, copy=False)
+
+
+#-------------------------------------------------------------------------------
+
+
+def _distance_slow(shape, origin, resolution, dtype):
+    """
+    Returns an array whose values are the distances to a given origin.
+
+    This routine is written using numpy.meshgrid routine. It is slower
+    than the Fortran-based `distance` routine, but can handle any number
+    of dimensions.
+
+    Refer to `tamasis.distance` for full documentation.
+    """
+
     dim = []
-    for length, c in zip(reversed(shape), origin):
-        dim.append((numpy.arange(length) - c) * resolution)
-    return Map(numpy.sqrt(numpy.sum(numpy.square(numpy.meshgrid(*dim)), axis=0)), dtype=dtype)
+    index = []
+    for n, o, r in zip(reversed(shape), origin, resolution):
+        index.append(slice(0,n))
+    d = numpy.asarray(numpy.mgrid[index], dtype=_FTYPE).T
+    d -= numpy.asanyarray(origin) - 1.
+    d *= resolution
+    numpy.square(d, d)
+    d = Map(numpy.sqrt(numpy.sum(d, axis=d.shape[-1])), dtype=dtype, copy=False)
+    
+    return d
     
 
 #-------------------------------------------------------------------------------
