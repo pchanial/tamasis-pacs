@@ -95,7 +95,7 @@ def plot_scan(input, map=None, mask=None, title=None, new_figure=True, color='ma
         ra  = input[0]
         dec = input[1]
 
-    if map is not None and map.header is not None and map.header.has_key('CRVAL1'):
+    if map is not None and map.has_wcs():
         image = map.imshow(title=title)
         x, y = image.topixel(ra, dec)
         x[mask] = numpy.nan

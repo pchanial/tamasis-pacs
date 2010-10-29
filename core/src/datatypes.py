@@ -83,6 +83,24 @@ class FitsArray(Quantity):
     def zeros(shape, header=None, unit=None, dtype=None, order=None):
         return FitsArray(numpy.zeros(shape, dtype, order), header, unit, dtype, copy=False)
 
+    def has_wcs(self):
+        """
+        Returns True is the array has a FITS header with a defined World
+        Coordinate System.
+        """
+        if self.header is None:
+            return False
+        rank = numpy.rank(self)
+        if rank == 0:
+            return False
+
+        required = 'CRPIX,CRVAL,CTYPE'.split(',')
+        keywords = numpy.concatenate(
+            [(lambda i: [r+str(i+1) for r in required])(i) 
+             for i in range(rank)])
+
+        return all([self.header.has_key(k) for k in keywords])
+
     @property
     def header(self):
         return self._header
@@ -275,7 +293,7 @@ class FitsArray(Quantity):
         d = ds9.ds9(id)
         d.set_np2arr(self.view(numpy.ndarray).T)
 
-        if self.header is not None:
+        if self.has_wcs():
             d.set('wcs append', str(self.header))
     
         if xpamsg is not None:
@@ -382,7 +400,7 @@ class Map(FitsArray):
             origin = self.origin
 
         # check if the map has no astrometry information
-        if self.header is None or not all([self.header.has_key(key) for key in 'CRPIX1,CRPIX2,CRVAL1,CRVAL2,CTYPE1,CTYPE2'.split(',')]):
+        if not self.has_wcs():
             if 'xlabel' not in kw:
                 kw['xlabel'] = 'X'
             if 'ylabel' not in kw:
