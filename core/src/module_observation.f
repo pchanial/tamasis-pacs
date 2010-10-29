@@ -532,12 +532,29 @@ contains
 
         call ft_read_keyword_hcss(unit, 'mapScanLegLength', this%scan_length, found, status)
         if (status /= 0) return
-
-        call ft_read_keyword(unit, '__mapScanSpeed',    this%scan_speed, found, status)
+        
+        call ft_read_keyword_hcss(unit, 'mapScanSpeed', scan_speed, found, status)
         if (status /= 0) return
+        if (found) then
 
-        if (.not. found) then
-            call ft_read_keyword_hcss(unit, 'mapScanRate',     scan_speed, found, status)
+            read (scan_speed,'(bn,f'//strinteger(FLEN_VALUE)//'.0)',iostat=status) this%scan_speed
+            if (status /= 0) then
+                select case (strlowcase(scan_speed))
+                    case ('low')
+                        this%scan_speed = 10._p
+                    case ('medium')
+                        this%scan_speed = 20._p
+                    case ('high')
+                        this%scan_speed = 60._p
+                    case default
+                        status = 1
+                        write (ERROR_UNIT, '(a)') "email-me pierre.chanial@cea.fr: mapscanspeed: '" // trim(scan_speed) // "'."
+                    end select
+            end if
+
+        else
+
+            call ft_read_keyword_hcss(unit, 'mapScanRate', scan_speed, found, status)
             if (status /= 0) return
             if (found) then                
                 select case (strlowcase(scan_speed))
@@ -552,22 +569,8 @@ contains
                         write (ERROR_UNIT, '(a)') "email-me pierre.chanial@cea.fr: mapscanrate: '" // trim(scan_speed) // "'."
                 end select
             else
-                call ft_read_keyword_hcss(unit, 'mapScanSpeed',     scan_speed, found, status)
-                if (status /= 0) return
-                if (found) then
-                    select case (strlowcase(scan_speed))
-                        case ('low')
-                            this%scan_speed = 10._p
-                        case ('medium')
-                            this%scan_speed = 20._p
-                        case ('high')
-                            this%scan_speed = 60._p
-                        case default
-                            status = 1
-                            write (ERROR_UNIT, '(a)') "email-me pierre.chanial@cea.fr: mapscanspeed: '" // trim(scan_speed) // "'."
-                    end select
-                end if
             end if
+
         end if
 
         call ft_read_keyword_hcss(unit, 'mapScanNumLegs',   this%scan_nlegs, found, status)

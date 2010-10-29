@@ -952,7 +952,7 @@ def _write_status(obs, filename=None):
     elif obs.slice[0].scan_speed == 60.:
         scan_speed = 'high'
     else:
-        scan_speed = 'unknown'
+        scan_speed = str(obs.slice[0].scan_speed)
         
     p = obs.pointing
     if p.size != numpy.sum(obs.slice.nsamples_all):
@@ -1003,7 +1003,6 @@ def _write_status(obs, filename=None):
             cc('META_6', s.scan_length),
             cc('META_7', s.scan_nlegs),
             cc('META_8', scan_speed),
-            cc('META_9', s.scan_speed),
             cc('HIERARCH key.META_0', 'detRow'), 
             cc('HIERARCH key.META_1', 'detCol'), 
             cc('HIERARCH key.META_2', 'camName'), 
@@ -1013,7 +1012,6 @@ def _write_status(obs, filename=None):
             cc('HIERARCH key.META_6', 'mapScanLegLength'),
             cc('HIERARCH key.META_7', 'mapScanNumLegs'),
             cc('HIERARCH key.META_8', 'mapScanSpeed'),
-            cc('HIERARCH key.META_8', '__mapScanSpeed'),
             ])
 
     hdu = pyfits.PrimaryHDU(None, header)
