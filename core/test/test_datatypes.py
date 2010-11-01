@@ -6,7 +6,7 @@ from tamasis.datatypes import validate_sliced_shape
 from uuid import uuid1
 
 filename = 'tamasistest-'+str(uuid1())
-deftype = get_default_dtype_float()
+deftype = get_default_dtype_float().type
 
 def test_cleanup():
     files = glob.glob(filename+'*')

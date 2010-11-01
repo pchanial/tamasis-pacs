@@ -21,11 +21,11 @@ def get_default_dtype_complex():
     import tamasisfortran as tmf
     nbytes = tmf.info_nbytes_real()
     if nbytes == 4:
-        return numpy.complex64
+        return numpy.dtype(numpy.complex64)
     elif nbytes == 8:
-        return numpy.complex128
+        return numpy.dtype(numpy.complex128)
     elif nbytes == 16:
-        return numpy.complex256
+        return numpy.dtype(numpy.complex256)
     else:
         raise ValueError("Invalid number of bytes per real '"+str(nbytes)+"'.")
 
@@ -34,10 +34,10 @@ def get_default_dtype_float():
     import tamasisfortran as tmf
     nbytes = tmf.info_nbytes_real()
     if nbytes == 4:
-        return numpy.float32
+        return numpy.dtype(numpy.float32)
     elif nbytes == 8:
-        return numpy.float64
+        return numpy.dtype(numpy.float64)
     elif nbytes == 16:
-        return numpy.float128
+        return numpy.dtype(numpy.float128)
     else:
         raise ValueError("Invalid number of bytes per real '"+str(nbytes)+"'.")

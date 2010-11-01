@@ -57,7 +57,7 @@ class _Pacs(Observation):
                                           numpy.ascontiguousarray(self.pointing.masked, dtype='int8'),
                                           numpy.ascontiguousarray(self.pointing.removed,dtype='int8'),
                                           method,
-                                          numpy.asfortranarray(self.instrument.detector_mask),
+                                          numpy.asfortranarray(self.instrument.detector_mask, dtype='int8'),
                                           self.get_ndetectors(),
                                           self.instrument.detector_center.base.base.swapaxes(0,1).copy().T,
                                           self.instrument.detector_corner.base.base.swapaxes(0,1).copy().T,
@@ -77,7 +77,7 @@ class _Pacs(Observation):
         ncorrelations, status = tmf.pacs_read_filter_calibration_ncorrelations(tamasis_dir, self.instrument.band)
         if status != 0: raise RuntimeError()
 
-        data, status = tmf.pacs_read_filter_calibration(tamasis_dir, self.instrument.band, ncorrelations, self.get_ndetectors(), numpy.asfortranarray(self.instrument.detector_mask))
+        data, status = tmf.pacs_read_filter_calibration(tamasis_dir, self.instrument.band, ncorrelations, self.get_ndetectors(), numpy.asfortranarray(self.instrument.detector_mask, numpy.int8))
         if status != 0: raise RuntimeError()
 
         return data.T
@@ -161,15 +161,15 @@ class _Pacs(Observation):
             if detector_mask == 'calibration':
                 detector_mask, status = tmf.pacs_info_detector_mask(tamasis_dir, band, shape[0], shape[1])
                 if status != 0: raise RuntimeError()
-                detector_mask = numpy.ascontiguousarray(detector_mask)
+                detector_mask = numpy.ascontiguousarray(detector_mask, numpy.bool8)
             else:
                 raise ValueError('Invalid specification for the detector_mask.')
         elif detector_mask is None:
-            detector_mask = numpy.zeros(shape, dtype='uint8')
+            detector_mask = numpy.zeros(shape, numpy.bool8)
         else:
             if detector_mask.shape != shape:
                 raise ValueError('Invalid shape of the input detector mask: ' + str(detector_mask.shape) + ' for the ' + band + ' band.')
-            detector_mask = numpy.array(detector_mask, dtype='uint8', copy=False)
+            detector_mask = numpy.array(detector_mask, numpy.bool8, copy=False)
 
         # mask non-transmitting detectors in transparent mode
         if transparent_mode:
@@ -208,7 +208,7 @@ class PacsObservation(_Pacs):
         fine_sampling_factor: integer
               Set this value to a power of two, which will increase the
               acquisition model's sampling frequency beyond 40Hz
-        detector_mask: None, 'calibration' or int8 array
+        detector_mask: None, 'calibration' or boolean array
               If None, no detector will be filtered out. if 'calibration',
               the detector mask will be read from a calibration file.
               Otherwise, it must be of the same shape as the camera:
@@ -256,10 +256,9 @@ class PacsObservation(_Pacs):
         nsamples_all = nsamples_all[slice_observation]
         nfilenames = len(filename)
         igood = numpy.where(detector_mask.flat == 0)[0]
-        detector_mask = numpy.ones(detector_mask.shape, dtype='uint8')
+        detector_mask = numpy.ones(detector_mask.shape, numpy.bool8)
         detector_mask.flat[igood[slice_detector]] = 0
         filename_, nfilenames = _files2tmf(filename)
-        ndetectors = int(numpy.sum(detector_mask == 0))
         ftype = get_default_dtype_float()
 
         # frame policy
@@ -273,7 +272,7 @@ class PacsObservation(_Pacs):
         unit = map(lambda x: x if x.find('/') != -1 else x + ' / detector', unit)
 
         # Store instrument information
-        detector_center, detector_corner, detector_area, distortion_yz, oflat, dflat, responsivity, status = tmf.pacs_info_instrument(tamasis_dir, band, numpy.asfortranarray(detector_mask))
+        detector_center, detector_corner, detector_area, distortion_yz, oflat, dflat, responsivity, status = tmf.pacs_info_instrument(tamasis_dir, band, numpy.asfortranarray(detector_mask, numpy.int8))
         if status != 0: raise RuntimeError()
         self.instrument = Instrument('PACS/' + band.capitalize(), detector_mask)
         self.instrument.band = band
@@ -337,9 +336,9 @@ class PacsObservation(_Pacs):
                                             numpy.ascontiguousarray(self.pointing.dec),
                                             numpy.ascontiguousarray(self.pointing.pa),
                                             numpy.ascontiguousarray(self.pointing.chop),
-                                            numpy.ascontiguousarray(self.pointing.masked, dtype='int8'),
-                                            numpy.ascontiguousarray(self.pointing.removed,dtype='int8'),
-                                            numpy.asfortranarray(self.instrument.detector_mask),
+                                            numpy.ascontiguousarray(self.pointing.masked, numpy.int8),
+                                            numpy.ascontiguousarray(self.pointing.removed,numpy.int8),
+                                            numpy.asfortranarray(self.instrument.detector_mask, numpy.int8),
                                             numpy.asfortranarray(self.instrument.flatfield.detector),
                                             flatfielding,
                                             subtraction_mean,
@@ -388,9 +387,9 @@ class PacsObservation(_Pacs):
                                              numpy.ascontiguousarray(self.pointing.dec),
                                              numpy.ascontiguousarray(self.pointing.pa),
                                              numpy.ascontiguousarray(self.pointing.chop),
-                                             numpy.ascontiguousarray(self.pointing.masked, dtype='int8'),
-                                             numpy.ascontiguousarray(self.pointing.removed,dtype='int8'),
-                                             numpy.asfortranarray(self.instrument.detector_mask),
+                                             numpy.ascontiguousarray(self.pointing.masked, numpy.int8),
+                                             numpy.ascontiguousarray(self.pointing.removed,numpy.int8),
+                                             numpy.asfortranarray(self.instrument.detector_mask, numpy.int8),
                                              self.instrument.detector_corner.base.base.swapaxes(0,1).copy().T,
                                              self.instrument.distortion_yz.base.base.T,
                                              resolution)
@@ -474,7 +473,7 @@ class PacsSimulation(_Pacs):
                                 policy_turnaround == 'remove' and self.pointing.info == Pointing.TURNAROUND
 
         # Store instrument information
-        detector_center, detector_corner, detector_area, distortion_yz, oflat, dflat, responsivity, status = tmf.pacs_info_instrument(tamasis_dir, band, numpy.asfortranarray(detector_mask))
+        detector_center, detector_corner, detector_area, distortion_yz, oflat, dflat, responsivity, status = tmf.pacs_info_instrument(tamasis_dir, band, numpy.asfortranarray(detector_mask, numpy.int8))
         if status != 0: raise RuntimeError()
         self.instrument = Instrument('PACS/'+band.capitalize(),detector_mask)
         self.instrument.band = band
@@ -534,9 +533,8 @@ class PacsSimulation(_Pacs):
 
         pyfits.append(filename, tod, header)
         if tod.mask is not None:
-            mask = numpy.abs(tod.mask).view('uint8')
             header = create_fitsheader(mask, extname='Mask')
-            pyfits.append(filename, mask, header)
+            pyfits.append(filename, tod.mask.view('int8'), header)
         
    
 #-------------------------------------------------------------------------------
@@ -628,7 +626,7 @@ def pacs_preprocess(obs, projection_method='sharp edges', oversampling=True, npi
     if tod is None:
         projection = Projection(obs, method='sharp edges', oversampling=False, npixels_per_sample=npixels_per_sample)
         tod = obs.get_tod()
-        tod.mask[:] = 0
+        tod.mask = False
         tod_filtered = filter_median(tod, deglitching_hf_length)
         tod.mask = deglitch_l2mad(tod_filtered, projection, nsigma=nsigma)
         tod = filter_median(tod, hf_length)

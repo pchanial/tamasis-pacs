@@ -13,7 +13,7 @@ import tamasisfortran as tmf
 from config import __verbose__, get_default_dtype, get_default_dtype_float, get_default_dtype_complex
 from datatypes import Map, Tod, combine_sliced_shape, flatten_sliced_shape, validate_sliced_shape
 from mpi4py import MPI
-from numpyutils import _my_issctype, _my_isscalar, get_type
+from numpyutils import _my_isscalar
 from processing import interpolate_linear
 
 __all__ = ['AcquisitionModel', 'AcquisitionModelTranspose', 'Composition', 
@@ -95,7 +95,7 @@ class AcquisitionModel(object):
         if self._dtype is not None:
             return self._dtype
         for block in self.blocks:
-            if block.dtype in (numpy.complex64, numpy.complex128, numpy.complex256):
+            if block.dtype.type in (numpy.complex64, numpy.complex128, numpy.complex256):
                 return block.dtype
         return get_default_dtype_float()
 
@@ -103,8 +103,7 @@ class AcquisitionModel(object):
     def dtype(self, dtype):
         if len(self.blocks) != 0:
             raise ValueError('It is not possible to set the dtype of a composite AcquisitionModel.')
-        dtype = numpy.dtype(dtype)
-        self._dtype = dtype.type
+        self._dtype = numpy.dtype(dtype)
 
     def aslinearoperator(self, shape=None, packing=None, unpacking=None):
         """Returns the AcquisitionModel as a LinearOperator"""
@@ -165,7 +164,7 @@ class AcquisitionModel(object):
             else:
                return shapein
         if flatten_sliced_shape(shapein) != flatten_sliced_shape(self.shapein):
-            raise ValidationError('The input of '+self.__class__.__name__+' has incompatible shape '+str(shapein)+' instead of '+str(self.shapein)+'.')
+            raise ValidationError('The input of '+self.__class__.__name__+' has an incompatible shape '+str(shapein)+' instead of '+str(self.shapein)+'.')
         return self.shapeout
 
     def validate_shapeout(self, shapeout):
@@ -175,23 +174,24 @@ class AcquisitionModel(object):
             else:
                 return shapeout
         if flatten_sliced_shape(shapeout) != flatten_sliced_shape(self.shapeout):
-            raise ValidationError("The input of '" + self.__class__.__name__ + ".T' has incompatible shape " + str(shapeout) + ' instead of ' + str(self.shapeout) + '.')
+            raise ValidationError("The input of '" + type(self).__name__ + ".T' has an incompatible shape " + str(shapeout) + ' instead of ' + str(self.shapeout) + '.')
         return self.shapein
 
     def validate_input(self, cls, data):
         data = numpy.asanyarray(data)
-        if not _my_issctype(data.dtype):
-            raise TypeError("The input of '" + self.__class__.__name__ + "' has an non-numeric type '" + get_type(data) + "'.")
+        if not _is_scientific_dtype(data.dtype):
+            raise TypeError("The input of '" + type(self).__name__ + "' has a non-numeric type '" + str(data.dtype) + "'.")
+        data = numpy.asanyarray(data, _get_dtype(self.dtype, data.dtype))
         if not isinstance(data, cls):
             data = data.view(cls)
-
         shapeout = self.validate_shape(data.shape)
         return data
 
     def validate_input_direct(self, cls, data, reusein):
         data = numpy.asanyarray(data)
-        if not _my_issctype(data.dtype):
-            raise TypeError("The input of '" + self.__class__.__name__ + "' has an non-numeric type '" + get_type(data)+"'.")
+        if not _is_scientific_dtype(data.dtype):
+            raise TypeError("The input of '" + type(self).__name__ + "' has a non-numeric type '" + str(data.dtype) + "'.")
+        data = numpy.asanyarray(data, _get_dtype(self.dtype, data.dtype))
         if not isinstance(data, cls):
             data = data.view(cls)
         shapeout = self.validate_shapein(validate_sliced_shape(data.shape, getattr(data, 'nsamples', None)))
@@ -200,8 +200,9 @@ class AcquisitionModel(object):
 
     def validate_input_transpose(self, cls, data, reusein):
         data = numpy.asanyarray(data)
-        if not _my_issctype(data.dtype):
-            raise TypeError("The input of '" + self.__class__.__name__ + ".T' has an non-numeric type '" + get_type(data) + "'.")
+        if not _is_scientific_dtype(data.dtype):
+            raise TypeError("The input of '" + type(self).__name__ + ".T' has a non-numeric type '" + str(data.dtype) + "'.")
+        data = numpy.asanyarray(data, _get_dtype(self.dtype, data.dtype))
         if not isinstance(data, cls):
             data = data.view(cls)
         shapein = self.validate_shapeout(validate_sliced_shape(data.shape, getattr(data, 'nsamples', None)))
@@ -210,25 +211,27 @@ class AcquisitionModel(object):
 
     def validate_output(self, array, reusein):
         """
-        Allocate memory for the output of the acquisition models for which input and output have the same shape
-        These are the models for which the direct and transpose routines only have the reusein keyword
+        Allocate memory for the output of the acquisition models for which
+        input and output have the same shape. These are the models for which
+        the direct and transpose routines only have the reusein keyword.
         """
         if reusein:
             return array
-        if __verbose__: print 'Info: Allocating '+str(array.dtype.itemsize*numpy.product(array.shape)/2.**20)+' MiB in '+self.__class__.__name__+'.'
+        if __verbose__: print 'Info: Allocating ' + str(array.dtype.itemsize * numpy.product(array.shape)/2.**20) + ' MiB in ' + type(self).__name__ + '.'
         return array.copy('a')
 
     def validate_output_direct(self, cls, shapeout, dtype, reuseout, **options):
         """
         Allocate memory for the output of the direct operation.
-        **options should not depend on the input array, since it might only be used for the first call and it would not be
-        propagated during the next calls
+        **options should not depend on the input array, since it might
+        only be used for the first call and it would not be propagated
+        during the next calls.
         """
         if shapeout is None:
-            raise ValueError('The shape of the output of '+self.__class__.__name__+' is not known.')
+            raise ValueError('The shape of the output of ' + type(self).__name__+' is not known.')
         shapeout_flat = flatten_sliced_shape(shapeout)
         if self._output_direct is None or shapeout_flat != self._output_direct.shape or self._output_direct.dtype != dtype:
-            if __verbose__: print 'Info: Allocating '+str(dtype.itemsize*numpy.product(shapeout_flat)/2.**20)+' MiB for the output of '+self.__class__.__name__+'.'
+            if __verbose__: print 'Info: Allocating '+str(dtype.itemsize*numpy.product(shapeout_flat)/2.**20)+' MiB for the output of ' + type(self).__name__+'.'
             if cls == numpy.ndarray:
                 self._output_direct = numpy.empty(shapeout, dtype, **options)
             else:
@@ -244,10 +247,10 @@ class AcquisitionModel(object):
         **options should not depend on the input array
         """
         if shapein is None:
-            raise ValueError('The shape of the input of '+self.__class__.__name__+' is not known.')
+            raise ValueError('The shape of the input of ' + type(self).__name__+' is not known.')
         shapein_flat = flatten_sliced_shape(shapein)
         if self._output_transpose is None or shapein_flat != self._output_transpose.shape or self._output_transpose.dtype != dtype:
-            if __verbose__: print 'Info: Allocating '+str(dtype.itemsize*numpy.product(shapein_flat)/2.**20)+' MiB for the output of '+self.__class__.__name__+'.T.'
+            if __verbose__: print 'Info: Allocating '+str(dtype.itemsize*numpy.product(shapein_flat)/2.**20)+' MiB for the output of ' + type(self).__name__+'.T.'
             if cls == numpy.ndarray:
                 self._output_transpose = numpy.empty(shapein, dtype, **options)
             else:
@@ -304,7 +307,7 @@ class AcquisitionModel(object):
 
     def __str__(self):
         result = self.description
-        if self.__class__ == Identity:
+        if type(self) == Identity:
             result += ' (Identity)'
         if self.shapein is not None or self.shapeout is not None:
             result += ' [input:'
@@ -630,7 +633,7 @@ class Diagonal(Symmetric):
 
     @property
     def dtype(self):
-        return self.diagonal.dtype.type
+        return self.diagonal.dtype
 
 
 #-------------------------------------------------------------------------------
@@ -696,7 +699,7 @@ class Projection(AcquisitionModel):
 
         self._pmatrix, self.header, ndetectors, nsamples, self.npixels_per_sample = \
             observation.get_pointing_matrix(header, resolution, npixels_per_sample, method=method, oversampling=oversampling)
-        self.pmatrix = self._pmatrix.view(dtype=[('weight', 'f4'), ('pixel', 'i4')]).view(numpy.recarray)
+        self.pmatrix = self._pmatrix.view([('weight', 'f4'), ('pixel', 'i4')]).view(numpy.recarray)
         self.pmatrix.resize((ndetectors, numpy.sum(nsamples), self.npixels_per_sample))
         self.shapein = tuple([self.header['naxis'+str(i+1)] for i in reversed(range(self.header['naxis']))])
         self.shapeout = combine_sliced_shape(ndetectors, nsamples)
@@ -891,9 +894,9 @@ class Masking(Symmetric):
         if mask is None:
             self._mask = None
             return
-        if not _my_issctype(numpy.asarray(mask).dtype):
-            raise TypeError("Invalid type for the mask: '" + get_type(mask) + "'.")
         mask = numpy.asanyarray(mask)
+        if not _is_scientific_dtype(mask.dtype):
+            raise TypeError("Invalid type for the mask: '" + str(mask.dtype) + "'.")
         if numpy.rank(mask) == 0:
             raise TypeError('The input mask should not be scalar.')
         self._mask = mask
@@ -901,7 +904,7 @@ class Masking(Symmetric):
     @property
     def dtype(self):
         if self.mask is not None and numpy.iscomplexobj(self.mask):
-            return self.mask.dtype.type
+            return self.mask.dtype
         return get_default_dtype_float()
 
 
@@ -915,7 +918,7 @@ class Unpacking(AcquisitionModel):
     """
     def __init__(self, mask, field=0., description=None):
         AcquisitionModel.__init__(self, description)
-        self.mask = numpy.array(mask, dtype='int8', copy=False)
+        self.mask = numpy.array(mask, numpy.bool8, copy=False)
         self.field = field
         self.shapein  = (numpy.sum(self.mask == 0),)
         self.shapeout = self.mask.shape
@@ -923,13 +926,13 @@ class Unpacking(AcquisitionModel):
     def direct(self, packed, reusein=False, reuseout=False):
         packed, shapeout = self.validate_input_direct(numpy.ndarray, packed, reusein)
         output = self.validate_output_direct(Map, shapeout, packed.dtype, reuseout)
-        tmf.unpack_direct(packed.T, self.mask.T, output.T, self.field)
+        tmf.unpack_direct(packed.T, self.mask.view(numpy.int8).T, output.T, self.field)
         return output
 
     def transpose(self, unpacked, reusein=False, reuseout=False):
         unpacked, shapein = self.validate_input_transpose(Map, unpacked, reusein)
         output = self.validate_output_transpose(numpy.ndarray, shapein, unpacked.dtype, reuseout)
-        tmf.unpack_transpose(unpacked.T, self.mask.T, output.T)
+        tmf.unpack_transpose(unpacked.T, self.mask.view(numpy.int8).T, output.T)
         return output
 
 
@@ -943,7 +946,7 @@ class Unpacking2(AcquisitionModel):
     """
     def __init__(self, mask, field=0., description=None):
         AcquisitionModel.__init__(self, description)
-        self.mask = numpy.array(mask, dtype='bool', copy=False) == False
+        self.mask = numpy.array(mask, numpy.bool8, copy=False)
         self.field = field
         self.shapein  = (numpy.sum(self.mask),)
         self.shapeout = tuple(self.mask.shape)
@@ -1247,6 +1250,24 @@ def _toacquisitionmodel(model, cls, description=None):
     model2 = copy.copy(model)
     model.__class__ = cls
     model.__dict__ = {'description': description, 'blocks': [model2], '_shapein': None, '_shapeout': None, '_dtype': None}
+
+
+#-------------------------------------------------------------------------------
+
+
+def _get_dtype(type1, type2):
+    t1 = type1.type()
+    t2 = type2.type()
+    t = t1 * t2
+    return t.dtype
+
+
+#-------------------------------------------------------------------------------
+
+
+def _is_scientific_dtype(dtype):
+    """Return true if the data type is """
+    return issubclass(dtype.type, numpy.number) or dtype.type == numpy.bool8
 
 
 #-------------------------------------------------------------------------------
