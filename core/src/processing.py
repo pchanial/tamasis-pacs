@@ -14,10 +14,10 @@ def deglitch_l2std(tod, projection, nsigma=5.):
     ny = projection.header['naxis2']
     npixels_per_sample = projection.npixels_per_sample
     if tod.mask is None:
-        mask = numpy.zeros(tod.shape, dtype='int8')
+        mask = numpy.zeros(tod.shape, numpy.bool8)
     else:
         mask = tod.mask.copy()
-    tmf.deglitch_l2b_std(projection._pmatrix, nx, ny, tod.T, mask.T, nsigma, npixels_per_sample)
+    tmf.deglitch_l2b_std(projection._pmatrix, nx, ny, tod.T, mask.view(numpy.int8).T, nsigma, npixels_per_sample)
     return mask
 
 
@@ -33,10 +33,10 @@ def deglitch_l2mad(tod, projection, nsigma=5.):
     ny = projection.header['naxis2']
     npixels_per_sample = projection.npixels_per_sample
     if tod.mask is None:
-        mask = numpy.zeros(tod.shape, dtype='int8')
+        mask = numpy.zeros(tod.shape, numpy.bool8)
     else:
         mask = tod.mask.copy()
-    tmf.deglitch_l2b_mad(projection._pmatrix, nx, ny, tod.T, mask.T, nsigma, npixels_per_sample)
+    tmf.deglitch_l2b_mad(projection._pmatrix, nx, ny, tod.T, mask.view(numpy.int8).T, nsigma, npixels_per_sample)
     return mask
 
 
@@ -51,10 +51,10 @@ def filter_median(tod, length=10, mask=None):
     if mask is None:
         mask = tod.mask
         if mask is None:
-            mask = numpy.zeros(tod.shape, dtype='int8')
+            mask = numpy.zeros(tod.shape, numpy.bool8)
     else:
-        mask = numpy.ascontiguousarray(mask, dtype='int8')
-    status = tmf.filter_median(filtered.T, mask.T, length, numpy.ascontiguousarray(tod.nsamples, dtype='int32'))
+        mask = numpy.ascontiguousarray(mask, numpy.bool8)
+    status = tmf.filter_median(filtered.T, mask.view(numpy.int8).T, length, numpy.array(tod.nsamples, dtype='int32'))
     if status != 0:
         raise RuntimeError()
     return filtered
@@ -99,8 +99,8 @@ def interpolate_linear(tod):
         x = numpy.arange(nsamples)
         for idetector in range(tod.shape[0]):
             tod_ = tod[idetector,dest:dest+nsamples]
-            valid = tod.mask[idetector,dest:dest+nsamples] == 0
-            tod_[~valid] = numpy.interp(x[~valid], x[valid], tod_[valid])
+            invalid = tod.mask[idetector,dest:dest+nsamples]
+            tod_[invalid] = numpy.interp(x[invalid], x[~invalid], tod_[~invalid])
         dest = dest + nsamples
     
     return tod

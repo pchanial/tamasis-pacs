@@ -291,7 +291,7 @@ class Pointing(numpy.recarray):
         if dtype is None:
             ftype = get_default_dtype_float()
             dtype = numpy.dtype([('time', ftype), ('ra', ftype), ('dec', ftype), ('pa', ftype), ('info', numpy.int64),
-                                 ('masked', numpy.bool_), ('removed', numpy.bool_)])
+                                 ('masked', numpy.bool8), ('removed', numpy.bool8)])
 
 
         time    = numpy.asarray(time)

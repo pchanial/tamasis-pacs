@@ -875,11 +875,9 @@ class Masking(Symmetric):
         output = self.validate_output(data, reusein and reuseout)
         if self.mask is None:
             return output
-        if self.mask.dtype.type in (numpy.int8, numpy.uint8):
-            status = tmf.masking(output.T, self.mask.T)
+        if self.mask.dtype.itemsize == 1:
+            status = tmf.masking(output.T, self.mask.view(numpy.int8).T)
             if status != 0: raise RuntimeError()
-        elif self.mask.dtype.type is numpy.bool_:
-            output[self.mask] = 0
         else:
             output *= self.mask
         return output

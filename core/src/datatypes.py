@@ -448,22 +448,28 @@ class Tod(FitsArray):
 
         # get a new Tod instance (or a subclass if subok is True)
         result = FitsArray(data, header, unit, dtype, copy, order, True, ndmin)
+        if not subok and result.__class__ is not cls or not issubclass(result.__class__, cls):
+            result = result.view(cls)
         
-        if type(data) is str:
+        # mask attribute
+        if mask is numpy.ma.nomask:
+            mask = None
+
+        if mask is None and isinstance(data, str):
             try:
-                mask = pyfits.open(data)['Mask'].data.view('int8')
+                mask = pyfits.open(data)['Mask'].data.view(numpy.bool8)
+                copy = False
             except:
                 pass
 
-        if not subok and result.__class__ is not cls or not issubclass(result.__class__, cls):
-            result = result.view(cls)
+        if mask is None and hasattr(data, 'mask') and data.mask is not numpy.ma.nomask:
+            mask = data.mask
 
-        # mask attribute
         if mask is not None:
-            result.mask = numpy.asarray(mask, dtype='int8')
-        elif copy and hasattr(data, 'mask') and data.mask is not None and data.mask is not numpy.ma.nomask:
-            result.mask = data.mask.copy()
+            mask = numpy.array(mask, numpy.bool8, copy=copy)
 
+        result.mask = mask
+        
         # nsamples attribute
         if type(data) is str and nsamples is None:
             if result.header.has_key('nsamples'):
@@ -479,6 +485,41 @@ class Tod(FitsArray):
 
         return result
 
+    @property
+    def mask(self):
+        return self._mask
+
+    @mask.setter
+    def mask(self, mask):
+        if mask is None or mask is numpy.ma.nomask:
+            self._mask = None
+            return
+
+        # enforce bool8 dtype
+        if not isinstance(mask, numpy.ndarray):
+            mask = numpy.array(mask, numpy.bool8)
+        elif mask.dtype.type != numpy.bool8:
+            if mask.dtype.itemsize == 1:
+                mask = mask.view(numpy.bool8)
+            else:
+                mask = numpy.asarray(mask, numpy.bool8)
+
+        # handle the scalar case
+        if numpy.rank(mask) == 0:
+            if self._mask is None:
+                func = numpy.zeros if mask == 0 else numpy.ones
+                self._mask = func(self.shape, dtype=numpy.bool8)
+            else:
+                self._mask[:] = mask
+            return
+
+        # check shape compatibility
+        if self.shape != mask.shape:
+            raise ValueError("The input mask has a shape '" + str(mask.shape) + \
+                             "' incompatible with that of the Tod '" + str(self.shape) + "'.")
+        
+        self._mask = mask
+
     def __array_finalize__(self, obj):
         FitsArray.__array_finalize__(self, obj)
         # obj might be None without __new__ being called (ex: append, concatenate)
@@ -487,9 +528,7 @@ class Tod(FitsArray):
             self.mask = None
             return
         if hasattr(obj, 'mask') and obj.mask is not numpy.ma.nomask:
-            self.mask = obj.mask
-        else:
-            self.mask = None
+            self._mask = None if obj.mask is numpy.ma.nomask else obj.mask
         self.nsamples = getattr(obj, 'nsamples', () if numpy.rank(self) == 0 else (self.shape[-1],))
 
     def __array_wrap__(self, obj, context=None):
@@ -592,9 +631,8 @@ class Tod(FitsArray):
         super(Tod, self).save(filename)
         if self.mask is None:
             return
-        mask = numpy.abs(self.mask).view('uint8')
-        header = create_fitsheader(mask, extname='Mask')
-        pyfits.append(filename, mask, header)
+        header = create_fitsheader(self.mask, extname='Mask')
+        pyfits.append(filename, self.mask.view(numpy.uint8), header)
 
 
 #-------------------------------------------------------------------------------
@@ -645,7 +683,7 @@ def create_fitsheader(array, extname=None, crval=(0.,0.), crpix=None, ctype=('RA
         if not isinstance(array, numpy.ndarray):
             raise TypeError('The input is not an ndarray.')
         naxis = tuple(reversed(array.shape))
-        if array.dtype.name == 'bool':
+        if array.dtype.itemsize == 1:
             typename = 'uint8'
         else:
             typename = array.dtype.name

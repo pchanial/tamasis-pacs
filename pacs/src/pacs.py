@@ -347,7 +347,7 @@ class PacsObservation(_Pacs):
                                             self.get_ndetectors())
         if status != 0: raise RuntimeError()
        
-        tod = Tod(signal.T, mask.T, nsamples=self.get_nsamples(), unit=self.slice[0].unit)
+        tod = Tod(signal.T, mask.T, nsamples=self.get_nsamples(), unit=self.slice[0].unit, copy=False)
 
         # the flux calibration has been done by using HCSS photproject and assuming that the central detectors had a size of 3.2x3.2
         # squared arcseconds. To be consistent with detector sharp edge model, we need to adjust the Tod.
