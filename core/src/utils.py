@@ -20,27 +20,47 @@ _FTYPE = config.get_default_dtype_float()
 
 
 class Ds9(object):
+    """
+    Helper around the ds9 package.
     
+    Examples
+    --------
+    >>> ds9.open_in_new_window = False
+    >>> d = ds9.current
+    >>> d.set('scale linear')
+    >>> ds9(my new map)
+    """
     def __call__(self, array, origin=None, **keywords):
         array = numpy.asanyarray(array)
         array = Map(array, dtype=array.dtype, copy=False)
         array.ds9(origin=origin, new=self.open_in_new_window, **keywords)
 
+    @property
     def targets(self):
+        """
+        Returns a list of the ids of the running ds9 instances.
+        """
         import ds9
         return ds9.ds9_targets()
 
-    def get_current(self):
+    @property
+    def current(self):
+        """
+        Return current ds9 instance.
+        """
         targets = self.targets()
         if targets is None:
             return None
         return self.get(targets[-1])
 
     def get(self, id):
+        """
+        Return ds9 instance matching a specified id.
+        """
         import ds9
         return ds9.ds9(id)
 
-    open_in_new_window = True    
+    open_in_new_window = True
 
 ds9 = Ds9()
 
