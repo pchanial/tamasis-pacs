@@ -577,6 +577,31 @@ end subroutine masking
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
+subroutine remove_nan(signal, mask, nsamples, ndetectors)
+
+    use module_preprocessor, only : remove_nan_ => remove_nan
+    use module_tamasis,      only : p
+    implicit none
+
+    !f2py threadsafe
+    !f2py intent(inout)      :: signal
+    !f2py intent(in)         :: mask
+    !f2py intent(hide)       :: nsamples = shape(signal,0)
+    !f2py intent(hide)       :: ndetectors = shape(signal,1)
+    
+    integer, intent(in)      :: nsamples
+    integer, intent(in)      :: ndetectors
+    real(p), intent(inout)   :: signal(nsamples, ndetectors)
+    logical*1, intent(inout) :: mask(nsamples, ndetectors)
+
+    call remove_nan_(signal, mask)
+
+end subroutine remove_nan
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
 subroutine mean_degrees(array, n, mean)
 
     use module_math,    only : mean_degrees_ => mean_degrees

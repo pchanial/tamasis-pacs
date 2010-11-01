@@ -12,6 +12,7 @@ module module_preprocessor
     public :: interpolate_linear
     public :: median_filtering
     public :: multiply_vectordim2
+    public :: remove_nan
     public :: subtract_meandim1
     public :: subtract_vectordim2
 
@@ -516,6 +517,24 @@ contains
         irank = 1
 
     end subroutine median_filtering_next
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+    
+    
+    subroutine remove_nan(signal, mask)
+        
+        real(p), intent(inout)   :: signal(:,:)
+        logical*1, intent(inout) :: mask(size(signal,1),size(signal,2))
+        
+        !$omp parallel workshare
+        where (signal /= signal)
+            signal = 0._p
+            mask   = .true.
+        end where
+        !$omp end parallel workshare
+        
+    end subroutine remove_nan
 
 
 end module module_preprocessor

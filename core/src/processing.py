@@ -3,7 +3,7 @@ import pyfits
 import scipy
 import tamasisfortran as tmf
 
-__all__ = [ 'deglitch_l2std', 'deglitch_l2mad', 'filter_median', 'filter_polynomial', 'interpolate_linear' ]
+__all__ = [ 'deglitch_l2std', 'deglitch_l2mad', 'filter_median', 'filter_polynomial', 'interpolate_linear', 'remove_nan' ]
 
 def deglitch_l2std(tod, projection, nsigma=5.):
     """
@@ -87,11 +87,10 @@ def filter_polynomial(tod, degree):
 
 def interpolate_linear(tod):
     """
-    Interpolate masked values of a Tod
+    In-place interpolation of masked values of a Tod
     """
-    tod = tod.copy()
     if tod.mask is None:
-        return tod
+        return
 
     dest = 0
     for islice in range(len(tod.nsamples)):
@@ -103,4 +102,16 @@ def interpolate_linear(tod):
             tod_[invalid] = numpy.interp(x[invalid], x[~invalid], tod_[~invalid])
         dest = dest + nsamples
     
-    return tod
+    return
+
+
+#-------------------------------------------------------------------------------
+
+
+def remove_nan(tod):
+    """
+    Replace NaN values in a Tod with zeros and update the mask.
+    """
+    if tod.mask is None:
+        tod.mask = numpy.zeros(tod.shape, numpy.bool8)
+    tmf.remove_nan(tod.T, tod.mask.view(numpy.int8).T)

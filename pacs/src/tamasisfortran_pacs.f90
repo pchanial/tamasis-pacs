@@ -462,7 +462,7 @@ subroutine pacs_tod(band, filename, nslices, npointings, nsamples_tot, compressi
     use iso_fortran_env,        only : ERROR_UNIT
     use module_pacsinstrument,  only : PacsInstrument
     use module_pacsobservation, only : PacsObservation
-    use module_preprocessor,    only : divide_vectordim2, subtract_meandim1
+    use module_preprocessor,    only : divide_vectordim2, remove_nan, subtract_meandim1
     use module_tamasis,         only : p
     implicit none
 
@@ -552,6 +552,9 @@ subroutine pacs_tod(band, filename, nslices, npointings, nsamples_tot, compressi
     if (do_flatfielding) then
         call divide_vectordim2(signal, pacs%flatfield_detector)
     end if
+
+    ! remove NaN
+    call remove_nan(signal, mask)
     
     ! subtract the mean of each detector timeline
     if (do_subtraction_mean) then
