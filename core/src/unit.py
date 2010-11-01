@@ -572,8 +572,8 @@ empty.__doc__ = _grab_doc(numpy.empty.__doc__, 'empty')
 
 def ones(shape, unit=None, dtype=None, order=None):
     return Quantity(numpy.ones(shape, dtype, order), unit, copy=False)
-empty.__doc__ = _grab_doc(numpy.ones.__doc__, 'ones')
+ones.__doc__ = _grab_doc(numpy.ones.__doc__, 'ones')
 
 def zeros(shape, unit=None, dtype=None, order=None):
     return Quantity(numpy.zeros(shape, dtype, order), unit, copy=False)
-empty.__doc__ = _grab_doc(numpy.zeros.__doc__, 'zeros')
+zeros.__doc__ = _grab_doc(numpy.zeros.__doc__, 'zeros')
