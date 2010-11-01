@@ -19,11 +19,31 @@ _FTYPE = config.get_default_dtype_float()
 #-------------------------------------------------------------------------------
 
 
-def ds9(array, origin=None, **keywords):
-    array = numpy.asanyarray(array)
-    array = Map(array, dtype=array.dtype, copy=False)
-    array.ds9(origin=origin, **keywords)
+class Ds9(object):
     
+    def __call__(self, array, origin=None, **keywords):
+        array = numpy.asanyarray(array)
+        array = Map(array, dtype=array.dtype, copy=False)
+        array.ds9(origin=origin, new=self.open_in_new_window, **keywords)
+
+    def targets(self):
+        import ds9
+        return ds9.ds9_targets()
+
+    def get_current(self):
+        targets = self.targets()
+        if targets is None:
+            return None
+        return self.get(targets[-1])
+
+    def get(self, id):
+        import ds9
+        return ds9.ds9(id)
+
+    open_in_new_window = True    
+
+ds9 = Ds9()
+
 
 #-------------------------------------------------------------------------------
 

@@ -201,7 +201,7 @@ class FitsArray(Quantity):
         pyplot.draw()
         return image
 
-    def ds9(self, xpamsg=None, origin=None, **keywords):
+    def ds9(self, xpamsg=None, origin=None, new=True, **keywords):
         """
         Display the array using ds9.
 
@@ -224,6 +224,8 @@ class FitsArray(Quantity):
             (see http://hea-www.harvard.edu/RD/ds9/ref/xpa.html).
         origin: string
             Set origin to 'upper' for Y increasing downwards
+        new: boolean
+            If true, open the array in a new ds9 instance.
         **keywords : string or tuple of string
             Specify more access points to be set before array loading.
             a keyword such as 'height=400' will be appended to the command
@@ -245,51 +247,58 @@ class FitsArray(Quantity):
             raise RuntimeError('The library pyds9 has not been installed.')
         import ds9, os, time, sys, uuid, xpa
 
-        if 'cmap' not in keywords:
-            keywords['cmap'] = 'heat'
+        id = None
+        if not new:
+            list = ds9.ds9_targets()
+            if list is not None:
+                id = list[-1]
 
-        if 'zoom' not in keywords:
-            keywords['zoom'] = 'to fit'
+        if id is None:
+            if 'cmap' not in keywords:
+                keywords['cmap'] = 'heat'
 
-        if 'scale' not in keywords:
-            keywords['scale'] = ('scope local', 'mode 99.5')
+            if 'zoom' not in keywords:
+                keywords['zoom'] = 'to fit'
 
-        if origin == 'upper' or 'orient' not in keywords and self.origin == 'upper':
-            keywords['orient'] = 'y'
+            if 'scale' not in keywords:
+                keywords['scale'] = ('scope local', 'mode 99.5')
 
-        wait = 10
+            if origin == 'upper' or 'orient' not in keywords and self.origin == 'upper':
+                keywords['orient'] = 'y'
 
-        id = 'ds9_' + str(uuid.uuid1())[4:8]
-        
-        command = 'ds9 -title ' + id
+            wait = 10
 
-        for k,v in keywords.items():
-            k = str(k)
-            if type(v) is not tuple:
-                v = (v,)
-            command += reduce(lambda x,y: str(x) + ' -' + k + ' ' + str(y),v,'')
+            id = 'ds9_' + str(uuid.uuid1())[4:8]
 
-        os.system(command + '&')
+            command = 'ds9 -title ' + id
 
-        # start the xpans name server
-        if xpa.xpaaccess("xpans", None, 1) == None:
-            _cmd = None
-            # look in install directories
-            for _dir in sys.path:
-                _fname = os.path.join(_dir, "xpans")
-                if os.path.exists(_fname):
-                    _cmd = _fname + " -e &"
-            if _cmd:
-                print _cmd
-                os.system(_cmd)
+            for k,v in keywords.items():
+                k = str(k)
+                if type(v) is not tuple:
+                    v = (v,)
+                command += reduce(lambda x,y: str(x) + ' -' + k + ' ' + str(y),v,'')
 
-        for i in range(wait):
-            list = xpa.xpaaccess(id, None, 1024)
-            if list: break
-            time.sleep(1)
-	if not list:
-	    raise ValueError, 'No active ds9 running for target: %s' % list
+            os.system(command + '&')
 
+            # start the xpans name server
+            if xpa.xpaaccess("xpans", None, 1) == None:
+                _cmd = None
+                # look in install directories
+                for _dir in sys.path:
+                    _fname = os.path.join(_dir, "xpans")
+                    if os.path.exists(_fname):
+                        _cmd = _fname + " -e &"
+                if _cmd:
+                    os.system(_cmd)
+
+            for i in range(wait):
+                list = xpa.xpaaccess(id, None, 1024)
+                if list: break
+                time.sleep(1)
+            if not list:
+                raise ValueError, 'No active ds9 running for target: %s' % list
+
+        # get ds9 instance with given id
         d = ds9.ds9(id)
         d.set_np2arr(self.view(numpy.ndarray).T)
 
