@@ -30,7 +30,7 @@ def _get_filename():
 
 def _get_cmd_preprocessor(frames, options):
 
-    cmd = tamasis_dir + 'pacs/script/tamasis_photproject.py'
+    cmd = tamasis_dir + 'pacs/src/pacs_photproject.py'
     
     # write frames to disk
     filename = _get_filename()+'_tod_'
@@ -57,14 +57,14 @@ def _get_cmd_preprocessor(frames, options):
     if options.npixelsPerSample is not None:
         cmd += ' --npixels-per-sample ' + str(options.npixelsPerSample)
 
-    for policy in (options.framePolicyInscan, options.framePolicyTurnaround, options.framePolicyOther, options.framePolicyInvalid):
+    for policy in (options.policyInscan, options.policyTurnaround, options.policyOther, options.policyInvalid):
         if policy.lower() not in ('keep', 'mask'):
             raise ValueError("In HCSS, a policy must be 'keep' or 'mask'.")
         
-    cmd += ' --frame-policy-inscan ' + options.framePolicyInscan
-    cmd += ' --frame-policy-turnaround ' + options.framePolicyTurnaround
-    cmd += ' --frame-policy-other ' + options.framePolicyOther
-    cmd += ' --frame-policy-invalid ' + options.framePolicyInvalid
+    cmd += ' --policy-inscan ' + options.framePolicyInscan
+    cmd += ' --policy-turnaround ' + options.framePolicyTurnaround
+    cmd += ' --policy-other ' + options.framePolicyOther
+    cmd += ' --policy-invalid ' + options.framePolicyInvalid
 
     return cmd, files
 
@@ -167,16 +167,16 @@ class TamasisPreprocessor(JTask):
         p = TaskParameter('npixelsPerSample', valueType=Integer, defaultValue=6, description='Maximum number of sky pixels seen by a detector.')
         self.addTaskParameter(p)
 
-        p = TaskParameter('framePolicyInscan', valueType=String, defaultValue='keep', description="Policy for in-scan frames: 'keep' or 'mask'")
+        p = TaskParameter('policyInscan', valueType=String, defaultValue='keep', description="Policy for in-scan frames: 'keep' or 'mask'")
         self.addTaskParameter(p)
 
-        p = TaskParameter('framePolicyTurnaround', valueType=String, defaultValue='keep', description="Policy for turn-around frames: 'keep' or 'mask'")
+        p = TaskParameter('policyTurnaround', valueType=String, defaultValue='keep', description="Policy for turn-around frames: 'keep' or 'mask'")
         self.addTaskParameter(p)
 
-        p = TaskParameter('framePolicyOther', valueType=String, defaultValue='mask', description="Policy for other frames: 'keep' or 'mask'")
+        p = TaskParameter('policyOther', valueType=String, defaultValue='mask', description="Policy for other frames: 'keep' or 'mask'")
         self.addTaskParameter(p)
 
-        p = TaskParameter('framePolicyInvalid', valueType=String, defaultValue='mask', description="Policy for invalid frames: 'keep' or 'mask'")
+        p = TaskParameter('policyInvalid', valueType=String, defaultValue='mask', description="Policy for invalid frames: 'keep' or 'mask'")
         self.addTaskParameter(p)
 
     def execute(self):
