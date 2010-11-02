@@ -619,36 +619,52 @@ def pacs_plot_scan(patterns, title=None, new_figure=True):
 #-------------------------------------------------------------------------------
 
 
-def pacs_preprocess(obs, projection_method='sharp edges', oversampling=True, npixels_per_sample=None, deglitching_hf_length=20, compression_factor=1, nsigma=5., hf_length=30000, tod=None):
+def pacs_preprocess(obs,
+                    tod,
+                    projection_method='sharp',
+                    header=None,
+                    oversampling=True,
+                    npixels_per_sample=None,
+                    deglitching_hf_length=20,
+                    deglitching_nsigma=5.,
+                    hf_length=30000,
+                    transparent_mode_compression_factor=1):
     """
     deglitch, filter and potentially compress if the observation is in transparent mode
     """
-    if tod is None:
-        projection = Projection(obs, method='sharp edges', oversampling=False, npixels_per_sample=npixels_per_sample)
-        tod = obs.get_tod()
-        tod.mask = False
-        tod_filtered = filter_median(tod, deglitching_hf_length)
-        tod.mask = deglitch_l2mad(tod_filtered, projection, nsigma=nsigma)
-        tod = filter_median(tod, hf_length)
-        masking = Masking(tod.mask)
-        tod = masking(tod)
-    else:
-        projection = None
-        masking = Masking(tod.mask)
+    projection = Projection(obs,
+                            method='sharp',
+                            header=header,
+                            oversampling=False,
+                            npixels_per_sample=npixels_per_sample)
+    tod_filtered = filter_median(tod, deglitching_hf_length)
+    tod.mask = deglitch_l2mad(tod_filtered,
+                              projection,
+                              nsigma=deglitching_nsigma)
+    tod = filter_median(tod, hf_length)
+    masking = Masking(tod.mask)
+    tod = masking(tod)
     
-    # get the proper projector
-    if projection is None or projection_method != 'sharp edges' or oversampling and numpy.any(obs.slice.compression_factor * obs.instrument.fine_sampling_factor > 1):
-        projection = Projection(obs, method=projection_method, oversampling=oversampling, npixels_per_sample=npixels_per_sample)
+    # get the proper projector if necessary
+    if projection is None or projection_method != 'sharp' or oversampling and numpy.any(obs.slice.compression_factor * obs.instrument.fine_sampling_factor > 1):
+        projection = Projection(obs,
+                                method=projection_method,
+                                oversampling=oversampling,
+                                header=header,
+                                npixels_per_sample=npixels_per_sample)
 
     # bail out if not in transparent mode
-    if not obs.slice[0].mode == 'transparent' or compression_factor == 1:
-        model = CompressionAverage(obs.slice.compression_factor) * projection
+    if all(obs.slice[0].compression_factor != 1) or transparent_mode_compression_factor == 1:
+        if oversampling:
+            model = CompressionAverage(obs.slice.compression_factor) * projection
+        else:
+            model = projection
         map_mask = model.T(Tod(tod.mask, nsamples=tod.nsamples))
         model = masking * model
         return tod, model, mapper_naive(tod, model), map_mask
 
     # compress the transparent observation
-    compression = CompressionAverage(compression_factor)
+    compression = CompressionAverage(transparent_mode_compression_factor)
     todc = compression(tod)
     mask = compression(tod.mask)
     mask[mask != 0] = 1
@@ -656,9 +672,8 @@ def pacs_preprocess(obs, projection_method='sharp edges', oversampling=True, npi
     maskingc = Masking(todc.mask)
 
     model = compression * projection
-    map_mask = model.T(tod.mask)
+    map_mask = model.T(Tod(tod.mask, nsamples=tod.nsamples, copy=False))
     model = masking * model
-    print 'XXX PACS PREPROCESS CHECK compression(tod.mask) and model.T(mask)'
 
     return todc, model, mapper_naive(todc, model), map_mask
 
