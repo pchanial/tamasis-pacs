@@ -19,6 +19,7 @@ program pacs_photproject
     class(OptionParser), allocatable   :: parser
     real(p), allocatable               :: signal(:,:)
     logical*1, allocatable             :: mask(:,:)
+    logical*1, allocatable             :: detector_mask(:,:)
     real(p), allocatable               :: map1d(:), weight1d(:)
     character(len=2048), allocatable   :: infile(:)
     character(len=2048)                :: outfile, headerfile
@@ -64,12 +65,6 @@ program pacs_photproject
     deglitching_nsigma = parser%get_option_as_real('nsigma')
     reject_bad_line    = parser%get_option_as_logical('reject-bad-line')
 
-    !XXX
-    if (reject_bad_line) then
-        write (ERROR_UNIT,'(a)') 'Reject_bad_line not implemented...'
-        go to 999
-    end if
-
     if (filtering_method /= 'none' .and. filtering_method /= 'median') then
         write (ERROR_UNIT) "Invalid filtering method '" // filtering_method // "'. The only valid method is 'median'."
         go to 999
@@ -110,7 +105,9 @@ program pacs_photproject
 
     ! initialise pacs instrument
     allocate(pacs)
-    call pacs%init(obs%band, obs%observing_mode == 'Transparent', 1, status=status)
+    call pacs%read_detector_mask(obs%band, detector_mask, status, all(obs%slice%observing_mode == 'transparent'), reject_bad_line)
+    if (status /= 0) go to 999
+    call pacs%init_with_calfiles(obs%band, detector_mask, 1, status=status)
     if (status /= 0) go to 999
 
     ! get FITS header
@@ -144,7 +141,7 @@ program pacs_photproject
     ! remove flat field
     if (do_flatfield) then
         write (OUTPUT_UNIT,'(a)') 'Flat-fielding... '
-        call divide_vectordim2(signal, pack(pacs%flatfield_detector, .not. pacs%mask))
+        call divide_vectordim2(signal, pacs%flatfield_detector)
     end if
 
     ! filtering
