@@ -26,11 +26,12 @@ program test_pacsobservation
     allocate (afilename(1))
     ! valid calls
     allocate(obs)
-    afilename(1) = get_tamasis_path() // filename
 
+    afilename(1) = get_tamasis_path() // filename
     call obs%init(afilename, policy, status)
+    if (status /= 0) stop 'FAILED: init'
     call get_first_last(obs%slice(1)%p%removed, first, last)
-    if (status /= 0 .or. first /= 1 .or. last /= 360) stop 'FAILED: init1'
+    if (first /= 1 .or. last /= 360) stop 'FAILED: init1'
 
     afilename(1) = get_tamasis_path() // filename // '[23:23]'
     call obs%init(afilename, policy, status)
