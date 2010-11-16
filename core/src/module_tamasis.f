@@ -16,6 +16,8 @@ module module_tamasis
     integer, parameter :: p = dp
 #elif PRECISION_REAL == 16
     integer, parameter :: p = qp
+#else
+#error Invalid or undefined macro PRECISION_REAL
 #endif
 
     integer, parameter :: POLICY_KEEP = 0
