@@ -421,7 +421,7 @@ contains
         end if
 
         !Fix non-standard WCS keyvalues.
-        status = wcsfix(ctrl=7, naxis=c_null_ptr, wcs=wcs, stat=statfix)
+        status = wcsfix(7, c_null_ptr, wcs, statfix)
         if (status /= 0) then
             write (ERROR_UNIT,'(a)') 'ft_header2wcs: wcsfix error: ', status
             return

@@ -55,7 +55,7 @@ DIRS = core madcap pacs
 # lists of files which are updated in sub-directory Makefile.mk files
 MODULES :=
 EXECS :=
-INCLUDES := -Iinclude -Iinclude/wcslib-4.4.4-Fortran90
+INCLUDES := $(shell export PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1; pkg-config --cflags-only-I fftw3) -Ibuild/include
 
 PYTHONSOURCES = $(wildcard */src/*.py)
 PYTHONTESTS = $(wildcard */test/test_*.py)

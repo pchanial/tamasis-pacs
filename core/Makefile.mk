@@ -27,8 +27,11 @@ $(SDIR)/module_string := $(SDIR)/module_tamasis
 $(SDIR)/module_tamasis := $(SDIR)/module_precision
 $(SDIR)/module_wcs := $(SDIR)/module_fitstools $(SDIR)/module_math $(SDIR)/module_string $(SDIR)/module_tamasis $(SDIR)/module_wcslib
 
-.PHONY: core test-core clean-core distclean-core
-core: lib/libtamasiscore.so
+.PHONY: build/include core test-core clean-core distclean-core
+core: build/include lib/libtamasiscore.so
+
+build/include:
+	@if ! test -e build/include; then waf configure; fi
 
 lib/libtamasiscore.so: $(MODULESOURCES:.f=.o)
 	@if ! test -e lib; then mkdir lib; fi
@@ -48,7 +51,8 @@ test-core: $(TESTSOURCES:.f=)
 
 clean-core:
 	@find core \( -perm /u=x -and -type f -and -not -name "*py" \) -exec rm {} ';';\
-	find core \( -name '*.o' -or -name "*.mod" -or -name "*~" -or -name "*pyc" \) -exec rm {} ';'
+	find core \( -name '*.o' -or -name "*.mod" -or -name "*~" -or -name "*pyc" \) -exec rm {} ';';\
+	rm -rf build/include
 
 distclean-core: clean-core
 	@rm -f lib/libtamasiscore.so
