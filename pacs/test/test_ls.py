@@ -1,7 +1,9 @@
 from tamasis import *
 import numpy
+import os
 
-obs = PacsObservation(tamasis_dir+'pacs/test/data/frames_blue.fits', fine_sampling_factor=1)
+data_dir = os.path.dirname(__file__) + '/data/'
+obs = PacsObservation(data_dir+'frames_blue.fits', fine_sampling_factor=1)
 tod = obs.get_tod()
 
 telescope    = Identity('Telescope PSF')

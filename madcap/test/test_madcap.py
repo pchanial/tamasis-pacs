@@ -1,9 +1,10 @@
 import numpy
 import pyfits
+import os
 
 from tamasis import *
 
-path = tamasis_dir + 'madcap/test/data/madmap1/'
+path = os.path.dirname(__file__) + '/data/madmap1/'
 obs = MadMap1Observation(path+'todSpirePsw_be', path+'invnttSpirePsw_be', 
                          path+'madmapSpirePsw.fits[coverage]', 'big_endian',
                          135, missing_value=numpy.nan)

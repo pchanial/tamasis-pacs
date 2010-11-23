@@ -74,10 +74,10 @@ class _Pacs(Observation):
         """
         Read an inverse noise time-time correlation matrix from a calibration file, in PACS-DP format.
         """
-        ncorrelations, status = tmf.pacs_read_filter_calibration_ncorrelations(tamasis_dir, self.instrument.band)
+        ncorrelations, status = tmf.pacs_read_filter_calibration_ncorrelations(self.instrument.band)
         if status != 0: raise RuntimeError()
 
-        data, status = tmf.pacs_read_filter_calibration(tamasis_dir, self.instrument.band, ncorrelations, self.get_ndetectors(), numpy.asfortranarray(self.instrument.detector_mask, numpy.int8))
+        data, status = tmf.pacs_read_filter_calibration(self.instrument.band, ncorrelations, self.get_ndetectors(), numpy.asfortranarray(self.instrument.detector_mask, numpy.int8))
         if status != 0: raise RuntimeError()
 
         return data.T
@@ -159,7 +159,7 @@ class _Pacs(Observation):
         shape = (16,32) if band == 'red' else (32,64)
         if type(detector_mask) is str:
             if detector_mask == 'calibration':
-                detector_mask, status = tmf.pacs_info_detector_mask(tamasis_dir, band, shape[0], shape[1])
+                detector_mask, status = tmf.pacs_info_detector_mask(band, shape[0], shape[1])
                 if status != 0: raise RuntimeError()
                 detector_mask = numpy.ascontiguousarray(detector_mask, numpy.bool8)
             else:
@@ -272,7 +272,7 @@ class PacsObservation(_Pacs):
         unit = map(lambda x: x if x.find('/') != -1 else x + ' / detector', unit)
 
         # Store instrument information
-        detector_center, detector_corner, detector_area, distortion_yz, oflat, dflat, responsivity, status = tmf.pacs_info_instrument(tamasis_dir, band, numpy.asfortranarray(detector_mask, numpy.int8))
+        detector_center, detector_corner, detector_area, distortion_yz, oflat, dflat, responsivity, status = tmf.pacs_info_instrument(band, numpy.asfortranarray(detector_mask, numpy.int8))
         if status != 0: raise RuntimeError()
         self.instrument = Instrument('PACS/' + band.capitalize(), detector_mask)
         self.instrument.band = band
@@ -473,7 +473,7 @@ class PacsSimulation(_Pacs):
                                 policy_turnaround == 'remove' and self.pointing.info == Pointing.TURNAROUND
 
         # Store instrument information
-        detector_center, detector_corner, detector_area, distortion_yz, oflat, dflat, responsivity, status = tmf.pacs_info_instrument(tamasis_dir, band, numpy.asfortranarray(detector_mask, numpy.int8))
+        detector_center, detector_corner, detector_area, distortion_yz, oflat, dflat, responsivity, status = tmf.pacs_info_instrument(band, numpy.asfortranarray(detector_mask, numpy.int8))
         if status != 0: raise RuntimeError()
         self.instrument = Instrument('PACS/'+band.capitalize(),detector_mask)
         self.instrument.band = band

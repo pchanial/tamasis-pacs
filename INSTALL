@@ -5,7 +5,6 @@ o FFTW3 3.2.2
 o Fortran 2003 compiler
     - gfortran 4.5
     - or ifort 11.1
-o make 3.81
 o python 2.6
     - kapteyn 2.0.2 (http://www.astro.rug.nl/software/kapteyn/index.html)
     - matplotlib 0.99
@@ -20,3 +19,7 @@ Recommended packages:
 =====================
 o ipython
 o pyds9
+
+Installation:
+=============
+./waf configure build install --prefix=$HOME/mysoft

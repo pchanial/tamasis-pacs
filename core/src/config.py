@@ -1,8 +1,7 @@
 import os
 __verbose__ = False
-tamasis_dir = os.path.dirname(__file__) + '/../' if os.path.dirname(__file__) != '' else '../'
+tamasis_dir = os.path.abspath(os.path.dirname(__file__) + '/../../../../share/tamasis')
 del os
-
 __version_info__ = (1, 8, 0)
 __version__ = '.'.join((str(i) for i in __version_info__))
 

@@ -9,7 +9,7 @@ program test_ngc6946_bpj
     use module_preprocessor,    only : subtract_meandim1, divide_vectordim2
     use module_projection,      only : surface_convex_polygon
     use module_string,          only : strinteger
-    use module_tamasis,         only : init_tamasis, p, POLICY_KEEP, POLICY_MASK, POLICY_REMOVE
+    use module_tamasis,         only : p, POLICY_KEEP, POLICY_MASK, POLICY_REMOVE
     use module_wcs,             only : init_astrometry, ad2xy_gnomonic
     use omp_lib
     implicit none
@@ -36,9 +36,6 @@ program test_ngc6946_bpj
     logical*1, allocatable              :: detector_mask(:,:)
 
     call system_clock(count0, count_rate, count_max)
-
-    ! initialise tamasis
-    call init_tamasis
 
     ! initialise observation
     allocate (obs)

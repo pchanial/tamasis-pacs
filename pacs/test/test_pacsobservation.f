@@ -4,7 +4,7 @@ program test_pacsobservation
     use module_pacsobservation, only : MaskPolicy, PacsObservation
     use module_observation,     only : Pointing
     use module_string,          only : strsection
-    use module_tamasis,         only : init_tamasis, get_tamasis_path, p, POLICY_REMOVE
+    use module_tamasis,         only : p, POLICY_REMOVE
     implicit none
 
     class(PacsObservation), allocatable :: obs
@@ -20,66 +20,63 @@ program test_pacsobservation
     real(p)                :: signal_ref(360)
     logical*1              :: mask_ref(360)
  
-    ! initialise tamasis
-    call init_tamasis
-
     allocate (afilename(1))
     ! valid calls
     allocate(obs)
 
-    afilename(1) = get_tamasis_path() // filename
+    afilename(1) = filename
     call obs%init(afilename, policy, status)
     if (status /= 0) stop 'FAILED: init'
     call get_first_last(obs%slice(1)%p%removed, first, last)
     if (first /= 1 .or. last /= 360) stop 'FAILED: init1'
 
-    afilename(1) = get_tamasis_path() // filename // '[23:23]'
+    afilename(1) = filename // '[23:23]'
     call obs%init(afilename, policy, status)
     call get_first_last(obs%slice(1)%p%removed, first, last)
     if (status /= 0 .or. first /= 23 .or. last /= 23) stop 'FAILED: init2'
 
-    afilename(1) = get_tamasis_path() // filename // '[200:]'
+    afilename(1) = filename // '[200:]'
     call obs%init(afilename, policy, status)
     call get_first_last(obs%slice(1)%p%removed, first, last)
     if (status /= 0 .or. first /= 200 .or. last /= 360) stop 'FAILED: init3'
 
-    afilename(1) = get_tamasis_path() // filename // '[:130]'
+    afilename(1) = filename // '[:130]'
     call obs%init(afilename, policy, status)
     call get_first_last(obs%slice(1)%p%removed, first, last)
     if (status /= 0 .or. first /= 1 .or. last /= 130) stop 'FAILED: init4'
 
-    afilename(1) = get_tamasis_path() // filename // '[:]'
+    afilename(1) = filename // '[:]'
     call obs%init(afilename, policy, status)
     call get_first_last(obs%slice(1)%p%removed, first, last)
     if (status /= 0 .or. first /= 1 .or. last /= 360) stop 'FAILED: init5'
 
-    afilename(1) = get_tamasis_path() // filename // '[]'
+    afilename(1) = filename // '[]'
     call obs%init(afilename, policy, status)
     call get_first_last(obs%slice(1)%p%removed, first, last)
     if (status /= 0 .or. first /= 1 .or. last /= 360) stop 'FAILED: init6'
    
     ! invalid calls
-    afilename(1) = get_tamasis_path() // filename // '[32:23]'
+    afilename(1) = filename // '[32:23]'
     call obs%init(afilename, policy, status)
     if (status == 0) stop 'FAILED: badinit1'
 
-    afilename(1) = get_tamasis_path() // filename // '[32:361]'
+    afilename(1) = filename // '[32:361]'
     call obs%init(afilename, policy, status)
     if (status == 0) stop 'FAILED: badinit2'
 
-    afilename(1) = get_tamasis_path() // filename // '[ljdf]'
+    afilename(1) = filename // '[ljdf]'
     call obs%init(afilename, policy, status)
     if (status == 0) stop 'FAILED: badinit4'
 
-    afilename(1) = get_tamasis_path() // filename // '[:l+]'
+    afilename(1) = filename // '[:l+]'
     call obs%init(afilename, policy, status)
     if (status == 0) stop 'FAILED: badinit5'
     deallocate (afilename)
 
     ! array
     allocate(afilename(2))
-    afilename(1) = get_tamasis_path() // filename // '[3:100]'
-    afilename(2) = get_tamasis_path() // filename // '[201:300]'
+    afilename(1) = filename // '[3:100]'
+    afilename(2) = filename // '[201:300]'
     call obs%init(afilename, policy, status)
     if (status /= 0 .or. sum(obs%slice%nsamples) /= 360*2 .or. &
          count(.not. obs%slice(1)%p%removed) + count(.not. obs%slice(2)%p%removed) /= 198) stop 'FAILED:ainit1'
@@ -96,7 +93,7 @@ program test_pacsobservation
 
     ! test reading observation
     allocate (afilename(1))
-    afilename(1) = get_tamasis_path() // filename
+    afilename(1) = filename
     call obs%init(afilename, policy, status)
     if (status /= 0) stop 'FAILED: init_pacsobservation loop'
     if (obs%band /= 'blue' .or. obs%slice(1)%observing_mode /= 'prime') stop 'FAILED: obs%init'

@@ -201,29 +201,23 @@ end subroutine pacs_info_observation
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine pacs_info_detector_mask(tamasis_dir, band, nrows, ncolumns, detector_mask, status)
+subroutine pacs_info_detector_mask(band, nrows, ncolumns, detector_mask, status)
 
     use iso_fortran_env,       only : ERROR_UNIT
     use module_pacsinstrument, only : read_detector_mask
-    use module_tamasis,        only : init_tamasis
 
     !f2py threadsafe
-    !f2py intent(in)             :: tamasis_dir
     !f2py intent(in)             :: band
     !f2py intent(in)             :: nrows, ncolumns
     !f2py intent(out)            :: detector_mask
     !f2py intent(out)            :: status
 
-    character(len=*), intent(in) :: tamasis_dir
     character(len=*), intent(in) :: band
     integer, intent(in)          :: nrows, ncolumns
     logical*1, intent(out)       :: detector_mask(nrows,ncolumns)
     integer, intent(out)         :: status
 
     logical*1, allocatable       :: tmp(:,:)
-
-    ! initialise tamasis
-    call init_tamasis(tamasis_dir)
 
     ! read calibration file
     call read_detector_mask(band, tmp, status)
@@ -238,15 +232,14 @@ end subroutine pacs_info_detector_mask
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine pacs_info_instrument(tamasis_dir, band, detector_mask, nrows, ncolumns, detector_center, detector_corner, detector_area,&
+subroutine pacs_info_instrument(band, detector_mask, nrows, ncolumns, detector_center, detector_corner, detector_area,&
                                 distortion_yz, flatfield_optical, flatfield_detector, responsivity, status)
 
     use module_pacsinstrument, only : read_calibration_files
-    use module_tamasis,        only : init_tamasis, p
+    use module_tamasis,        only : p
     implicit none
 
     !f2py threadsafe
-    !f2py intent(in)             :: tamasis_dir
     !f2py intent(in)             :: band
     !f2py intent(in)             :: detector_mask
     !f2py intent(hide)           :: nrows = shape(detector_mask,0)
@@ -260,7 +253,6 @@ subroutine pacs_info_instrument(tamasis_dir, band, detector_mask, nrows, ncolumn
     !f2py intent(out)            :: responsivity
     !f2py intent(out)            :: status
 
-    character(len=*), intent(in) :: tamasis_dir
     character(len=*), intent(in) :: band
     logical*1, intent(in)        :: detector_mask(nrows,ncolumns)
     integer, intent(in)          :: nrows, ncolumns
@@ -278,9 +270,6 @@ subroutine pacs_info_instrument(tamasis_dir, band, detector_mask, nrows, ncolumn
     real(p), allocatable :: detector_area_all(:,:)
     real(p), allocatable :: flatfield_optical_all(:,:)
     real(p), allocatable :: flatfield_detector_all(:,:)
-
-    ! initialise tamasis
-    call init_tamasis(tamasis_dir)
 
     ! read calibration files
     call read_calibration_files(band, detector_mask, detector_center_all, detector_corner_all, detector_area_all,                  &
@@ -300,23 +289,19 @@ end subroutine pacs_info_instrument
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine pacs_read_filter_calibration_ncorrelations(tamasis_dir, band, ncorrelations, status)
+subroutine pacs_read_filter_calibration_ncorrelations(band, ncorrelations, status)
 
     use module_pacsinstrument, only : read_filter_calibration_ncorrelations
-    use module_tamasis,        only : init_tamasis
     implicit none
 
-    !f2py intent(in)             :: tamasis_dir
     !f2py intent(in)             :: band
     !f2py intent(out)            :: ncorrelations
     !f2py intent(out)            :: status
     
-    character(len=*), intent(in) :: tamasis_dir
     character(len=*), intent(in) :: band
     integer, intent(out)         :: ncorrelations
     integer, intent(out)         :: status
     
-    call init_tamasis(tamasis_dir)
     ncorrelations = read_filter_calibration_ncorrelations(band, status)
 
 end subroutine pacs_read_filter_calibration_ncorrelations
@@ -325,16 +310,15 @@ end subroutine pacs_read_filter_calibration_ncorrelations
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine pacs_read_filter_calibration(tamasis_dir, band, ncorrelations, ndetectors, mask, nrows, ncolumns, data, status)
+subroutine pacs_read_filter_calibration(band, ncorrelations, ndetectors, mask, nrows, ncolumns, data, status)
 
     use iso_fortran_env,       only : ERROR_UNIT
     use module_filtering,      only : FilterUncorrelated
     use module_pacsinstrument, only : read_filter_calibration
-    use module_tamasis,        only : init_tamasis, p
+    use module_tamasis,        only : p
     implicit none
 
     !f2py threadsafe
-    !f2py intent(in)             :: tamasis_dir
     !f2py intent(in)             :: band
     !f2py intent(in)             :: ncorrelations
     !f2py intent(in)             :: ndetectors
@@ -344,7 +328,6 @@ subroutine pacs_read_filter_calibration(tamasis_dir, band, ncorrelations, ndetec
     !f2py intent(out)            :: data
     !f2py intent(out)            :: status
 
-    character(len=*), intent(in) :: tamasis_dir
     character(len=*), intent(in) :: band
     integer, intent(in)          :: ncorrelations
     integer, intent(in)          :: ndetectors
@@ -356,7 +339,6 @@ subroutine pacs_read_filter_calibration(tamasis_dir, band, ncorrelations, ndetec
 
     type(FilterUncorrelated)     :: filter
 
-    call init_tamasis(tamasis_dir)
     call read_filter_calibration(band, mask, filter, status)
     if (status /= 0) return
 
@@ -582,7 +564,7 @@ subroutine pacs_pointing_matrix(band, nslices, nvalids, npointings, nsamples_tot
     use module_pacsinstrument,  only : PacsInstrument, NDIMS, NVERTICES, NEAREST_NEIGHBOUR, SHARP_EDGES
     use module_pacsobservation, only : PacsObservation, MaskPolicy
     use module_pointingmatrix,  only : PointingElement
-    use module_tamasis,         only : p, init_tamasis
+    use module_tamasis,         only : p
     implicit none
 
     !f2py threadsafe

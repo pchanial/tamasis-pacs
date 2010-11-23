@@ -5,7 +5,7 @@ program test_pacsinstrument
     use module_pacsinstrument
     use module_pacsobservation, only : PacsObservation, MaskPolicy
     use module_string,          only : strreal
-    use module_tamasis,         only : init_tamasis, p, POLICY_KEEP, POLICY_MASK, POLICY_REMOVE
+    use module_tamasis,         only : p, POLICY_KEEP, POLICY_MASK, POLICY_REMOVE
     use module_wcs,             only : init_astrometry, ad2xy_gnomonic
     implicit none
 
@@ -33,9 +33,6 @@ program test_pacsinstrument
 
     real(p), allocatable :: a_vect(:), d_vect(:), ad_vect(:,:)
     integer              :: n
-
-    ! initialise tamasis
-    call init_tamasis
 
     ! initialise observation
     allocate(obs)

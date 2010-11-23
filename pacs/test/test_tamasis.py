@@ -1,12 +1,13 @@
 import numpy
 import pyfits
+import os
 
 from tamasis import *
 
 class TestFailure(Exception): pass
 
-datadir = tamasis_dir + 'pacs/test/data/'
-obs = PacsObservation(datadir+'frames_blue.fits', fine_sampling_factor=1)
+data_dir = os.path.dirname(__file__) + '/data/'
+obs = PacsObservation(data_dir+'frames_blue.fits', fine_sampling_factor=1)
 
 tod = obs.get_tod()
 
@@ -41,7 +42,7 @@ if any_neq(map_naive, map_naive3, 1.e-7): raise TestFailure('mapper_naive, with 
 # test compatibility with photproject
 tod = obs.get_tod('Jy/arcsec^2', flatfielding=False, subtraction_mean=False)
 map_naive4 = mapper_naive(tod, projection, unit='Jy/pixel')
-hdu_ref = pyfits.open(datadir + 'frames_blue_map_hcss_photproject.fits')[1]
+hdu_ref = pyfits.open(data_dir + 'frames_blue_map_hcss_photproject.fits')[1]
 map_ref = Map(hdu_ref.data, hdu_ref.header, unit=hdu_ref.header['qtty____']+'/pixel')
 std_naive = numpy.std(map_naive4[40:60,40:60])
 std_ref = numpy.std(map_ref[40:60,40:60])

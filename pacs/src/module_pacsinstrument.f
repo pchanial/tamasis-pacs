@@ -9,7 +9,7 @@ module module_pacsinstrument
     use module_pointingmatrix,  only : PointingElement, xy2pmatrix, xy2roi, roi2pmatrix
     use module_projection,      only : convex_hull, surface_convex_polygon
     use module_string,          only : strinteger
-    use module_tamasis,         only : get_tamasis_path, tamasis_path_len, p, POLICY_KEEP, POLICY_MASK, POLICY_REMOVE
+    use module_tamasis,         only : tamasis_dir, p, POLICY_KEEP, POLICY_MASK, POLICY_REMOVE
     use module_wcs,             only : init_astrometry, ad2xy_gnomonic, ad2xy_gnomonic_vect, ad2xys_gnomonic, refpix_area
     use omp_lib
     implicit none
@@ -482,10 +482,10 @@ contains
 
     function get_calfile(filename)
 
-        character(len=*), intent(in)                     :: filename
-        character(len=tamasis_path_len+10+len(filename)) :: get_calfile
+        character(len=*), intent(in)                    :: filename
+        character(len=len(tamasis_dir)+6+len(filename)) :: get_calfile
 
-        get_calfile = get_tamasis_path() // 'pacs/data/' // filename
+        get_calfile = tamasis_dir // '/pacs/' // filename
 
     end function get_calfile
 

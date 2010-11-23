@@ -1,11 +1,12 @@
 from tamasis import *
 import numpy
 import scipy
+import os
 from scipy.sparse import dia_matrix
 from scipy.sparse.linalg import LinearOperator, cgs
 
-obs = PacsObservation(filename=tamasis_dir+'pacs/test/data/frames_blue.fits',
-                       fine_sampling_factor=1)
+data_dir = os.path.dirname(__file__) + '/data/'
+obs = PacsObservation(filename=data_dir+'frames_blue.fits', fine_sampling_factor=1)
 
 tod = obs.get_tod()
 
