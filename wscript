@@ -67,7 +67,8 @@ def configure(conf):
         conf.env.LIB_OPENMP = ['gomp']
         conf.env.F2PYFCOMPILER = 'gnu95'
     elif conf.env.FC_NAME == 'IFORT':
-        conf.env.FCFLAGS = ['-warn', 'all', '-fpp', '-fPIC', '-free', '-openmp', '-ftz', '-fp-model', 'precise', '-ftrapuv']
+        # '-warn all' removed because of internal compilation error
+        conf.env.FCFLAGS = ['-fpp', '-fPIC', '-free', '-openmp', '-ftz', '-fp-model', 'precise', '-ftrapuv']
         conf.env.FCFLAGS += ['-debug', '-check', 'all', '-traceback'] if conf.options.debug else ['-fast']
         conf.env.LIB_OPENMP = ['iomp5']
         conf.env.F2PYFCOMPILER = 'intelem'
