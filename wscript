@@ -30,6 +30,7 @@ required_modules = ['numpy',
                     'mpi4py']
 
 
+
 #
 # Read options
 #
@@ -49,6 +50,8 @@ def options(opt):
                    default=False,
                    help='use compiler flags for debugging (export symbols, add checks...)')
 
+
+
 #
 # Configuration
 #
@@ -64,14 +67,10 @@ def configure(conf):
         conf.env.LIB_OPENMP = ['gomp']
         conf.env.F2PYFCOMPILER = 'gnu95'
     elif conf.env.FC_NAME == 'IFORT':
-        conf.env.FCFLAGS = ['-warn all', '-fpp', '-fPIC', '-free', '-openmp', '-ftz', '-fp-model precise', '-ftrapuv']
-        conf.env.FCFLAGS = ['-debug', '-check all', '-traceback'] if conf.options.debug else ['-fast']
+        conf.env.FCFLAGS = ['-warn', 'all', '-fpp', '-fPIC', '-free', '-openmp', '-ftz', '-fp-model', 'precise', '-ftrapuv']
+        conf.env.FCFLAGS += ['-debug', '-check', 'all', '-traceback'] if conf.options.debug else ['-fast']
         conf.env.LIB_OPENMP = ['iomp5']
         conf.env.F2PYFCOMPILER = 'intelem'
-
-    # these two environment variables are required by pkg-config
-    os.putenv('PKG_CONFIG_ALLOW_SYSTEM_CFLAGS', '1')
-    os.putenv('PKG_CONFIG_ALLOW_SYSTEM_LIBS',   '1')
 
     conf.check_python_version((2,6))
     for module in required_modules:
@@ -98,6 +97,9 @@ end program test""",
     except conf.errors.ConfigurationError:
         conf.find_program('f2py', var='F2PY')
         
+    # these two environment variables are required by pkg-config
+    os.putenv('PKG_CONFIG_ALLOW_SYSTEM_CFLAGS', '1')
+    os.putenv('PKG_CONFIG_ALLOW_SYSTEM_LIBS',   '1')
     conf.check_cfg(package='cfitsio', args=['--libs', '--cflags'])
     conf.check_cfg(package='fftw3',   args=['--libs', '--cflags'])
     conf.check_cfg(package='wcslib',  args=['--libs', '--cflags'])
@@ -120,8 +122,6 @@ end program test""",
     ctype = {'4':'float', '8':'double', '16':'long_double'}
     os.system("echo {\\'real\\':{\\'p\\':\\'" + ctype[conf.options.precision_real] +              \
               "\\'}} > %s/.f2py_f2cmap" % out)
-
-    print conf.env
 
 
 
@@ -148,6 +148,7 @@ def build(bld):
     #XXX this should be a Task...
     cmd = '${F2PY} --fcompiler=${F2PYFCOMPILER} --f90exec=${FC}'
     cmd += ' --f90flags="${FCFLAGS}"'
+    cmd += ' --quiet' if bld.options.verbose == 0 else ''
     cmd += ' -DF2PY_REPORT_ON_ARRAY_COPY=1'
     cmd += ' -m tamasisfortran -c ' + string.join(map(str, [s.abspath() for s in source]))
     cmd += ' ' + string.join([bld.env.fcstlib_PATTERN%('tamasis'+s) for s in reversed(subdirs)])
@@ -167,6 +168,7 @@ def build(bld):
         datanode = bld.srcnode.find_node(subdir+'/data')
         if datanode is not None:
             bld.install_files('${SHAREDIR}/tamasis/'+subdir, datanode.ant_glob('*'))
+
 
         
 #
@@ -239,6 +241,7 @@ def _test_python_fun(bld):
             bld.add_group()
 
 
+
 #
 # loc, loc-fortran, loc-python
 #
@@ -262,6 +265,7 @@ class loc_python(Context):
 
 def loc_python_fun(ctx):
     os.system('find . \( -name ".waf*" -prune -or -name build -prune -name .git -prune -or -name include -prune -or -name "*py" \) -and -not -type l -and -not -type d | xargs cat | wc -l')
+
 
 
 #
