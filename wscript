@@ -81,6 +81,7 @@ def configure(conf):
     conf.check_fortran_clib()
     conf.check_fortran_dummy_main()
     conf.check_fortran_mangling()
+
     if conf.options.precision_real == '16':
         conf.check_cc(
             fragment         = """
@@ -91,7 +92,12 @@ end program test""",
             compile_filename = 'test.f',
             features         = 'fc fcprogram',
             msg              = 'Checking for quadruple precision')
-    conf.find_program('f2py' + sys.version[0:3], var='F2PY')
+
+    try:
+        conf.find_program('f2py' + sys.version[0:3], var='F2PY')
+    except conf.errors.ConfigurationError:
+        conf.find_program('f2py', var='F2PY')
+        
     conf.check_cfg(package='cfitsio', args=['--libs', '--cflags'])
     conf.check_cfg(package='fftw3',   args=['--libs', '--cflags'])
     conf.check_cfg(package='wcslib',  args=['--libs', '--cflags'])
