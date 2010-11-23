@@ -1,8 +1,9 @@
 import numpy
 
 from tamasis.config import get_default_dtype_float
-from tamasis.core import *
 from tamasis.numpyutils import _my_isscalar
+from tamasis.unit import Quantity
+from tamasis.datatypes import Map, Tod
 
 __all__ = ['Observation', 'Instrument', 'FlatField', 'MaskPolicy', 'Pointing']
 

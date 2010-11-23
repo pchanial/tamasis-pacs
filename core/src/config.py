@@ -2,7 +2,7 @@ import os
 __verbose__ = False
 tamasis_dir = os.path.abspath(os.path.dirname(__file__) + '/../../../../share/tamasis')
 del os
-__version_info__ = (1, 8, 0)
+__version_info__ = (1, 9, 0)
 __version__ = '.'.join((str(i) for i in __version_info__))
 
 __all__ = [ 'get_default_dtype', 'get_default_dtype_complex', 'get_default_dtype_float', 'tamasis_dir', '__verbose__', 
