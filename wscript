@@ -105,6 +105,8 @@ end program test""",
     conf.check_cfg(package='cfitsio', args=['--libs', '--cflags'])
     conf.check_cfg(package='fftw3',   args=['--libs', '--cflags'])
     conf.check_cfg(package='wcslib',  args=['--libs', '--cflags'])
+    conf.check_cfg(modversion='wcslib')
+    check_wcslib_external(conf.env)
 
     conf.env.SHAREDIR = os.path.abspath(conf.env.PYTHONDIR + '/../../../share')
     conf.define(conf.env.FC_NAME, 1)
@@ -183,22 +185,14 @@ class test(BuildContext):
     fun = 'test_fun'
 
 def test_fun(ctx):
-    Options.commands = ['build', 'install', '_test-fortran', '_test-python'] + Options.commands
+    Options.commands = ['test-fortran', 'test-python'] + Options.commands
 
 class test_fortran(BuildContext):
     """run Fortran test suite"""
     cmd = 'test-fortran'
     fun = 'test_fortran_fun'
 
-def test_fortran_fun(ctx):
-    Options.commands = ['build', 'install', '_test-fortran'] + Options.commands
-
-class _test_fortran(BuildContext):
-    """(internal)"""
-    cmd = '_test-fortran'
-    fun = '_test_fortran_fun'
-
-def _test_fortran_fun(bld):
+def test_fortran_fun(bld):
     for subdir in subdirs:
         files = bld.srcnode.ant_glob(subdir+'/test/test_*.f')
         for file in files:
@@ -226,15 +220,7 @@ class test_python(BuildContext):
     cmd = 'test-python'
     fun = 'test_python_fun'
 
-def test_python_fun(ctx):
-    Options.commands = ['build', 'install', '_test-python'] + Options.commands
-
-class _test_python(BuildContext):
-    """(internal)"""
-    cmd = '_test-python'
-    fun = '_test_python_fun'
-
-def _test_python_fun(bld):
+def test_python_fun(bld):
     for subdir in subdirs:
         files = bld.path.ant_glob(subdir+'/test/test_*.py')
         for file in files:
@@ -289,3 +275,10 @@ def f77_to_f90(source, target):
             f90content.append(l)
         with open(f90name, 'w') as f90:
             f90.writelines(f90content)
+
+def check_wcslib_external(env):
+    wme = 'WCSLIB_MISSING_EXTERNAL'
+    i = next((i for i in range(len(env.DEFINES)) if env.DEFINES[i].startswith('WCSLIB_VERSION')))
+    version = env.DEFINES[i].split('=')[1]
+    env.DEFINES[i] = wme + '=' + str(int(version < '4.5'))
+    env.define_key[i] = wme

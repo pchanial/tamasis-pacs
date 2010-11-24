@@ -1,4 +1,4 @@
-! interface to WCSLIB 4.4
+! interface to WCSLIB
 module module_wcslib
 
     use, intrinsic :: ISO_C_BINDING
@@ -10,7 +10,9 @@ module module_wcslib
     include 'wcsfix.inc'
     include 'wcshdr.inc'
 
+#if WCSLIB_MISSING_EXTERNAL
     external wcss2p, wcspih, wcsvcopy, wcsput, wcscopy, wcsfree, wcsvfree, wcsfix, wcsset
+#endif
 
     ! routines from cel.inc
 !!$    interface
