@@ -61,6 +61,16 @@ def configure(conf):
     conf.load('compiler_c')
     conf.load('compiler_fc')
     conf.load('python')
+
+    conf.check_python_version((2,6))
+    for module in required_modules:
+        conf.check_python_module(module)
+    conf.check_fortran()
+    conf.check_fortran_verbose_flag()
+    conf.check_fortran_clib()
+    conf.check_fortran_dummy_main()
+    conf.check_fortran_mangling()
+
     if conf.env.FC_NAME == 'GFORTRAN':
         conf.env.FCFLAGS = ['-ffree-form', '-fopenmp', '-Wall', '-fPIC', '-cpp']
         conf.env.FCFLAGS += ['-O0', '-g', '-fcheck=all', '-fbacktrace'] if conf.options.debug else ['-O3']
@@ -72,15 +82,6 @@ def configure(conf):
         conf.env.FCFLAGS += ['-debug', '-check', 'all', '-traceback'] if conf.options.debug else ['-fast']
         conf.env.LIB_OPENMP = ['iomp5']
         conf.env.F2PYFCOMPILER = 'intelem'
-
-    conf.check_python_version((2,6))
-    for module in required_modules:
-        conf.check_python_module(module)
-    conf.check_fortran()
-    conf.check_fortran_verbose_flag()
-    conf.check_fortran_clib()
-    conf.check_fortran_dummy_main()
-    conf.check_fortran_mangling()
 
     if conf.options.precision_real == '16':
         conf.check_cc(
