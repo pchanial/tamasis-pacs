@@ -48,5 +48,4 @@ for field in fields:
     if getattr(simul.slice[0], field) != getattr(simul2.slice[0], field):
         ok = False
         print("Field '" + field + "' is wrong.")
-if not ok: raise TestFailure()
 

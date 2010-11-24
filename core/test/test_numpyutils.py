@@ -17,5 +17,3 @@ if any_neq(NaN, NaN): raise TestFailure()
 if any_neq([NaN], [NaN]): raise TestFailure()
 if any_neq([NaN,1], [NaN,1]): raise TestFailure()
 if not any_neq([NaN,1,NaN], [NaN,1,3]): raise TestFailure()
-
-print 'OK.'

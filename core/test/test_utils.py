@@ -23,5 +23,3 @@ d1 = distance((2,3), origin=origin, resolution = (1.,2.))
 d2 = _distance_slow((2,3), origin, [1.,2.], None)
 if any_neq(d0, d1): raise TestFailure()
 if any_neq(d0, d2): raise TestFailure()
-
-print 'OK.'

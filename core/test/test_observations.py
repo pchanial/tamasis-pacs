@@ -16,5 +16,3 @@ try:
     junk = MaskPolicy(flags[0:2], bad_policy)
 except KeyError:
     pass
-
-print 'OK.'

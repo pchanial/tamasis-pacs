@@ -260,6 +260,3 @@ a = Masking([True, False])
 if a.dtype.type is not numpy.float64: raise TestFailure()
 a = Masking(numpy.array([0,1,0], dtype='int8'))
 if a.dtype.type is not numpy.float64: raise TestFailure()
-
-print 'OK.'
-

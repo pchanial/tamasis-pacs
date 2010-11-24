@@ -3,6 +3,11 @@ from tamasis import *
 
 class TestFailure(Exception): pass
 
+def testFailure(minver=None):
+    if minver is not None:
+        if numpy.__version__ < minver: pass
+    raise TestFailure()
+
 #test scalar, array and slices
 na = numpy.array
 
@@ -118,14 +123,14 @@ except UnitError:
     pass
 
 # test __array_prepare__
-if Quantity(10, 'm') >  Quantity(1,'km')  : raise TestFailure()
-if Quantity(10, 'm') >= Quantity(1,'km')  : raise TestFailure()
-if Quantity(1, 'km') <  Quantity(10,'m')  : raise TestFailure()
-if Quantity(1, 'km') <= Quantity(10,'m')  : raise TestFailure()
-if Quantity(1, 'km') == Quantity(1,'m')   : raise TestFailure()
-if Quantity(1, 'km') != Quantity(1000,'m'): raise TestFailure()
-if numpy.maximum(Quantity(10,'m'),Quantity(1,'km')) != 1000: raise TestFailure()
-if numpy.minimum(Quantity(10,'m'),Quantity(1,'km')) != 10  : raise TestFailure()
+if Quantity(10, 'm') >  Quantity(1,'km')  : testFailure(minver='1.4')
+if Quantity(10, 'm') >= Quantity(1,'km')  : testFailure(minver='1.4')
+if Quantity(1, 'km') <  Quantity(10,'m')  : testFailure(minver='1.4')
+if Quantity(1, 'km') <= Quantity(10,'m')  : testFailure(minver='1.4')
+if Quantity(1, 'km') == Quantity(1,'m')   : testFailure(minver='1.4')
+if Quantity(1, 'km') != Quantity(1000,'m'): testFailure(minver='1.4')
+if numpy.maximum(Quantity(10,'m'),Quantity(1,'km')) != 1000: testFailure(minver='1.4')
+if numpy.minimum(Quantity(10,'m'),Quantity(1,'km')) != 10  : testFailure(minver='1.4')
 
 # test constructor
 a = numpy.array([10,20])
@@ -189,5 +194,3 @@ if Quantity(1., dtype=numpy.complex256).dtype.type is not numpy.complex256: rais
 if Quantity(numpy.array(complex(1,0))).dtype is not get_default_dtype_complex(): raise TestFailure()
 if Quantity(numpy.array(numpy.complex64(1.))).dtype is not get_default_dtype_complex(): raise TestFailure()
 if Quantity(numpy.array(numpy.complex128(1.))).dtype is not get_default_dtype_complex(): raise TestFailure()
-
-print 'OK.'

@@ -48,5 +48,3 @@ std_naive = numpy.std(map_naive4[40:60,40:60])
 std_ref = numpy.std(map_ref[40:60,40:60])
 relerror = abs(std_naive-std_ref) / std_ref
 if relerror > 0.025: raise TestFailure('Tncompatibility with HCSS photproject: ' + str(relerror*100)+'%.')
-
-print 'OK.'

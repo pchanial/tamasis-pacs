@@ -37,5 +37,3 @@ M = packing(1/map_naive.coverage)
 M[numpy.isfinite(M) == False] = numpy.max(M[numpy.isfinite(M)])
 M = M.reshape(numpy.product(M.shape))
 map_rlsw2 = packing.T(mapper_rls(tod, projection, padding.T * fft.T * invNtt * fft * padding, hyper=0, tol=1.e-5, M=M))
-
-print 'OK.'

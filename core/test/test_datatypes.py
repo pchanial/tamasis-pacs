@@ -202,4 +202,3 @@ b = Tod(filename+'_tod.fits')
 if numpy.any(a != b) or numpy.any(a.mask != b.mask) or a.nsamples != b.nsamples: raise TestFailure()
 
 test_cleanup()
-print 'OK.'
