@@ -278,7 +278,7 @@ def f77_to_f90(source, target):
 
 def check_wcslib_external(env):
     wme = 'WCSLIB_MISSING_EXTERNAL'
-    i = next((i for i in range(len(env.DEFINES)) if env.DEFINES[i].startswith('WCSLIB_VERSION')))
+    i = (i for i in range(len(env.DEFINES)) if env.DEFINES[i].startswith('WCSLIB_VERSION')).next()
     version = env.DEFINES[i].split('=')[1]
     env.DEFINES[i] = wme + '=' + str(int(version < '4.5'))
     env.define_key[i] = wme
