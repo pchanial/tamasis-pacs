@@ -3,10 +3,8 @@ from tamasis import *
 
 class TestFailure(Exception): pass
 
-def testFailure(minver=None):
-    if minver is not None:
-        if numpy.__version__ < minver: pass
-    raise TestFailure()
+def testFailure():
+    if numpy.__version__ >= '1.4': raise TestFailure()
 
 #test scalar, array and slices
 na = numpy.array
@@ -30,17 +28,18 @@ test_unit_add(q, q2, 2, {'m':1.0})
 test_unit_add(q, a, 2, {'m':1.0})
 test_unit_add(q, i, 2, {'m':1.0})
 
-q = Quantity(1.)
-q2 = Quantity(1., 'km')
-test_unit_add(q, q2, 2, {'km':1.0})
+if numpy.__version__ >= '1.4':
+    q = Quantity(1.)
+    q2 = Quantity(1., 'km')
+    test_unit_add(q, q2, 2, {'km':1.0})
 
-q = Quantity(1., 'm')
-q2 = Quantity(1., 'km')
-test_unit_add(q, q2, 1001, {'m':1.0})
+    q = Quantity(1., 'm')
+    q2 = Quantity(1., 'km')
+    test_unit_add(q, q2, 1001, {'m':1.0})
 
-q = Quantity(1., 'km')
-q2 = Quantity(1., 'm')
-test_unit_add(q, q2, 1.001, {'km':1.0})
+    q = Quantity(1., 'km')
+    q2 = Quantity(1., 'm')
+    test_unit_add(q, q2, 1.001, {'km':1.0})
 
 q = Quantity(1.)
 a = numpy.array(1.)
@@ -62,6 +61,11 @@ except UnitError:
 # SUB
 
 def test_unit_sub(x, y, v, u):
+    if numpy.__version__ < '1.4':
+        if getattr(x, '_unit', None) is not None and getattr(y, '_unit', None) is not None:
+            if x._unit != y._unit:
+                print 'Disabling operation on Quantities for Numpy < 1.4'
+                return
     c = x - y
     if not isinstance(c, Quantity): raise TestFailure(str(c))
     if na(c) != v: raise TestFailure(str(c))
@@ -123,14 +127,14 @@ except UnitError:
     pass
 
 # test __array_prepare__
-if Quantity(10, 'm') >  Quantity(1,'km')  : testFailure(minver='1.4')
-if Quantity(10, 'm') >= Quantity(1,'km')  : testFailure(minver='1.4')
-if Quantity(1, 'km') <  Quantity(10,'m')  : testFailure(minver='1.4')
-if Quantity(1, 'km') <= Quantity(10,'m')  : testFailure(minver='1.4')
-if Quantity(1, 'km') == Quantity(1,'m')   : testFailure(minver='1.4')
-if Quantity(1, 'km') != Quantity(1000,'m'): testFailure(minver='1.4')
-if numpy.maximum(Quantity(10,'m'),Quantity(1,'km')) != 1000: testFailure(minver='1.4')
-if numpy.minimum(Quantity(10,'m'),Quantity(1,'km')) != 10  : testFailure(minver='1.4')
+if Quantity(10, 'm') >  Quantity(1,'km')  : testFailure()
+if Quantity(10, 'm') >= Quantity(1,'km')  : testFailure()
+if Quantity(1, 'km') <  Quantity(10,'m')  : testFailure()
+if Quantity(1, 'km') <= Quantity(10,'m')  : testFailure()
+if Quantity(1, 'km') == Quantity(1,'m')   : testFailure()
+if Quantity(1, 'km') != Quantity(1000,'m'): testFailure()
+if numpy.maximum(Quantity(10,'m'),Quantity(1,'km')) != 1000: testFailure()
+if numpy.minimum(Quantity(10,'m'),Quantity(1,'km')) != 10  : testFailure()
 
 # test constructor
 a = numpy.array([10,20])
