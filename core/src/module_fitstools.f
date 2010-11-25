@@ -2011,7 +2011,7 @@ contains
         if (present(found)) found = found_
         if (status /= 0 .or. .not. found_) return
 
-        read (charvalue,'(bn,f'//strinteger(FLEN_VALUE)//'.0)',iostat=status) value
+        read (charvalue,*,iostat=status) value
         if (status /= 0) then
             status = 409
             write (ERROR_UNIT,'(a)') "ft_read_keyword: invalid real value '" // trim(charvalue) //                 &
@@ -2218,7 +2218,7 @@ contains
 
         logical                     :: found_, junk
         character(len=FLEN_COMMENT) :: comment_
-        
+
         status = 0
         call ftgkyd(unit, keyword, value, comment_, status)
         found_ = status == 0
