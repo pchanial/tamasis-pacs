@@ -56,7 +56,8 @@ map_naive40Hz = mapper_naive(tod40Hz, model40Hz)
 
 if do_plot:
     map_naive40Hz.imshow()
-    clim(-0.00002,0.00002)
+    # clim doesn't work anymore with AnnotatedImage
+    #clim(-0.00002,0.00002)
 
 # compressed TOD
 tod = compression.direct(tod40Hz).copy()
