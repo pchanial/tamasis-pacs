@@ -90,8 +90,8 @@ def configure(conf):
         conf.check_cc(
             fragment         = """
 program test
-   integer, parameter :: qp = selected_real_kind(2*precision(1.0d0))
-   real(kind=qp)      :: quad
+    integer, parameter :: qp = selected_real_kind(2*precision(1.0d0))
+    real(kind=qp)      :: quad
 end program test""",
             compile_filename = 'test.f',
             features         = 'fc fcprogram',
@@ -110,6 +110,20 @@ end program test""",
     os.putenv('PKG_CONFIG_ALLOW_SYSTEM_LIBS',   '1')
     conf.check_cfg(package='cfitsio', args=['--libs', '--cflags'])
     conf.check_cfg(package='fftw3',   args=['--libs', '--cflags'])
+    conf.check_cc(
+        fragment         = """
+program test
+    include 'fftw3.f'
+    integer, parameter :: dp = kind(1.d0)
+    integer*8          :: plan
+    real(dp)           :: in(10), out(10)
+    call dfftw_plan_r2r_1d(plan, 10, in, out, FFTW_R2HC, FFTW_ESTIMATE)
+    call dfftw_destroy_plan(plan)
+end program test""",
+        compile_filename = 'test.f',
+        features         = 'fc fcprogram',
+        msg              = "Checking for 'fftw3' double precision",
+        use='FFTW3')
     conf.check_cfg(package='wcslib',  args=['--libs', '--cflags'])
     conf.check_cfg(modversion='wcslib')
     check_wcslib_external(conf.env)
