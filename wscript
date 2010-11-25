@@ -10,6 +10,9 @@ from waflib.Build import BuildContext
 from waflib.Configure import conf
 from waflib.Context import Context
 
+APPNAME = 'tamasis'
+VERSION = '1.9.0'
+
 top = '.'
 out = 'build'
 
@@ -110,7 +113,8 @@ end program test""",
 
     conf.env.SHAREDIR = os.path.abspath(conf.env.PYTHONDIR + '/../../../share')
     conf.define(conf.env.FC_NAME, 1)
-    conf.define('TAMASISDIR', os.path.join(conf.env.SHAREDIR, 'tamasis'))
+    conf.define('TAMASIS_DIR', os.path.join(conf.env.SHAREDIR, 'tamasis'))
+    conf.define('TAMASIS_VERSION', VERSION)
     conf.define('PRECISION_REAL', int(conf.options.precision_real))
 
     # Since WCSLIB doesn't provide F90 include files, we generate them

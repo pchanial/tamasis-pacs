@@ -7,9 +7,11 @@ module module_tamasis
 
     public :: p, POLICY_KEEP, POLICY_MASK, POLICY_REMOVE
     public :: tamasis_dir  ! Tamasis data directory
+    public :: tamasis_version
 
     character(len=*), parameter :: tamasis_dir =                                                                                   &
-TAMASISDIR
+TAMASIS_DIR
+    character(len=*), parameter :: tamasis_version = TAMASIS_VERSION
 
 #if PRECISION_REAL == 4
     integer, parameter :: p = sp
@@ -21,8 +23,8 @@ TAMASISDIR
 #error Invalid or undefined macro PRECISION_REAL
 #endif
 
-    integer, parameter :: POLICY_KEEP = 0
-    integer, parameter :: POLICY_MASK = 1
+    integer, parameter :: POLICY_KEEP   = 0
+    integer, parameter :: POLICY_MASK   = 1
     integer, parameter :: POLICY_REMOVE = 2
 
 
