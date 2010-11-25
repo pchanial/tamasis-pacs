@@ -243,7 +243,7 @@ class test_python(BuildContext):
     fun = 'test_python_fun'
 
 def test_python_fun(bld):
-    bld(rule   = '${IPYTHON} ' + bld.path.find_node('core/test/test_broken_locale.py').abspath(),
+    bld(rule   = '${IPYTHON} -noconfirm_exit ' + bld.path.find_node('core/test/test_broken_locale.py').abspath(),
         always = True)
 
     for subdir in subdirs:
