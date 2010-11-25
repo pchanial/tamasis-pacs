@@ -537,7 +537,7 @@ contains
         if (status /= 0) return
         if (found) then
 
-            read (scan_speed,'(bn,f'//strinteger(FLEN_VALUE)//'.0)',iostat=status) this%scan_speed
+            read (scan_speed,*,iostat=status) this%scan_speed
             if (status /= 0) then
                 select case (strlowcase(scan_speed))
                     case ('low')

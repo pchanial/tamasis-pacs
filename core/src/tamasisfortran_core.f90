@@ -2,6 +2,24 @@
 !
 ! Author: P. Chanial
 
+subroutine test_broken_locale(ok)
+
+    !f2py intent(out) :: ok
+
+    logical*1, intent(out) :: ok
+    character(len=70)      :: svalue
+    double precision       :: value
+
+    svalue="0.5"
+    read (svalue,*) value
+    ok = value == 0.5
+
+end subroutine test_broken_locale
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
 subroutine info_version(version)
 
     use module_tamasis, only : tamasis_version

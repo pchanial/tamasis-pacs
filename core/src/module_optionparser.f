@@ -775,7 +775,7 @@ contains
             if (status /= 0) return
         end if
 
-        read (charvalue,'(bn,f20.0)',iostat=iostatus) value
+        read (charvalue,*,iostat=iostatus) value
         if (iostatus /= 0) then
             write (ERROR_UNIT,'(a)') "Invalid real option value '" // &
                   trim(charvalue) // "'."

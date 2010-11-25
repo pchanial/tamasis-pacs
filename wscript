@@ -104,6 +104,7 @@ end program test""",
             conf.find_program('f2py-' + sys.version[0:3], var='F2PY')
         except conf.errors.ConfigurationError:
             conf.find_program('f2py', var='F2PY')
+    conf.find_program('ipython')
         
     # these two environment variables are required by pkg-config
     os.putenv('PKG_CONFIG_ALLOW_SYSTEM_CFLAGS', '1')
@@ -242,10 +243,14 @@ class test_python(BuildContext):
     fun = 'test_python_fun'
 
 def test_python_fun(bld):
+    bld(rule   = '${IPYTHON} ' + bld.path.find_node('core/test/test_broken_locale.py').abspath(),
+        always = True)
+
     for subdir in subdirs:
         files = bld.path.ant_glob(subdir+'/test/test_*.py')
         for file in files:
             bld(rule   = 'python ' + file.abspath(),
+                cwd    = bld.path.abspath(), # required if python 3 is the default and if a symbolic link to python2 has been put in bld.path
                 always = True)
             bld.add_group()
 
