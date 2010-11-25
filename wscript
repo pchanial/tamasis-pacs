@@ -100,7 +100,10 @@ end program test""",
     try:
         conf.find_program('f2py' + sys.version[0:3], var='F2PY')
     except conf.errors.ConfigurationError:
-        conf.find_program('f2py', var='F2PY')
+        try:
+            conf.find_program('f2py-' + sys.version[0:3], var='F2PY')
+        except conf.errors.ConfigurationError:
+            conf.find_program('f2py', var='F2PY')
         
     # these two environment variables are required by pkg-config
     os.putenv('PKG_CONFIG_ALLOW_SYSTEM_CFLAGS', '1')
