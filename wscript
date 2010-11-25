@@ -97,21 +97,13 @@ end program test""",
             features         = 'fc fcprogram',
             msg              = 'Checking for quadruple precision')
 
-    try:
-        conf.find_program('ipython' + sys.version[0:3], var='IPYTHON')
-    except conf.errors.ConfigurationError:
-        try:
-            conf.find_program('ipython-' + sys.version[0:3], var='IPYTHON')
-        except conf.errors.ConfigurationError:
-            conf.find_program('ipython', var='IPYTHON')
+    conf.find_program(['ipython'  + sys.version[0:3], 
+                       'ipython-' + sys.version[0:3],
+                       'ipython'], var='IPYTHON')
 
-    try:
-        conf.find_program('f2py' + sys.version[0:3], var='F2PY')
-    except conf.errors.ConfigurationError:
-        try:
-            conf.find_program('f2py-' + sys.version[0:3], var='F2PY')
-        except conf.errors.ConfigurationError:
-            conf.find_program('f2py', var='F2PY')
+    conf.find_program(['f2py'  + sys.version[0:3], 
+                       'f2py-' + sys.version[0:3],
+                       'f2py'], var='F2PY')
         
     # these two environment variables are required by pkg-config
     os.putenv('PKG_CONFIG_ALLOW_SYSTEM_CFLAGS', '1')
