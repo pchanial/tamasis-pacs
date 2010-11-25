@@ -20,6 +20,23 @@ Recommended packages:
 o ipython
 o pyds9
 
+
 Installation:
 =============
-./waf configure build install --prefix=$HOME/mysoft
+To install, type in this directory:
+./waf configure build install
+
+By default, the tamasis package will be installed in /usr/local, which requires admin privilege.
+To install it elsewhere:
+./waf configure --prefix=~/local build install
+
+
+Troubleshooting:
+================
+- on MacOSX, if some symbols are not found, make sure that your libraries are dynamically accessible, for instance
+by setting the environment variable DYLD_LIBRARY_PATH.
+
+- if Python 3 is your default python interpreter (in Archlinux, for instance), you can
+     - soft link the python2 interpreter in the tamasis-v*.* directory
+     - add if necessary '.' in your PATH
+     - change the first line in file 'waf' to ensure that it will be interpreted by the Python 2 interpreter
