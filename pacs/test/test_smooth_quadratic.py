@@ -1,4 +1,4 @@
-#!/usr/bin/env python2.6
+#!/usr/bin/env python
 from   matplotlib.pyplot import clim, figure, plot, show, ioff
 import numpy
 import os
@@ -7,7 +7,14 @@ from   tamasis import *
 do_plot = True
 ioff()
 
-datadir = os.getenv('PACS_DATA')+'/transpScan/'
+datadir  = os.getenv('PACS_DATA', '')+'/transpScan/'
+datafile = [datadir+'1342184598_blue_PreparedFrames.fits[6065:]',
+            datadir+'1342184599_blue_PreparedFrames.fits[6066:]']
+
+if not all(map(os.path.exists, datafile)):
+    print 'The data files are not found: ', ', '.join(datafile)
+    exit(0)
+
 pacs = PacsObservation(filename=[datadir+'1342184598_blue_PreparedFrames.fits[6065:]',
                                  datadir+'1342184599_blue_PreparedFrames.fits[6066:]'],
                        fine_sampling_factor=1)
