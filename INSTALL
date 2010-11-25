@@ -26,17 +26,18 @@ Installation:
 To install and test, type in this directory:
 ./waf configure build install test
 
-By default, the tamasis package will be installed in /usr/local, which requires admin privilege.
-To install it elsewhere:
+By default, the tamasis package will be installed in /usr/local, which requires
+admin privilege. To install it elsewhere:
 ./waf configure --prefix=~/local build install test
 
 
 Troubleshooting:
 ================
-- on MacOSX, if some symbols are not found, make sure that your libraries are dynamically accessible, for instance
-by setting the environment variable DYLD_LIBRARY_PATH.
+- on MacOSX, if some symbols are not found, make sure that your libraries 
+are dynamically accessible, for instance by setting the environment variable 
+DYLD_LIBRARY_PATH.
 
-- if Python 3 is your default python interpreter (in Archlinux, for instance), you can
-     - soft link the python2 interpreter in the tamasis-v*.* directory
-     - add if necessary '.' in your PATH
-     - run 'python2 waf configure ...'
+- if Python 3 is your default python interpreter (in Archlinux, for instance) 
+and assuming that the Python 2 interpreter is 'python2', you can run the fol-
+lowing command in bash:
+PYTHON=python2 python2 waf configure --prefix=~/local build install test
