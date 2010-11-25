@@ -172,7 +172,8 @@ class TamasisPreprocessor(JTask):
 
         try:
             _run_command(cmd)
-            map(_import_tod, files, frames)
+            for file, frame in zip(files, frames):
+                _import_tod(file, frame)
         except:
             pass
 
@@ -225,10 +226,9 @@ class TamasisPhotProject(TamasisPreprocessor):
 
         try:
             _run_command(cmd)
-        
             if self.updateFrames:
-                map(_import_tod, files, frames)
-
+                for file, frame in zip(files, frames):
+                    _import_tod(file, frame)
             self.result = _import_map(files[0] + '_map.fits')
         except:
             pass
