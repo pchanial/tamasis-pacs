@@ -1,9 +1,9 @@
 import os
 import tamasisfortran
+
 __verbose__ = False
 __version__ = tamasisfortran.info_version().strip()
 tamasis_dir = os.path.abspath(os.path.dirname(__file__) + '/../../../../share/tamasis')
-del os, tamasisfortran
 
 __all__ = [ 'get_default_dtype',
             'get_default_dtype_complex',
@@ -11,6 +11,8 @@ __all__ = [ 'get_default_dtype',
             'tamasis_dir',
             '__verbose__',
             '__version__']
+
+del os, tamasisfortran
 
 def get_default_dtype(data):
     import numpy
