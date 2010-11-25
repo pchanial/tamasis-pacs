@@ -52,7 +52,7 @@ program test_madcap
     if (status /= 0) stop 'FAILED: ft_read_image coverage'
 
 #ifdef GFORTRAN
-    where (coverage < 1e-15_p)
+    where (coverage < 1e-15_p .or. coverage > 5e+276_p)
          coverage = NaN
          map_ref  = NaN
     end where
