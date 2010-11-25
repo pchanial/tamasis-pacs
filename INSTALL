@@ -23,12 +23,12 @@ o pyds9
 
 Installation:
 =============
-To install, type in this directory:
-./waf configure build install
+To install and test, type in this directory:
+./waf configure build install test
 
 By default, the tamasis package will be installed in /usr/local, which requires admin privilege.
 To install it elsewhere:
-./waf configure --prefix=~/local build install
+./waf configure --prefix=~/local build install test
 
 
 Troubleshooting:
