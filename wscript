@@ -21,7 +21,7 @@ out = 'build'
 subdirs = ['core', 'madcap', 'pacs']
 
 # Required libraries
-libraries = ['CFITSIO', 'FFTW3', 'WCSLIB', 'OPENMP']
+libraries = ['CFITSIO', 'FFTW3', 'OPENMP', 'WCSLIB']
 
 # Required Python packages
 required_modules = ['numpy',
