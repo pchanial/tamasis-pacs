@@ -131,7 +131,7 @@ end program test""",
         compile_filename = 'test.f',
         features         = 'fc fcprogram',
         msg              = "Checking for 'fftw3' double precision",
-        use='FFTW3')
+        use=['FFTW3', 'OPENMP'])
     conf.check_cfg(package='wcslib',  args=['--libs', '--cflags'])
     conf.check_cfg(modversion='wcslib')
     check_wcslib_external(conf.env)
