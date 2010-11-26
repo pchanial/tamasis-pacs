@@ -308,20 +308,25 @@ def check_wcslib_external(env):
     env.DEFINES[i] = wme + '=' + str(int(version < '4.5'))
     env.define_key[i] = wme
 
-def check_git_version():
+def check_git_version(ctx):
     global VERSION
     cmd = 'git log HEAD^..'.split()
     # Python 2.7
     # line = subprocess.check_output(cmd).split('\n')[0]
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
     (stdout, stderr) = p.communicate()
-    tag = stdout.split('\n')[0].split()[1]
-    if tag[0] == 'v':
-        VERSION = tag[1:]
+    commit = stdout.split('\n')[0].split()[1]
+    tagdir = os.path.join(ctx.path.abspath(), '.git', 'refs', 'tags')
+    tags = os.listdir(os.path.join(ctx.path.abspath(), '.git', 'refs', 'tags'))
+    for tag in os.listdir(tagdir):
+        if commit == open(os.path.join(tagdir,tag)).read()[0:-1]:
+            VERSION = tag
+            if VERSION[0] == 'v': VERSION = VERSION[1:]
+            break
     else:
         dev = '-dev' in VERSION
-        VERSION = VERSION.replace('-dev', '') + '.' + tag[0:8] + \
+        VERSION = VERSION.replace('-dev', '') + '.' + commit[0:8] + \
                   ('-dev' if dev else '')
 
 def dist(ctx):
-    check_git_version()
+    check_git_version(ctx)
