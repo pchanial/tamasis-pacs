@@ -248,8 +248,7 @@ def test_python_fun(bld):
     for subdir in subdirs:
         files = bld.path.ant_glob(subdir+'/test/test_*.py')
         for file in files:
-            bld(rule   = 'python ' + file.abspath(),
-                cwd    = bld.path.abspath(), # required if python 3 is the default and if a symbolic link to python2 has been put in bld.path
+            bld(rule   = '${PYTHON} ' + file.abspath(),
                 always = True)
             bld.add_group()
 
