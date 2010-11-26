@@ -3,6 +3,7 @@
 import glob
 import os
 import string
+import subprocess
 import sys
 
 from waflib import Options
@@ -11,7 +12,7 @@ from waflib.Configure import conf
 from waflib.Context import Context
 
 APPNAME = 'tamasis'
-VERSION = '1.9.0'
+VERSION = '1.9'
 
 top = '.'
 out = 'build'
@@ -306,3 +307,21 @@ def check_wcslib_external(env):
     version = env.DEFINES[i].split('=')[1]
     env.DEFINES[i] = wme + '=' + str(int(version < '4.5'))
     env.define_key[i] = wme
+
+def check_git_version():
+    global VERSION
+    cmd = 'git log HEAD^..'.split()
+    # Python 2.7
+    # line = subprocess.check_output(cmd).split('\n')[0]
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+    (stdout, stderr) = p.communicate()
+    tag = stdout.split('\n')[0].split()[1]
+    if tag[0] == 'v':
+        VERSION = tag[1:]
+    else:
+        dev = '-dev' in VERSION
+        VERSION = VERSION.replace('-dev', '') + '.' + tag[0:8] + \
+                  ('-dev' if dev else '')
+
+def dist(ctx):
+    check_git_version()
