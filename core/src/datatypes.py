@@ -160,12 +160,13 @@ class FitsArray(Quantity):
             True means masked.
         """
 
+        unfinite = ~numpy.isfinite(numpy.asarray(self))
         if mask is None:
-            mask = ~numpy.isfinite(self)
+            mask = unfinite
         else:
-            mask = numpy.logical_or(mask, ~numpy.isfinite(self))
+            mask = numpy.logical_or(mask, unfinite)
 
-        data = numpy.ma.MaskedArray(self, mask=mask, copy=False)
+        data = numpy.ma.MaskedArray(numpy.asarray(self), mask=mask, copy=False)
         if numpy.iscomplexobj(data):
             data = abs(data)
         mean   = numpy.mean(data)
