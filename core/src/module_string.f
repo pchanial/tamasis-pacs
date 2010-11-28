@@ -93,40 +93,34 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine strsplit(input, output, delimiter)
+    subroutine strsplit(input, delimiter, output)
 
-        character(len=*), intent(in)                  :: input
-        character(len=*), dimension(:), intent(inout) :: output
-        character, intent(in), optional               :: delimiter
+        character(len=*), intent(in) :: input
+        character, intent(in)        :: delimiter
+        character(len=*), allocatable, intent(out) :: output(:)
 
-        character                                     :: delim
-        integer                                       :: i, ic, j, len_in, len_out
+        integer :: i, noutputs, ioutput, start
       
-        if (present(delimiter)) then
-            delim = delimiter
-        else
-            delim = ','
-        end if
-
-        len_in  = len_trim(input)
-        len_out = len(output)
-
-        do i=1, size(output, 1)
-            output(i) = ' '
-        enddo
-
-        ic = 1
-        i  = 1
-        do j=1, len_in
-            if (input(j:j) == delim) then
-                i = i + 1
-                if (i > size(output,1)) exit
-                ic = 1
-                cycle
-            endif
-            if (ic <= len_out) output(i)(ic:ic) = input(j:j)
-            ic = ic + 1
+        noutputs = 1
+        do i = 1, len(input)
+            if (input(i:i) == delimiter) then
+                noutputs = noutputs + 1
+            end if
         end do
+
+        allocate (output(noutputs))
+
+        ioutput = 1
+        start = 1
+        do i=1, len(input)
+            if (input(i:i) == delimiter) then
+                output(ioutput) = input(start:i-1)
+                ioutput = ioutput + 1
+                start = i + 1
+                cycle
+            end if
+        end do
+        output(ioutput) = input(start:)
 
     end subroutine strsplit
 
