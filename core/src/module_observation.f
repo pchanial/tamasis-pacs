@@ -8,7 +8,7 @@ module module_observation
 
     use iso_fortran_env,  only : ERROR_UNIT, OUTPUT_UNIT
     use module_fitstools, only : FLEN_VALUE, ft_close, ft_open, ft_open_bintable, ft_read_column, ft_read_image, ft_read_keyword,  &
-                                 ft_read_keyword_hcss
+                                 ft_read_keyword_hcss, ft_check_error_cfitsio
     use module_math,      only : NaN, mean, mean_degrees, median, neq_real
     use module_string,    only : strinteger, strlowcase, strreal, strsection, strternary
     use module_tamasis,   only : p, POLICY_KEEP, POLICY_MASK, POLICY_REMOVE
@@ -66,17 +66,20 @@ public :: PacsObservationSlice
 !!$ type, extends(observationslice) :: PacsObservationSlice
     type PacsObservationSlice
 
-        integer                     :: nsamples, nvalids
-        character(len=256)          :: filename
-        character(len=FLEN_VALUE)   :: band
-        character(len=FLEN_VALUE)   :: observing_mode
-        real(p)                     :: ra, dec
-        real(p)                     :: cam_angle, scan_angle, scan_length, scan_speed, scan_step
-        integer                     :: scan_nlegs
-        character(len=FLEN_VALUE)   :: unit
-        integer                     :: compression_factor
-        real(p)                     :: sampling_interval
-        type(pointing), allocatable :: p(:)
+        integer                   :: nsamples, nvalids
+        character(len=256)        :: filename
+        character(len=FLEN_VALUE) :: band
+        character(len=FLEN_VALUE) :: observing_mode
+        real(p)                   :: ra, dec
+        real(p)                   :: cam_angle, scan_angle, scan_length, scan_speed, scan_step
+        integer                   :: scan_nlegs
+        character(len=FLEN_VALUE) :: unit
+        integer                   :: compression_factor
+        real(p)                   :: sampling_interval
+        integer                   :: nmasks
+        character(len=FLEN_VALUE), allocatable :: mask_name(:)
+        logical, allocatable                   :: mask_activated(:)
+        type(pointing), allocatable            :: p(:)
 
     contains
         
@@ -85,6 +88,7 @@ public :: PacsObservationSlice
         procedure :: set_policy
         procedure :: set_observing_mode
         procedure :: set_astrometry
+        procedure :: set_mask
         procedure :: set_unit
         procedure :: set_flags
         procedure :: set_sampling_interval
@@ -766,6 +770,50 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
+    subroutine set_mask(this, status)
+
+        class(PacsObservationSlice), intent(inout) :: this
+        integer, intent(out)                       :: status
+
+        integer :: unit, hdutype, i
+        logical :: found
+        character(len=8*FLEN_VALUE) :: info
+        integer, allocatable        :: mask_extension(:)
+
+        this%unit = ''
+
+        call ft_open(trim(this%filename) // '[MASK]', unit, found, status)
+        if (status /= 0 .or. .not. found) return
+
+        call ft_read_keyword(unit, 'DSETS___', this%nmasks, status=status)
+        if (status /= 0) return
+
+        allocate (mask_extension(this%nmasks), this%mask_name(this%nmasks), this%mask_activated(this%nmasks))
+        do i=1, this%nmasks
+            call ft_read_keyword(unit, 'DS_' // strinteger(i-1), mask_extension(i), status=status)
+            if (status /= 0) return
+        end do
+        
+        do i=1, this%nmasks
+            call FTMAHD(unit, mask_extension(i)+1, hdutype, status)
+            if (ft_check_error_cfitsio(status, unit, trim(this%filename))) return
+
+            call ft_read_keyword(unit, 'EXTNAME', this%mask_name(i), status=status)
+            if (status /= 0) return
+            call ft_read_keyword(unit, 'INFO____', info, status=status)
+            if (status /= 0) return
+            this%mask_activated(i) = .not. index(info, 'deactivated') > 0
+            
+        end do
+
+        call ft_close(unit, status)
+        
+    end subroutine set_mask
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
     subroutine set_unit(this, status)
 
         class(PacsObservationSlice), intent(inout) :: this
@@ -921,6 +969,9 @@ contains
             if (status /= 0) return
                 
             call this%slice(islice)%set_observing_mode(status)
+            if (status /= 0) return
+
+            call this%slice(islice)%set_mask(status)
             if (status /= 0) return
 
             call this%slice(islice)%set_unit(status)

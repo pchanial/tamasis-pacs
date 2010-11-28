@@ -887,10 +887,11 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine read(this, obs, signal, mask, status, verbose)
+    subroutine read(this, obs, selected_masks, signal, mask, status, verbose)
 
         class(PacsInstrument), intent(in)  :: this
         class(PacsObservation), intent(in) :: obs
+        character(len=*), intent(in)       :: selected_masks(:)
         real(p), intent(out)               :: signal(:,:)
         logical(1), intent(out)            :: mask(:,:)
         integer, intent(out)               :: status
@@ -925,8 +926,8 @@ contains
         ! loop over the PACS observations
         dest = 1
         do iobs = 1, nobs
-            call this%read_one(obs%slice(iobs), signal(dest:dest+obs%slice(iobs)%nvalids-1,:),                                     &
-                 mask(dest:dest+obs%slice(iobs)%nvalids-1,:), status)
+            call this%read_one(obs%slice(iobs), selected_masks, signal(dest:dest+obs%slice(iobs)%nvalids-1,:),                     &
+                               mask(dest:dest+obs%slice(iobs)%nvalids-1,:), status)
             if (status /= 0) return
             dest = dest + obs%slice(iobs)%nvalids
         end do
@@ -942,10 +943,11 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine read_one(this, obs, signal, mask, status)
+    subroutine read_one(this, obs, selected_mask, signal, mask, status)
 
         class(PacsInstrument), intent(in)       :: this
         class(PacsObservationSlice), intent(in) :: obs
+        character(len=*), intent(in)            :: selected_mask(:)
         real(p), intent(out)                    :: signal(:,:)
         logical*1, intent(out)                  :: mask  (:,:)
         integer, intent(out)                    :: status
@@ -958,7 +960,7 @@ contains
         integer*4, allocatable :: maskcompressed(:)
         integer*4              :: maskval
         integer                :: ncompressed
-        integer                :: isample, icompressed, ibit
+        integer                :: imask, isample, icompressed, ibit
         integer                :: firstcompressed, lastcompressed
         real(p), allocatable   :: signal_(:)
         logical*1, allocatable :: mask_(:)
@@ -992,64 +994,69 @@ contains
             signal(:,idetector) = pack(signal_, .not. obs%p(first:last)%removed)
 
         end do
-
+        
         call ft_close(unit, status)
-        if (status /= 0) return
-
-        ! read Mask HDU
-        mask_found = ft_test_extension(trim(obs%filename)//'[Master]', status)
-        if (status /= 0) return
-
-        if (.not. mask_found) then
-!!$            write (*,'(a)') 'Info: mask Master is not found.'
-            return
-        end if
-
-        call ft_open_image(trim(obs%filename) // '[Master]', unit, 3, imageshape, status)
         if (status /= 0) return
 
         firstcompressed = (first - 1) / 32 + 1
         lastcompressed  = (last  - 1) / 32 + 1
-        ncompressed = lastcompressed - firstcompressed + 1
+        ncompressed     = lastcompressed - firstcompressed + 1
 
-        if (lastcompressed > imageshape(1)) then
-            status = 1
-            write (ERROR_UNIT, '(a)') 'There is not enough samples in ' // trim(obs%filename) // '[Master] for this pointing.'
-            return
-        end if
+        do imask = 1, size(selected_mask)
 
-        allocate (maskcompressed(ncompressed))
-
-        do idetector = 1, size(mask,2)
-
-            ip = this%pq(1,idetector)
-            iq = this%pq(2,idetector)
-
-            mask_ = .false.
-
-            call ft_read_slice(unit, firstcompressed, lastcompressed, iq+1, ip+1, imageshape, maskcompressed, status)
+            mask_found = ft_test_extension(trim(obs%filename) // '[' // trim(selected_mask(imask)) // ']', status)
             if (status /= 0) return
 
-            ! loop over the bytes of the compressed mask
-            do icompressed = firstcompressed, lastcompressed
+            if (.not. mask_found) then
+                write (*,'(a)') "Warning: mask '" // trim(selected_mask(imask)) // "' is not found."
+                cycle
+            end if
 
-                maskval = maskcompressed(icompressed-firstcompressed+1)
-                if (maskval == 0) cycle
+            ! read Mask HDU
+            call ft_open_image(trim(obs%filename) // '[' // trim(selected_mask(imask)) // ']', unit, 3, imageshape, status)
+            if (status /= 0) return
+            
+            if (lastcompressed /= imageshape(1)) then
+                status = 1
+                write (ERROR_UNIT, '(a,2(i0,a))') "The observation '" // trim(obs%filename) // "', has an incompatible dimension in&
+                       & mask '" // trim(selected_mask(imask)) // "' (", imageshape(1), ' instead of ', ncompressed, ').'
+                return
+            end if
 
-                isample = (icompressed-1)*32 - first + 2
+            if (.not. allocated(maskcompressed)) allocate (maskcompressed(ncompressed))
 
-                ! loop over the bits of a compressed mask byte
-                do ibit = max(0, first - (icompressed-1)*32 - 1), min(31, last - (icompressed-1)*32 - 1)
-                    mask_(isample+ibit) = btest(maskval,ibit)
+            do idetector = 1, size(mask,2)
+
+                ip = this%pq(1,idetector)
+                iq = this%pq(2,idetector)
+
+                mask_ = .false.
+
+                call ft_read_slice(unit, firstcompressed, lastcompressed, iq+1, ip+1, imageshape, maskcompressed, status)
+                if (status /= 0) return
+
+                ! loop over the bytes of the compressed mask
+                do icompressed = firstcompressed, lastcompressed
+
+                    maskval = maskcompressed(icompressed-firstcompressed+1)
+                    if (maskval == 0) cycle
+
+                    isample = (icompressed-1)*32 - first + 2
+
+                    ! loop over the bits of a compressed mask byte
+                    do ibit = max(0, first - (icompressed-1)*32 - 1), min(31, last - (icompressed-1)*32 - 1)
+                        mask_(isample+ibit) = btest(maskval,ibit)
+                    end do
+
                 end do
 
+                mask(:,idetector) = mask(:,idetector) .or. pack(mask_, .not. obs%p(first:last)%removed)
+
             end do
-            
-            mask(:,idetector) = mask(:,idetector) .or. pack(mask_, .not. obs%p(first:last)%removed)
+
+            call ft_close(unit, status)
 
         end do
-
-        call ft_close(unit, status)
 
     end subroutine read_one
 

@@ -106,7 +106,8 @@ end subroutine pacs_info_init
 
 subroutine pacs_info_observation(filename, nfilenames, policy, nsamples_tot, cusmode, compression, unit, ra, dec, cam_angle,       &
                                  scan_angle, scan_length, scan_speed, scan_step, scan_nlegs, frame_time, frame_ra, frame_dec,      &
-                                 frame_pa, frame_chop, frame_info, frame_masked, frame_removed, status)
+                                 frame_pa, frame_chop, frame_info, frame_masked, frame_removed, nmasks, mask_name, mask_activated, &
+                                 status)
 
     use module_observation,     only : POINTING_INSCAN, POINTING_TURNAROUND, POINTING_OTHER, MaskPolicy
     use module_pacsobservation, only : PacsObservation
@@ -122,6 +123,8 @@ subroutine pacs_info_observation(filename, nfilenames, policy, nsamples_tot, cus
     !f2py intent(out)           :: compression, ra, dec, cam_angle, scan_angle, scan_length, scan_speed, scan_step
     !f2py intent(out)           :: scan_nlegs
     !f2py intent(out)           :: frame_time, frame_ra, frame_dec, frame_pa, frame_chop, frame_info, frame_masked, frame_removed
+    !f2py intent(out)           :: nmasks, mask_activated
+    !f2py character(len=70*32*nfilenames), intent(out), depend(nfilenames) :: mask_name
     !f2py intent(out)           :: status
 
     character(len=*), intent(in)                    :: filename
@@ -130,14 +133,18 @@ subroutine pacs_info_observation(filename, nfilenames, policy, nsamples_tot, cus
     integer, intent(in)                             :: nsamples_tot
     character(len=70*nfilenames), intent(out)       :: cusmode, unit !XXX hack around f2py bug with array of characters
     real(p), intent(out), dimension(nfilenames)     :: ra, dec, cam_angle, scan_angle, scan_length, scan_speed, scan_step
-    integer, intent(out), dimension(nfilenames)     :: compression, scan_nlegs
+    integer, intent(out), dimension(nfilenames)     :: compression, scan_nlegs, nmasks
     real(p), intent(out), dimension(nsamples_tot)   :: frame_time, frame_ra, frame_dec, frame_pa, frame_chop, frame_info
     logical*1, intent(out), dimension(nsamples_tot) :: frame_masked, frame_removed
+    character(len=70*32*nfilenames), intent(out)    :: mask_name
+    logical*1, dimension(32,nfilenames)             :: mask_activated
     integer, intent(out)                            :: status
 
+    integer, parameter                  :: NMASKS_MAX = 32
+    integer, parameter                  :: FLEN_VALUE = 70
     class(PacsObservation), allocatable :: obs
     type(MaskPolicy)                    :: mask_policy
-    integer                             :: iobs, isample, nsamples, dest
+    integer                             :: iobs, isample, imask, nsamples, dest
     character(len=len(filename)/nfilenames), allocatable :: filename_(:)
 
     ! split input filename
@@ -159,9 +166,16 @@ subroutine pacs_info_observation(filename, nfilenames, policy, nsamples_tot, cus
 
     cusmode = ''
     unit = ''
+    mask_name = ''
     do iobs = 1, nfilenames
-        cusmode((iobs-1)*70+1:iobs*70) = obs%slice(iobs)%observing_mode
-        unit   ((iobs-1)*70+1:iobs*70) = obs%slice(iobs)%unit
+        cusmode((iobs-1)*FLEN_VALUE+1:iobs*FLEN_VALUE) = obs%slice(iobs)%observing_mode
+        unit   ((iobs-1)*FLEN_VALUE+1:iobs*FLEN_VALUE) = obs%slice(iobs)%unit
+        nmasks(iobs) = obs%slice(iobs)%nmasks
+        do imask = 1, nmasks(iobs)
+            dest = ((iobs-1)*NMASKS_MAX+(imask-1))*FLEN_VALUE
+            mask_name(dest+1:dest+FLEN_VALUE) = obs%slice(iobs)%mask_name(imask)
+            mask_activated(imask,iobs) = obs%slice(iobs)%mask_activated(imask)
+        end do
     end do
     compression = obs%slice%compression_factor
     ra          = obs%slice%ra
@@ -436,9 +450,9 @@ end subroutine pacs_map_header
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine pacs_tod(band, filename, nslices, npointings, nsamples_tot, compression_factor, fine_sampling_factor, time, ra, dec,&
+subroutine pacs_tod(band, filename, nslices, npointings, nsamples_tot, compression_factor, fine_sampling_factor, time, ra, dec,    &
                     pa, chop, masked, removed, detector_mask, flatfield_detector, do_flatfielding, do_subtraction_mean,            &
-                    nvalids, ndetectors, nrows, ncolumns, signal, mask, status)
+                    nvalids, ndetectors, selected_mask, nrows, ncolumns, signal, mask, status)
 
 
     use iso_fortran_env,        only : ERROR_UNIT
@@ -446,6 +460,7 @@ subroutine pacs_tod(band, filename, nslices, npointings, nsamples_tot, compressi
     use module_pacsobservation, only : PacsObservation
     use module_preprocessor,    only : divide_vectordim2, remove_nan, subtract_meandim1
     use module_tamasis,         only : p
+    use module_string,          only : strsplit
     implicit none
 
     !f2py threadsafe
@@ -469,6 +484,7 @@ subroutine pacs_tod(band, filename, nslices, npointings, nsamples_tot, compressi
     !f2py intent(in)                               :: do_subtraction_mean
     !f2py intent(in)                               :: nvalids
     !f2py intent(in)                               :: ndetectors
+    !f2py intent(in)                               :: selected_mask
     !f2py intent(hide)                             :: nrows=shape(detector_mask,0)
     !f2py intent(hide)                             :: ncolumns=shape(detector_mask,1)
     !f2py intent(out)                              :: signal(nvalids,ndetectors)
@@ -491,13 +507,15 @@ subroutine pacs_tod(band, filename, nslices, npointings, nsamples_tot, compressi
     integer, intent(in)                            :: ndetectors
     integer, intent(in)                            :: nrows
     integer, intent(in)                            :: ncolumns
+    character(len=*), intent(in)                   :: selected_mask
     real(p), intent(out)                           :: signal(nvalids, ndetectors)
     logical*1, intent(out)                         :: mask(nvalids, ndetectors)
     integer, intent(out)                           :: status
 
-    class(PacsObservation), allocatable :: obs
-    class(PacsInstrument), allocatable  :: pacs
-    integer                             :: iobs, destination, filename_len
+    class(PacsObservation), allocatable            :: obs
+    class(PacsInstrument), allocatable             :: pacs
+    integer                                        :: iobs, destination, filename_len
+    character(len=len(selected_mask)), allocatable :: selected_mask_(:)
 
     ! initialise observations
     allocate(obs)
@@ -526,8 +544,11 @@ subroutine pacs_tod(band, filename, nslices, npointings, nsamples_tot, compressi
         return
     end if
 
+    ! split masks
+    call strsplit(selected_mask, ',', selected_mask_)
+
     ! read timeline
-    call pacs%read(obs, signal, mask, status, verbose=.true.)
+    call pacs%read(obs, selected_mask_, signal, mask, status, verbose=.true.)
     if (status /= 0) return
 
     ! detector flat fielding

@@ -102,17 +102,52 @@ class _Pacs(Observation):
         return self._status
 
     def __str__(self):
+
+        # some helpers
+        def same(a):
+            return all(a == a[0])
+        def plural(s,n,prepend=True,s2=''):
+            if n == 0:
+                return 'no ' + s
+            elif n == 1:
+                return ('1 ' if prepend else '') + s + s2
+            else:
+                return (str(n) + ' ' if prepend else '') + s + 's' + s2
+        def ad_masks(slice, islice):
+            a = [m for i, m in enumerate(slice[islice].mask_name)      \
+                 if m != '' and slice[islice].mask_activated[i]]
+            d = [m for i, m in enumerate(slice[islice].mask_name)      \
+                 if m != '' and not slice[islice].mask_activated[i]]
+            return (plural('activated mask',   len(a), 0, ': ').capitalize() + \
+                        ', '.join(a), 
+                    plural('deactivated mask', len(d), 0, ': ').capitalize() + \
+                        ', '.join(d))
+
         nthreads = tmf.info_nthreads()
         ndetectors = self.get_ndetectors()
         sp = len('Info: ')*' '
         unit = 'unknown' if self.slice[0].unit == '' else self.slice[0].unit
         if MPI.COMM_WORLD.Get_size() > 1:
-            mpistr = 'Process '+str(MPI.COMM_WORLD.Get_rank()+1) + '/' + str(MPI.COMM_WORLD.Get_size()) + \
-                ' on node ' + MPI.Get_processor_name() + ', '
+            mpistr = 'Process '+str(MPI.COMM_WORLD.Get_rank()+1) + '/' +       \
+                     str(MPI.COMM_WORLD.Get_size()) + ' on node ' +            \
+                     MPI.Get_processor_name() + ', '
         else:
             mpistr = ''
-        result = '\nInfo: ' + mpistr + str(nthreads) + ' core' + ('s' if nthreads > 1 else '') + ' handling ' + str(ndetectors) + ' detector' + ('s' if ndetectors > 1 else '') + '\n'
+
+        # print general informations
+        result = '\nInfo: ' + mpistr + plural('core', nthreads) + ' handling '+ plural('detector', ndetectors) + '\n'
         result += sp + self.instrument.band.capitalize() + ' band, unit is ' + unit + '\n'
+
+        # check if the masks are the same for all the slices
+        homogeneous = same(self.slice.nmasks) and all([same(a) for a in self.slice.mask_name.T])
+        if homogeneous:
+            (a,d) = ad_masks(self.slice, 0)
+            result += sp + a + '\n'
+            result += sp + d + '\n'
+        else:
+            result += sp + 'The masks are heterogeneous among the observations\n'
+
+        # print slice-specific information
         dest = 0
         for islice, slice in enumerate(self.slice):
 
@@ -144,8 +179,14 @@ class _Pacs(Observation):
                 result += ' #' + str(islice+1)
             result += ' ' + slice.filename
             first = numpy.argmin(p.removed) + 1
-            last = p.size - numpy.argmin(p.removed[::-1]) + 1
+            last = p.size - numpy.argmin(p.removed[::-1])
             result += '[' + str(first) + ':' + str(last) + ']:\n'
+
+            if not homogeneous:
+                (a,d) = ad_masks(self.slice, islice)
+                result += sp + '      ' + a + '\n'
+                result += sp + '      ' + d + '\n'
+
             result += sp + '      Compression: x' + str(slice.compression_factor) + '\n'
             result += sp + '      In-scan:     ' + _str_policy(p.info == Pointing.INSCAN) + '\n'
             result += sp + '      Turnaround:  ' + _str_policy(p.info == Pointing.TURNAROUND) + '\n'
@@ -265,7 +306,7 @@ class PacsObservation(_Pacs):
         policy = MaskPolicy('inscan,turnaround,other,invalid', (policy_inscan, policy_turnaround, policy_other, policy_invalid), 'Frame Policy')
 
         # retrieve information from the observation
-        mode, compression_factor, unit, ra, dec, cam_angle, scan_angle, scan_length, scan_speed, scan_step, scan_nlegs, frame_time, frame_ra, frame_dec, frame_pa, frame_chop, frame_info, frame_masked, frame_removed, status = tmf.pacs_info_observation(filename_, nfilenames, numpy.array(policy, dtype='int32'), numpy.sum(nsamples_all))
+        mode, compression_factor, unit, ra, dec, cam_angle, scan_angle, scan_length, scan_speed, scan_step, scan_nlegs, frame_time, frame_ra, frame_dec, frame_pa, frame_chop, frame_info, frame_masked, frame_removed, nmasks, mask_name_flat, mask_activated, status = tmf.pacs_info_observation(filename_, nfilenames, numpy.array(policy, dtype='int32'), numpy.sum(nsamples_all))
         flen_value = len(unit) // nfilenames
         mode = [mode[i*flen_value:(i+1)*flen_value].strip() for i in range(nfilenames)]
         unit = [unit[i*flen_value:(i+1)*flen_value].strip() for i in range(nfilenames)]
@@ -286,12 +327,26 @@ class PacsObservation(_Pacs):
         self.instrument.responsivity = Quantity(responsivity, 'V/Jy')
 
         # Store slice information
-        self.slice = numpy.recarray(nfilenames, dtype=[('filename', 'S256'), ('nsamples_all', int), ('mode', 'S32'), ('compression_factor', int), ('unit', 'S32'), ('ra', float), ('dec', float), ('cam_angle', float), ('scan_angle', float), ('scan_length', float), ('scan_nlegs', int), ('scan_step', float), ('scan_speed', float)])
+        nmasks_max = numpy.max(nmasks)
+        mask_len_max = numpy.max([len(mask_name_flat[(i*32+j)*70:(i*32+j+1)*70].strip()) for j in range(nmasks[i]) for i in range(nfilenames)])
+
+        mask_name      = numpy.ndarray((nfilenames, nmasks_max), 'S'+str(mask_len_max))
+        mask_activated = mask_activated.T
+        for ifile in range(nfilenames):
+            for imask in range(nmasks[ifile]):
+                dest = (ifile*32+imask)*70
+                mask_name[ifile,imask] = mask_name_flat[dest:dest+mask_len_max].lower()
+            isort = numpy.argsort(mask_name[ifile,0:nmasks[ifile]])
+            mask_name     [ifile,0:nmasks[ifile]] = mask_name     [ifile,isort]
+            mask_activated[ifile,0:nmasks[ifile]] = mask_activated[ifile,isort]
+
+        self.slice = numpy.recarray(nfilenames, dtype=[('filename', 'S256'), ('nsamples_all', int), ('mode', 'S32'), ('compression_factor', int), ('unit', 'S32'), ('ra', float), ('dec', float), ('cam_angle', float), ('scan_angle', float), ('scan_length', float), ('scan_nlegs', int), ('scan_step', float), ('scan_speed', float), ('nmasks', int), ('mask_name', 'S'+str(mask_len_max), nmasks_max), ('mask_activated', bool, nmasks_max)])
 
         regex = re.compile(r'(.*?)(\[[0-9]*:?[0-9]*\])? *$')
         for ifile, file in enumerate(filename):
             match = regex.match(file)
             self.slice[ifile].filename = match.group(1)
+
         self.slice.nsamples_all = nsamples_all
         self.slice.nfinesamples = nsamples_all * compression_factor * fine_sampling_factor
         self.slice.mode = mode
@@ -305,6 +360,9 @@ class PacsObservation(_Pacs):
         self.slice.scan_nlegs = scan_nlegs
         self.slice.scan_step = scan_step
         self.slice.scan_speed = scan_speed
+        self.slice.nmasks = nmasks
+        self.slice.mask_name      = mask_name
+        self.slice.mask_activated = mask_activated[:,0:nmasks_max]
         
         # Store pointing information
         self.pointing = PacsPointing(frame_time, frame_ra, frame_dec, frame_pa, frame_chop, frame_info, frame_masked, frame_removed, nsamples=self.slice.nsamples_all)
@@ -317,14 +375,48 @@ class PacsObservation(_Pacs):
 
         print self
 
-    def get_tod(self, unit=None, flatfielding=True, subtraction_mean=True, raw_data=False):
+    def get_tod(self, unit=None, flatfielding=True, subtraction_mean=True, raw_data=False, masks='activated'):
         """
         Returns the signal and mask timelines.
+
+        By default, if no active mask is specified, the Master mask will
+        be retrieved if it exists. Otherwise, the activated masks will
+        be read and combined.
         """
 
         if raw_data:
             flatfielding = False
             subtraction_mean = False
+
+        act_masks = set([m for slice in self.slice for i, m in enumerate(slice.mask_name) \
+                         if m not in ('','master') and slice.mask_activated[i]])
+        dea_masks = set([m for slice in self.slice for i, m in enumerate(slice.mask_name) \
+                         if m not in ('','master') and not slice.mask_activated[i]])
+        all_masks = set([m for slice in self.slice for m in slice.mask_name if m != ''])
+
+        if isinstance(masks, str):
+            masks = masks.split(',')
+
+        sel_masks = set()
+        for m in masks:
+            m = m.strip().lower()
+            if m == 'all':
+                sel_masks |= all_masks
+            elif m == 'activated':
+                sel_masks |= act_masks
+            elif m == 'deactivated':
+                sel_masks |= dea_masks
+            elif m not in all_masks:
+                print "Warning: mask '" + m + "' is not found."
+            else:
+                sel_masks.add(m)
+
+        # use 'master' if all activated masks are selected
+        if all(['master' in slice.mask_name for slice in self.slice]) and act_masks <= sel_masks:
+            sel_masks -= act_masks
+            sel_masks.add('master')
+
+        sel_masks = ','.join(sorted(sel_masks))
 
         signal, mask, status = tmf.pacs_tod(self.instrument.band,
                                             _files2tmf(self.slice.filename)[0],
@@ -343,7 +435,8 @@ class PacsObservation(_Pacs):
                                             flatfielding,
                                             subtraction_mean,
                                             int(numpy.sum(self.get_nsamples())),
-                                            self.get_ndetectors())
+                                            self.get_ndetectors(),
+                                            sel_masks)
         if status != 0: raise RuntimeError()
        
         tod = Tod(signal.T, mask.T, nsamples=self.get_nsamples(), unit=self.slice[0].unit, copy=False)
