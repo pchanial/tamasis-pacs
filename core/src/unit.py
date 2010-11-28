@@ -307,9 +307,9 @@ class Quantity(numpy.ndarray):
                 if u is None or u == self._unit:
                     continue
 
-                print "Warning: applying function '" + str(ufunc) + "' to Quant\
+                print("Warning: applying function '" + str(ufunc) + "' to Quant\
 ities of different units may have changed operands to common unit '" + \
-                    _strunit(self._unit) + "'."
+                    _strunit(self._unit) + "'.")
                 arg.unit = self._unit
 
         return array
@@ -383,7 +383,7 @@ ities of different units may have changed operands to common unit '" + \
             array._unit = None
 
         elif ufunc not in (numpy.abs, numpy.negative ):
-            print 'Quantity: unhandled ufunc ', ufunc, 'with', len(args), 'args'
+            print('Quantity: unhandled ufunc ', ufunc, 'with', len(args), 'args')
             array._unit = None
 
         else:

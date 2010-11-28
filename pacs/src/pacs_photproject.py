@@ -118,11 +118,11 @@ nx = projection.header['naxis1']
 ny = projection.header['naxis2']
 
 # Backproject the timeline and divide it by the weight
-print 'Computing the map...'
+print('Computing the map...')
 mymap = mapper_naive(tod, projection, unit='Jy/pixel')
 
 # Write resulting map as a FITS file
-print 'Writing the map...'
+print('Writing the map...')
 mymap.save(filename[0] + '_map.fits')
 
 # Display map

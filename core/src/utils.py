@@ -79,9 +79,9 @@ def hs(arg):
     if isinstance(arg, numpy.ndarray):
         names = arg.dtype.names
         if names is None:
-            print arg
+            print(arg)
             return
-        print str(arg.size) + ' element' + ('s' if arg.size > 1 else '')
+        print(str(arg.size) + ' element' + ('s' if arg.size > 1 else ''))
     else:
         members = inspect.getmembers(arg, lambda x: not inspect.ismethod(x) and not inspect.isbuiltin(x))
         members = filter(lambda x: x[0][0] != '_', members)
@@ -93,7 +93,7 @@ def hs(arg):
         value = str(getattr(arg, name))[0:72-length-2]
         if len(value) == 72-length-2:
             value = value[0:-3] + '...'
-        print lname+value
+        print(lname+value)
 
 def mean_degrees(array):
     """

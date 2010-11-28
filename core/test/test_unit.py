@@ -64,7 +64,7 @@ def test_unit_sub(x, y, v, u):
     if numpy.__version__ < '1.4':
         if getattr(x, '_unit', None) is not None and getattr(y, '_unit', None) is not None:
             if x._unit != y._unit:
-                print 'Disabling operation on Quantities for Numpy < 1.4'
+                print('Disabling operation on Quantities for Numpy < 1.4')
                 return
     c = x - y
     if not isinstance(c, Quantity): raise TestFailure(str(c))

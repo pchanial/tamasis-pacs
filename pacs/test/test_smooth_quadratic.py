@@ -12,7 +12,7 @@ datafile = [datadir+'1342184598_blue_PreparedFrames.fits[6065:]',
             datadir+'1342184599_blue_PreparedFrames.fits[6066:]']
 
 if not all(map(os.path.exists, datafile)):
-    print 'The data files are not found: ', ', '.join(datafile)
+    print('The data files are not found: ', ', '.join(datafile))
     exit(0)
 
 pacs = PacsObservation(filename=[datadir+'1342184598_blue_PreparedFrames.fits[6065:]',
@@ -68,7 +68,7 @@ if do_plot:
 
 # compressed TOD
 tod = compression.direct(tod40Hz).copy()
-print tod
+print(tod)
 
 # naive map
 map_naive = mapper_naive(tod, model)

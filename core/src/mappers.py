@@ -118,7 +118,7 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None, tol=
             if self.residual < tol:
                 self.niterations += 1
             if verbose and MPI.COMM_WORLD.Get_rank() == 0: 
-                print 'Iteration ' + str(self.niterations) + ': ' + str(self.residual)
+                print('Iteration ' + str(self.niterations) + ': ' + str(self.residual))
 
     callback = PcgCallback()
     
@@ -130,7 +130,7 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None, tol=
     if info > 0:
         callback.niterations += 1
         if callback.niterations != maxiter:
-            print 'Warning: mapper_rls: maxiter != niter...'
+            print('Warning: mapper_rls: maxiter != niter...')
 
     output = Map(C.unpacking(solution))
     if output.header is None:

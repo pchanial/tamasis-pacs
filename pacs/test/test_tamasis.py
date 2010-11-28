@@ -19,9 +19,9 @@ compression  = CompressionAverage(obs)
 masking      = Masking(tod.mask)
 
 model = masking * crosstalk * multiplexing * projection * telescope
-print model
+print(model)
 model = projection
-print model
+print(model)
 
 # naive map
 tod.mask[:] = 0

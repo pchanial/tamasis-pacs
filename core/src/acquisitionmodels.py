@@ -3,7 +3,7 @@ class ValidationError(Exception): pass
 try:
     import fftw3
 except:
-    print 'Warning: Library PyFFTW3 is not installed.'
+    print('Warning: Library PyFFTW3 is not installed.')
 
 import multiprocessing
 import numpy
@@ -217,7 +217,7 @@ class AcquisitionModel(object):
         """
         if reusein:
             return array
-        if __verbose__: print 'Info: Allocating ' + str(array.dtype.itemsize * numpy.product(array.shape)/2.**20) + ' MiB in ' + type(self).__name__ + '.'
+        if __verbose__: print('Info: Allocating ' + str(array.dtype.itemsize * numpy.product(array.shape)/2.**20) + ' MiB in ' + type(self).__name__ + '.')
         return array.copy('a')
 
     def validate_output_direct(self, cls, shapeout, dtype, reuseout, **options):
@@ -231,7 +231,7 @@ class AcquisitionModel(object):
             raise ValueError('The shape of the output of ' + type(self).__name__+' is not known.')
         shapeout_flat = flatten_sliced_shape(shapeout)
         if self._output_direct is None or shapeout_flat != self._output_direct.shape or self._output_direct.dtype != dtype:
-            if __verbose__: print 'Info: Allocating '+str(dtype.itemsize*numpy.product(shapeout_flat)/2.**20)+' MiB for the output of ' + type(self).__name__+'.'
+            if __verbose__: print('Info: Allocating '+str(dtype.itemsize*numpy.product(shapeout_flat)/2.**20)+' MiB for the output of ' + type(self).__name__+'.')
             if cls == numpy.ndarray:
                 self._output_direct = numpy.empty(shapeout, dtype, **options)
             else:
@@ -250,7 +250,7 @@ class AcquisitionModel(object):
             raise ValueError('The shape of the input of ' + type(self).__name__+' is not known.')
         shapein_flat = flatten_sliced_shape(shapein)
         if self._output_transpose is None or shapein_flat != self._output_transpose.shape or self._output_transpose.dtype != dtype:
-            if __verbose__: print 'Info: Allocating '+str(dtype.itemsize*numpy.product(shapein_flat)/2.**20)+' MiB for the output of ' + type(self).__name__+'.T.'
+            if __verbose__: print('Info: Allocating '+str(dtype.itemsize*numpy.product(shapein_flat)/2.**20)+' MiB for the output of ' + type(self).__name__+'.T.')
             if cls == numpy.ndarray:
                 self._output_transpose = numpy.empty(shapein, dtype, **options)
             else:
@@ -868,7 +868,7 @@ class Masking(Symmetric):
         AcquisitionModel.__init__(self, description)
         if mask is None:
             self.mask = None
-            print 'Warning: input mask is None.'
+            print('Warning: input mask is None.')
         else:
             self.mask = mask
         # shapein is not set, since it would fail for Tod with more than one slice

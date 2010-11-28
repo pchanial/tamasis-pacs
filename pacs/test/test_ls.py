@@ -14,7 +14,7 @@ compression  = CompressionAverage(obs)
 masking_tod  = Masking(tod.mask)
 
 model = masking_tod * crosstalk * multiplexing * projection * telescope
-print model
+print(model)
 
 # naive map
 map_naive = mapper_naive(tod, model)
@@ -37,4 +37,4 @@ old_settings = numpy.seterr(divide='ignore')
 M0 = unpacking.transpose(1./map_naive.coverage)
 numpy.seterr(**old_settings)
 map_iter2 = mapper_ls(tod, model * unpacking, tol=1.e-4, maxiter=200, M=M)
-print map_iter2.header['time']
+print(map_iter2.header['time'])

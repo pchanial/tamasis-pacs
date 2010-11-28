@@ -40,7 +40,7 @@ class _Pacs(Observation):
         ndetectors = self.get_ndetectors()
         nvalids = int(numpy.sum(nsamples))
         sizeofpmatrix = npixels_per_sample * nvalids * ndetectors
-        print 'Info: Allocating '+str(sizeofpmatrix/2.**17)+' MiB for the pointing matrix.'
+        print('Info: Allocating '+str(sizeofpmatrix/2.**17)+' MiB for the pointing matrix.')
         pmatrix = numpy.empty(sizeofpmatrix, dtype=numpy.int64)
         
         status = tmf.pacs_pointing_matrix(self.instrument.band,
@@ -373,7 +373,7 @@ class PacsObservation(_Pacs):
         # Status
         self._status = None
 
-        print self
+        print(self)
 
     def get_tod(self, unit=None, flatfielding=True, subtraction_mean=True, raw_data=False, masks='activated'):
         """
@@ -407,7 +407,7 @@ class PacsObservation(_Pacs):
             elif m == 'deactivated':
                 sel_masks |= dea_masks
             elif m not in all_masks:
-                print "Warning: mask '" + m + "' is not found."
+                print("Warning: mask '" + m + "' is not found.")
             else:
                 sel_masks.add(m)
 
@@ -508,7 +508,7 @@ class PacsPointing(Pointing):
                 nsamples = tuple(nsamples)
         nsamples_tot = numpy.sum(nsamples)
         if numpy.any(numpy.array([ra.size,dec.size,pa.size,info.size,masked.size,removed.size]) != nsamples_tot):
-            print numpy.array([ra.size,dec.size,pa.size,info.size,masked.size,removed.size]), nsamples_tot, nsamples
+            print(numpy.array([ra.size,dec.size,pa.size,info.size,masked.size,removed.size]), nsamples_tot, nsamples)
             raise ValueError('The pointing inputs do not have the same size.')
 
         if info is None:
@@ -603,7 +603,7 @@ class PacsSimulation(_Pacs):
 
         self._status = _write_status(self)
 
-        print self
+        print(self)
 
     def save(self, filename, tod):
         
@@ -691,7 +691,7 @@ def pacs_plot_scan(patterns, title=None, new_figure=True):
         try:
             hdu = pyfits.open(file)['STATUS']
         except Exception as error:
-            print "Warning: Cannot extract status from file '"+file+"': "+str(error)
+            print("Warning: Cannot extract status from file '"+file+"': "+str(error))
             continue
 
         while True:
