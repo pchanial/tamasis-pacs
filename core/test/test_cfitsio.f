@@ -15,13 +15,13 @@ program test_cfitsio
     call fits_open_file(fptr, filename // C_NULL_CHAR, CFITSIO_READONLY, status)
     if (status /= 0) then
         call cfitsio_report_error(status)
-        stop 'FAILED: fits_open_file'
+        call failure('fits_open_file')
     end if
 
     call fits_hdr2str(fptr, 1, C_NULL_PTR, 0, c_header, nkeyrec, status)
     if (status /= 0) then
         call cfitsio_report_error(status)
-        stop 'FAILED: fits_hdr2str'
+        call failure('fits_hdr2str')
     end if
 
     call c_f_pointer(c_header, header)
@@ -32,9 +32,15 @@ program test_cfitsio
     call fits_close_file(fptr, status)
     if (status /= 0) then
         call cfitsio_report_error(status)
-        stop 'FAILED: fits_close_file'
+        call failure('fits_close_file')
     end if
 
-    stop 'OK.'
+contains
+
+    subroutine failure(errmsg)
+        character(len=*), intent(in) :: errmsg
+        write (ERROR_UNIT,'(a)'), 'FAILED: ' // errmsg
+        stop 1
+    end subroutine failure
 
 end program test_cfitsio

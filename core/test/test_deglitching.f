@@ -8,7 +8,8 @@ program test_deglitching
     implicit none
 
     type(pointingelement),allocatable :: pmatrix(:,:,:)
-    integer                           :: i, j, itime, idetector, ipixel
+    integer                           :: i, j
+!   integer                           :: itime, idetector, ipixel
     integer                           :: ntimes, ndetectors, npixels_per_sample
     integer                           :: nrepeats
     integer                           :: nx, ny
@@ -75,7 +76,7 @@ program test_deglitching
     signal([3,8,9 ],2) = 10._p
 
     call deglitch_l2b(pmatrix(:,:,1:2), nx, ny, signal(:,1:2), mask(:,1:2), 5._p, .true.)
-    if (count(mask) /= 6 .or. any(.not. mask([1,4,17],1)) .or. any(.not. mask([3,8,9],2))) stop 'FAILED: deglitch_l2b 1'
+    if (count(mask) /= 6 .or. any(.not. mask([1,4,17],1)) .or. any(.not. mask([3,8,9],2))) call failure('deglitch_l2b 1')
 
     deallocate (pmatrix)
 
@@ -120,7 +121,7 @@ program test_deglitching
 
     call deglitch_l2b(pmatrix(:,:,1:2), nx, ny, signal(:,1:2), mask(:,1:2), 5._p, .true.)
     if (count(mask) /= 14 .or. any(.not. mask([1,3,4,8,9,16,17],1)) .or. &
-        any(.not. mask([1,3,4,8,9,16,17],2))) stop 'FAILED: deglitch_l2b 2'
+        any(.not. mask([1,3,4,8,9,16,17],2))) call failure('deglitch_l2b 2')
 
 
     !-------------------------------------
@@ -174,27 +175,23 @@ program test_deglitching
     call deglitch_l2b(pmatrix, nx, ny, signal, mask, 20._p, .true.)
     if (count(mask) /= 22 .or. any(.not. mask([1,3,4,8,9,16,17],1)) .or. &
         any(.not. mask([1,3,4,8,9,10,15,16,17],2)) .or. &
-        any(.not. mask([3,8,9,10,15,16],3))) stop 'FAILED: deglitch_l2b 3'
+        any(.not. mask([3,8,9,10,15,16],3))) call failure('deglitch_l2b 3')
 
-    stop 'OK.'
-
-    do idetector = 1, ndetectors
-        write (*,'(a,i0,a)') 'Detector ', idetector, ': '
-        do itime=1, ntimes
-            write (*,'(a,i0,a,$)') '   t', itime, ':'
-            do ipixel = 1, npixels_per_sample
-               write (*,'(x,i0,":",f8.5,$)') pmatrix(ipixel,itime,idetector)%pixel, pmatrix(ipixel,itime,idetector)%weight
-            end do
-            if (mask(itime,idetector)) then
-                write (*,'(a,$)') ' masked'
-            end if
-            write (*,*)
-        end do
-    end do
-
+!!$    do idetector = 1, ndetectors
+!!$        write (*,'(a,i0,a)') 'Detector ', idetector, ': '
+!!$        do itime=1, ntimes
+!!$            write (*,'(a,i0,a,$)') '   t', itime, ':'
+!!$            do ipixel = 1, npixels_per_sample
+!!$               write (*,'(x,i0,":",f8.5,$)') pmatrix(ipixel,itime,idetector)%pixel, pmatrix(ipixel,itime,idetector)%weight
+!!$            end do
+!!$            if (mask(itime,idetector)) then
+!!$                write (*,'(a,$)') ' masked'
+!!$            end if
+!!$            write (*,*)
+!!$        end do
+!!$    end do
 
 contains
-
 
     subroutine get_pmatrix(pmatrix, nx, ny, xc, yc, detectorsize)
         type(pointingelement), intent(inout) :: pmatrix(:,:,:)
@@ -237,6 +234,11 @@ contains
 
     end subroutine get_pmatrix
 
+    subroutine failure(errmsg)
+        character(len=*), intent(in) :: errmsg
+        write (ERROR_UNIT,'(a)'), 'FAILED: ' // errmsg
+        stop 1
+    end subroutine failure
 
 end program test_deglitching
 

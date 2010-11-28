@@ -1,5 +1,6 @@
 program test_pointingmatrix
 
+    use iso_fortran_env,      only : ERROR_UNIT
     use module_math,          only : sum_kahan, neq_real
     use module_pointingmatrix
     use module_tamasis,       only : p
@@ -32,23 +33,29 @@ program test_pointingmatrix
     xy(2,:) = y_vect
     roi = xy2roi(xy, 4)
 
-    if (any(roi(:,1,:) /= 1 .or. roi(:,2,:) /= 2)) stop 'FAILED: xy2roi'
+    if (any(roi(:,1,:) /= 1 .or. roi(:,2,:) /= 2)) call failure('xy2roi')
 
     nroi = 0
     do itime = 1, ntimes
        call roi2pmatrix(roi, nvertices, xy, nx, ny, nroi, out, pmatrix(:,itime,:))
     end do
-    if (nroi /= npixels_per_sample) stop 'FAILED: update npixels_per_sample'
-    if (out) stop 'FAILED: roi2pmatrix out'
+    if (nroi /= npixels_per_sample) call failure('update npixels_per_sample')
+    if (out) call failure('roi2pmatrix out')
     if (any(pmatrix%pixel /= 0 .and. pmatrix%pixel /= 1 .and. pmatrix%pixel /= 100 .and. pmatrix%pixel /= 101)) then
-        stop 'FAILED: roi2pmatrix1'
+        call failure('roi2pmatrix1')
     end if
 
     if (neq_real(sum_kahan(real(pmatrix%weight,kind=p)), surface_convex_polygon(real(xy(:,1:4), p)) * ndetectors * ntimes,         &
         10._p * epsilon(1.0))) then
-        stop 'FAILED: roi2pmatrix2'
+        call failure('roi2pmatrix2')
     end if
 
-    stop "OK."
+contains
+
+    subroutine failure(errmsg)
+        character(len=*), intent(in) :: errmsg
+        write (ERROR_UNIT,'(a)'), 'FAILED: ' // errmsg
+        stop 1
+    end subroutine failure
  
 end program test_pointingmatrix

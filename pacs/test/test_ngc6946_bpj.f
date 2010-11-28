@@ -40,7 +40,7 @@ program test_ngc6946_bpj
     ! initialise observation
     allocate (obs)
     call obs%init(filename, policy, status, verbose=.true.)
-    if (status /= 0) stop 'FAILED: pacsobservation%init'
+    if (status /= 0) call failure('pacsobservation%init')
     nsamples = obs%slice(1)%nvalids
 
     call obs%print()
@@ -49,18 +49,18 @@ program test_ngc6946_bpj
     allocate (pacs)
     call pacs%read_detector_mask(obs%band, detector_mask, status,                                                                  &
          transparent_mode=obs%slice(1)%observing_mode=='transparent')
-    if (status /= 0) stop 'FAILED: pacs%read_detector_mask'
+    if (status /= 0) call failure('pacs%read_detector_mask')
     call pacs%init_with_calfiles(obs%band, detector_mask, 1, status)
-    if (status /= 0) stop 'FAILED: pacs%init_with_calfiles'
+    if (status /= 0) call failure('pacs%init_with_calfiles')
 
     ! get header map
     call pacs%compute_map_header(obs, .false., 3._p, header, status)
-    if (status /= 0) stop 'FAILED: compute_map_header.'
+    if (status /= 0) call failure('compute_map_header.')
 
     call ft_read_keyword(header, 'naxis1', nx, status=status)
-    if (status /= 0) stop 'FAILED: compute_map_header 2.'
+    if (status /= 0) call failure('compute_map_header 2.')
     call ft_read_keyword(header, 'naxis2', ny, status=status)
-    if (status /= 0) stop 'FAILED: compute_map_header 3.'
+    if (status /= 0) call failure('compute_map_header 3.')
 
     ! allocate memory for the map
     allocate (map1d(0:nx*ny-1))
@@ -71,7 +71,7 @@ program test_ngc6946_bpj
     allocate (signal(nsamples, pacs%ndetectors))
     allocate (mask  (nsamples, pacs%ndetectors))
     call pacs%read(obs, signal, mask, status)
-    if (status /= 0) stop 'FAILED: read_tod'
+    if (status /= 0) call failure('read_tod')
     call system_clock(count2, count_rate, count_max)
     write (*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
 
@@ -86,7 +86,7 @@ program test_ngc6946_bpj
     ! compute the projector
     allocate (pmatrix(npixels_per_sample,nsamples,pacs%ndetectors))
     call pacs%compute_projection(SHARP_EDGES, obs, .false., header, nx, ny, pmatrix, status)
-    if (status /= 0) stop 'FAILED: compute_projection_sharp_edges.'
+    if (status /= 0) call failure('compute_projection_sharp_edges.')
 
     ! check flux conservation during backprojection
     write (*,'(a)', advance='no') 'Testing flux conservation...'
@@ -97,7 +97,7 @@ program test_ngc6946_bpj
     allocate (coords_yz(NDIMS, pacs%ndetectors*NVERTICES))
 
     call init_astrometry(header, status=status)
-    if (status /= 0) stop 'FAILED: init_astrometry'
+    if (status /= 0) call failure('init_astrometry')
 
     chop_old = pInf
 
@@ -142,7 +142,7 @@ program test_ngc6946_bpj
     ! test the back projected map
     write (OUTPUT_UNIT,*) 'Sum in map is ', sum_kahan(map1d), ' ...instead of ', strinteger(int(pacs%ndetectors*nsamples, kind=4))
     if (neq_real(sum_kahan(map1d), real(pacs%ndetectors*nsamples,p), 10._p * epsilon(1.0))) then
-        stop 'FAILED.'
+        stop 'FAILED:back projection'
     end if
 
     ! project the map
@@ -158,13 +158,18 @@ program test_ngc6946_bpj
         write (OUTPUT_UNIT,*), 'max N*epsilon:', maxval((signal-surface1)/signal/epsilon(1.0), signal==signal                      &
               .and. surface1 == surface1), ' instead of 6.07.'
         write (OUTPUT_UNIT,*), 'NaN:', count(signal/=signal), count(surface1/=surface1)
-        stop 'FAILED. wrong back projection.'
+        call failure('wrong back projection.')
     end if
 
     call system_clock(count2, count_rate, count_max)
     write (*,'(a,f6.2,a)') 'Total elapsed time: ', real(count2-count0)/count_rate, 's'
 
-    flush(OUTPUT_UNIT)
-    stop "OK."
+contains
+
+    subroutine failure(errmsg)
+        character(len=*), intent(in) :: errmsg
+        write (ERROR_UNIT,'(a)'), 'FAILED: ' // errmsg
+        stop 1
+    end subroutine failure
 
 end program test_ngc6946_bpj

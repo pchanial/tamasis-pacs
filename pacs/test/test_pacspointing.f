@@ -1,5 +1,6 @@
 program test_pacspointing
 
+    use iso_fortran_env,        only : ERROR_UNIT
     use module_math,            only : NaN, neq_real
     use module_pacsobservation, only : PacsObservation, MaskPolicy
     use module_tamasis,         only : p
@@ -24,16 +25,16 @@ program test_pacspointing
 
     allocate(obs)
     call obs%init(filename, policy, status)
-    if (status /= 0) stop 'FAILED: init_pacsobservation'
+    if (status /= 0) call failure('init_pacsobservation')
 
     index = 0
     do i = 1, 6
         call obs%get_position_time(1, timetest(i)-timetest(1), ra(i), dec(i), pa(i), chop(i), index)
     end do
-    if (any(neq_real(ra  (1:6), ratest))) stop 'FAILED: ra'
-    if (any(neq_real(dec (1:6), dectest))) stop 'FAILED: dec'
-    if (any(neq_real(pa  (1:6), patest ))) stop 'FAILED: pa'
-    if (any(neq_real(chop(1:6), choptest))) stop 'FAILED: chop'
+    if (any(neq_real(ra  (1:6), ratest))) call failure('ra')
+    if (any(neq_real(dec (1:6), dectest))) call failure('dec')
+    if (any(neq_real(pa  (1:6), patest ))) call failure('pa')
+    if (any(neq_real(chop(1:6), choptest))) call failure('chop')
 
     call obs%destructor()
 
@@ -42,7 +43,7 @@ program test_pacspointing
     ! test interpolation (evenly spaced sampling)
     call obs%init_with_variables([1._p, 2._p], [0._p, 1._p], [3._p, 3._p], [2._p, 1._p], [0._p, 0._p], [FALSE, FALSE],             &
                                  [FALSE, FALSE], [2], [1], status)
-    if (status /= 0) stop 'FAILED: init_with_var 1'
+    if (status /= 0) call failure('init_with_var 1')
 
     index = 0
     do i = 1, size(time)
@@ -51,14 +52,14 @@ program test_pacspointing
     if (any(neq_real(ra,  [nan, nan,-1.0_p,-0.5_p, 0.0_p, 0.5_p, 1.0_p, 1.5_p, 2.0_p, nan, nan, nan]) .or.                         &
             neq_real(dec, [nan, nan, 3.0_p, 3.0_p, 3.0_p, 3.0_p, 3.0_p, 3.0_p, 3.0_p, nan, nan, nan]) .or.                         &
             neq_real(pa,  [nan, nan, 3.0_p, 2.5_p, 2.0_p, 1.5_p, 1.0_p, 0.5_p, 0.0_p, nan, nan, nan])))                            &
-        stop 'FAILED: get_position_time 1'
+        call failure('get_position_time 1')
     call obs%destructor()
 
     ! test slow interpolation (unevenly spaced sampling)
     call obs%init_with_variables([0.5_p, 1.5_p, 2.5_p, 3._p], [0._p, 1._p, 2._p, 2.5_p], [3._p, 3._p, 3._p, 3._p],                 &
                                  [3._p, 2._p, 1._p, 0.5_p], [0._p, 0._p, 0._p, 1._p], [(FALSE, i=1, 4)], [(FALSE, i=1, 4)], [4],   &
                                  [1], status)
-    if (status /= 0) stop 'FAILED: init_with_var 2'
+    if (status /= 0) call failure('init_with_var 2')
 
     index = 0
     do i = 1, size(time)
@@ -70,7 +71,7 @@ program test_pacspointing
             neq_real(dec, [nan,  3.0_p,  3.0_p, 3.0_p, 3.0_p, 3.0_p, 3.0_p, 3.0_p, 3.0_p, 3.0_p, nan, nan]) .or.                   &
             neq_real(pa,  [nan,  4.0_p,  3.5_p, 3.0_p, 2.5_p, 2.0_p, 1.5_p, 1.0_p, 0.5_p, 0.0_p, nan, nan]) .or.                   &
             neq_real(chop,[nan,  0.0_p,  0.0_p, 0.0_p, 0.0_p, 0.0_p, 0.0_p, 0.0_p, 1.0_p, 2.0_p, nan, nan]))) then
-        stop 'FAILED: get_position_time 2'
+        call failure('get_position_time 2')
     end if
 
     do i = 1, size(time)
@@ -80,10 +81,16 @@ program test_pacspointing
     if (any( neq_real(ra, [(0+i/3._p,i=0,2), (1+i/3._p,i=0,2), (2+0.5_p*i/3._p,i=0,2),(2.5_p+0.5_p*i/3._p,i=0,2)])                 &
         .or. neq_real(dec, [(3.0_p,i=1,12)])                                                                                       &
         .or. neq_real(pa, [(3-i/3._p,i=0,2), (2-i/3._p,i=0,2), (1-0.5_p*i/3._p,i=0,2), (0.5_p-0.5_p*i/3._p, i=0,2)])               &
-        .or. neq_real(chop, [(0._p, i=1,6), (i/3.0_p, i=0,5)]))) stop 'FAILED: get_position_index'
+        .or. neq_real(chop, [(0._p, i=1,6), (i/3.0_p, i=0,5)]))) call failure('get_position_index')
 
     call obs%destructor()
 
-    stop "OK."
+contains
+
+    subroutine failure(errmsg)
+        character(len=*), intent(in) :: errmsg
+        write (ERROR_UNIT,'(a)'), 'FAILED: ' // errmsg
+        stop 1
+    end subroutine failure
 
 end program test_pacspointing

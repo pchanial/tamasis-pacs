@@ -1,5 +1,6 @@
 program test_pacsobservation
 
+    use iso_fortran_env,        only : ERROR_UNIT
     use module_pacsinstrument,  only : PacsInstrument
     use module_pacsobservation, only : MaskPolicy, PacsObservation
     use module_observation,     only : Pointing
@@ -26,51 +27,51 @@ program test_pacsobservation
 
     afilename(1) = filename
     call obs%init(afilename, policy, status)
-    if (status /= 0) stop 'FAILED: init'
+    if (status /= 0) call failure('init')
     call get_first_last(obs%slice(1)%p%removed, first, last)
-    if (first /= 1 .or. last /= 360) stop 'FAILED: init1'
+    if (first /= 1 .or. last /= 360) call failure('init1')
 
     afilename(1) = filename // '[23:23]'
     call obs%init(afilename, policy, status)
     call get_first_last(obs%slice(1)%p%removed, first, last)
-    if (status /= 0 .or. first /= 23 .or. last /= 23) stop 'FAILED: init2'
+    if (status /= 0 .or. first /= 23 .or. last /= 23) call failure('init2')
 
     afilename(1) = filename // '[200:]'
     call obs%init(afilename, policy, status)
     call get_first_last(obs%slice(1)%p%removed, first, last)
-    if (status /= 0 .or. first /= 200 .or. last /= 360) stop 'FAILED: init3'
+    if (status /= 0 .or. first /= 200 .or. last /= 360) call failure('init3')
 
     afilename(1) = filename // '[:130]'
     call obs%init(afilename, policy, status)
     call get_first_last(obs%slice(1)%p%removed, first, last)
-    if (status /= 0 .or. first /= 1 .or. last /= 130) stop 'FAILED: init4'
+    if (status /= 0 .or. first /= 1 .or. last /= 130) call failure('init4')
 
     afilename(1) = filename // '[:]'
     call obs%init(afilename, policy, status)
     call get_first_last(obs%slice(1)%p%removed, first, last)
-    if (status /= 0 .or. first /= 1 .or. last /= 360) stop 'FAILED: init5'
+    if (status /= 0 .or. first /= 1 .or. last /= 360) call failure('init5')
 
     afilename(1) = filename // '[]'
     call obs%init(afilename, policy, status)
     call get_first_last(obs%slice(1)%p%removed, first, last)
-    if (status /= 0 .or. first /= 1 .or. last /= 360) stop 'FAILED: init6'
+    if (status /= 0 .or. first /= 1 .or. last /= 360) call failure('init6')
    
     ! invalid calls
     afilename(1) = filename // '[32:23]'
     call obs%init(afilename, policy, status)
-    if (status == 0) stop 'FAILED: badinit1'
+    if (status == 0) call failure('badinit1')
 
     afilename(1) = filename // '[32:361]'
     call obs%init(afilename, policy, status)
-    if (status == 0) stop 'FAILED: badinit2'
+    if (status == 0) call failure('badinit2')
 
     afilename(1) = filename // '[ljdf]'
     call obs%init(afilename, policy, status)
-    if (status == 0) stop 'FAILED: badinit4'
+    if (status == 0) call failure('badinit4')
 
     afilename(1) = filename // '[:l+]'
     call obs%init(afilename, policy, status)
-    if (status == 0) stop 'FAILED: badinit5'
+    if (status == 0) call failure('badinit5')
     deallocate (afilename)
 
     ! array
@@ -81,30 +82,30 @@ program test_pacsobservation
     if (status /= 0 .or. sum(obs%slice%nsamples) /= 360*2 .or. &
          count(.not. obs%slice(1)%p%removed) + count(.not. obs%slice(2)%p%removed) /= 198) stop 'FAILED:ainit1'
     call get_first_last(obs%slice(1)%p%removed, first, last)
-    if (first /= 3 .or. last /= 100) stop 'FAILED: ainit1b'
+    if (first /= 3 .or. last /= 100) call failure('ainit1b')
     call get_first_last(obs%slice(2)%p%removed, first, last)
-    if (first /= 201 .or. last /= 300) stop 'FAILED: ainit1c'
+    if (first /= 201 .or. last /= 300) call failure('ainit1c')
     deallocate(afilename)
  
     allocate(afilename(0))
     call obs%init(afilename, policy, status)
-    if (status == 0) stop 'FAILED: ainit2'
+    if (status == 0) call failure('ainit2')
     deallocate(afilename)
 
     ! test reading observation
     allocate (afilename(1))
     afilename(1) = filename
     call obs%init(afilename, policy, status)
-    if (status /= 0) stop 'FAILED: init_pacsobservation loop'
-    if (obs%band /= 'blue' .or. obs%slice(1)%observing_mode /= 'prime') stop 'FAILED: obs%init'
+    if (status /= 0) call failure('init_pacsobservation loop')
+    if (obs%band /= 'blue' .or. obs%slice(1)%observing_mode /= 'prime') call failure('obs%init')
     deallocate (afilename)
 
     allocate (pacs)
     call pacs%read_detector_mask(obs%band, detector_mask, status,                                                                  &
          transparent_mode=obs%slice(1)%observing_mode=='transparent')
-    if (status /= 0) stop 'FAILED: pacs%read_detector_mask'
+    if (status /= 0) call failure('pacs%read_detector_mask')
     call pacs%init_with_calfiles(obs%band, detector_mask, 1, status)
-    if (status /= 0) stop 'FAILED: pacs%init_with_calfiles'
+    if (status /= 0) call failure('pacs%init_with_calfiles')
 
     allocate (signal(obs%slice(1)%nsamples,pacs%ndetectors))
     allocate (mask  (obs%slice(1)%nsamples,pacs%ndetectors))
@@ -118,7 +119,7 @@ program test_pacsobservation
     signal_ref = signal(:,idetector)
     mask_ref = .false.
     mask_ref([5,6,7,151]) = .true. ! (27,64)
-    if (any(mask_ref .neqv. mask(:,idetector))) stop 'FAILED: mask ref'
+    if (any(mask_ref .neqv. mask(:,idetector))) call failure('mask ref')
     deallocate (mask, signal)
     
     do first = 1, 360, 7
@@ -130,22 +131,20 @@ program test_pacsobservation
            allocate(signal(obs%slice(1)%nvalids,pacs%ndetectors))
            allocate(mask  (obs%slice(1)%nvalids,pacs%ndetectors))
            call pacs%read(obs, signal, mask, status)
-           if (status /= 0) stop 'FAILED: read_pacsobservation loop'
-           if (any(signal(:,idetector) /= signal_ref(first:last))) stop 'FAILED: read signal'
+           if (status /= 0) call failure('read_pacsobservation loop')
+           if (any(signal(:,idetector) /= signal_ref(first:last))) call failure('read signal')
            if (any(mask(:,idetector) .neqv. mask_ref(first:last))) then
                print *,first, last
                print *,shape(mask(:,idetector))
                print *,shape(mask_ref)
                print *,mask(:,idetector)
                print *,mask_ref(first:last)
-               stop 'FAILED: read mask'
+               call failure('read mask')
            end if
            deallocate (signal)
            deallocate (mask)
         end do
     end do
-
-    stop 'OK.'
 
 contains
 
@@ -163,5 +162,11 @@ contains
         end do
 
     end subroutine get_first_last
+
+    subroutine failure(errmsg)
+        character(len=*), intent(in) :: errmsg
+        write (ERROR_UNIT,'(a)'), 'FAILED: ' // errmsg
+        stop 1
+    end subroutine failure
 
 end program test_pacsobservation

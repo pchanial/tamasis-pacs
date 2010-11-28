@@ -1,5 +1,6 @@
 program test_pacsinstrument
 
+    use iso_fortran_env,        only : ERROR_UNIT
     use module_fitstools,       only : ft_read_keyword, ft_header2str
     use module_math,            only : mean, neq_real
     use module_pacsinstrument
@@ -37,47 +38,47 @@ program test_pacsinstrument
     ! initialise observation
     allocate(obs)
     call obs%init(filename, policy, status)
-    if (status /= 0) stop 'FAILED: init_pacsobservation'
+    if (status /= 0) call failure('init_pacsobservation')
 
     ! initialise pacs instrument
     allocate(pacs)
     call pacs%read_detector_mask(obs%band, detector_mask, status,                                                                  &
          transparent_mode=obs%slice(1)%observing_mode=='transparent')
-    if (status /= 0) stop 'FAILED: pacs%read_detector_mask'
+    if (status /= 0) call failure('pacs%read_detector_mask')
     call pacs%init_with_calfiles(obs%band, detector_mask, 1, status)
-    if (status /= 0) stop 'FAILED: pacs%init_with_calfiles'
+    if (status /= 0) call failure('pacs%init_with_calfiles')
 
     ! read calibration files
     call pacs%read_calibration_files(obs%band, detector_mask, detector_center_all, detector_corner_all, detector_area_all,         &
                                          flatfield_optical_all, flatfield_detector_all, distortion_yz, responsivity, status)
-    if (status /= 0) stop 'FAILED: read_calibration_files'
+    if (status /= 0) call failure('read_calibration_files')
 
     allocate(time(obs%nsamples))
     time = obs%slice(1)%p%time
 
-    if (pacs%ndetectors /= 1997) stop 'FAILED: ndetectors'
-    if (size(time) /= 360) stop 'FAILED: nsamples'
-    if (any(shape(pacs%detector_corner) /= [2,4*pacs%ndetectors])) stop 'FAILED: shape detector_corner'
+    if (pacs%ndetectors /= 1997) call failure('ndetectors')
+    if (size(time) /= 360) call failure('nsamples')
+    if (any(shape(pacs%detector_corner) /= [2,4*pacs%ndetectors])) call failure('shape detector_corner')
 
     i = count(.not. pacs%mask(1,:))
 
-    if (any(pacs%pq(:,2)   /= [0,1])) stop 'FAILED pq1'
-    if (any(pacs%pq(:,1+i) /= [1,0])) stop 'FAILED pq2'
-    if (any(pacs%ij(:,2)   /= [0,1])) stop 'FAILED ij1'
-    if (any(pacs%ij(:,1+i) /= [1,0])) stop 'FAILED ij2'
+    if (any(pacs%pq(:,2)   /= [0,1])) call failure('pq1')
+    if (any(pacs%pq(:,1+i) /= [1,0])) call failure('pq2')
+    if (any(pacs%ij(:,2)   /= [0,1])) call failure('ij1')
+    if (any(pacs%ij(:,1+i) /= [1,0])) call failure('ij2')
 
     if (any(pacs%detector_corner(:,5:8) /= detector_corner_all(:,:,1,2)))          &
-        stop 'FAILED uv1'
+        call failure('uv1')
     if (any(pacs%detector_corner(:,i*4+1:i*4+4) /= detector_corner_all(:,:,2,1)))  &
-        stop 'FAILED uv2'
+        call failure('uv2')
 
     allocate(yz(ndims, size(pacs%detector_corner,2)))
     allocate(ad(ndims, size(pacs%detector_corner,2)))
     allocate(xy(ndims, size(pacs%detector_corner,2)))
     call ft_header2str(filename_header, header, status)
-    if (status /= 0) stop 'FAILED: ft_header2str.'
+    if (status /= 0) call failure('ft_header2str.')
     call init_astrometry(header, status=status)
-    if (status /= 0) stop 'FAILED: init_astrometry.'
+    if (status /= 0) call failure('init_astrometry.')
 
     index = 0
     call obs%get_position_time(1, time(1), ra, dec, pa, chop, index)
@@ -115,23 +116,23 @@ program test_pacsinstrument
     ! minmax(dec) 59.980161       67.110813
 
     call obs%compute_center(ra0, dec0)
-    if (neq_real(ra0,  mean(obs%slice(1)%p%ra)) .or. neq_real(dec0, mean(obs%slice(1)%p%dec))) stop 'FAILED: compute_center'
+    if (neq_real(ra0,  mean(obs%slice(1)%p%ra)) .or. neq_real(dec0, mean(obs%slice(1)%p%dec))) call failure('compute_center')
 
     call pacs%find_minmax(obs, .false., xmin, xmax, ymin, ymax)
     write (*,*) 'Xmin: ', xmin, ', Xmax: ', xmax
     write (*,*) 'Ymin: ', ymin, ', Ymax: ', ymax
 
     call pacs%compute_map_header(obs, .false., 3._p, header, status)
-    if (status /= 0) stop 'FAILED: compute_map_header'
+    if (status /= 0) call failure('compute_map_header')
 
     call ft_read_keyword(header, 'naxis1', nx, status=status)
-    if (status /= 0) stop 'FAILED: read_param NAXIS1'
+    if (status /= 0) call failure('read_param NAXIS1')
 
     call ft_read_keyword(header, 'naxis2', ny, status=status)
-    if (status /= 0) stop 'FAILED: read_param NAXIS2'
+    if (status /= 0) call failure('read_param NAXIS2')
 
     call init_astrometry(header, status=status)
-    if (status /= 0) stop 'FAILED: init_astrometry'
+    if (status /= 0) call failure('init_astrometry')
 
     ! check that all detector corners are inside the map
     index = 0
@@ -145,7 +146,7 @@ program test_pacsinstrument
             write (*,'(3(a,i0))') 'sample:', i, ', nx: ', nx, ', ny: ', ny
             write (*,*) 'X: ', minval(xy(1,:)), maxval(xy(1,:))
             write (*,*) 'Y: ', minval(xy(2,:)), maxval(xy(2,:))
-            stop 'FAILED: detector outside of map'
+            call failure('detector outside of map')
         end if
     end do
     call system_clock(count2, count_rate, count_max)
@@ -177,25 +178,31 @@ program test_pacsinstrument
 
     detector_mask_red = .false.
     call pacs%init_with_calfiles('red', detector_mask_red, 1, status)
-    if (status /= 0) stop 'FAILED: pacs%init 1'
+    if (status /= 0) call failure('pacs%init 1')
     call pacs%destroy()
 
     call pacs%init_with_calfiles('green', detector_mask, 1, status)
-    if (status /= 0) stop 'FAILED: pacs%init 2'
+    if (status /= 0) call failure('pacs%init 2')
     call pacs%destroy()
 
     call pacs%init_with_calfiles('blue', detector_mask, 1, status)
-    if (status /= 0) stop 'FAILED: pacs%init 3'
+    if (status /= 0) call failure('pacs%init 3')
     call pacs%destroy()
 
     call pacs%init_with_calfiles('x', detector_mask, 1, status)
-    if (status == 0) stop 'FAILED: pacs%init 4'
+    if (status == 0) call failure('pacs%init 4')
 
     call pacs%init_with_calfiles('blue', detector_mask, 3, status)
-    if (status == 0) stop 'FAILED: pacs%init 5'
+    if (status == 0) call failure('pacs%init 5')
 
-    stop "OK."
-    
+contains
+
+    subroutine failure(errmsg)
+        character(len=*), intent(in) :: errmsg
+        write (ERROR_UNIT,'(a)'), 'FAILED: ' // errmsg
+        stop 1
+    end subroutine failure
+
 end program test_pacsinstrument
 
 ! test before patch to handle several observations
