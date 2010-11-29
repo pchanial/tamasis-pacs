@@ -36,6 +36,7 @@ program test_pointingmatrix
     if (any(roi(:,1,:) /= 1 .or. roi(:,2,:) /= 2)) call failure('xy2roi')
 
     nroi = 0
+    out = .false.
     do itime = 1, ntimes
        call roi2pmatrix(roi, nvertices, xy, nx, ny, nroi, out, pmatrix(:,itime,:))
     end do
