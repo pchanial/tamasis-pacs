@@ -215,6 +215,8 @@ class test_fortran(BuildContext):
     fun = 'test_fortran_fun'
 
 def test_fortran_fun(bld):
+    build(bld)
+    tamasislib = ' '.join(['tamasis' + s for s in reversed(subdirs)])
     for subdir in subdirs:
         files = bld.srcnode.ant_glob(subdir+'/test/test_*.f')
         for file in files:
@@ -223,9 +225,8 @@ def test_fortran_fun(bld):
                 source   = file,
                 target   = os.path.splitext(str(file))[0],
                 includes = '. include',
-                stlib    = ['tamasis' + s for s in reversed(subdirs)],
                 libpath  = '.',
-                use      = libraries)
+                use      = ' '.join(libraries) + ' ' + tamasislib)
     bld.add_group()
     for subdir in subdirs:
         files = bld.path.ant_glob(subdir+'/test/test_*.f')
