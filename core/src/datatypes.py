@@ -3,15 +3,16 @@ import matplotlib
 import matplotlib.pyplot as pyplot
 import numpy
 import pyfits
+from functools import reduce
 try:
     import ds9
     _imported_ds9 = True
 except:
     _imported_ds9 = False
 
-from numpyutils import _my_isscalar
+from .numpyutils import _my_isscalar
 from scipy.special import jn
-from unit import Quantity
+from .unit import Quantity
 
 __all__ = [ 'FitsArray', 'Map', 'Tod', 'create_fitsheader' ]
 
@@ -35,9 +36,9 @@ class FitsArray(Quantity):
             header = hdu.header
             copy = False
             if unit is None:
-                if header.has_key('bunit'):
+                if 'bunit' in header:
                     unit = header['bunit']
-                elif header.has_key('QTTY____'):
+                elif 'QTTY____' in header:
                     unit = header['QTTY____'] # HCSS crap
 
         # get a new FitsArray instance (or a subclass if subok is True)
@@ -99,7 +100,7 @@ class FitsArray(Quantity):
             [(lambda i: [r+str(i+1) for r in required])(i) 
              for i in range(rank)])
 
-        return all([self.header.has_key(k) for k in keywords])
+        return all([k in self.header for k in keywords])
 
     @property
     def header(self):
@@ -297,7 +298,7 @@ class FitsArray(Quantity):
                 if list: break
                 time.sleep(1)
             if not list:
-                raise ValueError, 'No active ds9 running for target: %s' % list
+                raise ValueError('No active ds9 running for target: %s' % list)
 
         # get ds9 instance with given id
         d = ds9.ds9(id)
@@ -482,10 +483,10 @@ class Tod(FitsArray):
         
         # nsamples attribute
         if type(data) is str and nsamples is None:
-            if result.header.has_key('nsamples'):
+            if 'nsamples' in result.header:
                 nsamples = result.header['nsamples'][1:-1].replace(' ', '')
                 if len(nsamples) > 0:
-                    nsamples = map(lambda x: int(float(x)), nsamples.split(','))
+                    nsamples = [int(float(x)) for x in nsamples.split(',')]
         if nsamples is None:
             return result
         shape = validate_sliced_shape(result.shape, nsamples)

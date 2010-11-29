@@ -302,7 +302,7 @@ class Pointing(numpy.recarray):
         info    = numpy.asarray(info)
         masked  = numpy.asarray(masked)
         removed = numpy.asarray(removed)
-        if numpy.any(map(lambda x: x.size not in (1, nsamples_tot), [ra,dec,pa,info,masked,removed])):
+        if numpy.any([x.size not in (1, nsamples_tot) for x in [ra,dec,pa,info,masked,removed]]):
             raise ValueError('The pointing inputs do not have the same size.')
 
         result = numpy.recarray(nsamples_tot, dtype=dtype)

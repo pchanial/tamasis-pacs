@@ -1,6 +1,6 @@
 import numpy
 import re
-from config import get_default_dtype
+from .config import get_default_dtype
 
 __all__ = ['DerivedUnits', 'Quantity', 'UnitError']
 
@@ -49,7 +49,7 @@ def _multiply_unit_inplace(unit, key, val):
     """
     if unit is None:
         return { key : val }
-    if unit.has_key(key):
+    if key in unit:
         if unit[key] == -val:
             del unit[key]
         else:
@@ -65,7 +65,7 @@ def _normalize_quantity(value):
     if value._unit is None:
         return value
     result = Quantity(value, '')
-    for key, val in value._unit.iteritems():
+    for key, val in value._unit.items():
         if (key,val) in DerivedUnits.table:
             result *= _normalize_quantity(DerivedUnits.table[(key,val)])
         elif (key,-val) in DerivedUnits.table:
@@ -108,8 +108,8 @@ def _multiply_unit(unit1, unit2):
     if unit1 is None:
         return unit2
     unit = unit1.copy()
-    for key, val in unit2.iteritems():
-        if unit.has_key(key):
+    for key, val in unit2.items():
+        if key in unit:
             if unit[key] == -val:
                 del unit[key]
             else:
@@ -127,8 +127,8 @@ def _divide_unit(unit1, unit2):
     if unit1 is None:
         return _power_unit(unit2, -1)
     unit = unit1.copy()
-    for key, val in unit2.iteritems():
-        if unit.has_key(key):
+    for key, val in unit2.items():
+        if key in unit:
             if unit[key] == val:
                 del unit[key]
             else:
@@ -138,7 +138,7 @@ def _divide_unit(unit1, unit2):
     return unit
 
 def _get_units(units):
-    return map(lambda q: getattr(q, '_unit', None), units)
+    return [getattr(q, '_unit', None) for q in units]
 
 def _strunit(unit):
     """
@@ -149,12 +149,12 @@ def _strunit(unit):
     result = ''
     has_pos = False
 
-    for key, val in unit.iteritems():
+    for key, val in unit.items():
         if val >= 0:
             has_pos = True
             break
 
-    for key, val in sorted(unit.iteritems()):
+    for key, val in sorted(unit.items()):
         if val < 0 and has_pos:
             continue
         result += ' ' + key
@@ -167,7 +167,7 @@ def _strunit(unit):
     if not has_pos:
         return result[1:]
 
-    for key, val in sorted(unit.iteritems()):
+    for key, val in sorted(unit.items()):
         if val >= 0:
             continue
         val = -val

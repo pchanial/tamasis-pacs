@@ -10,11 +10,11 @@ import numpy
 import scipy.sparse.linalg
 import tamasisfortran as tmf
 
-from config import __verbose__, get_default_dtype, get_default_dtype_float, get_default_dtype_complex
-from datatypes import Map, Tod, combine_sliced_shape, flatten_sliced_shape, validate_sliced_shape
+from .config import __verbose__, get_default_dtype, get_default_dtype_float, get_default_dtype_complex
+from .datatypes import Map, Tod, combine_sliced_shape, flatten_sliced_shape, validate_sliced_shape
 from mpi4py import MPI
-from numpyutils import _my_isscalar
-from processing import interpolate_linear
+from .numpyutils import _my_isscalar
+from .processing import interpolate_linear
 
 __all__ = ['AcquisitionModel', 'AcquisitionModelTranspose', 'Composition', 
            'Addition', 'Square', 'Symmetric', 'Diagonal', 'Scalar', 'Identity',
@@ -487,7 +487,7 @@ class Addition(AcquisitionModel):
         try:
             shapein = self.shapein
             shapeout = self.shapeout
-        except ValidationError, errmsg:
+        except ValidationError as errmsg:
             self.blocks = oldblocks
             raise ValidationError(errmsg)
         return self
@@ -561,7 +561,7 @@ class Composition(AcquisitionModel):
         try:
             shapein = self.shapein
             shapeout = self.shapeout
-        except ValidationError, errmsg:
+        except ValidationError as errmsg:
             self.blocks = oldblocks
             raise ValidationError(errmsg)
         return self
@@ -701,7 +701,7 @@ class Projection(AcquisitionModel):
             observation.get_pointing_matrix(header, resolution, npixels_per_sample, method=method, oversampling=oversampling)
         self.pmatrix = self._pmatrix.view([('weight', 'f4'), ('pixel', 'i4')]).view(numpy.recarray)
         self.pmatrix.resize((ndetectors, numpy.sum(nsamples), self.npixels_per_sample))
-        self.shapein = tuple([self.header['naxis'+str(i+1)] for i in reversed(range(self.header['naxis']))])
+        self.shapein = tuple([self.header['naxis'+str(i+1)] for i in reversed(list(range(self.header['naxis'])))])
         self.shapeout = combine_sliced_shape(ndetectors, nsamples)
 
     def direct(self, map2d, reusein=False, reuseout=False):

@@ -94,7 +94,7 @@ class _Pacs(Observation):
                 try:
                     s = hdu.data
                     break
-                except IndexError, errmsg:
+                except IndexError as errmsg:
                     pass
             
             status.append(s.base)
@@ -310,7 +310,7 @@ class PacsObservation(_Pacs):
         flen_value = len(unit) // nfilenames
         mode = [mode[i*flen_value:(i+1)*flen_value].strip() for i in range(nfilenames)]
         unit = [unit[i*flen_value:(i+1)*flen_value].strip() for i in range(nfilenames)]
-        unit = map(lambda x: x if x.find('/') != -1 else x + ' / detector', unit)
+        unit = [x if x.find('/') != -1 else x + ' / detector' for x in unit]
 
         # Store instrument information
         detector_center, detector_corner, detector_area, distortion_yz, oflat, dflat, responsivity, status = tmf.pacs_info_instrument(band, numpy.asfortranarray(detector_mask, numpy.int8))
@@ -906,7 +906,7 @@ def _generate_pointing(ra0, dec0, pa0, scan_angle, scan_length=30., scan_nlegs=3
     line_counter = 0
     working_time = 0.
 
-    for i in xrange(nsamples):
+    for i in range(nsamples):
         info = 0
    
         # check if new line

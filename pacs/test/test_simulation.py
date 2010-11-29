@@ -42,7 +42,7 @@ for field in simul.status.dtype.names:
     if not numpy.allclose(simul.status[field], status2[field]): raise TestFailure('Status problem with: '+field)
 
 if not numpy.allclose(tod, tod2): raise TestFailure()
-fields = filter(lambda x: x not in ('filename',), simul.slice.dtype.names)
+fields = [x for x in simul.slice.dtype.names if x not in ('filename',)]
 ok = True
 for field in fields:
     if getattr(simul.slice[0], field) != getattr(simul2.slice[0], field):

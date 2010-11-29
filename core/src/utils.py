@@ -1,4 +1,4 @@
-import config
+from . import config
 import kapteyn
 import numpy
 import os
@@ -6,10 +6,10 @@ import pyfits
 import re
 import tamasisfortran as tmf
 import time
-from datatypes import Map, create_fitsheader
+from .datatypes import Map, create_fitsheader
 from matplotlib import pyplot
-from numpyutils import _my_isscalar
-from unit import Quantity
+from .numpyutils import _my_isscalar
+from .unit import Quantity
 
 __all__ = [ 'ds9', 'hs', 'mean_degrees', 'minmax_degrees', 'plot_scan', 'airy_disk', 'aperture_circular', 'distance', 'gaussian', 'phasemask_fourquadrant' ]
 
@@ -84,10 +84,10 @@ def hs(arg):
         print(str(arg.size) + ' element' + ('s' if arg.size > 1 else ''))
     else:
         members = inspect.getmembers(arg, lambda x: not inspect.ismethod(x) and not inspect.isbuiltin(x))
-        members = filter(lambda x: x[0][0] != '_', members)
-        names = map(lambda x:x[0], members)
+        members = [x for x in members if x[0][0] != '_']
+        names = [x[0] for x in members]
 
-    length = numpy.max(map(len, names))
+    length = numpy.max(list(map(len, names)))
     lnames = numpy.array([names[i].ljust(length)+': ' for i in range(len(names))])
     for name, lname in zip(names, lnames):
         value = str(getattr(arg, name))[0:72-length-2]
