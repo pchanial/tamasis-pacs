@@ -2,13 +2,13 @@ module module_pacsinstrument
 
     use iso_fortran_env,        only : ERROR_UNIT, OUTPUT_UNIT
     use module_filtering,       only : FilterUncorrelated
-    use module_fitstools,       only : ft_check_error_cfitsio, ft_close, ft_create_header, ft_open, ft_open_image,                 &
-                                       ft_read_image, ft_read_keyword_hcss, ft_read_slice, ft_test_extension
+    use module_fitstools,       only : FLEN_VALUE, ft_check_error_cfitsio, ft_close, ft_create_header, ft_open, ft_open_image,     &
+                                       ft_read_image, ft_read_keyword, ft_read_keyword_hcss, ft_read_slice, ft_test_extension
     use module_math,            only : DEG2RAD, mInf, pInf, mean, nint_down, nint_up
     use module_pacsobservation, only : PacsObservationSlice, PacsObservation
     use module_pointingmatrix,  only : PointingElement, xy2pmatrix, xy2roi, roi2pmatrix
     use module_projection,      only : convex_hull, surface_convex_polygon
-    use module_string,          only : strinteger
+    use module_string,          only : strinteger, strlowcase
     use module_tamasis,         only : tamasis_dir, p, POLICY_KEEP, POLICY_MASK, POLICY_REMOVE
     use module_wcs,             only : init_astrometry, ad2xy_gnomonic, ad2xy_gnomonic_vect, ad2xys_gnomonic, refpix_area
     use omp_lib
@@ -952,18 +952,22 @@ contains
         logical*1, intent(out)                  :: mask  (:,:)
         integer, intent(out)                    :: status
 
-        integer                :: first, last
-        integer                :: ip, iq
-        integer                :: idetector, ndetectors, unit
-        integer, allocatable   :: imageshape(:)
-        logical                :: mask_found
-        integer*4, allocatable :: maskcompressed(:)
-        integer*4              :: maskval
-        integer                :: ncompressed
-        integer                :: imask, isample, icompressed, ibit
-        integer                :: firstcompressed, lastcompressed
-        real(p), allocatable   :: signal_(:)
-        logical*1, allocatable :: mask_(:)
+        integer                   :: first, last
+        integer                   :: ip, iq
+        integer                   :: idetector, ndetectors, unit
+        integer, allocatable      :: signal_shape(:), mask_shape(:)
+        integer                   :: imask, isample, icompressed, ibit
+        integer                   :: firstcompressed, lastcompressed
+        real(p), allocatable      :: signal_(:)
+        logical*1, allocatable    :: mask_(:)
+        integer, allocatable      :: mask_extension(:)
+        character(len=FLEN_VALUE) :: mask_name
+        integer                   :: nmasks
+        integer*4, allocatable    :: maskcompressed(:)
+        integer*4                 :: maskval
+        logical                   :: mask_found
+        integer                   :: hdutype, naxis1
+        integer                   :: ncompressed
 
         ndetectors = size(signal, 2)
 
@@ -979,8 +983,12 @@ contains
         mask = spread(pack(obs%p(first:last)%masked, .not. obs%p(first:last)%removed), 2, ndetectors)
 
         ! read signal HDU
-        call ft_open_image(trim(obs%filename) // '[Signal]', unit, 3, imageshape, status)
+        call ft_open_image(trim(obs%filename) // '[Signal]', unit, 3, signal_shape, status)
         if (status /= 0) return
+
+        allocate (mask_shape(size(signal_shape)))
+        mask_shape(1)  = (signal_shape(1) - 1) / 32 + 1
+        mask_shape(2:) = signal_shape(2:)
 
         allocate (signal_(last - first + 1), mask_(last - first + 1))
         do idetector = 1, ndetectors
@@ -988,7 +996,7 @@ contains
             ip = this%pq(1,idetector)
             iq = this%pq(2,idetector)
 
-            call ft_read_slice(unit, first, last, iq+1, ip+1, imageshape, signal_, status)
+            call ft_read_slice(unit, first, last, iq+1, ip+1, signal_shape, signal_, status)
             if (status /= 0) return
 
             signal(:,idetector) = pack(signal_, .not. obs%p(first:last)%removed)
@@ -998,33 +1006,47 @@ contains
         call ft_close(unit, status)
         if (status /= 0) return
 
+        ! get the mask tree
+        call ft_open(trim(obs%filename) // '[MASK]', unit, mask_found, status)
+        if (status /= 0 .or. .not. mask_found) return
+
+        call ft_read_keyword(unit, 'DSETS___', nmasks, status=status)
+        if (status /= 0) return
+
+        allocate (mask_extension(nmasks))
+        do imask=1, nmasks
+            call ft_read_keyword(unit, 'DS_' // strinteger(imask-1), mask_extension(imask), status=status)
+            if (status /= 0) return
+        end do
+        
         firstcompressed = (first - 1) / 32 + 1
         lastcompressed  = (last  - 1) / 32 + 1
         ncompressed     = lastcompressed - firstcompressed + 1
+        allocate (maskcompressed(ncompressed))
 
-        do imask = 1, size(selected_mask)
+        ! loop over all the masks in the file
+        do imask=1, nmasks
 
-            mask_found = ft_test_extension(trim(obs%filename) // '[' // trim(selected_mask(imask)) // ']', status)
+            call FTMAHD(unit, mask_extension(imask)+1, hdutype, status)
+            if (ft_check_error_cfitsio(status, unit, trim(obs%filename))) return
+
+            call ft_read_keyword(unit, 'EXTNAME', mask_name, status=status)
             if (status /= 0) return
 
-            if (.not. mask_found) then
-                write (*,'(a)') "Warning: mask '" // trim(selected_mask(imask)) // "' is not found."
-                cycle
-            end if
+            ! check if the mask is selected
+            if (all(strlowcase(mask_name) /= selected_mask)) cycle
 
-            ! read Mask HDU
-            call ft_open_image(trim(obs%filename) // '[' // trim(selected_mask(imask)) // ']', unit, 3, imageshape, status)
-            if (status /= 0) return
-            
-            if (lastcompressed /= imageshape(1)) then
+            ! check mask dimension
+            call ft_read_keyword(unit, 'NAXIS1', naxis1, status=status)
+            if (status /= 0) return            
+            if (mask_shape(1) /= naxis1) then
                 status = 1
                 write (ERROR_UNIT, '(a,2(i0,a))') "The observation '" // trim(obs%filename) // "', has an incompatible dimension in&
-                       & mask '" // trim(selected_mask(imask)) // "' (", imageshape(1), ' instead of ', ncompressed, ').'
+                       & mask '" // trim(mask_name) // "' (", naxis1, ' instead of ', mask_shape(1), ').'
                 return
             end if
 
-            if (.not. allocated(maskcompressed)) allocate (maskcompressed(ncompressed))
-
+            ! read mask
             do idetector = 1, size(mask,2)
 
                 ip = this%pq(1,idetector)
@@ -1032,7 +1054,7 @@ contains
 
                 mask_ = .false.
 
-                call ft_read_slice(unit, firstcompressed, lastcompressed, iq+1, ip+1, imageshape, maskcompressed, status)
+                call ft_read_slice(unit, firstcompressed, lastcompressed, iq+1, ip+1, mask_shape, maskcompressed, status)
                 if (status /= 0) return
 
                 ! loop over the bytes of the compressed mask
@@ -1054,9 +1076,9 @@ contains
 
             end do
 
-            call ft_close(unit, status)
-
         end do
+
+        call ft_close(unit, status)
 
     end subroutine read_one
 

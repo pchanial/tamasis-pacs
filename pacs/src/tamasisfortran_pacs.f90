@@ -167,6 +167,7 @@ subroutine pacs_info_observation(filename, nfilenames, policy, nsamples_tot, cus
     cusmode = ''
     unit = ''
     mask_name = ''
+    mask_activated = .false.
     do iobs = 1, nfilenames
         cusmode((iobs-1)*FLEN_VALUE+1:iobs*FLEN_VALUE) = obs%slice(iobs)%observing_mode
         unit   ((iobs-1)*FLEN_VALUE+1:iobs*FLEN_VALUE) = obs%slice(iobs)%unit

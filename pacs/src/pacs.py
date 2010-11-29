@@ -145,7 +145,7 @@ class _Pacs(Observation):
             result += sp + a + '\n'
             result += sp + d + '\n'
         else:
-            result += sp + 'The masks are heterogeneous among the observations\n'
+            result += sp + 'The masks of the observations are heterogeneous\n'
 
         # print slice-specific information
         dest = 0
@@ -328,7 +328,10 @@ class PacsObservation(_Pacs):
 
         # Store slice information
         nmasks_max = numpy.max(nmasks)
-        mask_len_max = numpy.max([len(mask_name_flat[(i*32+j)*70:(i*32+j+1)*70].strip()) for j in range(nmasks[i]) for i in range(nfilenames)])
+        if nmasks_max > 0:
+            mask_len_max = numpy.max([len(mask_name_flat[(i*32+j)*70:(i*32+j+1)*70].strip()) for j in range(nmasks[i]) for i in range(nfilenames)])
+        else:
+            mask_len_max = 1
 
         mask_name      = numpy.ndarray((nfilenames, nmasks_max), 'S'+str(mask_len_max))
         mask_activated = mask_activated.T
@@ -626,8 +629,7 @@ class PacsSimulation(_Pacs):
 
         pyfits.append(filename, tod, header)
         if tod.mask is not None:
-            header = create_fitsheader(mask, extname='Mask')
-            pyfits.append(filename, tod.mask.view('int8'), header)
+            print 'Warning: the saving of the tod mask is not implemented.'
         
    
 #-------------------------------------------------------------------------------

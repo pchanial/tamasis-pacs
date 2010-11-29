@@ -780,10 +780,13 @@ contains
         character(len=8*FLEN_VALUE) :: info
         integer, allocatable        :: mask_extension(:)
 
-        this%unit = ''
-
         call ft_open(trim(this%filename) // '[MASK]', unit, found, status)
-        if (status /= 0 .or. .not. found) return
+        if (status /= 0) return
+        if (.not. found) then
+            this%nmasks = 0
+            allocate (this%mask_name(0), this%mask_activated(0))
+            return
+        end if
 
         call ft_read_keyword(unit, 'DSETS___', this%nmasks, status=status)
         if (status /= 0) return
