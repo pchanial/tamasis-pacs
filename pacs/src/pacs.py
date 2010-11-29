@@ -114,10 +114,14 @@ class _Pacs(Observation):
             else:
                 return (str(n) + ' ' if prepend else '') + s + 's' + s2
         def ad_masks(slice, islice):
-            a = [m for i, m in enumerate(slice[islice].mask_name)      \
-                 if m != '' and slice[islice].mask_activated[i]]
-            d = [m for i, m in enumerate(slice[islice].mask_name)      \
-                 if m != '' and not slice[islice].mask_activated[i]]
+            if 'nmasks' not in slice.dtype.names:
+                a = []
+                d = []
+            else:
+                a = [m for i, m in enumerate(slice[islice].mask_name)          \
+                     if m != '' and slice[islice].mask_activated[i]]
+                d = [m for i, m in enumerate(slice[islice].mask_name)          \
+                     if m != '' and not slice[islice].mask_activated[i]]
             return (plural('activated mask',   len(a), 0, ': ').capitalize() + \
                         ', '.join(a), 
                     plural('deactivated mask', len(d), 0, ': ').capitalize() + \
@@ -139,7 +143,8 @@ class _Pacs(Observation):
         result += sp + self.instrument.band.capitalize() + ' band, unit is ' + unit + '\n'
 
         # check if the masks are the same for all the slices
-        homogeneous = same(self.slice.nmasks) and all([same(a) for a in self.slice.mask_name.T])
+        homogeneous = 'nmasks' not in self.slice.dtype.names or \
+                      same(self.slice.nmasks) and all([same(a) for a in self.slice.mask_name.T])
         if homogeneous:
             (a,d) = ad_masks(self.slice, 0)
             result += sp + a + '\n'
