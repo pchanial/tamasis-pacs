@@ -1,6 +1,6 @@
 module module_math
 
-    use module_tamasis,   only : p
+    use module_tamasis, only : p
 
     implicit none
     private
