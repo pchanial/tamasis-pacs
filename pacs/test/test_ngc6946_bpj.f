@@ -47,7 +47,7 @@ program test_ngc6946_bpj
 
     ! initialise pacs instrument
     allocate (pacs)
-    call pacs%read_detector_mask(obs%band, detector_mask, status,                                                                  &
+    call pacs%read_detector_mask(obs%band, detector_mask, status,                                                      &
          transparent_mode=obs%slice(1)%observing_mode=='transparent')
     if (status /= 0) call failure('pacs%read_detector_mask')
     call pacs%init_with_calfiles(obs%band, detector_mask, 1, status)
@@ -70,7 +70,7 @@ program test_ngc6946_bpj
     call system_clock(count1, count_rate, count_max)
     allocate (signal(nsamples, pacs%ndetectors))
     allocate (mask  (nsamples, pacs%ndetectors))
-    call pacs%read(obs, signal, mask, status)
+    call pacs%read(obs, [''], signal, mask, status)
     if (status /= 0) call failure('read_tod')
     call system_clock(count2, count_rate, count_max)
     write (*,'(f6.2,a)') real(count2-count1)/count_rate, 's'

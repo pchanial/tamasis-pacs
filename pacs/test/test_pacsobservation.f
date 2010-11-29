@@ -109,7 +109,7 @@ program test_pacsobservation
 
     allocate (signal(obs%slice(1)%nsamples,pacs%ndetectors))
     allocate (mask  (obs%slice(1)%nsamples,pacs%ndetectors))
-    call pacs%read(obs, signal, mask, status)
+    call pacs%read(obs, ['master'], signal, mask, status)
 
     ! get a detector that has been hit by a glitch
     do idetector = 1, pacs%ndetectors
@@ -130,7 +130,7 @@ program test_pacsobservation
            obs%nvalids = obs%slice(1)%nvalids
            allocate(signal(obs%slice(1)%nvalids,pacs%ndetectors))
            allocate(mask  (obs%slice(1)%nvalids,pacs%ndetectors))
-           call pacs%read(obs, signal, mask, status)
+           call pacs%read(obs, ['master'], signal, mask, status)
            if (status /= 0) call failure('read_pacsobservation loop')
            if (any(signal(:,idetector) /= signal_ref(first:last))) call failure('read signal')
            if (any(mask(:,idetector) .neqv. mask_ref(first:last))) then
