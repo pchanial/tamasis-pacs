@@ -184,6 +184,7 @@ def build(bld):
     cmd += ' ${DEFINES_ST:DEFINES}'
 
     bld(rule=cmd,
+        color='YELLOW',
         source=source + [bld.env.fcstlib_PATTERN%('tamasis'+s) for s in subdirs],
         target=target,
         use=libraries)
