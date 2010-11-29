@@ -40,6 +40,10 @@ program test_ngc6946_bpj
     ! initialise observation
     allocate (obs)
     call obs%init(filename, policy, status, verbose=.true.)
+    if (status == 104) then
+       print *, 'Aborting test: file not found.'
+       stop
+    end if
     if (status /= 0) call failure('pacsobservation%init')
     nsamples = obs%slice(1)%nvalids
 
