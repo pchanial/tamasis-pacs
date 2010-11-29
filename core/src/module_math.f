@@ -1,6 +1,7 @@
 module module_math
 
-    use module_tamasis, only : p
+    use iso_fortran_env, only : ERROR_UNIT
+    use module_tamasis,  only : p
 
     implicit none
     private
@@ -80,7 +81,13 @@ contains
         real(p), allocatable :: residuals(:)
 
         nsamples = size(input)
+        
         if (present(mask)) then
+            if (size(mask) /= nsamples) then
+                write (ERROR_UNIT,'(a,2(i0,a))'), 'Error: the mask has an incompatible dimension (', size(mask), ' instead of ',   &
+                       size(input), ').'
+                stop 1
+            end if
             nsamples = nsamples - count(mask)
         end if
 
@@ -182,6 +189,11 @@ contains
         end if
 
         if (present(mask)) then
+            if (size(mask) /= size(input)) then
+                write (ERROR_UNIT,'(a,2(i0,a))'), 'Error: the mask has an incompatible dimension (', size(mask), ' instead of ',   &
+                       size(input), ').'
+                stop 1
+            end if
             do i = 1, size(input)
                 if (.not. mask(i)) exit
             end do
@@ -326,7 +338,7 @@ contains
 
         minv = pInf
         maxv = mInf
-        !$omp parallel do default(shared) reduction(min:minv) reduction(max:maxv)
+        !$omp parallel do default(shared) reduction(min:minv) reduction(max:maxv) private(value)
         do isample=1, size(array)
             value = array(isample)
             if (value /= value) cycle

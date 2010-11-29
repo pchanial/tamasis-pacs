@@ -1,10 +1,14 @@
 import numpy
 import os
+import tamasis
+
 from tamasis import *
 from uuid import uuid1
 
 class TestFailure(Exception):
     pass
+
+tamasis.__verbose__ = False
 
 # creation of the sky map
 msize = 50

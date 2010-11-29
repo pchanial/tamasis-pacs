@@ -1,10 +1,13 @@
 import numpy
 import pyfits
 import os
+import tamasis
 
 from tamasis import *
 
 class TestFailure(Exception): pass
+
+tamasis.__verbose__ = False
 
 data_dir = os.path.dirname(__file__) + '/data/'
 obs = PacsObservation(data_dir+'frames_blue.fits', fine_sampling_factor=1)

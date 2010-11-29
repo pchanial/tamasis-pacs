@@ -1,9 +1,11 @@
 import numpy
 import pyfits
 import os
+import tamasis
 
 from tamasis import *
 
+tamasis.__verbose__ = False
 path = os.path.dirname(__file__) + '/data/madmap1/'
 obs = MadMap1Observation(path+'todSpirePsw_be', path+'invnttSpirePsw_be', 
                          path+'madmapSpirePsw.fits[coverage]', 'big_endian',

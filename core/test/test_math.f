@@ -22,7 +22,6 @@ program test_math
 
     call moment([-100._p, sample(1:2), +200._p,sample(3:5), -20._p], mean_, variance, skewness, kurtosis, stddev=stddev_,          &
          meandev=meandev, mask=[.true., .false., .false., .true., .false., .false., .false., .true.])
-
     if (any(neq_real([mean_,variance,skewness,kurtosis,stddev_,meandev], mresults))) then
         call failure('moment 1 with mask')
     end if

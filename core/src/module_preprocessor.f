@@ -56,15 +56,16 @@ contains
     subroutine subtract_meandim1_mask(data, mask)
 
         real(p), intent(inout) :: data(:,:)
-        logical*1, intent(in)  :: mask(:,:)
-        integer                :: nsamples, ndetectors, idetector
+        logical*1, intent(in)  :: mask(size(data,1),size(data,2))
+
+        integer                :: ndetectors, nsamples, idetector
 
         ndetectors = size(data,2)
-        !$omp parallel do
-        do idetector=1, ndetectors
+        !$omp parallel do private(nsamples)
+        do idetector=1, size(data,2)
             nsamples = count(.not. mask(:,idetector))
             if (nsamples == 0) cycle
-            data(:,idetector) = data(:,idetector) - sum_kahan(data(:,idetector), logical(mask(:,idetector), kind(.true.)))/nsamples
+            data(:,idetector) = data(:,idetector) - sum(data(:,idetector), logical(mask(:,idetector), kind(.true.))) / nsamples
         end do
         !$omp end parallel do
 
@@ -188,6 +189,7 @@ contains
             return
         end if
 
+        ival = 0 ! to silence a bogus warning message
         val = NaN
         iNaN = 1
         hasNaN = .false.

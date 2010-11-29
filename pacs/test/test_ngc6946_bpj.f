@@ -17,7 +17,7 @@ program test_ngc6946_bpj
     class(PacsInstrument), allocatable  :: pacs
     class(PacsObservation), allocatable :: obs
     type(MaskPolicy)                    :: policy
-    character(len=*), parameter         :: dir = '/home/pchanial/work/pacs/data/transpScan/'
+    character(len=*), parameter         :: dir = '/home/pchanial/data/pacs/transpScan/'
     character(len=*), parameter         :: filename(1) = dir // '1342184520_blue_PreparedFrames.fits[12001:16000]'
     integer, parameter                  :: npixels_per_sample = 6
     real(p), allocatable                :: signal(:,:)

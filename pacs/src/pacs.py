@@ -10,7 +10,7 @@ from matplotlib import pyplot
 from mpi4py import MPI
 from tamasis import numpyutils
 from tamasis.core import *
-from tamasis.config import __version__ as tamasis_version
+from tamasis.config import __verbose__, __version__
 from tamasis.observations import *
 
 __all__ = [ 'PacsObservation', 'PacsSimulation', 'pacs_plot_scan', 'pacs_preprocess' ]
@@ -381,7 +381,8 @@ class PacsObservation(_Pacs):
         # Status
         self._status = None
 
-        print(self)
+        if __verbose__:
+            print(self)
 
     def get_tod(self, unit=None, flatfielding=True, subtraction_mean=True, raw_data=False, masks='activated'):
         """
@@ -611,7 +612,8 @@ class PacsSimulation(_Pacs):
 
         self._status = _write_status(self)
 
-        print(self)
+        if __verbose__:
+            print(self)
 
     def save(self, filename, tod):
         
@@ -1098,7 +1100,7 @@ def _write_status(obs, filename=None):
             cc('NAXIS', 0), 
             cc('EXTEND', True, 'May contain datasets'), 
             cc('TYPE', 'HPPAVG'+band_type, 'Product Type Identification'), 
-            cc('CREATOR', 'TAMASIS v' + tamasis_version, 'Generator of this file'), 
+            cc('CREATOR', 'TAMASIS v' + __version__, 'Generator of this file'), 
             cc('INSTRUME', 'PACS', 'Instrument attached to this file'), 
             cc('TELESCOP', 'Herschel Space Observatory', 'Name of telescope'),
             cc('OBS_MODE', 'Scan map', 'Observation mode name'),
