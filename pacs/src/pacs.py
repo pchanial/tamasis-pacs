@@ -381,8 +381,7 @@ class PacsObservation(_Pacs):
         # Status
         self._status = None
 
-        if __verbose__:
-            print(self)
+        print(self)
 
     def get_tod(self, unit=None, flatfielding=True, subtraction_mean=True, raw_data=False, masks='activated'):
         """
@@ -612,8 +611,7 @@ class PacsSimulation(_Pacs):
 
         self._status = _write_status(self)
 
-        if __verbose__:
-            print(self)
+        print(self)
 
     def save(self, filename, tod):
         
