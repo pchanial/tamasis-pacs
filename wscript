@@ -251,7 +251,7 @@ def test_python_fun(bld):
     for subdir in subdirs:
         files = bld.path.ant_glob(subdir+'/test/test_*.py')
         for file in files:
-            bld(rule   = '${PYTHON} ' + file.abspath(),
+            bld(rule   = '${PYTHON} ' + file.abspath() + ' > /dev/null',
                 always = True)
             bld.add_group()
 

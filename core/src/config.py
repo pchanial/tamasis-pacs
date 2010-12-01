@@ -1,9 +1,11 @@
+import numpy
 import os
 import tamasisfortran
 
 __verbose__ = False
 __version__ = tamasisfortran.info_version().strip()
 tamasis_dir = os.path.abspath(os.path.dirname(__file__) + '/../../../../share/tamasis')
+numpy.seterr(all='ignore')
 
 __all__ = [ 'get_default_dtype',
             'get_default_dtype_complex',
