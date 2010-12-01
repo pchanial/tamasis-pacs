@@ -41,7 +41,7 @@ module module_pacsinstrument
 
     ! these calibration files are taken from HCSS 4.0.70
     character(len=*), parameter :: FILENAME_SAA = 'PCalPhotometer_SubArrayArray_FM_v5.fits'
-    character(len=*), parameter :: FILENAME_AI  = 'PCalPhotometer_ArrayInstrument_FM_v5.fits'
+    character(len=*), parameter :: FILENAME_AI  = 'PCalPhotometer_ArrayInstrument_FM_v6.fits'
     character(len=*), parameter :: FILENAME_BPM = 'PCalPhotometer_BadPixelMask_FM_v5.fits'
     character(len=*), parameter :: FILENAME_FF  = 'PCalPhotometer_FlatField_FM_v3.fits'
     character(len=*), parameter :: FILENAME_IB  = 'PCalPhotometer_InvnttBS_FM_v1.fits[Contents]'
