@@ -1188,7 +1188,7 @@ class InvNtt(Diagonal):
         if status != 0: raise RuntimeError()
         Diagonal.__init__(self, tod_filter.T, nsamples, description)
         self.ncorrelations = ncorrelations
-        self.diagonal /= numpy.max(self.diagonal)
+        self.diagonal /= MPI.COMM_WORLD.allreduce(numpy.max(self.diagonal), op=MPI.MAX)
 
 
 #-------------------------------------------------------------------------------
