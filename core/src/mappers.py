@@ -55,14 +55,14 @@ def mapper_naive(tod, model, unit=None):
 #-------------------------------------------------------------------------------
 
 
-def mapper_ls(tod, model, weight=None, unpacking=None, x0=None, tol=1.e-5, maxiter=300, M=None, solver=None, verbose=True):
-    return mapper_rls(tod, model, weight=weight, unpacking=unpacking, hyper=0, x0=x0, tol=tol, maxiter=maxiter, M=M, solver=solver, verbose=verbose)
+def mapper_ls(tod, model, weight=None, unpacking=None, x0=None, tol=1.e-5, maxiter=300, M=None, solver=None, verbose=True, callback=None):
+    return mapper_rls(tod, model, weight=weight, unpacking=unpacking, hyper=0, x0=x0, tol=tol, maxiter=maxiter, M=M, solver=solver, verbose=verbose, callback=callback)
 
 
 #-------------------------------------------------------------------------------
 
 
-def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None, tol=1.e-5, maxiter=300, M=None, solver=None, verbose=True):
+def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None, tol=1.e-5, maxiter=300, M=None, solver=None, verbose=True, callback=None):
 
     if weight is None:
         weight = Identity('Weight')
@@ -120,7 +120,8 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None, tol=
             if verbose and MPI.COMM_WORLD.Get_rank() == 0: 
                 print('Iteration ' + str(self.niterations) + ': ' + str(self.residual))
 
-    callback = PcgCallback()
+    if callback is None:
+        callback = PcgCallback()
     
     time0 = time.time()
     solution, info = solver(C, rhs, x0=x0, tol=tol, maxiter=maxiter, callback=callback, M=M0)
