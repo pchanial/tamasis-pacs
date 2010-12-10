@@ -18,6 +18,7 @@ module module_filtering
         real(p), allocatable   :: data(:,:) ! (filter values, detector)
     end type FilterUncorrelated
 
+
 contains
 
 
@@ -30,7 +31,7 @@ contains
         integer, intent(out)                 :: status
 
         real(p), allocatable :: in(:), out(:)
-        integer              :: dest, idetector, ifilter, islice, nslices
+        integer              :: dest, idetector, ifilter, islice, nslices, isample
         integer*8            :: plan
 
         status = 1
@@ -81,6 +82,11 @@ contains
 
                 call dfftw_execute_r2r(plan, in, out)
 
+                out(1) = out(1) / nsamples(islice)
+                do isample = 2, nsamples(islice) / 2 + 1
+                    out(isample) = out(isample) / nsamples(islice)
+                    out(nsamples(islice)-isample+2) = out(isample)
+                end do
                 tod(dest:dest+nsamples(islice)-1,idetector) = out
 
             end do
