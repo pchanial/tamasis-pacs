@@ -6,7 +6,7 @@ import tamasis
 from tamasis import *
 
 tamasis.__verbose__ = False
-path = os.path.dirname(__file__) + '/data/madmap1/'
+path = os.path.abspath(os.path.dirname(__file__)) + '/data/madmap1/'
 obs = MadMap1Observation(path+'todSpirePsw_be', path+'invnttSpirePsw_be', 
                          path+'madmapSpirePsw.fits[coverage]', 'big_endian',
                          135, missing_value=numpy.nan)
@@ -30,12 +30,19 @@ if any_neq(map_naive_2d,map_ref): print('FAILED: mapper_naive madcap 2')
 
 packing = Unpacking(obs.info.mapmask).T
 
-M = 1 / map_naive.coverage
-M[numpy.isfinite(M) == False] = numpy.max(M[numpy.isfinite(M)])
-map_rlsw1 = mapper_rls(tod, projection*packing, padding.T * fft.T * invNtt * fft * padding, hyper=0, tol=1.e-5, M=M)
-print(map_rlsw1.header['time'])
+#M = 1 / map_naive.coverage
+#M[~numpy.isfinite(M)] = numpy.max(M[numpy.isfinite(M)])
+#map_rlsw1 = mapper_rls(tod, projection*packing, padding.T * fft.T * invNtt * fft * padding, hyper=0, tol=1.e-5, M=M, solver=cg)
+#print('Elapsed time: ' + str(map_rlsw1.header['time']))
 
 M = packing(1/map_naive.coverage)
-M[numpy.isfinite(M) == False] = numpy.max(M[numpy.isfinite(M)])
-M = M.reshape(numpy.product(M.shape))
-map_rlsw2 = packing.T(mapper_rls(tod, projection, padding.T * fft.T * invNtt * fft * padding, hyper=0, tol=1.e-5, M=M))
+if numpy.any(~numpy.isfinite(M)):
+    raise ValueError()
+
+def callback(x):
+    pass
+
+map_rlsw2_packed = mapper_rls(tod, projection, padding.T * fft.T * invNtt * fft * padding, hyper=0, tol=1.e-7, M=M, callback=callback)
+print 'Elapsed time:', map_rlsw2_packed.header['TIME']
+
+map_rlsw2 = packing.T(map_rlsw2_packed)
