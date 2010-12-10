@@ -195,6 +195,7 @@ def build(bld):
         datanode = bld.srcnode.find_node(subdir+'/data')
         if datanode is not None:
             bld.install_files('${SHAREDIR}/tamasis/'+subdir, datanode.ant_glob('*'))
+    bld.install_files('${LIBDIR}/jython/tamasishcss', bld.srcnode.ant_glob('pacs/hcss/tamasishcss/*py'))
 
 
         
