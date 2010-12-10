@@ -17,21 +17,21 @@ from herschel.pacs.spg import *
 
 __all__ = [ 'tamasis_dir', 'tamasisPrepareFrames', 'tamasisPreprocessor', 'tamasisPhotProject' ]
 
-tamasis_dir = '/home/pchanial/work/tamasis/tamasis-latest/'
-ld_library_path = '/mnt/local/opt/core-3.1-amd64/python/2.5/lib:/opt/core-3.1-amd64/pgplot/5.2/:/opt/core-3.1-amd64/gcc/4.5/lib64:/opt/core-3.1-amd64/libelf/0.8.13-gcc45/lib:/opt/core-3.1-amd64/cloog-ppl/0.15.7-gcc45/lib:/opt/core-3.1-amd64/polylib/5.22.4-gcc45/lib:/opt/core-3.1-amd64/ppl/0.10.2-gcc45/lib:/opt/core-3.1-amd64/mpc/0.8.1-gcc45/lib:/opt/core-3.1-amd64/mpfr/2.4.2-gcc45/lib:/opt/core-3.1-amd64/gmp/4.3.2-gcc45/lib:/opt/core-3.1-amd64/fftw3/3.2.2/lib:/opt/core-3.1-amd64/python/2.6/lib:/opt/core-3.1-amd64/ifc/11.1/lib/intel64:/opt/core-3.1-amd64/ifc/11.1/mkl/lib/em64t:/opt/core-3.1-amd64/cfitsio/3.23/lib'
-python_path = '/home/pchanial/software/lib/python2.6/site-packages/:/home/pchanial/work/tamasis/tamasis-latest/:/opt/core-3.1-amd64/python/2.6'
+tamasis_dir = '/home/pchanial/software/lib/python2.6/site-packages/tamasis/'
+ld_library_path = '/opt/core-3.1-amd64/openmpi/1.4.1-gcc45/lib:/opt/core-3.1-amd64/gcc/4.5/lib64:/opt/core-3.1-amd64/libelf/0.8.13-gcc45/lib:/opt/core-3.1-amd64/cloog-ppl/0.15.7-gcc45/lib:/opt/core-3.1-amd64/polylib/5.22.4-gcc45/lib:/opt/core-3.1-amd64/ppl/0.10.2-gcc45/lib:/opt/core-3.1-amd64/mpc/0.8.1-gcc45/lib:/opt/core-3.1-amd64/mpfr/2.4.2-gcc45/lib:/opt/core-3.1-amd64/gmp/4.3.2-gcc45/lib:/opt/core-3.1-amd64/fftw3/3.2.2/lib:/opt/core-3.1-amd64/python/2.6/lib:/opt/core-3.1-amd64/ifc/11.1/lib/intel64:/opt/core-3.1-amd64/ifc/11.1/mkl/lib/em64t:/opt/core-3.1-amd64/cfitsio/3.23/lib'
+python_path = '/home/pchanial/software/lib/python2.6/site-packages'
 False = 0
 
 fa                     = herschel.ia.io.fits.FitsArchive()
 simpleFitsReader       = herschel.ia.toolbox.util.SimpleFitsReaderTask()
-getCalTree             = herschel.pacs.cal.GetPacsCalTask()
-findBlocks             = FindBlocksTask()
-photFlagBadPixels      = PhotFlagBadPixelsTask()
-photFlagSaturation     = PhotFlagSaturationTask()
-photConvDigit2Volts    = PhotConvDigit2VoltsTask()
-convertChopper2Angle   = ConvertChopper2AngleTask()
-photAddInstantPointing = PhotAddInstantPointingTask()
-cleanPlateauFrames     = CleanPlateauFramesTask()
+#getCalTree             = herschel.pacs.cal.GetPacsCalTask()
+#findBlocks             = FindBlocksTask()
+#photFlagBadPixels      = PhotFlagBadPixelsTask()
+#photFlagSaturation     = PhotFlagSaturationTask()
+#photConvDigit2Volts    = PhotConvDigit2VoltsTask()
+#convertChopper2Angle   = ConvertChopper2AngleTask()
+#photAddInstantPointing = PhotAddInstantPointingTask()
+#cleanPlateauFrames     = CleanPlateauFramesTask()
 
 class TamasisPrepareFrames(JTask):
     """
@@ -272,7 +272,7 @@ def _get_filename():
 
 def _get_cmd_preprocessor(frames, options):
 
-    cmd = tamasis_dir + 'pacs/src/pacs_photproject.py'
+    cmd = 'python ' + tamasis_dir + 'pacs_photproject.py'
     
     # write frames to disk
     filename = _get_filename()+'_tod_'
@@ -303,10 +303,10 @@ def _get_cmd_preprocessor(frames, options):
         if policy.lower() not in ('keep', 'mask'):
             raise ValueError("In HCSS, a policy must be 'keep' or 'mask'.")
         
-    cmd += ' --policy-inscan ' + options.framePolicyInscan
-    cmd += ' --policy-turnaround ' + options.framePolicyTurnaround
-    cmd += ' --policy-other ' + options.framePolicyOther
-    cmd += ' --policy-invalid ' + options.framePolicyInvalid
+    cmd += ' --policy-inscan ' + options.policyInscan
+    cmd += ' --policy-turnaround ' + options.policyTurnaround
+    cmd += ' --policy-other ' + options.policyOther
+    cmd += ' --policy-invalid ' + options.policyInvalid
 
     return cmd, files
 
