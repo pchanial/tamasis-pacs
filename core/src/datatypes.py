@@ -696,6 +696,8 @@ def create_fitsheader(array, extname=None, crval=(0.,0.), crpix=None, ctype=('RA
         naxis = tuple(reversed(array.shape))
         if array.dtype.itemsize == 1:
             typename = 'uint8'
+        elif array.dtype.names is not None:
+            typename = None
         else:
             typename = array.dtype.name
     
@@ -705,7 +707,8 @@ def create_fitsheader(array, extname=None, crval=(0.,0.), crpix=None, ctype=('RA
     else:
         card = pyfits.createCard('xtension', 'IMAGE', 'Image extension')
     header = pyfits.Header([card])
-    header.update('bitpix', pyfits.PrimaryHDU.ImgCode[typename], 'array data type')
+    if typename is not None:
+        header.update('bitpix', pyfits.PrimaryHDU.ImgCode[typename], 'array data type')
     header.update('naxis', numaxis, 'number of array dimensions')
     for dim in range(numaxis):
         header.update('naxis'+str(dim+1), naxis[dim])
