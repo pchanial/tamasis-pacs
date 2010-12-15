@@ -19,7 +19,8 @@ mymap.header = header
 mymap.unit='Jy/pixel'
 
 # creation of the simulation
-simul = PacsSimulation('red', (header['CRVAL1'],header['CRVAL2']), scan_length=60, scan_nlegs=1, scan_angle=20., detector_mask=None)
+scan = pacs_create_scan(header['CRVAL1'], header['CRVAL2'], cam_angle=0., scan_length=60, scan_nlegs=1, scan_angle=20.)
+simul = PacsSimulation(scan, 'red', detector_mask=None)
 
 # build the acquisition model
 model = CompressionAverage(simul.slice.compression_factor) * \
