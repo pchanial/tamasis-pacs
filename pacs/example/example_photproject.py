@@ -28,7 +28,7 @@ projection = Projection(obs,
 # Read the Time Ordered Data: the signal and mask
 tod = obs.get_tod(flatfielding=True,
                   subtraction_mean=True,
-                  unit='Jy/detector')
+                  unit='Jy/arcsec^2')
 
 # Remove very low frequency drift by removing a fitted polynomial
 # of degree 6
