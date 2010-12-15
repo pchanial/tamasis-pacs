@@ -3,7 +3,7 @@ import numpy
 from tamasis.config import get_default_dtype_float
 from tamasis.numpyutils import _my_isscalar
 from tamasis.unit import Quantity
-from tamasis.datatypes import Map, Tod
+from tamasis.datatypes import Map, Tod, create_fitsheader
 
 __all__ = ['Observation', 'Instrument', 'FlatField', 'MaskPolicy', 'Pointing']
 
@@ -264,6 +264,9 @@ class MaskPolicy(object):
 
 #-------------------------------------------------------------------------------
 
+POINTING_DTYPE = [('time', get_default_dtype_float()), ('ra', get_default_dtype_float()),
+                  ('dec', get_default_dtype_float()), ('pa', get_default_dtype_float()),
+                  ('info', numpy.int64), ('masked', numpy.bool8), ('removed', numpy.bool8)]
 
 class Pointing(numpy.recarray):
     INSCAN     = 1
@@ -290,10 +293,7 @@ class Pointing(numpy.recarray):
             removed = False
 
         if dtype is None:
-            ftype = get_default_dtype_float()
-            dtype = numpy.dtype([('time', ftype), ('ra', ftype), ('dec', ftype), ('pa', ftype), ('info', numpy.int64),
-                                 ('masked', numpy.bool8), ('removed', numpy.bool8)])
-
+            dtype = POINTING_DTYPE
 
         time    = numpy.asarray(time)
         ra      = numpy.asarray(ra)
@@ -331,3 +331,185 @@ class Pointing(numpy.recarray):
         # BUG: append eats the unit...
         vel._unit = u
         return vel
+
+
+#-------------------------------------------------------------------------------
+
+
+def create_scan(ra0, dec0, scan_acceleration, sampling, scan_angle=0., scan_length=30., scan_nlegs=3, scan_step=20.,
+                scan_speed=10., dtype=None):
+    """
+    compute the pointing timeline of the instrument reference point
+    from the description of a scan map
+    Authors: R. Gastaud
+    """
+    
+    scan_angle -= 90.
+
+    scan_length = float(scan_length)
+    if scan_length <= 0:
+        raise ValueError('Input scan_length must be strictly positive.')
+
+    scan_nlegs = int(scan_nlegs)
+    if scan_nlegs <= 0:
+        raise ValueError('Input scan_nlegs must be strictly positive.')
+    
+    scan_step = float(scan_step)
+    if scan_step <= 0: 
+        raise ValueError('Input scan_step must be strictly positive.')
+
+    scan_speed = float(scan_speed)
+    if scan_speed <= 0:
+        raise ValueError('Input scan_speed must be strictly positive.')
+
+    sampling_frequency = 1. / sampling
+    sampling_period    = 1. / sampling_frequency
+
+    # compute the different times and the total number of points
+    # acceleration time at the beginning of a leg, and deceleration time
+    # at the end
+    extra_time1 = scan_speed / scan_acceleration
+    # corresponding length 
+    extralength = 0.5 * scan_acceleration * extra_time1 * extra_time1
+    # Time needed to go from a scan line to the next 
+    extra_time2 = numpy.sqrt(scan_step / scan_acceleration)
+    # Time needed to turn around (not used)
+    turnaround_time = 2 * (extra_time1 + extra_time2)
+
+    # Time needed to go along the scanline at constant speed
+    line_time = scan_length / scan_speed
+    # Total time for a scanline
+    full_line_time=extra_time1 + line_time + extra_time1 + extra_time2 + extra_time2 
+    # Total duration of the observation
+    total_time = full_line_time * scan_nlegs - 2 * extra_time2
+
+    # Number of samples
+    nsamples = int(numpy.ceil(total_time * sampling_frequency))
+
+    # initialization
+    time          = numpy.zeros(nsamples)
+    latitude      = numpy.zeros(nsamples)
+    longitude     = numpy.zeros(nsamples)
+    infos         = numpy.zeros(nsamples, dtype=int)
+    line_counters = numpy.zeros(nsamples, dtype=int)
+
+    # Start of computations, alpha and delta are the longitude and
+    # latitide in arc seconds in the referential of the map.
+    signe = 1
+    delta = -extralength - scan_length/2.
+    alpha = -scan_step * (scan_nlegs-1)/2.
+    alpha0 = alpha
+    line_counter = 0
+    working_time = 0.
+
+    for i in range(nsamples):
+        info = 0
+   
+        # check if new line
+        if working_time > full_line_time:
+            working_time = working_time - full_line_time
+            signe = -signe
+            line_counter = line_counter + 1
+            alpha = -scan_step * (scan_nlegs-1)/2. + line_counter * scan_step
+            alpha0 = alpha
+   
+        # acceleration at the beginning of a scan line to go from 0 to the
+        # scan_speed. 
+        if working_time < extra_time1:
+            delta = -signe*(extralength + scan_length/2) + signe * 0.5 * scan_acceleration * working_time * working_time
+            info  = Pointing.TURNAROUND
+   
+        # constant speed
+        if working_time >=  extra_time1 and working_time < extra_time1+line_time:
+            delta = signe*(-scan_length/2+ (working_time-extra_time1)*scan_speed)
+            info  = Pointing.INSCAN
+ 
+        # Deceleration at then end of the scanline to stop
+        if working_time >= extra_time1+line_time and working_time < extra_time1+line_time+extra_time1:
+            dt = working_time - extra_time1 - line_time
+            delta = signe * (scan_length/2 + scan_speed*dt - 0.5 * scan_acceleration*dt*dt)
+            info  = Pointing.TURNAROUND
+  
+        # Acceleration to go toward the next scan line
+        if working_time >= 2*extra_time1+line_time and working_time < 2*extra_time1+line_time+extra_time2:
+            dt = working_time-2*extra_time1-line_time
+            alpha = alpha0 + 0.5*scan_acceleration*dt*dt
+            info  = Pointing.TURNAROUND
+   
+        # Deceleration to stop at the next scan line
+        if working_time >= 2*extra_time1+line_time+extra_time2 and working_time < full_line_time:
+            dt = working_time-2*extra_time1-line_time-extra_time2
+            speed = scan_acceleration*extra_time2
+            alpha = (alpha0+scan_step/2.) + speed*dt - 0.5*scan_acceleration*dt*dt
+            info  = Pointing.TURNAROUND
+
+        time[i] = i / sampling_frequency
+        infos[i] = info
+        latitude[i] = delta
+        longitude[i] = alpha
+        line_counters[i] = line_counter
+        working_time = working_time + sampling_period
+
+    # Convert the longitude and latitude *expressed in degrees) to ra and dec
+    ra, dec = _change_coord(ra0, dec0, scan_angle, longitude/3600., latitude/3600.)
+
+    scan = Pointing(time, ra, dec, 0., infos, dtype=dtype)
+    header = create_fitsheader(scan)
+    header.update('ra', ra0)
+    header.update('dec', dec0)
+    header.update('HIERARCH scan_angle', scan_angle)
+    header.update('HIERARCH scan_length', scan_length)
+    header.update('HIERARCH scan_nlegs', scan_nlegs)
+    header.update('HIERARCH scan_step', scan_step)
+    header.update('HIERARCH scan_speed', scan_speed)
+    header.update('HIERARCH scan_acceleration', scan_acceleration)
+    scan.header = header
+    return scan
+
+
+#-------------------------------------------------------------------------------
+
+
+def _change_coord(ra0, dec0, pa0, lon, lat):
+    """
+    Transforms the longitude and latitude coordinates expressed in the
+    native coordinate system attached to a map into right ascension and
+    declination.
+    Author: R. Gastaud
+    """
+    from numpy import arcsin, arctan2, cos, deg2rad, mod, sin, rad2deg
+
+    # Arguments in radian
+    lambd = deg2rad(lon)
+    beta  = deg2rad(lat) 
+    alpha = deg2rad(ra0)
+    delta = deg2rad(dec0)
+    eps   = deg2rad(pa0)
+
+    # Cartesian coordinates from longitude and latitude
+    z4 = sin(beta)
+    y4 = sin(lambd)*cos(beta)
+    x4 = cos(lambd)*cos(beta)
+
+    # rotation about the x4 axe of -eps 
+    x3 =  x4
+    y3 =  y4*cos(eps) + z4*sin(eps)
+    z3 = -y4*sin(eps) + z4*cos(eps)
+    
+    # rotation about the axis Oy2, angle delta
+    x2 = x3*cos(delta) - z3*sin(delta)
+    y2 = y3
+    z2 = x3*sin(delta) + z3*cos(delta)
+
+    # rotation about the axis Oz1, angle alpha
+    x1 = x2*cos(alpha) - y2*sin(alpha)
+    y1 = x2*sin(alpha) + y2*cos(alpha)
+    z1 = z2
+
+    # Compute angles from cartesian coordinates
+    # it is the only place where we can get nan with arcsinus
+    dec = rad2deg(arcsin(numpy.clip(z1, -1., 1.)))
+    ra  = mod(rad2deg(arctan2(y1, x1)), 360.)
+
+    return ra, dec
+

@@ -11,12 +11,20 @@ from mpi4py import MPI
 from tamasis import numpyutils
 from tamasis.core import *
 from tamasis.config import __verbose__, __version__
-from tamasis.observations import *
+from tamasis.observations import Observation, Instrument, FlatField, create_scan
 
-__all__ = [ 'PacsObservation', 'PacsSimulation', 'pacs_plot_scan', 'pacs_preprocess' ]
+__all__ = [ 'PacsObservation', 'PacsSimulation', 'pacs_create_scan', 'pacs_plot_scan', 'pacs_preprocess' ]
 
 DEFAULT_RESOLUTION = {'blue':3.2, 'green':3.2, 'red':6.4}
 DEFAULT_NPIXELS_PER_SAMPLE = {'blue':6, 'green':6, 'red':11}
+
+PACS_POINTING_DTYPE = [('time', get_default_dtype_float()), ('ra', get_default_dtype_float()),
+                       ('dec', get_default_dtype_float()), ('pa', get_default_dtype_float()),
+                       ('chop', get_default_dtype_float()), ('info', numpy.int64), ('masked', numpy.bool8),
+                       ('removed', numpy.bool8)]
+
+PACS_ACCELERATION = 4.
+PACS_SAMPLING = 0.024996
 
 class _Pacs(Observation):
 
@@ -373,7 +381,8 @@ class PacsObservation(_Pacs):
         self.slice.mask_activated = mask_activated[:,0:nmasks_max]
         
         # Store pointing information
-        self.pointing = PacsPointing(frame_time, frame_ra, frame_dec, frame_pa, frame_chop, frame_info, frame_masked, frame_removed, nsamples=self.slice.nsamples_all)
+        self.pointing = Pointing(frame_time, frame_ra, frame_dec, frame_pa, frame_info, frame_masked, frame_removed, nsamples=self.slice.nsamples_all, dtype=PACS_POINTING_DTYPE)
+        self.pointing.chop = frame_chop
 
         # Store frame policy
         self.policy = policy
@@ -502,58 +511,11 @@ class PacsObservation(_Pacs):
 #-------------------------------------------------------------------------------
 
 
-class PacsPointing(Pointing):
-    """
-    This class subclasses tamasis.Pointing, by adding the chopper information.
-    """
-    def __new__(cls, time, ra, dec, pa, chop, info=None, masked=None, removed=None, nsamples=None):
-        if nsamples is None:
-            nsamples = (time.size,)
-        else:
-            if numpyutils._my_isscalar(nsamples):
-                nsamples = (nsamples,)
-            else:
-                nsamples = tuple(nsamples)
-        nsamples_tot = numpy.sum(nsamples)
-        if numpy.any(numpy.array([ra.size,dec.size,pa.size,info.size,masked.size,removed.size]) != nsamples_tot):
-            print(numpy.array([ra.size,dec.size,pa.size,info.size,masked.size,removed.size]), nsamples_tot, nsamples)
-            raise ValueError('The pointing inputs do not have the same size.')
-
-        if info is None:
-            info = Pointing.INSCAN
-
-        if masked is None:
-            masked = False
-
-        if removed is None:
-            removed = False
-
-        result = numpy.recarray(nsamples_tot, dtype=PacsPointing._dtype)
-        result.time = time
-        result.ra   = ra
-        result.dec  = dec
-        result.pa   = pa
-        result.chop = chop
-        result.info = info
-        result.masked = masked
-        result.removed = removed
-        result = result.view(cls)
-        result.nsamples = nsamples
-        return result
-
-    _dtype = [('time', get_default_dtype_float()), ('ra', get_default_dtype_float()), ('dec', get_default_dtype_float()),
-              ('pa', get_default_dtype_float()), ('chop', get_default_dtype_float()), ('info', numpy.int64), 
-              ('masked', numpy.bool_), ('removed', numpy.bool_)]
-
-
-#-------------------------------------------------------------------------------
-
-
 class PacsSimulation(_Pacs):
     """
     This class creates a simulated PACS observation.
     """
-    def __init__(self, band, center, mode='prime', cam_angle=0., scan_angle=0., scan_length=30., scan_nlegs=3, scan_step=20., scan_speed=10., fine_sampling_factor=1, detector_mask='calibration', reject_bad_line=False, policy_inscan='keep', policy_turnaround='keep', policy_other='remove', policy_invalid='mask'):
+    def __init__(self, pointing, band, mode='prime', fine_sampling_factor=1, detector_mask='calibration', reject_bad_line=False, policy_inscan='keep', policy_turnaround='keep', policy_other='remove', policy_invalid='mask'):
         band = band.lower()
         if band not in ('blue', 'green', 'red'):
             raise ValueError("Band is not 'blue', 'green', nor 'red'.")
@@ -562,14 +524,18 @@ class PacsSimulation(_Pacs):
         if mode not in ('prime', 'parallel', 'transparent'):
             raise ValueError("Observing mode is not 'prime', 'parallel', nor 'transparent'.")
         
-        compression_factor = 8 if mode == 'parallel' and band != 'red' else 1 if mode == 'transparent' else 4
+        if pointing.header is not None and 'compression_factor' in pointing.header:
+            compression_factor = pointing.header['compression_factor']
+        else:
+            compression_factor = 8 if mode == 'parallel' and band != 'red' else 1 if mode == 'transparent' else 4
+
         detector_mask = self._get_detector_mask(band, detector_mask, mode == 'transparent', reject_bad_line)
         ftype = get_default_dtype_float()
 
         # Store pointing information
-        self.pointing = _generate_pointing(center[0], center[1], cam_angle, scan_angle, scan_length, scan_nlegs, scan_step,
-                                           scan_speed, compression_factor, dtype=PacsPointing._dtype)
-        self.pointing.chop = 0.
+        if not hasattr(pointing, 'chop'):
+            pointing.chop = numpy.zeros(pointing.size, ftype)
+        self.pointing = pointing
         self.pointing.removed = policy_inscan == 'remove' and self.pointing.info == Pointing.INSCAN or \
                                 policy_turnaround == 'remove' and self.pointing.info == Pointing.TURNAROUND
 
@@ -593,14 +559,8 @@ class PacsSimulation(_Pacs):
         self.slice.mode = mode
         self.slice.compression_factor = compression_factor
         self.slice.unit = ''
-        self.slice.ra = center[0]
-        self.slice.dec = center[1]
-        self.slice.cam_angle = cam_angle
-        self.slice.scan_angle = scan_angle
-        self.slice.scan_length = scan_length
-        self.slice.scan_nlegs = scan_nlegs
-        self.slice.scan_step = scan_step
-        self.slice.scan_speed = scan_speed
+        for field in ('ra', 'dec', 'cam_angle', 'scan_angle', 'scan_nlegs', 'scan_length', 'scan_step', 'scan_speed'):
+            self.slice[field] = pointing.header[field] if field in pointing.header else 0
         self.slice.ninscans = numpy.sum(self.pointing.info == Pointing.INSCAN)
         self.slice.nturnarounds = numpy.sum(self.pointing.info == Pointing.TURNAROUND)
         self.slice.nothers = numpy.sum(self.pointing.info == Pointing.OTHER)
@@ -781,48 +741,16 @@ def pacs_preprocess(obs,
 #-------------------------------------------------------------------------------
 
 
-def _change_coord(ra0, dec0, pa0, lon, lat):
-    """
-    Transforms the longitude and latitude coordinates expressed in the
-    native coordinate system attached to a map into right ascension and
-    declination.
-    Author: R. Gastaud
-    """
-    from numpy import arcsin, arctan2, cos, deg2rad, mod, sin, rad2deg
-
-    # Arguments in radian
-    lambd = deg2rad(lon)
-    beta  = deg2rad(lat) 
-    alpha = deg2rad(ra0)
-    delta = deg2rad(dec0)
-    eps   = deg2rad(pa0)
-
-    # Cartesian coordinates from longitude and latitude
-    z4 = sin(beta)
-    y4 = sin(lambd)*cos(beta)
-    x4 = cos(lambd)*cos(beta)
-
-    # rotation about the x4 axe of -eps 
-    x3 =  x4
-    y3 =  y4*cos(eps) + z4*sin(eps)
-    z3 = -y4*sin(eps) + z4*cos(eps)
-    
-    # rotation about the axis Oy2, angle delta
-    x2 = x3*cos(delta) - z3*sin(delta)
-    y2 = y3
-    z2 = x3*sin(delta) + z3*cos(delta)
-
-    # rotation about the axis Oz1, angle alpha
-    x1 = x2*cos(alpha) - y2*sin(alpha)
-    y1 = x2*sin(alpha) + y2*cos(alpha)
-    z1 = z2
-
-    # Compute angles from cartesian coordinates
-    # it is the only place where we can get nan with arcsinus
-    dec = rad2deg(arcsin(numpy.clip(z1, -1., 1.)))
-    ra  = mod(rad2deg(arctan2(y1, x1)), 360.)
-
-    return ra, dec
+def pacs_create_scan(ra0, dec0, cam_angle=0., scan_angle=0., scan_length=30., scan_nlegs=3, scan_step=20., scan_speed=10., 
+                     compression_factor=4):
+    if int(compression_factor) not in (1, 4, 8):
+        raise ValueError("Input compression_factor must be 1, 4 or 8.")
+    scan = create_scan(ra0, dec0, PACS_ACCELERATION, PACS_SAMPLING * compression_factor, scan_angle=scan_angle,
+                       scan_length=scan_length, scan_nlegs=scan_nlegs, scan_step=scan_step, scan_speed=scan_speed,
+                       dtype=PACS_POINTING_DTYPE)
+    scan.header.update('HIERARCH cam_angle', cam_angle)
+    scan.chop = 0.
+    return scan
 
 
 #-------------------------------------------------------------------------------
@@ -835,136 +763,6 @@ def _files2tmf(filename):
     for f in filename:
         filename_ += f + (length-len(f))*' '
     return filename_, nfilenames
-
-
-#-------------------------------------------------------------------------------
-
-
-def _generate_pointing(ra0, dec0, pa0, scan_angle, scan_length=30., scan_nlegs=3, scan_step=20., scan_speed=10., 
-                       compression_factor=4, dtype=None):
-    """
-    compute the pointing timeline of the instrument reference point
-    from the description of a scan map
-    Authors: R. Gastaud
-    """
-    
-    # some info
-    gamma = 4.
-    sampling_pacs = 0.024996
-
-    scan_angle -= 90.
-
-    scan_length = float(scan_length)
-    if scan_length <= 0:
-        raise ValueError('Input scan_length must be strictly positive.')
-
-    scan_nlegs = int(scan_nlegs)
-    if scan_nlegs <= 0:
-        raise ValueError('Input scan_nlegs must be strictly positive.')
-    
-    scan_step = float(scan_step)
-    if scan_step <= 0: 
-        raise ValueError('Input scan_step must be strictly positive.')
-
-    scan_speed = float(scan_speed)
-    if scan_speed <= 0:
-        raise ValueError('Input scan_speed must be strictly positive.')
-
-    compression_factor = int(compression_factor)
-    if compression_factor not in (1, 4, 8):
-        raise ValueError("Input compression_factor must be 1, 4 or 8.")
-    sampling_frequency = 1. / sampling_pacs / compression_factor
-    sampling_period    = 1. / sampling_frequency
-
-    # compute the different times and the total number of points
-    # acceleration time at the beginning of a leg, and deceleration time
-    # at the end
-    extra_time1 = scan_speed / gamma
-    # corresponding length 
-    extralength = 0.5 * gamma * extra_time1 * extra_time1
-    # Time needed to go from a scan line to the next 
-    extra_time2 = numpy.sqrt(scan_step / gamma)
-    # Time needed to turn around (not used)
-    turnaround_time = 2 * (extra_time1 + extra_time2)
-
-    # Time needed to go along the scanline at constant speed
-    line_time = scan_length / scan_speed
-    # Total time for a scanline
-    full_line_time=extra_time1 + line_time + extra_time1 + extra_time2 + extra_time2 
-    # Total duration of the observation
-    total_time = full_line_time * scan_nlegs - 2 * extra_time2
-
-    # Number of samples
-    nsamples = int(numpy.ceil(total_time * sampling_frequency))
-
-    # initialization
-    time          = numpy.zeros(nsamples)
-    latitude      = numpy.zeros(nsamples)
-    longitude     = numpy.zeros(nsamples)
-    infos         = numpy.zeros(nsamples, dtype=int)
-    line_counters = numpy.zeros(nsamples, dtype=int)
-
-    # Start of computations, alpha and delta are the longitude and
-    # latitide in arc seconds in the referential of the map.
-    signe = 1
-    delta = -extralength - scan_length/2.
-    alpha = -scan_step * (scan_nlegs-1)/2.
-    alpha0 = alpha
-    line_counter = 0
-    working_time = 0.
-
-    for i in range(nsamples):
-        info = 0
-   
-        # check if new line
-        if working_time > full_line_time:
-            working_time = working_time - full_line_time
-            signe = -signe
-            line_counter = line_counter + 1
-            alpha = -scan_step * (scan_nlegs-1)/2. + line_counter * scan_step
-            alpha0 = alpha
-   
-        # acceleration at the beginning of a scan line to go from 0 to the
-        # scan_speed. 
-        if working_time < extra_time1:
-            delta = -signe*(extralength + scan_length/2) + signe * 0.5 * gamma * working_time * working_time
-            info  = Pointing.TURNAROUND
-   
-        # constant speed
-        if working_time >=  extra_time1 and working_time < extra_time1+line_time:
-            delta = signe*(-scan_length/2+ (working_time-extra_time1)*scan_speed)
-            info  = Pointing.INSCAN
- 
-        # Deceleration at then end of the scanline to stop
-        if working_time >= extra_time1+line_time and working_time < extra_time1+line_time+extra_time1:
-            dt = working_time - extra_time1 - line_time
-            delta = signe * (scan_length/2 + scan_speed*dt - 0.5 * gamma*dt*dt)
-            info  = Pointing.TURNAROUND
-  
-        # Acceleration to go toward the next scan line
-        if working_time >= 2*extra_time1+line_time and working_time < 2*extra_time1+line_time+extra_time2:
-            dt = working_time-2*extra_time1-line_time
-            alpha = alpha0 + 0.5*gamma*dt*dt
-            info  = Pointing.TURNAROUND
-   
-        # Deceleration to stop at the next scan line
-        if working_time >= 2*extra_time1+line_time+extra_time2 and working_time < full_line_time:
-            dt = working_time-2*extra_time1-line_time-extra_time2
-            speed = gamma*extra_time2
-            alpha = (alpha0+scan_step/2.) + speed*dt - 0.5*gamma*dt*dt
-            info  = Pointing.TURNAROUND
-
-        time[i] = i / sampling_frequency
-        infos[i] = info
-        latitude[i] = delta
-        longitude[i] = alpha
-        line_counters[i] = line_counter
-        working_time = working_time + sampling_period
-
-    # Convert the longitude and latitude *expressed in degrees) to ra and dec
-    ra, dec = _change_coord(ra0, dec0, scan_angle, longitude/3600., latitude/3600.)
-
-    return Pointing(time, ra, dec, pa0, infos, dtype=dtype)
 
 
 #-------------------------------------------------------------------------------
