@@ -74,6 +74,7 @@ weight = padding.T * fft.T * invNtt * fft * padding
 # it is equivalent to solving the equation H^T N^-1 H x = H^T N^-1 y
 map_madmap = mapper_ls(tod, model,
                        weight=weight,
+                       M=1/map_naive.coverage,
                        unpacking=Unpacking(map_naive.coverage==0),
                        tol=1.e-5)
 map_madmap.save('map_madmap.fits')
