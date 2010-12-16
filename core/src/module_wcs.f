@@ -2,7 +2,7 @@ module module_wcs
 
     use iso_c_binding
     use iso_fortran_env,  only : ERROR_UNIT
-    use module_fitstools, only : ft_read_keyword
+    use module_fitstools, only : FLEN_VALUE, ft_read_keyword
     use module_math,      only : DEG2RAD, RAD2DEG
     use module_string,    only : strinteger, strlowcase, strupcase
     use module_tamasis,   only : p
@@ -41,11 +41,11 @@ contains
         type(astrometry), intent(out), optional :: astr
         integer, intent(out)                    :: status
 
-        type(astrometry)  :: myastr
-        logical           :: found
-        integer           :: has_cd
-        real(p)           :: crota2, cdelt1, cdelt2
-        character(len=70) :: buffer
+        type(astrometry)          :: myastr
+        logical                   :: found
+        integer                   :: has_cd
+        real(p)                   :: crota2, cdelt1, cdelt2
+        character(len=FLEN_VALUE) :: buffer
 
         has_cd = 0
 
@@ -91,13 +91,21 @@ contains
         if (status /= 0) return
         myastr%ctype(2) = strupcase(buffer(1:8))
 
-        call ft_read_keyword(header, 'cunit1', buffer, status=status)
+        call ft_read_keyword(header, 'cunit1', buffer, found, status=status)
         if (status /= 0) return
-        myastr%cunit(1) = strlowcase(buffer(1:8))
+        if (found) then
+            myastr%cunit(1) = strlowcase(buffer(1:8))
+        else
+            myastr%cunit(1) = 'deg'
+        end if
 
-        call ft_read_keyword(header, 'cunit2', buffer, status=status)
+        call ft_read_keyword(header, 'cunit2', buffer, found, status=status)
         if (status /= 0) return
-        myastr%cunit(2) = strlowcase(buffer(1:8))
+        if (found) then
+            myastr%cunit(2) = strlowcase(buffer(1:8))
+        else
+            myastr%cunit(2) = 'deg'
+        end if
 
         if (has_cd /= 0 .and. has_cd /= 4) then
             write (ERROR_UNIT,'(a)') 'Header has incomplete CD matrix.'
