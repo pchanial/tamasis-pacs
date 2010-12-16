@@ -106,7 +106,24 @@ class _Pacs(Observation):
                     pass
             
             status.append(s.base)
-        self._status = numpy.concatenate(status).view(numpy.recarray)
+
+        # check number of records
+        if numpy.any([len(s) for s in status] != self.slice.nsamples_all):
+            raise ValueError("The status has a number of records '" + str([len(s) for s in status]) + "' incompatible with that of the pointings '" + str(self.slice.nsamples_all) + "'.")
+
+        # merge status if necessary
+        if any([status[i].dtype != status[0].dtype for i in range(1,len(status))]):
+            newdtype = []
+            for d in status[0].dtype.names:
+                newdtype.append((d, max(status, key=lambda s: s[d].dtype.itemsize)[d].dtype))
+            self._status = numpy.recarray(int(numpy.sum(self.slice.nsamples_all)), newdtype)
+            dest = 0
+            for s in status:
+                for n in status[0].dtype.names:
+                    self._status[n][dest:dest+len(s)] = s[n]
+                dest += len(s)
+        else:
+            self._status = numpy.concatenate(status).view(numpy.recarray)
         return self._status
 
     def __str__(self):
