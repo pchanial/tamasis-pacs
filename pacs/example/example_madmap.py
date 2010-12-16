@@ -54,8 +54,7 @@ tod.save('tod_preprocessed.fits')
 # M y == M H x, M is the mask operator which sets bad samples values to 0
 projection = Projection(obs,
                         method='nearest',
-                        oversampling=False,
-                        npixels_per_sample=6)
+                        oversampling=False)
 masking = Masking(tod.mask)
 model = masking * projection
 tod = masking(tod)
