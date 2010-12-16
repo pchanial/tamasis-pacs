@@ -895,26 +895,27 @@ contains
         ! check if there are gaps
         delta_max = maxval(abs(delta))
         if (verbose .and. any(neq_real(delta, this%sampling_interval, 1.e-3_p))) then
-            write (*,'(a,$)') "Warning: In observation '" // trim(this%filename) //"', the pointing time is not evenly spaced."
+            write (OUTPUT_UNIT,'(a,$)') "Warning: In observation '" // trim(this%filename) //"', the pointing time is not evenly sp&
+                  &aced."
             if (delta_max > 1.5_p * this%sampling_interval) then
-                write (*,'(a)') ' Largest gap is ' // strreal(delta_max*1000._p,1) // 'ms.'
+                write (OUTPUT_UNIT,'(a)') ' Largest gap is ' // strreal(delta_max*1000._p,1) // 'ms.'
             else
-                write (*,*)
+                write (OUTPUT_UNIT,*)
             end if
         end if
         
         ! check the compression factor from the data themselves
         compression_factor = nint(this%sampling_interval / 0.024996_p)
         if (neq_real(compression_factor * 0.024996_p, this%sampling_interval, 1e-2_p)) then
-            write (*,'(a)') 'Error: The sampling time is not an integer number of PACS sampling time (40Hz).'
+            write (ERROR_UNIT,'(a)') 'Error: The sampling time is not an integer number of PACS sampling time (40Hz).'
             return
         end if
         
         if (compression_factor /= this%compression_factor) then
-            write (*,'(a,2(i0,a))') "Error: The compression_factor determined from the observation header '",                      &
-                  this%compression_factor, "' is different from the one inferred from the time in the Status table '",             &
-                  compression_factor, "'."
-            return
+            write (OUTPUT_UNIT,'(a,2(i0,a))') "Warning: The compression factor determined from the observation header '",          &
+                  this%compression_factor, "' is different from the one inferred from the fine time in the Status table '",        &
+                  compression_factor, "'. The latter is assumed to be true."
+            this%compression_factor = compression_factor
         end if
 
         status = 0
