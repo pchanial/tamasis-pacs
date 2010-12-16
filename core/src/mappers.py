@@ -11,7 +11,7 @@ from .quantity import Quantity, UnitError
 
 __all__ = [ 'mapper_naive', 'mapper_ls', 'mapper_rls' ]
 
-def mapper_naive(tod, model, unit=None):
+def mapper_naive(tod, model, unit='Jy/pixel'):
     """
     Returns a naive map, i.e.: model.transpose(tod) / model.transpose(1)
 
@@ -20,34 +20,39 @@ def mapper_naive(tod, model, unit=None):
     have the TOD in unit of surface brightness.
     """
 
+    # make sure the input is a surface brightness
+    if tod._unit is not None and 'detector' in tod._unit:
+        tod = tod.tounit(tod.unit + ' detector / arcsec^2')
+        copy = False
+    elif tod._unit is not None and 'detector_nominal' in tod._unit:
+        tod = tod.tounit(tod.unit + ' detector_nominal / arcsec^2')
+        copy = False
+    else:
+        copy = True
+
     model = model * AllReduce().T
     if tod.mask is not None:
         model = Masking(tod.mask) * model
-    mymap = Map(model.transpose(tod), copy=False)
-    unity = tod.copy()
+
+    mymap = model.T(tod)
+    h = mymap.header
+    try:
+        cd = numpy.array([ [h['cd1_1'],h['cd1_2']], [h['cd2_1'],h['cd2_2']] ])
+    except:
+        raise KeyError('The pixel size cannot be determined from the map header: The CD matrix is missing.')
+    pixel_area = Quantity(abs(numpy.linalg.det(cd)), 'deg^2').tounit('arcsec^2')
+
+    mymap = Map(mymap, derived_units={'pixel':pixel_area}, copy=False)
+    unity = Tod(tod, copy=copy)
     unity[:] = 1.
     unity.unit = ''
-    map_weights = model.transpose(unity, reusein=True)
+    map_weights = model.T(unity, reusein=True)
     old_settings = numpy.seterr(divide='ignore', invalid='ignore')
     mymap /= map_weights
     numpy.seterr(**old_settings)
     mymap.coverage = map_weights
    
-    if unit is None:
-        return mymap
-
-    newunit = Quantity(1., unit)
-    newunit_si = newunit.SI._unit
-    if 'pixel' in newunit_si and newunit_si['pixel'] == -1:
-        h = mymap.header
-        try:
-            cd = numpy.array([ [h['cd1_1'],h['cd1_2']], [h['cd2_1'],h['cd2_2']] ])
-        except:
-            raise KeyError('The pixel size cannot be determined from the map header: The CD matrix is missing.')
-        pixel_area = Quantity(abs(numpy.linalg.det(cd)), 'deg^2/pixel')
-        mymap *= pixel_area
-       
-    mymap.unit = newunit._unit
+    mymap.unit = unit
     
     return mymap
 

@@ -323,7 +323,7 @@ class PacsObservation(_Pacs):
         flen_value = len(unit) // nfilenames
         mode = [mode[i*flen_value:(i+1)*flen_value].strip() for i in range(nfilenames)]
         unit = [unit[i*flen_value:(i+1)*flen_value].strip() for i in range(nfilenames)]
-        unit = [x if x.find('/') != -1 else x + ' / detector' for x in unit]
+        unit = [x if x.find('/') != -1 else x + ' / detector_nominal' for x in unit]
 
         # Store instrument information
         detector_center, detector_corner, detector_area, distortion_yz, oflat, dflat, responsivity, status = tmf.pacs_info_instrument(band, numpy.asfortranarray(detector_mask, numpy.int8))
@@ -334,7 +334,7 @@ class PacsObservation(_Pacs):
         self.instrument.fine_sampling_factor = fine_sampling_factor
         self.instrument.detector_center = detector_center.T.swapaxes(0,1).copy().view(dtype=[('u',ftype),('v',ftype)]).view(numpy.recarray)
         self.instrument.detector_corner = detector_corner.T.swapaxes(0,1).copy().view(dtype=[('u',ftype),('v',ftype)]).view(numpy.recarray)
-        self.instrument.detector_area = Map(numpy.ascontiguousarray(detector_area), unit='arcsec^2/detector', origin='upper')
+        self.instrument.detector_area = Map(numpy.ascontiguousarray(detector_area), unit='arcsec^2', origin='upper')
         self.instrument.distortion_yz = distortion_yz.T.view(dtype=[('y',ftype), ('z',ftype)]).view(numpy.recarray)
         self.instrument.flatfield = FlatField(oflat, dflat)
         self.instrument.responsivity = Quantity(responsivity, 'V/Jy')
@@ -392,7 +392,7 @@ class PacsObservation(_Pacs):
 
         print(self)
 
-    def get_tod(self, unit=None, flatfielding=True, subtraction_mean=True, raw_data=False, masks='activated'):
+    def get_tod(self, unit='Jy/detector', flatfielding=True, subtraction_mean=True, raw_data=False, masks='activated'):
         """
         Returns the signal and mask timelines.
 
@@ -456,29 +456,24 @@ class PacsObservation(_Pacs):
                                             sel_masks)
         if status != 0: raise RuntimeError()
        
-        tod = Tod(signal.T, mask.T, nsamples=self.get_nsamples(), unit=self.slice[0].unit, copy=False)
+        i = self.instrument.shape[0] / 2 - 1
+        j = self.instrument.shape[1] / 2 - 1
+        detector_nominal = Quantity((6.4 if self.instrument.band == 'red' else 3.2)**2, 'arcsec^2 / detector_nominal')
+        detector_geometric = numpy.mean(self.instrument.detector_area[i:i+2,j:j+2])
+        detector = Quantity(self.instrument.detector_area[~self.instrument.detector_mask], 'arcsec^2')
+        derived_units = {
+            'detector_nominal': Quantity(detector_nominal/detector_geometric, 'detector', {'detector':detector}),
+            'detector'        : detector,
+            'V'               : Quantity(1./self.instrument.responsivity, 'Jy')
+            }
+        tod = Tod(signal.T, 
+                  mask.T,
+                  nsamples=self.get_nsamples(),
+                  unit=self.slice[0].unit,
+                  derived_units=derived_units,
+                  copy=False)
 
-        # the flux calibration has been done by using HCSS photproject and assuming that the central detectors had a size of 3.2x3.2
-        # squared arcseconds. To be consistent with detector sharp edge model, we need to adjust the Tod.
-        if not raw_data and tod.unit in ('Jy / detector', 'V / detector'):
-            i = self.instrument.shape[0] / 2 - 1
-            j = self.instrument.shape[1] / 2 - 1
-            nominal_area = (6.4 if self.instrument.band == 'red' else 3.2)**2
-            tod *= numpy.mean(self.instrument.detector_area[i:i+2,j:j+2]) / Quantity(nominal_area, 'arcsec^2/detector')
-
-        if unit is None:
-            return tod
-
-        newunit = Quantity(1., unit)
-        newunit_si = newunit.SI._unit
-        if 'sr' in newunit_si and newunit_si['sr'] == -1:
-            area = self.instrument.detector_area[self.instrument.detector_mask == 0].reshape((self.get_ndetectors(),1))
-            tod /= area
-           
-        if 'V' in tod._unit and tod._unit['V'] == 1 and 'V' not in newunit_si:
-            tod /= self.instrument.responsivity
-
-        tod.unit = newunit._unit
+        tod.unit = unit
         return tod
 
     def get_map_header(self, resolution=None, oversampling=True):
