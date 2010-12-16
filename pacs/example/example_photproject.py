@@ -1,6 +1,7 @@
 #---------------------------------------------------
 # Creation of a map using the photproject algorithm
 #---------------------------------------------------
+import numpy
 import os
 from tamasis import *
 

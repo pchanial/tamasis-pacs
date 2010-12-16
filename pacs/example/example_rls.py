@@ -1,9 +1,9 @@
 #-------------------------------------------------------------
 # Creation of a map using the regularised least square method
 #-------------------------------------------------------------
+import numpy
 import os
 from tamasis import *
-import numpy
 
 # Specify the Frames observations as FITS files
 path = os.getenv('PACS_DATA')+'transpScan/'
