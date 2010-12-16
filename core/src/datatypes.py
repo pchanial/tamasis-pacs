@@ -12,7 +12,7 @@ except:
 
 from .numpyutils import _my_isscalar
 from scipy.special import jn
-from .unit import Quantity
+from .quantity import Quantity
 
 __all__ = [ 'FitsArray', 'Map', 'Tod', 'create_fitsheader' ]
 
@@ -20,7 +20,7 @@ __all__ = [ 'FitsArray', 'Map', 'Tod', 'create_fitsheader' ]
 class FitsArray(Quantity):
 
     __slots__ = ('_header', '__dict__')
-    def __new__(cls, data, header=None, unit=None, dtype=None, copy=True, order='C', subok=False, ndmin=0):
+    def __new__(cls, data, header=None, unit=None, derived_units=None, dtype=None, copy=True, order='C', subok=False, ndmin=0):
 
         if type(data) is str:
             ihdu = 0
@@ -42,7 +42,7 @@ class FitsArray(Quantity):
                     unit = header['QTTY____'] # HCSS crap
 
         # get a new FitsArray instance (or a subclass if subok is True)
-        result = Quantity(data, unit, dtype, copy, order, True, ndmin)
+        result = Quantity(data, unit, derived_units, dtype, copy, order, True, ndmin)
         if not subok and result.__class__ is not cls or not issubclass(result.__class__, cls):
             result = result.view(cls)
 
@@ -73,16 +73,16 @@ class FitsArray(Quantity):
         return result
 
     @staticmethod
-    def empty(shape, header=None, unit=None, dtype=None, order=None):
-        return FitsArray(numpy.empty(shape, dtype, order), header, unit, dtype, copy=False)
+    def empty(shape, header=None, unit=None, derived_units=None, dtype=None, order=None):
+        return FitsArray(numpy.empty(shape, dtype, order), header, unit, derived_units, dtype, copy=False)
 
     @staticmethod
-    def ones(shape, header=None, unit=None, dtype=None, order=None):
-        return FitsArray(numpy.ones(shape, dtype, order), header, unit, dtype, copy=False)
+    def ones(shape, header=None, unit=None, derived_units=None, dtype=None, order=None):
+        return FitsArray(numpy.ones(shape, dtype, order), header, unit, derived_units, dtype, copy=False)
 
     @staticmethod
-    def zeros(shape, header=None, unit=None, dtype=None, order=None):
-        return FitsArray(numpy.zeros(shape, dtype, order), header, unit, dtype, copy=False)
+    def zeros(shape, header=None, unit=None, derived_units=None, dtype=None, order=None):
+        return FitsArray(numpy.zeros(shape, dtype, order), header, unit, derived_units, dtype, copy=False)
 
     def has_wcs(self):
         """
@@ -326,10 +326,10 @@ class Map(FitsArray):
     """
     Represent a map, complemented with unit and FITS header.
     """
-    def __new__(cls, data, coverage=None, error=None, origin='lower', header=None, unit=None, dtype=None, copy=True, order='C', subok=False, ndmin=0):
+    def __new__(cls, data, coverage=None, error=None, origin='lower', header=None, unit=None, derived_units=None, dtype=None, copy=True, order='C', subok=False, ndmin=0):
 
         # get a new Map instance (or a subclass if subok is True)
-        result = FitsArray(data, header, unit, dtype, copy, order, True, ndmin)
+        result = FitsArray(data, header, unit, derived_units, dtype, copy, order, True, ndmin)
 
         if type(data) is str:
             try:
@@ -382,16 +382,16 @@ class Map(FitsArray):
             self.origin = 'lower'
 
     @staticmethod
-    def empty(shape, coverage=None, error=None, origin='lower', header=None, unit=None, dtype=None, order=None):
-        return Map(numpy.empty(shape, dtype, order), coverage, error, origin, header, unit, dtype, copy=False)
+    def empty(shape, coverage=None, error=None, origin='lower', header=None, unit=None, derived_units=None, dtype=None, order=None):
+        return Map(numpy.empty(shape, dtype, order), coverage, error, origin, header, unit, derived_units, dtype, copy=False)
 
     @staticmethod
-    def ones(shape, coverage=None, error=None, origin='lower', header=None, unit=None, dtype=None, order=None):
-        return Map(numpy.ones(shape, dtype, order), coverage, error, origin, header, unit, dtype, copy=False)
+    def ones(shape, coverage=None, error=None, origin='lower', header=None, unit=None, derived_units=None, dtype=None, order=None):
+        return Map(numpy.ones(shape, dtype, order), coverage, error, origin, header, unit, derived_units, dtype, copy=False)
 
     @staticmethod
-    def zeros(shape, coverage=None, error=None, origin='lower', header=None, unit=None, dtype=None, order=None):
-        return Map(numpy.zeros(shape, dtype, order), coverage, error, origin, header, unit, dtype, copy=False)
+    def zeros(shape, coverage=None, error=None, origin='lower', header=None, unit=None, derived_units=None, dtype=None, order=None):
+        return Map(numpy.zeros(shape, dtype, order), coverage, error, origin, header, unit, derived_units, dtype, copy=False)
 
     def copy(self, order='C'):
         return Map(self, copy=True, order=order)
@@ -453,12 +453,12 @@ class Map(FitsArray):
 
 class Tod(FitsArray):
 
-    __slots__ = ('mask', 'nsamples')
+    __slots__ = ('_mask', 'nsamples')
 
-    def __new__(cls, data, mask=None, nsamples=None, header=None, unit=None, dtype=None, copy=True, order='C', subok=False, ndmin=0):
+    def __new__(cls, data, mask=None, nsamples=None, header=None, unit=None, derived_units=None, dtype=None, copy=True, order='C', subok=False, ndmin=0):
 
         # get a new Tod instance (or a subclass if subok is True)
-        result = FitsArray(data, header, unit, dtype, copy, order, True, ndmin)
+        result = FitsArray(data, header, unit, derived_units, dtype, copy, order, True, ndmin)
         if not subok and result.__class__ is not cls or not issubclass(result.__class__, cls):
             result = result.view(cls)
         
@@ -477,9 +477,9 @@ class Tod(FitsArray):
             mask = data.mask
 
         if mask is not None:
-            mask = numpy.array(mask, numpy.bool8, copy=copy)
-
-        result.mask = mask
+            result._mask = numpy.array(mask, numpy.bool8, copy=copy)
+        else:
+            result._mask = None
         
         # nsamples attribute
         if type(data) is str and nsamples is None:
@@ -571,22 +571,22 @@ class Tod(FitsArray):
         return result
 
     @staticmethod
-    def empty(shape, mask=None, nsamples=None, header=None, unit=None, dtype=None, order=None):
+    def empty(shape, mask=None, nsamples=None, header=None, unit=None, derived_units=None, dtype=None, order=None):
         shape = validate_sliced_shape(shape, nsamples)
         shape_flat = flatten_sliced_shape(shape)
-        return Tod(numpy.empty(shape_flat, dtype, order), mask, shape[-1], header, unit, dtype, copy=False)
+        return Tod(numpy.empty(shape_flat, dtype, order), mask, shape[-1], header, unit, derived_units, dtype, copy=False)
 
     @staticmethod
-    def ones(shape, mask=None, nsamples=None, header=None, unit=None, dtype=None, order=None):
+    def ones(shape, mask=None, nsamples=None, header=None, unit=None, derived_units=None, dtype=None, order=None):
         shape = validate_sliced_shape(shape, nsamples)
         shape_flat = flatten_sliced_shape(shape)
-        return Tod(numpy.ones(shape_flat, dtype, order), mask, shape[-1], header, unit, dtype, copy=False)
+        return Tod(numpy.ones(shape_flat, dtype, order), mask, shape[-1], header, unit, derived_units, dtype, copy=False)
 
     @staticmethod
-    def zeros(shape, mask=None, nsamples=None, header=None, unit=None, dtype=None, order=None):
+    def zeros(shape, mask=None, nsamples=None, header=None, unit=None, derived_units=None, dtype=None, order=None):
         shape = validate_sliced_shape(shape, nsamples)
         shape_flat = flatten_sliced_shape(shape)
-        return Tod(numpy.zeros(shape_flat, dtype, order), mask, shape[-1], header, unit, dtype, copy=False)
+        return Tod(numpy.zeros(shape_flat, dtype, order), mask, shape[-1], header, unit, derived_units, dtype, copy=False)
    
     def copy(self, order='C'):
         return Tod(self, copy=True, order=order)

@@ -198,3 +198,16 @@ if Quantity(1., dtype=numpy.complex256).dtype.type is not numpy.complex256: rais
 if Quantity(numpy.array(complex(1,0))).dtype is not get_default_dtype_complex(): raise TestFailure()
 if Quantity(numpy.array(numpy.complex64(1.))).dtype is not get_default_dtype_complex(): raise TestFailure()
 if Quantity(numpy.array(numpy.complex128(1.))).dtype is not get_default_dtype_complex(): raise TestFailure()
+
+# test custom derived units:
+derived_units = {'detector':Quantity([1, 1/10.], 'm^2')}
+a = Quantity([[1,2,3,4],[10,20,30,40]], 'detector', derived_units=derived_units)
+if not numpy.allclose(a.SI, [[1,2,3,4],[1,2,3,4]]): raise TestFailure()
+a = Quantity(1, 'detector C', derived_units)
+if a.SI.shape != (2,): raise TestFailure()
+a = Quantity(numpy.ones((1,10)), 'detector', derived_units=derived_units)
+if a.SI.shape != (2,10): raise TestFailure()
+
+a= Quantity(4., 'Jy/detector', {'detector':Quantity(2,'arcsec^2')})
+a.unit = a.unit + ' / arcsec^2 * detector'
+if a.magnitude != 2 or a.unit != 'Jy / arcsec^2': raise TestFailure()

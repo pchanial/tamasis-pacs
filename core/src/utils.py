@@ -9,7 +9,7 @@ import time
 from .datatypes import Map, create_fitsheader
 from matplotlib import pyplot
 from .numpyutils import _my_isscalar
-from .unit import Quantity
+from .quantity import Quantity
 
 __all__ = [ 'ds9', 'hs', 'mean_degrees', 'minmax_degrees', 'plot_scan', 'airy_disk', 'aperture_circular', 'distance', 'gaussian', 'phasemask_fourquadrant' ]
 

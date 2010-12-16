@@ -1,9 +1,9 @@
 import numpy
 
-from tamasis.config import get_default_dtype_float
-from tamasis.numpyutils import _my_isscalar
-from tamasis.unit import Quantity
-from tamasis.datatypes import Map, Tod, create_fitsheader
+from .config import get_default_dtype_float
+from .numpyutils import _my_isscalar
+from .quantity import Quantity
+from .datatypes import Map, Tod, create_fitsheader
 
 __all__ = ['Observation', 'Instrument', 'FlatField', 'MaskPolicy', 'Pointing']
 
@@ -324,7 +324,7 @@ class Pointing(numpy.recarray):
         dra  = numpy.diff(ra)
         ddec = numpy.diff(dec)
         dtime = Quantity(numpy.diff(self.time), 's')
-        vel = numpy.sqrt((dra*numpy.cos(dec[0:-1].inunit('rad')))**2 + ddec**2) / dtime
+        vel = numpy.sqrt((dra*numpy.cos(dec[0:-1].tounit('rad')))**2 + ddec**2) / dtime
         vel.unit = 'arcsec/s'
         u = vel._unit
         vel = numpy.append(vel, vel[-1])
