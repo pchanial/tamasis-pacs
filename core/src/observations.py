@@ -199,7 +199,7 @@ class Instrument(object):
     """
     def __init__(self, name, detector_mask):
         self.name = name
-        self.detector_mask = Map(detector_mask, origin='upper', dtype='uint8', copy=True)
+        self.detector_mask = Map(detector_mask, origin='upper', dtype='bool8', copy=True)
         self.shape = detector_mask.shape
 
 
