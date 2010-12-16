@@ -320,6 +320,8 @@ class PacsObservation(_Pacs):
 
         # retrieve information from the observation
         mode, compression_factor, unit, ra, dec, cam_angle, scan_angle, scan_length, scan_speed, scan_step, scan_nlegs, frame_time, frame_ra, frame_dec, frame_pa, frame_chop, frame_info, frame_masked, frame_removed, nmasks, mask_name_flat, mask_activated, status = tmf.pacs_info_observation(filename_, nfilenames, numpy.array(policy, dtype='int32'), numpy.sum(nsamples_all))
+        if status != 0: raise RuntimeError()
+
         flen_value = len(unit) // nfilenames
         mode = [mode[i*flen_value:(i+1)*flen_value].strip() for i in range(nfilenames)]
         unit = [unit[i*flen_value:(i+1)*flen_value].strip() for i in range(nfilenames)]
@@ -328,6 +330,7 @@ class PacsObservation(_Pacs):
         # Store instrument information
         detector_center, detector_corner, detector_area, distortion_yz, oflat, dflat, responsivity, status = tmf.pacs_info_instrument(band, numpy.asfortranarray(detector_mask, numpy.int8))
         if status != 0: raise RuntimeError()
+
         self.instrument = Instrument('PACS/' + band.capitalize(), detector_mask)
         self.instrument.band = band
         self.instrument.reject_bad_line = reject_bad_line
