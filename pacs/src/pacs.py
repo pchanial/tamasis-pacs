@@ -484,7 +484,7 @@ class PacsObservation(_Pacs):
        
         detector = Quantity(self.instrument.detector_area[~self.instrument.detector_mask], 'arcsec^2')
         derived_units = {
-            'detector_nominal': Quantity(1./self.instrument.active_fraction, 'detector', {'detector':detector}),
+            'detector_reference': Quantity(1./self.instrument.active_fraction, 'detector', {'detector':detector}),
             'detector'        : detector,
             'V'               : Quantity(1./self.instrument.responsivity, 'Jy')
             }

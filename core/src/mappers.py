@@ -24,8 +24,8 @@ def mapper_naive(tod, model, unit=None):
     if tod._unit is not None and 'detector' in tod._unit:
         tod = tod.tounit(tod.unit + ' detector / arcsec^2')
         copy = False
-    elif tod._unit is not None and 'detector_nominal' in tod._unit:
-        tod = tod.tounit(tod.unit + ' detector_nominal / arcsec^2')
+    elif tod._unit is not None and 'detector_reference' in tod._unit:
+        tod = tod.tounit(tod.unit + ' detector_reference / arcsec^2')
         copy = False
     else:
         copy = True

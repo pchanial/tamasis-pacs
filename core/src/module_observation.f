@@ -837,9 +837,9 @@ contains
 
         select case (this%unit)
             case ('Jy')
-                this%unit = 'Jy / detector_nominal'
+                this%unit = 'Jy / detector_reference'
             case ('V')
-                this%unit = 'V / detector_nominal'
+                this%unit = 'V / detector_reference'
         end select
 
     end subroutine set_unit
@@ -1021,10 +1021,10 @@ contains
 
         if (this%unit == '') then
             if (verbose_) then
-                write (OUTPUT_UNIT,'(a)') "Warning: Observation has no units. Assuming 'Jy / detector_nominal'."
+                write (OUTPUT_UNIT,'(a)') "Warning: Observation has no units. Assuming 'Jy / detector_reference'."
             end if
-            this%unit = 'Jy / detector_nominal'
-            this%slice%unit = 'Jy / detector_nominal'
+            this%unit = 'Jy / detector_reference'
+            this%slice%unit = 'Jy / detector_reference'
         else
             do islice = 1, this%nslices
                 if (this%slice(islice)%unit == '' .and. status == 0) then
