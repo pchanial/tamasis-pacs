@@ -198,8 +198,8 @@ def plot_scan(input, map=None, mask=None, title=None, new_figure=True, color='ma
 #-------------------------------------------------------------------------------
 
 
-def airy_disk(shape, fwhm, origin=None, resolution=1., dtype=None):
-    d  = distance(shape, origin=origin, resolution=resolution, dtype=dtype)
+def airy_disk(shape, fwhm, origin=None, resolution=1.):
+    d  = distance(shape, origin=origin, resolution=resolution)
     d *= 1.61633 / (fwhm/2.)
     d  = (2 * jn(1,d)/d)**2
     d /= numpy.sum(d)
@@ -209,8 +209,8 @@ def airy_disk(shape, fwhm, origin=None, resolution=1., dtype=None):
 #-------------------------------------------------------------------------------
 
 
-def aperture_circular(shape, diameter, origin=None, resolution=1., dtype=None):
-    array = distance(shape, origin=origin, resolution=resolution, dtype=dtype)
+def aperture_circular(shape, diameter, origin=None, resolution=1.):
+    array = distance(shape, origin=origin, resolution=resolution)
     m = array > diameter / 2.
     array[ m] = 0
     array[~m] = 1
@@ -220,7 +220,7 @@ def aperture_circular(shape, diameter, origin=None, resolution=1., dtype=None):
 #-------------------------------------------------------------------------------
 
 
-def distance(shape, origin=None, resolution=1., dtype=None):
+def distance(shape, origin=None, resolution=1.):
     """
     Returns an array whose values are the distances to a given origin.
     
@@ -234,9 +234,8 @@ def distance(shape, origin=None, resolution=1., dtype=None):
         column and row is one), from which the distance is calculated.
         Default value is the array center.
     resolution : array-like in the form of (dx, dy, ...), optional
-        Inter-pixel distance. Default is one.
-    dtype : data-type, optional
-        Data type of the output array.
+        Inter-pixel distance. Default is one. If resolution is a Quantity, its
+        unit will be carried over to the returned distance array
 
     Example
     -------
@@ -256,8 +255,13 @@ def distance(shape, origin=None, resolution=1., dtype=None):
         origin = (numpy.asanyarray(list(reversed(shape)), dtype=_FTYPE) - 1.) / 2.
     else:
         origin = numpy.asanyarray(origin, dtype=_FTYPE)
+
+    if isinstance(resolution, Quantity):
+        unit = resolution._unit
+    else:
+        unit = None
     if _my_isscalar(resolution):
-        resolution = rank * (resolution,)
+        resolution = numpy.resize(resolution, rank)
     resolution = numpy.asanyarray(resolution, dtype=_FTYPE)
 
     if rank == 1:
@@ -267,9 +271,9 @@ def distance(shape, origin=None, resolution=1., dtype=None):
     elif rank == 3:
         d = tmf.distance_3d(shape[2], shape[1], shape[0], origin, resolution).T
     else:
-        d = _distance_slow(shape, origin, resolution, dtype=dtype)
-        
-    return Map(d, dtype=dtype, copy=False)
+        d = _distance_slow(shape, origin, resolution, _FTYPE)
+
+    return Map(d, copy=False, unit=unit)
 
 
 #-------------------------------------------------------------------------------
@@ -295,17 +299,17 @@ def _distance_slow(shape, origin, resolution, dtype):
     d *= resolution
     numpy.square(d, d)
     d = Map(numpy.sqrt(numpy.sum(d, axis=d.shape[-1])), dtype=dtype, copy=False)
-    
     return d
     
 
 #-------------------------------------------------------------------------------
 
 
-def gaussian(shape, fwhm, origin=None, resolution=1., dtype=None):
+def gaussian(shape, fwhm, origin=None, resolution=1., unit=None):
     sigma = fwhm / numpy.sqrt(8*numpy.log(2))
-    d = distance(shape, origin=origin, resolution=resolution, dtype=dtype)
+    d = distance(shape, origin=origin, resolution=resolution)
     d = numpy.exp(-d**2/(2*sigma**2)) / (2*numpy.pi*sigma**2)
+    d.unit = unit
     return d
 
 
