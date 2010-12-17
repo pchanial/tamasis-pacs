@@ -835,6 +835,13 @@ contains
 
         call ft_close(unit, status)
 
+        select case (this%unit)
+            case ('Jy')
+                this%unit = 'Jy / detector_nominal'
+            case ('V')
+                this%unit = 'V / detector_nominal'
+        end select
+
     end subroutine set_unit
 
 
@@ -1014,10 +1021,10 @@ contains
 
         if (this%unit == '') then
             if (verbose_) then
-                write (OUTPUT_UNIT,'(a)') "Warning: Observation has no unit defined. Assuming 'Jy'."
+                write (OUTPUT_UNIT,'(a)') "Warning: Observation has no units. Assuming 'Jy / detector_nominal'."
             end if
-            this%unit = 'Jy'
-            this%slice%unit = 'Jy'
+            this%unit = 'Jy / detector_nominal'
+            this%slice%unit = 'Jy / detector_nominal'
         else
             do islice = 1, this%nslices
                 if (this%slice(islice)%unit == '' .and. status == 0) then

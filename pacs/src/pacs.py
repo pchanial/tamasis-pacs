@@ -335,16 +335,15 @@ class PacsObservation(_Pacs):
         # frame policy
         policy = MaskPolicy('inscan,turnaround,other,invalid', (policy_inscan, policy_turnaround, policy_other, policy_invalid), 'Frame Policy')
 
-        # retrieve information from the observation
+        # store observation information
         mode, compression_factor, unit, ra, dec, cam_angle, scan_angle, scan_length, scan_speed, scan_step, scan_nlegs, frame_time, frame_ra, frame_dec, frame_pa, frame_chop, frame_info, frame_masked, frame_removed, nmasks, mask_name_flat, mask_activated, status = tmf.pacs_info_observation(filename_, nfilenames, numpy.array(policy, dtype='int32'), numpy.sum(nsamples_all))
         if status != 0: raise RuntimeError()
 
         flen_value = len(unit) // nfilenames
         mode = [mode[i*flen_value:(i+1)*flen_value].strip() for i in range(nfilenames)]
         unit = [unit[i*flen_value:(i+1)*flen_value].strip() for i in range(nfilenames)]
-        unit = [x if x.find('/') != -1 else x + ' / detector_nominal' for x in unit]
 
-        # Store instrument information
+        # store instrument information
         detector_center, detector_corner, detector_area, distortion_yz, oflat, dflat, responsivity, status = tmf.pacs_info_instrument(band, numpy.asfortranarray(detector_mask, numpy.int8))
         if status != 0: raise RuntimeError()
 
@@ -359,7 +358,7 @@ class PacsObservation(_Pacs):
         self.instrument.flatfield = FlatField(oflat, dflat)
         self.instrument.responsivity = Quantity(responsivity, 'V/Jy')
 
-        # Store slice information
+        # store slice information
         nmasks_max = numpy.max(nmasks)
         if nmasks_max > 0:
             mask_len_max = numpy.max([len(mask_name_flat[(i*32+j)*70:(i*32+j+1)*70].strip()) for j in range(nmasks[i]) for i in range(nfilenames)])
@@ -400,7 +399,7 @@ class PacsObservation(_Pacs):
         self.slice.mask_name      = mask_name
         self.slice.mask_activated = mask_activated[:,0:nmasks_max]
         
-        # Store pointing information
+        # store pointing information
         self.pointing = Pointing(frame_time, frame_ra, frame_dec, frame_pa, frame_info, frame_masked, frame_removed, nsamples=self.slice.nsamples_all, dtype=PACS_POINTING_DTYPE)
         self.pointing.chop = frame_chop
 
@@ -547,14 +546,14 @@ class PacsSimulation(_Pacs):
         detector_mask = self._get_detector_mask(band, detector_mask, mode == 'transparent', reject_bad_line)
         ftype = get_default_dtype_float()
 
-        # Store pointing information
+        # store pointing information
         if not hasattr(pointing, 'chop'):
             pointing.chop = numpy.zeros(pointing.size, ftype)
         self.pointing = pointing
         self.pointing.removed = policy_inscan == 'remove' and self.pointing.info == Pointing.INSCAN or \
                                 policy_turnaround == 'remove' and self.pointing.info == Pointing.TURNAROUND
 
-        # Store instrument information
+        # store instrument information
         detector_center, detector_corner, detector_area, distortion_yz, oflat, dflat, responsivity, status = tmf.pacs_info_instrument(band, numpy.asfortranarray(detector_mask, numpy.int8))
         if status != 0: raise RuntimeError()
         self.instrument = Instrument('PACS/'+band.capitalize(),detector_mask)
@@ -581,7 +580,7 @@ class PacsSimulation(_Pacs):
         self.slice.nothers = numpy.sum(self.pointing.info == Pointing.OTHER)
         self.slice.ninvalids = 0
         
-        # Store policy
+        # store policy
         self.policy = MaskPolicy('inscan,turnaround,other,invalid', 'keep,keep,remove,mask', 'Frame Policy')
 
         self._status = _write_status(self)
