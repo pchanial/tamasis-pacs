@@ -63,7 +63,6 @@ module module_pacsinstrument
         integer, allocatable   :: ij(:,:)
         integer, allocatable   :: pq(:,:)
 
-        real(p)                :: responsivity ! Jy/V
         real(p), allocatable   :: detector_center(:,:)
         real(p), allocatable   :: detector_corner(:,:)
         real(p), allocatable   :: detector_area(:)
@@ -113,15 +112,15 @@ contains
         real(p), allocatable :: flatfield_optical_all(:,:)
         real(p), allocatable :: flatfield_detector_all(:,:)
         real(p)              :: distortion_yz(NDIMS,DISTORTION_DEGREE,DISTORTION_DEGREE,DISTORTION_DEGREE)
-        real(p)              :: responsivity
+        real(p)              :: responsivity, active_fraction
 
         call this%read_calibration_files(band, detector_mask, detector_center_all, detector_corner_all, detector_area_all,         &
-                                         flatfield_optical_all, flatfield_detector_all, distortion_yz, responsivity, status)
+                                         flatfield_optical_all, flatfield_detector_all, distortion_yz, responsivity,               &
+                                         active_fraction, status)
         if (status /= 0) return
 
         call this%init_with_variables(band, detector_mask, fine_sampling_factor, status, detector_center_all, detector_corner_all, &
-                                      detector_area_all, flatfield_optical_all, flatfield_detector_all, distortion_yz,             &
-                                      responsivity)
+                                      detector_area_all, flatfield_optical_all, flatfield_detector_all, distortion_yz)
         if (status /= 0) return
 
     end subroutine init_with_calfiles
@@ -133,7 +132,7 @@ contains
     ! a flattened array of detector values is travelled through columns and then through rows
     subroutine init_with_variables(this, band, detector_mask, fine_sampling_factor, status, detector_center_all,                   &
                                    detector_corner_all, detector_area_all, flatfield_optical_all, flatfield_detector_all,          &
-                                   distortion_yz, responsivity)
+                                   distortion_yz)
 
         class(PacsInstrument), intent(inout) :: this
         character(len=*), intent(in)         :: band
@@ -146,7 +145,6 @@ contains
         real(p), intent(in), optional        :: flatfield_optical_all(:,:)
         real(p), intent(in), optional        :: flatfield_detector_all(:,:)
         real(p), intent(in), optional        :: distortion_yz(:,:,:,:)
-        real(p), intent(in), optional        :: responsivity
 
         integer :: nrows, ncolumns, idetector, ip, iq
 
@@ -243,12 +241,6 @@ contains
                 return
             end if
             this%distortion_yz = distortion_yz
-        end if
-
-        if (present(responsivity)) then
-            this%responsivity = responsivity
-        else
-            this%responsivity = 1._p
         end if
 
         idetector = 1
@@ -359,7 +351,8 @@ contains
  
 
     subroutine read_calibration_files(band, detector_mask, detector_center_all, detector_corner_all, detector_area_all,            &
-                                      flatfield_optical_all, flatfield_detector_all, distortion_yz, responsivity, status)
+                                      flatfield_optical_all, flatfield_detector_all, distortion_yz, responsivity, active_fraction, &
+                                      status)
 
         character(len=*), intent(in)      :: band
         logical*1, intent(in)             :: detector_mask(:,:)
@@ -370,6 +363,7 @@ contains
         real(p), intent(out), allocatable :: flatfield_detector_all(:,:)
         real(p), intent(out)              :: distortion_yz(NDIMS,DISTORTION_DEGREE,DISTORTION_DEGREE,DISTORTION_DEGREE)
         real(p), intent(out)              :: responsivity
+        real(p), intent(out)              :: active_fraction
         integer, intent(out)              :: status
 
         
@@ -378,7 +372,7 @@ contains
         integer, parameter   :: HDU_RESPONSIVITY(3) = [6, 4, 2]                                     ! v5
         integer, parameter   :: HDU_CORNER(4,2)     = reshape([7, 11, 15, 19, 5, 9, 13, 17], [4,2]) ! v5
 
-        integer              :: iband, ichannel, ip, iq, ivertex, ncolumns, nrows
+        integer              :: iband, ichannel, ip, iq, ivertex, ncolumns, nrows, unit
         character(len=4)     :: channel
         real(p), allocatable :: tmp1(:)
         real(p), allocatable :: tmp2(:,:)
@@ -439,7 +433,17 @@ contains
             detector_corner_all(2,ivertex,:,:) = transpose(tmp2)
         end do
 
-        ! Distortion coefficients in the (y,z) plane
+        ! active fraction
+        call ft_open(get_calfile(FILENAME_SAA), unit, status)
+        if (status /= 0) return
+
+        call ft_read_keyword_hcss(unit, 'activeFraction', active_fraction, status=status)
+        if (status /= 0) return
+
+        call ft_close(unit, status)
+        if (status /= 0) return
+
+        ! distortion coefficients in the (y,z) plane
         call ft_read_image(get_calfile(FILENAME_AI) // '[ycoeff' // trim(channel) // ']', tmp3, status)
         if (status /= 0) return
         distortion_yz(1,:,:,:) = tmp3

@@ -16,7 +16,6 @@ mymap = gaussian(2*(msize*2+1,), 10)
 cd = numpy.array([[-1., 0.],[0., 1.]]) / 3600.
 header = create_fitsheader(mymap, crval=[53.,27.], cd=cd)
 mymap.header = header
-mymap.unit='Jy/pixel'
 
 # creation of the simulation
 scan = pacs_create_scan(header['CRVAL1'], header['CRVAL2'], cam_angle=0., scan_length=60, scan_nlegs=1, scan_angle=20.)

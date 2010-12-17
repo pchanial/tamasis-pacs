@@ -30,6 +30,7 @@ program test_ngc6946_bpj
     integer                             :: status, count0, count1
     integer                             :: count2, count_rate, count_max
     integer                             :: idetector, isample, ipointing
+    integer                             :: new_npixels_per_sample
     integer*8                           :: nsamples
     real(p), allocatable                :: map1d(:)
     type(pointingelement), allocatable  :: pmatrix(:,:,:)
@@ -89,7 +90,7 @@ program test_ngc6946_bpj
 
     ! compute the projector
     allocate (pmatrix(npixels_per_sample,nsamples,pacs%ndetectors))
-    call pacs%compute_projection(SHARP_EDGES, obs, .false., header, nx, ny, pmatrix, status)
+    call pacs%compute_projection(SHARP_EDGES, obs, .false., header, nx, ny, pmatrix, new_npixels_per_sample, status)
     if (status /= 0) call failure('compute_projection_sharp_edges.')
 
     ! check flux conservation during backprojection

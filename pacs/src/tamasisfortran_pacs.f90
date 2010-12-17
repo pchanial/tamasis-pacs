@@ -256,8 +256,8 @@ end subroutine pacs_info_detector_mask
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine pacs_info_instrument(band, detector_mask, nrows, ncolumns, detector_center, detector_corner, detector_area,&
-                                distortion_yz, flatfield_optical, flatfield_detector, responsivity, status)
+subroutine pacs_info_instrument(band, detector_mask, nrows, ncolumns, detector_center, detector_corner, detector_area,             &
+                                distortion_yz, flatfield_optical, flatfield_detector, responsivity, active_fraction, status)
 
     use module_pacsinstrument, only : read_calibration_files
     use module_tamasis,        only : p
@@ -275,12 +275,14 @@ subroutine pacs_info_instrument(band, detector_mask, nrows, ncolumns, detector_c
     !f2py intent(out)            :: flatfield_optical
     !f2py intent(out)            :: flatfield_detector
     !f2py intent(out)            :: responsivity
+    !f2py intent(out)            :: active_fraction
     !f2py intent(out)            :: status
 
     character(len=*), intent(in) :: band
     logical*1, intent(in)        :: detector_mask(nrows,ncolumns)
     integer, intent(in)          :: nrows, ncolumns
     real(p), intent(out)         :: responsivity
+    real(p), intent(out)         :: active_fraction
     real(p), intent(out)         :: detector_center(2,nrows,ncolumns)
     real(p), intent(out)         :: detector_corner(2,4,nrows,ncolumns)
     real(p), intent(out)         :: detector_area(nrows,ncolumns)
@@ -297,7 +299,7 @@ subroutine pacs_info_instrument(band, detector_mask, nrows, ncolumns, detector_c
 
     ! read calibration files
     call read_calibration_files(band, detector_mask, detector_center_all, detector_corner_all, detector_area_all,                  &
-                                    flatfield_optical_all, flatfield_detector_all, distortion_yz, responsivity, status)
+                                flatfield_optical_all, flatfield_detector_all, distortion_yz, responsivity, active_fraction, status)
     if (status /= 0) return
 
     ! copy the allocatable arrays

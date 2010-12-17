@@ -77,6 +77,7 @@ class _Pacs(Observation):
                                      pmatrix)
         if status != 0: raise RuntimeError()
 
+        # the number of pixels per sample is now known, do the real computation
         if npixels_per_sample == 0:
             return self.get_pointing_matrix(header, resolution, new_npixels_per_sample, method, oversampling)
 
@@ -348,10 +349,12 @@ class PacsObservation(_Pacs):
         unit = [unit[i*flen_value:(i+1)*flen_value].strip() for i in range(nfilenames)]
 
         # store instrument information
-        detector_center, detector_corner, detector_area, distortion_yz, oflat, dflat, responsivity, status = tmf.pacs_info_instrument(band, numpy.asfortranarray(detector_mask, numpy.int8))
+        detector_center, detector_corner, detector_area, distortion_yz, oflat, dflat, responsivity, active_fraction, status = \
+            tmf.pacs_info_instrument(band, numpy.asfortranarray(detector_mask, numpy.int8))
         if status != 0: raise RuntimeError()
 
         self.instrument = Instrument('PACS/' + band.capitalize(), detector_mask)
+        self.instrument.active_fraction = active_fraction
         self.instrument.band = band
         self.instrument.reject_bad_line = reject_bad_line
         self.instrument.fine_sampling_factor = fine_sampling_factor
@@ -479,13 +482,9 @@ class PacsObservation(_Pacs):
                                             sel_masks)
         if status != 0: raise RuntimeError()
        
-        i = self.instrument.shape[0] / 2 - 1
-        j = self.instrument.shape[1] / 2 - 1
-        detector_nominal = Quantity((6.4 if self.instrument.band == 'red' else 3.2)**2, 'arcsec^2 / detector_nominal')
-        detector_geometric = numpy.mean(self.instrument.detector_area[i:i+2,j:j+2])
         detector = Quantity(self.instrument.detector_area[~self.instrument.detector_mask], 'arcsec^2')
         derived_units = {
-            'detector_nominal': Quantity(detector_nominal/detector_geometric, 'detector', {'detector':detector}),
+            'detector_nominal': Quantity(1./self.instrument.active_fraction, 'detector', {'detector':detector}),
             'detector'        : detector,
             'V'               : Quantity(1./self.instrument.responsivity, 'Jy')
             }
@@ -558,9 +557,10 @@ class PacsSimulation(_Pacs):
                                 policy_turnaround == 'remove' and self.pointing.info == Pointing.TURNAROUND
 
         # store instrument information
-        detector_center, detector_corner, detector_area, distortion_yz, oflat, dflat, responsivity, status = tmf.pacs_info_instrument(band, numpy.asfortranarray(detector_mask, numpy.int8))
+        detector_center, detector_corner, detector_area, distortion_yz, oflat, dflat, responsivity, active_fraction, status = tmf.pacs_info_instrument(band, numpy.asfortranarray(detector_mask, numpy.int8))
         if status != 0: raise RuntimeError()
         self.instrument = Instrument('PACS/'+band.capitalize(),detector_mask)
+        self.instrument.active_fraction = active_fraction
         self.instrument.band = band
         self.instrument.reject_bad_line = reject_bad_line
         self.instrument.fine_sampling_factor = fine_sampling_factor
