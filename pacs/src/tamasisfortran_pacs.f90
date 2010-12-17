@@ -2,6 +2,15 @@
 !
 ! Author: P. Chanial
 
+subroutine pacs_test(array, n)
+    !f2py intent(hide):: n = size(array)
+    !f2py intent(in), depend(n) :: array(n)
+    real*8, intent(in) :: array(n)
+    real*8,allocatable :: tmp(:)
+    allocate(tmp(3))
+    print *, 'shape:', shape(tmp)
+    print *, 'shape:', shape(array)
+end subroutine
 subroutine pacs_info_init(filename, nfilenames, band, transparent_mode, nsamples, status)
 
     use iso_fortran_env,        only : ERROR_UNIT
@@ -579,7 +588,7 @@ end subroutine pacs_tod
 subroutine pacs_pointing_matrix(band, nslices, nvalids, npointings, nsamples_tot, compression_factor, fine_sampling_factor,        &
                                 oversampling, time, ra, dec, pa, chop, masked, removed, method, detector_mask, nrows, ncolumns,    &
                                 ndetectors, detector_center, detector_corner, detector_area, distortion_yz, npixels_per_sample,    &
-                                header, pmatrix, status)
+                                header, pmatrix, new_npixels_per_sample, status)
 
     use iso_fortran_env,        only : ERROR_UNIT
     use module_fitstools,       only : ft_read_keyword
@@ -616,7 +625,8 @@ subroutine pacs_pointing_matrix(band, nslices, nvalids, npointings, nsamples_tot
     !f2py intent(in)                               :: distortion_yz(2,3,3,3)
     !f2py intent(in)                               :: npixels_per_sample
     !f2py intent(in)                               :: header
-    !f2py integer*8, intent(inout)                 :: pmatrix(npixels_per_sample*nvalids*ndetectors)
+    !f2py integer*8, intent(inout),depend(npixels_per_sample,nvalids,ndetectors) :: pmatrix(npixels_per_sample*nvalids*ndetectors)
+    !f2py intent(out)                              :: new_npixels_per_sample
     !f2py intent(out)                              :: status
 
     character(len=*), intent(in)                   :: band
@@ -641,6 +651,7 @@ subroutine pacs_pointing_matrix(band, nslices, nvalids, npointings, nsamples_tot
     integer, intent(in)                            :: npixels_per_sample
     character(len=*), intent(in)                   :: header
     type(PointingElement), intent(inout)           :: pmatrix(npixels_per_sample,nvalids,ndetectors)
+    integer, intent(out)                           :: new_npixels_per_sample
     integer, intent(out)                           :: status
 
     class(PacsObservation), allocatable :: obs
@@ -702,7 +713,7 @@ subroutine pacs_pointing_matrix(band, nslices, nvalids, npointings, nsamples_tot
     end select
 
     ! compute the projector
-    call pacs%compute_projection(method_, obs, oversampling, header, nx, ny, pmatrix, status)
+    call pacs%compute_projection(method_, obs, oversampling, header, nx, ny, pmatrix, new_npixels_per_sample, status)
 
 end subroutine pacs_pointing_matrix
 

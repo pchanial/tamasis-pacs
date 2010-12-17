@@ -16,7 +16,6 @@ from tamasis.observations import Observation, Instrument, FlatField, create_scan
 __all__ = [ 'PacsObservation', 'PacsSimulation', 'pacs_create_scan', 'pacs_plot_scan', 'pacs_preprocess' ]
 
 DEFAULT_RESOLUTION = {'blue':3.2, 'green':3.2, 'red':6.4}
-DEFAULT_NPIXELS_PER_SAMPLE = {'blue':6, 'green':6, 'red':11}
 
 PACS_POINTING_DTYPE = [('time', get_default_dtype_float()), ('ra', get_default_dtype_float()),
                        ('dec', get_default_dtype_float()), ('pa', get_default_dtype_float()),
@@ -28,7 +27,7 @@ PACS_SAMPLING = 0.024996
 
 class _Pacs(Observation):
 
-    def get_pointing_matrix(self, header, resolution, npixels_per_sample, method=None, oversampling=True):
+    def get_pointing_matrix(self, header, resolution, npixels_per_sample=0, method=None, oversampling=True):
         if method is None:
             method = 'sharp'
         method = method.lower()
@@ -36,8 +35,6 @@ class _Pacs(Observation):
             raise ValueError("Invalid method '" + method + "'. Valids methods are 'nearest' or 'sharp'")
 
         nsamples = self.get_nfinesamples() if oversampling else self.get_nsamples()
-        if npixels_per_sample is None:
-            npixels_per_sample = DEFAULT_NPIXELS_PER_SAMPLE[self.instrument.band] if method != 'nearest' else 1
         if header is None:
             if MPI.COMM_WORLD.Get_size() > 1:
                 raise ValueError('With MPI, the map header must be specified.')
@@ -47,34 +44,41 @@ class _Pacs(Observation):
 
         ndetectors = self.get_ndetectors()
         nvalids = int(numpy.sum(nsamples))
-        sizeofpmatrix = npixels_per_sample * nvalids * ndetectors
-        print('Info: Allocating '+str(sizeofpmatrix/2.**17)+' MiB for the pointing matrix.')
+        if npixels_per_sample != 0:
+            sizeofpmatrix = npixels_per_sample * nvalids * ndetectors
+            print('Info: Allocating '+str(sizeofpmatrix/2.**17)+' MiB for the pointing matrix.')
+        else:
+            sizeofpmatrix = 1
         pmatrix = numpy.empty(sizeofpmatrix, dtype=numpy.int64)
         
-        status = tmf.pacs_pointing_matrix(self.instrument.band,
-                                          nvalids,
-                                          numpy.ascontiguousarray(self.slice.nsamples_all, dtype='int32'),
-                                          numpy.ascontiguousarray(self.slice.compression_factor, dtype='int32'),
-                                          self.instrument.fine_sampling_factor,
-                                          oversampling,
-                                          numpy.ascontiguousarray(self.pointing.time),
-                                          numpy.ascontiguousarray(self.pointing.ra),
-                                          numpy.ascontiguousarray(self.pointing.dec),
-                                          numpy.ascontiguousarray(self.pointing.pa),
-                                          numpy.ascontiguousarray(self.pointing.chop),
-                                          numpy.ascontiguousarray(self.pointing.masked, dtype='int8'),
-                                          numpy.ascontiguousarray(self.pointing.removed,dtype='int8'),
-                                          method,
-                                          numpy.asfortranarray(self.instrument.detector_mask, dtype='int8'),
-                                          self.get_ndetectors(),
-                                          self.instrument.detector_center.base.base.swapaxes(0,1).copy().T,
-                                          self.instrument.detector_corner.base.base.swapaxes(0,1).copy().T,
-                                          numpy.asfortranarray(self.instrument.detector_area),
-                                          self.instrument.distortion_yz.base.base.T,
-                                          npixels_per_sample,
-                                          str(header).replace('\n',''),
-                                          pmatrix)
+        new_npixels_per_sample, status = \
+            tmf.pacs_pointing_matrix(self.instrument.band,
+                                     nvalids,
+                                     numpy.ascontiguousarray(self.slice.nsamples_all, dtype='int32'),
+                                     numpy.ascontiguousarray(self.slice.compression_factor, dtype='int32'),
+                                     self.instrument.fine_sampling_factor,
+                                     oversampling,
+                                     numpy.ascontiguousarray(self.pointing.time),
+                                     numpy.ascontiguousarray(self.pointing.ra),
+                                     numpy.ascontiguousarray(self.pointing.dec),
+                                     numpy.ascontiguousarray(self.pointing.pa),
+                                     numpy.ascontiguousarray(self.pointing.chop),
+                                     numpy.ascontiguousarray(self.pointing.masked, dtype='int8'),
+                                     numpy.ascontiguousarray(self.pointing.removed,dtype='int8'),
+                                     method,
+                                     numpy.asfortranarray(self.instrument.detector_mask, dtype='int8'),
+                                     self.get_ndetectors(),
+                                     self.instrument.detector_center.base.base.swapaxes(0,1).copy().T,
+                                     self.instrument.detector_corner.base.base.swapaxes(0,1).copy().T,
+                                     numpy.asfortranarray(self.instrument.detector_area),
+                                     self.instrument.distortion_yz.base.base.T,
+                                     npixels_per_sample,
+                                     str(header).replace('\n',''),
+                                     pmatrix)
         if status != 0: raise RuntimeError()
+
+        if npixels_per_sample == 0:
+            return self.get_pointing_matrix(header, resolution, new_npixels_per_sample, method, oversampling)
 
         return pmatrix, header, ndetectors, nsamples, npixels_per_sample
 
@@ -698,7 +702,7 @@ def pacs_preprocess(obs,
                     projection_method='sharp',
                     header=None,
                     oversampling=True,
-                    npixels_per_sample=None,
+                    npixels_per_sample=0,
                     deglitching_hf_length=20,
                     deglitching_nsigma=5.,
                     hf_length=30000,

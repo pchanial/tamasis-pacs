@@ -673,7 +673,7 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine compute_projection(this, method, obs, oversampling, header, nx, ny, pmatrix, status)
+    subroutine compute_projection(this, method, obs, oversampling, header, nx, ny, pmatrix, npixels_per_sample, status)
 
         class(PacsInstrument), intent(in)  :: this
         integer, intent(in)                :: method
@@ -682,13 +682,17 @@ contains
         character(len=*), intent(in)       :: header
         integer, intent(in)                :: nx, ny
         type(PointingElement), intent(out) :: pmatrix(:,:,:)
+        integer, intent(out)               :: npixels_per_sample
         integer, intent(out)               :: status
 
-        integer :: npixels_per_sample
         integer :: count1, count2, count_rate, count_max
         logical :: out
 
-        write(*,'(a)', advance='no') 'Info: Computing the projector... '
+        if (size(pmatrix,1) > 0) then
+            write(*,'(a)', advance='no') 'Info: Computing the projector... '
+        else
+            write(*,'(a)', advance='no') 'Info: Computing the projector size... '
+        end if
         call system_clock(count1, count_rate, count_max)
 
         call init_astrometry(header, status=status)
@@ -707,11 +711,12 @@ contains
         call system_clock(count2, count_rate, count_max)
         write(*,'(f7.2,a)') real(count2-count1)/count_rate, 's'
 
-        if (npixels_per_sample > size(pmatrix,1)) then
+        if (npixels_per_sample > size(pmatrix,1) .and. size(pmatrix,1) > 0) then
             status = 1
-            write(ERROR_UNIT,'(a,i0,a)') 'Error: Please update npixels_per_sample to ', npixels_per_sample, '.'
-        else if (npixels_per_sample < size(pmatrix,1)) then
-            write(OUTPUT_UNIT,'(a,i0,a)') 'Warning: You may update npixels_per_sample to ', npixels_per_sample, '.'
+            write (ERROR_UNIT,'(a,i0,a)') 'Error: Please update npixels_per_sample to ', npixels_per_sample, '.'
+        else if (npixels_per_sample < size(pmatrix,1) .or. size(pmatrix,1) == 0) then
+            write (OUTPUT_UNIT,'(a,i0,a)') "Warning: For this observation, you can set the keyword 'npixels_per_sample' to ",      &
+                  npixels_per_sample, ' for better performances.'
         end if
 
         if (out) then
@@ -737,7 +742,7 @@ contains
         real(p) :: coords(NDIMS,this%ndetectors), coords_yz(NDIMS,this%ndetectors)
         real(p) :: x(this%ndetectors), y(this%ndetectors), s(this%ndetectors)
         real(p) :: ra, dec, pa, chop, chop_old, reference_area
-        integer   :: ifine, isample, islice, itime, ivalid, nsamples, nvalids, sampling_factor, dest
+        integer :: ifine, isample, islice, itime, ivalid, nsamples, nvalids, sampling_factor, dest
         integer, allocatable :: valids(:)
 
         npixels_per_sample = 1

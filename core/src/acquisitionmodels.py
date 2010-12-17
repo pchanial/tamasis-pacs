@@ -694,7 +694,7 @@ class Projection(AcquisitionModel):
         - npixels_per_sample: maximum number of sky map pixels that can be intercepted by a detector
     Author: P. Chanial
     """
-    def __init__(self, observation, method=None, header=None, resolution=None, npixels_per_sample=None, oversampling=True, description=None):
+    def __init__(self, observation, method=None, header=None, resolution=None, npixels_per_sample=0, oversampling=True, description=None):
         AcquisitionModel.__init__(self, description)
 
         self._pmatrix, self.header, ndetectors, nsamples, self.npixels_per_sample = \
