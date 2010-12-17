@@ -11,7 +11,7 @@ from .quantity import Quantity, UnitError
 
 __all__ = [ 'mapper_naive', 'mapper_ls', 'mapper_rls' ]
 
-def mapper_naive(tod, model, unit='Jy/pixel'):
+def mapper_naive(tod, model, unit=None):
     """
     Returns a naive map, i.e.: model.transpose(tod) / model.transpose(1)
 
@@ -35,14 +35,14 @@ def mapper_naive(tod, model, unit='Jy/pixel'):
         model = Masking(tod.mask) * model
 
     mymap = model.T(tod)
-    h = mymap.header
     try:
+        h = mymap.header
         cd = numpy.array([ [h['cd1_1'],h['cd1_2']], [h['cd2_1'],h['cd2_2']] ])
+        derived_units = {'pixel_reference' : Quantity(abs(numpy.linalg.det(cd)), 'deg^2').tounit('arcsec^2')}
     except:
-        raise KeyError('The pixel size cannot be determined from the map header: The CD matrix is missing.')
-    pixel_area = Quantity(abs(numpy.linalg.det(cd)), 'deg^2').tounit('arcsec^2')
+        derived_units = None
 
-    mymap = Map(mymap, derived_units={'pixel':pixel_area}, copy=False)
+    mymap = Map(mymap, derived_units=derived_units, copy=False)
     unity = Tod(tod, copy=copy)
     unity[:] = 1.
     unity.unit = ''
@@ -52,7 +52,8 @@ def mapper_naive(tod, model, unit='Jy/pixel'):
     numpy.seterr(**old_settings)
     mymap.coverage = map_weights
    
-    mymap.unit = unit
+    if unit is not None:
+        mymap.unit = unit
     
     return mymap
 
