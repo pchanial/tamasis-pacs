@@ -12,8 +12,7 @@ obs = MadMap1Observation(path+'todSpirePsw_be', path+'invnttSpirePsw_be',
                          135, missing_value=numpy.nan)
 obs.instrument.name = 'SPIRE/PSW'
 
-tod = obs.get_tod()
-tod.unit = 'Jy/beam'
+tod = obs.get_tod(unit='Jy/beam')
 invNtt = InvNtt(len(tod.nsamples)*(1024,), obs.get_filter_uncorrelated())
 fft = FftHalfComplex(len(tod.nsamples)*(1024,))
 padding = Padding(left=invNtt.ncorrelations, right=1024-numpy.array(tod.nsamples)-invNtt.ncorrelations)
