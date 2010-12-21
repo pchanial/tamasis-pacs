@@ -147,17 +147,11 @@ class AcquisitionModel(object):
         operator.unpacking = unpacking
         operator.model = model
         return operator
-        
-    def validate_shape(self, shapein):
-        if shapein is None:
-            return self.shapein
-        if self.shapein is None:
-            return shapein
-        if flatten_sliced_shape(shapein) != flatten_sliced_shape(self.shapein):
-            raise ValidationError('The input of '+self.__class__.__name__+' has incompatible shape '+str(shapein)+' instead of '+str(self.shapein)+'.')
-        return self.shapein
-
-    def validate_shapein(self, shapein):
+    
+    def validate_shape_direct(self, shapein):
+        """
+        Validate input shape and return the output shape of the direct model
+        """
         if shapein is None or self.shapein is None:
             if self.shapeout is not None:
                return self.shapeout
@@ -167,7 +161,10 @@ class AcquisitionModel(object):
             raise ValidationError('The input of '+self.__class__.__name__+' has an incompatible shape '+str(shapein)+' instead of '+str(self.shapein)+'.')
         return self.shapeout
 
-    def validate_shapeout(self, shapeout):
+    def validate_shape_transpose(self, shapeout):
+        """
+        Validate input shape and return the output shape of the transpose model
+        """
         if shapeout is None or self.shapeout is None:
             if self.shapein is not None:
                 return self.shapein
@@ -184,7 +181,7 @@ class AcquisitionModel(object):
         data = numpy.asanyarray(data, _get_dtype(self.dtype, data.dtype))
         if not isinstance(data, cls):
             data = data.view(cls)
-        shapeout = self.validate_shape(data.shape)
+        shapeout = self.validate_shape_direct(data.shape)
         return data
 
     def validate_input_direct(self, cls, data, reusein):
@@ -194,7 +191,7 @@ class AcquisitionModel(object):
         data = numpy.asanyarray(data, _get_dtype(self.dtype, data.dtype))
         if not isinstance(data, cls):
             data = data.view(cls)
-        shapeout = self.validate_shapein(validate_sliced_shape(data.shape, getattr(data, 'nsamples', None)))
+        shapeout = self.validate_shape_direct(validate_sliced_shape(data.shape, getattr(data, 'nsamples', None)))
         if reusein: self._output_transpose = data
         return data, shapeout
 
@@ -205,7 +202,7 @@ class AcquisitionModel(object):
         data = numpy.asanyarray(data, _get_dtype(self.dtype, data.dtype))
         if not isinstance(data, cls):
             data = data.view(cls)
-        shapein = self.validate_shapeout(validate_sliced_shape(data.shape, getattr(data, 'nsamples', None)))
+        shapein = self.validate_shape_transpose(validate_sliced_shape(data.shape, getattr(data, 'nsamples', None)))
         if reusein: self._output_direct = data
         return data, shapein
 
@@ -387,11 +384,11 @@ class AcquisitionModelTranspose(AcquisitionModel):
     def blocks(self, value):
         pass
 
-    def validate_shapein(self, shapein):
-        return self.model.validate_shapeout(shapein)
+    def validate_shape_direct(self, shapein):
+        return self.model.validate_shape_transpose(shapein)
 
-    def validate_shapeout(self, shapeout):
-        return self.model.validate_shapein(shapeout)
+    def validate_shape_transpose(self, shapeout):
+        return self.model.validate_shape_direct(shapeout)
 
     def validate_input_direct(self, cls, data, reusein):
         raise NotImplementedError()
@@ -457,7 +454,7 @@ class Addition(AcquisitionModel):
     def shapein(self):
         shapein = None
         for model in reversed(self.blocks):
-            shapein_ = model.validate_shapeout(None)
+            shapein_ = model.validate_shape_transpose(None)
             if shapein_ is None:
                 continue
             if shapein is None:
@@ -471,7 +468,7 @@ class Addition(AcquisitionModel):
     def shapeout(self):
         shapeout = None
         for model in reversed(self.blocks):
-            shapeout_ = model.validate_shapein(None)
+            shapeout_ = model.validate_shape_direct(None)
             if shapeout_ is None:
                 continue
             if shapeout is None:
@@ -545,14 +542,14 @@ class Composition(AcquisitionModel):
     def shapein(self):
         shapein = None
         for model in reversed(self.blocks):
-            shapein = model.validate_shapeout(shapein)
+            shapein = model.validate_shape_transpose(shapein)
         return shapein
 
     @property
     def shapeout(self):
         shapeout = None
         for model in self.blocks:
-            shapeout = model.validate_shapein(shapeout)
+            shapeout = model.validate_shape_direct(shapeout)
         return shapeout
 
     def __imul__(self, other):
@@ -598,6 +595,17 @@ class Square(AcquisitionModel):
     def shapeout(self, shape):
         self._shapein  = shape
         self._shapeout = shape
+
+    def validate_shape_direct(self, shape):
+        return self.validate_shape(shape)
+
+    def validate_shape_transpose(self, shape):
+        return self.validate_shape(shape)
+
+    def validate_shape(self, shape):
+        return super(Square, self).validate_shape_direct(shape)
+
+    
 
 
 #-------------------------------------------------------------------------------
@@ -660,14 +668,14 @@ class DiscreteDifference(AcquisitionModel):
         out = numpy.concatenate((border, data, border), axis=self.axis)
         return - numpy.diff(out, axis=self.axis)
 
-    def validate_shapein(self, shapein):
+    def validate_shape_direct(self, shapein):
         if shapein is None:
             return None
         shapeout = list(shapein)
         shapeout[self.axis] -= self.n
         return tuple(shapeout)
 
-    def validate_shapeout(self, shapeout):
+    def validate_shape_transpose(self, shapeout):
         if shapeout is None:
             return None
         shapein = list(shapeout)
@@ -772,14 +780,14 @@ class Compression(AcquisitionModel):
         self.compression_transpose(compressed, output, self.factor)
         return output
 
-    def validate_shapein(self, shapein):
+    def validate_shape_direct(self, shapein):
         if shapein is None:
             return None
         if numpy.any(numpy.array(shapein[-1]) % self.factor != 0):
             raise ValidationError('The input timeline size ('+str(shapein[-1])+') is not an integer times the compression factor ('+str(self.factor)+').')
         return combine_sliced_shape(shapein[0:-1], numpy.array(shapein[-1]) / self.factor)
 
-    def validate_shapeout(self, shapeout):
+    def validate_shape_transpose(self, shapeout):
         if shapeout is None:
             return
         return combine_sliced_shape(shapeout[0:-1], numpy.array(shapeout[-1]) * self.factor)
@@ -1055,12 +1063,12 @@ class Padding(AcquisitionModel):
                              "' incompatible with the specified padding.")
         return data, shapein       
 
-    def validate_shapein(self, shapein):
+    def validate_shape_direct(self, shapein):
         if shapein is None:
             return None
         return combine_sliced_shape(shapein[0:-1], numpy.array(shapein[-1]) + self.left + self.right)
        
-    def validate_shapeout(self, shapeout):
+    def validate_shape_transpose(self, shapeout):
         if shapeout is None:
             return None
         return combine_sliced_shape(shapeout[0:-1], numpy.array(shapeout[-1]) - self.left - self.right)
@@ -1135,41 +1143,43 @@ class FftHalfComplex(Square):
     """
     def __init__(self, nsamples, description=None):
         AcquisitionModel.__init__(self, description)
-        self.nsamples = numpy.array(nsamples, ndmin=1, dtype='int64')
-        self.forward_plan = numpy.empty(self.nsamples.size, dtype='int64')
-        self.backward_plan = numpy.empty(self.nsamples.size, dtype='int64')
-        nsamples_max = numpy.max(self.nsamples)
+        self.nsamples_array = numpy.array(nsamples, ndmin=1, dtype='int64')
+        self.nsamples = tuple(self.nsamples_array)
+        self.nsamples_tot = numpy.sum(self.nsamples_array)
+        self.forward_plan = numpy.empty(self.nsamples_array.size, dtype='int64')
+        self.backward_plan = numpy.empty(self.nsamples_array.size, dtype='int64')
         for i, n in enumerate(self.nsamples):
             tarray = numpy.empty(n, dtype=get_default_dtype_float())
             farray = numpy.empty(n, dtype=get_default_dtype_float())
             self.forward_plan[i] = fftw3.Plan(tarray, farray, direction='forward', flags=['measure'], realtypes=['halfcomplex r2c'], nthreads=1)._get_parameter()
             self.backward_plan[i] = fftw3.Plan(farray, tarray, direction='backward', flags=['measure'], realtypes=['halfcomplex c2r'], nthreads=1)._get_parameter()
+            
 
     def direct(self, array, reusein=False, reuseout=False):
         array = self.validate_input(Tod, array)
         output = self.validate_output(array, reusein and reuseout)
         output_ = _smart_reshape(output, (numpy.product(array.shape[:-1]), array.shape[-1]))
-        tmf.fft_plan(output_.T, self.nsamples, self.forward_plan)
+        tmf.fft_plan(output_.T, self.nsamples_array, self.forward_plan)
         return output
 
     def transpose(self, array, reusein=False, reuseout=False):
         array = self.validate_input(Tod, array)
         output = self.validate_output(array, reusein and reuseout)
         output_ = _smart_reshape(output, (numpy.product(array.shape[:-1]), array.shape[-1]))
-        tmf.fft_plan(output_.T, self.nsamples, self.backward_plan)
+        tmf.fft_plan(output_.T, self.nsamples_array, self.backward_plan)
         dest = 0
         for n in self.nsamples:
             output_[:,dest:dest+n] /= n
             dest += n
         return output
 
-    def validate_shape(self, shapein):
-        if shapein is None:
+    def validate_shape(self, shape):
+        if shape is None:
             return None
-        nsamples = shapein[-1]        
-        if not _my_isscalar(nsamples) and tuple(nsamples) != self.nsamples:
+        nsamples = shape[-1]
+        if nsamples != self.nsamples and nsamples != self.nsamples_tot:
             raise ValidationError("Invalid FFT size '"+str(nsamples)+"' instead of '"+str(self.nsamples)+"'.")
-        return combine_sliced_shape(shapein[0:-1], self.nsamples)
+        return combine_sliced_shape(shape[0:-1], self.nsamples)
 
 
 #-------------------------------------------------------------------------------
