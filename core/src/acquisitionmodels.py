@@ -725,18 +725,18 @@ class Projection(AcquisitionModel):
         self.shapein = tuple([self.header['naxis'+str(i+1)] for i in reversed(list(range(self.header['naxis'])))])
         self.shapeout = combine_sliced_shape(ndetectors, nsamples)
 
-    def direct(self, map2d, reusein=False, reuseout=False):
-        map2d, shapeout = self.validate_input_direct(map2d, Map, reusein)
-        output = self.validate_output_direct(map2d, Tod, shapeout, map2d.dtype, reuseout)
+    def direct(self, data, reusein=False, reuseout=False):
+        data, shapeout = self.validate_input_direct(data, Map, reusein)
+        output = self.validate_output_direct(data, Tod, shapeout, data.dtype, reuseout)
         output.nsamples = self.shapeout[-1]
-        tmf.pointing_matrix_direct(self._pmatrix, map2d.T, output.T, self.npixels_per_sample)
+        tmf.pointing_matrix_direct(self._pmatrix, data.T, output.T, self.npixels_per_sample)
         return output
 
-    def transpose(self, signal, reusein=False, reuseout=False):
-        signal, shapein = self.validate_input_transpose(signal, Tod, reusein)
-        output = self.validate_output_transpose(signal, Map, shapein, signal.dtype, reuseout)
+    def transpose(self, data, reusein=False, reuseout=False):
+        data, shapein = self.validate_input_transpose(data, Tod, reusein)
+        output = self.validate_output_transpose(data, Map, shapein, data.dtype, reuseout)
         output.header = self.header
-        tmf.pointing_matrix_transpose(self._pmatrix, signal.T, output.T,  self.npixels_per_sample)
+        tmf.pointing_matrix_transpose(self._pmatrix, data.T, output.T,  self.npixels_per_sample)
         return output
 
     def get_ptp(self):
@@ -765,30 +765,30 @@ class Compression(AcquisitionModel):
         else:
             self.factor = tuple(compression_factor)
 
-    def compression_direct(signal, output, compression_factor):
+    def compression_direct(data, output, compression_factor):
         raise NotImplementedError()
 
-    def compression_transpose(signal, output, compression_factor):
+    def compression_transpose(data, output, compression_factor):
         raise NotImplementedError()
 
-    def direct(self, signal, reusein=False, reuseout=False):
+    def direct(self, data, reusein=False, reuseout=False):
         if numpy.all(numpy.array(self.factor) == 1):
-            if not reusein: return signal.copy('a')
-            return signal
-        signal, shapeout = self.validate_input_direct(signal, Tod, reusein)
-        output = self.validate_output_direct(signal, Tod, shapeout, signal.dtype, reuseout)
-        output.nsamples = tuple(numpy.divide(signal.nsamples, self.factor))
-        self.compression_direct(signal, output, self.factor)
+            if not reusein: return data.copy('a')
+            return data
+        data, shapeout = self.validate_input_direct(data, Tod, reusein)
+        output = self.validate_output_direct(data, Tod, shapeout, data.dtype, reuseout)
+        output.nsamples = tuple(numpy.divide(data.nsamples, self.factor))
+        self.compression_direct(data, output, self.factor)
         return output
 
-    def transpose(self, compressed, reusein=False, reuseout=False):
+    def transpose(self, data, reusein=False, reuseout=False):
         if numpy.all(numpy.array(self.factor) == 1):
-            if not reusein: return compressed.copy('a')
-            return compressed
-        compressed, shapein = self.validate_input_transpose(compressed, Tod, reusein)
-        output = self.validate_output_transpose(compressed, Tod, shapein, compressed.dtype, reuseout)
-        output.nsamples = tuple(numpy.multiply(compressed.nsamples, self.factor))
-        self.compression_transpose(compressed, output, self.factor)
+            if not reusein: return data.copy('a')
+            return data
+        data, shapein = self.validate_input_transpose(data, Tod, reusein)
+        output = self.validate_output_transpose(data, Tod, shapein, data.dtype, reuseout)
+        output.nsamples = tuple(numpy.multiply(data.nsamples, self.factor))
+        self.compression_transpose(data, output, self.factor)
         return output
 
     def validate_shape_direct(self, shapein):
@@ -818,11 +818,11 @@ class CompressionAverage(Compression):
     def __init__(self, compression_factor, description=None):
         Compression.__init__(self, compression_factor, description)
 
-    def compression_direct(self, signal, output, compression_factor):
-        tmf.compression_average_direct(signal.T, output.T, numpy.resize(compression_factor, [len(signal.nsamples)]))
+    def compression_direct(self, data, output, compression_factor):
+        tmf.compression_average_direct(data.T, output.T, numpy.resize(compression_factor, [len(data.nsamples)]))
         
-    def compression_transpose(self, signal, output, compression_factor):
-        tmf.compression_average_transpose(signal.T, output.T, numpy.resize(compression_factor, [len(signal.nsamples)]))
+    def compression_transpose(self, data, output, compression_factor):
+        tmf.compression_average_transpose(data.T, output.T, numpy.resize(compression_factor, [len(data.nsamples)]))
         
 
 #-------------------------------------------------------------------------------
@@ -836,11 +836,11 @@ class DownSampling(Compression):
     def __init__(self, compression_factor, description=None):
         Compression.__init__(self, compression_factor, description)
 
-    def compression_direct(self, signal, output, compression_factor):
-        tmf.downsampling_direct(signal.T, output.T, numpy.resize(compression_factor, [len(signal.nsamples)]))
+    def compression_direct(self, data, output, compression_factor):
+        tmf.downsampling_direct(data.T, output.T, numpy.resize(compression_factor, [len(data.nsamples)]))
         
-    def compression_transpose(self, signal, output, compression_factor):
-        tmf.downsampling_transpose(signal.T, output.T, numpy.resize(compression_factor, [len(signal.nsamples)]))
+    def compression_transpose(self, data, output, compression_factor):
+        tmf.downsampling_transpose(data.T, output.T, numpy.resize(compression_factor, [len(data.nsamples)]))
       
 
 #-------------------------------------------------------------------------------
@@ -942,16 +942,16 @@ class Unpacking(AcquisitionModel):
         self.shapein  = (numpy.sum(self.mask == 0),)
         self.shapeout = self.mask.shape
 
-    def direct(self, packed, reusein=False, reuseout=False):
-        packed, shapeout = self.validate_input_direct(packed, numpy.ndarray, reusein)
-        output = self.validate_output_direct(packed, Map, shapeout, packed.dtype, reuseout)
-        tmf.unpack_direct(packed.T, self.mask.view(numpy.int8).T, output.T, self.field)
+    def direct(self, data, reusein=False, reuseout=False):
+        data, shapeout = self.validate_input_direct(data, numpy.ndarray, reusein)
+        output = self.validate_output_direct(data, Map, shapeout, data.dtype, reuseout)
+        tmf.unpack_direct(data.T, self.mask.view(numpy.int8).T, output.T, self.field)
         return output
 
-    def transpose(self, unpacked, reusein=False, reuseout=False):
-        unpacked, shapein = self.validate_input_transpose(unpacked, Map, reusein)
-        output = self.validate_output_transpose(unpacked, numpy.ndarray, shapein, unpacked.dtype, reuseout)
-        tmf.unpack_transpose(unpacked.T, self.mask.view(numpy.int8).T, output.T)
+    def transpose(self, data, reusein=False, reuseout=False):
+        data, shapein = self.validate_input_transpose(data, Map, reusein)
+        output = self.validate_output_transpose(data, numpy.ndarray, shapein, data.dtype, reuseout)
+        tmf.unpack_transpose(data.T, self.mask.view(numpy.int8).T, output.T)
         return output
 
 
@@ -970,13 +970,13 @@ class Unpacking2(AcquisitionModel):
         self.shapein  = (numpy.sum(self.mask),)
         self.shapeout = tuple(self.mask.shape)
 
-    def direct(self, packed, reusein=False, reuseout=False):
+    def direct(self, data, reusein=False, reuseout=False):
         output = numpy.zeros(self.shapeout) + self.field
-        output[self.mask] = packed
+        output[self.mask] = data
         return output
 
-    def transpose(self, unpacked, reusein=False, reuseout=False):
-        return unpacked[self.mask]
+    def transpose(self, data, reusein=False, reuseout=False):
+        return data[self.mask]
 
 
 #-------------------------------------------------------------------------------
@@ -994,17 +994,17 @@ class Reshaping(AcquisitionModel):
         if numpy.product(flatten_sliced_shape(self.shapein)) != numpy.product(flatten_sliced_shape(self.shapeout)):
             raise ValueError('The number of elements of the input and output of the Reshaping operator are incompatible.')
 
-    def direct(self, array, reusein=False, reuseout=False):
-        array, junk = self.validate_input_direct(array, numpy.ndarray, False)
-        output = array.copy('a') if not reusein or not reuseout else array
+    def direct(self, data, reusein=False, reuseout=False):
+        data, junk = self.validate_input_direct(data, numpy.ndarray, False)
+        output = data.copy('a') if not reusein or not reuseout else data
         output = _smart_reshape(output, self.shapeout)
         if type(self.shapeout[-1]) is tuple:
             output = Tod(output, nsamples=self.shapeout[-1], copy=False)
         return output
 
-    def transpose(self, array, reusein=False, reuseout=False):
-        array, junk = self.validate_input_transpose(array, numpy.ndarray, False)
-        output = array.copy('a') if not reusein or not reuseout else array
+    def transpose(self, data, reusein=False, reuseout=False):
+        data, junk = self.validate_input_transpose(data, numpy.ndarray, False)
+        output = data.copy('a') if not reusein or not reuseout else data
         output = _smart_reshape(output, self.shapein)
         if type(self.shapein[-1]) is tuple:
             output = Tod(output, nsamples=self.shapein[-1], copy=False)
@@ -1030,34 +1030,34 @@ class Padding(AcquisitionModel):
         self.right = tuple(right)
         self.value = value
    
-    def direct(self, array, reusein=False, reuseout=False):
-        array, shapeout = self.validate_input_direct(array, Tod, reusein)
-        output = self.validate_output_direct(array, Tod, shapeout, array.dtype, reuseout)
-        output.nsamples = tuple(numpy.array(array.nsamples) + self.left + self.right)
+    def direct(self, data, reusein=False, reuseout=False):
+        data, shapeout = self.validate_input_direct(data, Tod, reusein)
+        output = self.validate_output_direct(data, Tod, shapeout, data.dtype, reuseout)
+        output.nsamples = tuple(numpy.array(data.nsamples) + self.left + self.right)
         dest = 0
         dest_padded = 0
-        for islice in range(len(array.nsamples)):
-            nsamples = array.nsamples[islice]
+        for islice in range(len(data.nsamples)):
+            nsamples = data.nsamples[islice]
             left = self.left[islice if len(self.left) > 1 else 0]
             output[...,dest_padded:dest_padded+left] = self.value
-            output[...,dest_padded+left:dest_padded+left+nsamples] = array[...,dest:dest+nsamples]
+            output[...,dest_padded+left:dest_padded+left+nsamples] = data[...,dest:dest+nsamples]
             output[...,dest_padded+left+nsamples:] = self.value
             dest += nsamples
             dest_padded += output.nsamples[islice]
         return output
    
-    def transpose(self, array, reusein=False, reuseout=False):
-        array, shapeout = self.validate_input_transpose(array, Tod, reusein)
-        output = self.validate_output_transpose(array, Tod, shapeout, array.dtype, reuseout)
-        output.nsamples = tuple(numpy.array(array.nsamples) - self.left - self.right)
+    def transpose(self, data, reusein=False, reuseout=False):
+        data, shapeout = self.validate_input_transpose(data, Tod, reusein)
+        output = self.validate_output_transpose(data, Tod, shapeout, data.dtype, reuseout)
+        output.nsamples = tuple(numpy.array(data.nsamples) - self.left - self.right)
         dest = 0
         dest_padded = 0
-        for islice in range(len(array.nsamples)):
+        for islice in range(len(data.nsamples)):
             nsamples = output.nsamples[islice]
             left  = self.left [islice if len(self.left)  > 1 else 0]
-            output[...,dest:dest+nsamples] = array[...,dest_padded+left:dest_padded+left+nsamples]
+            output[...,dest:dest+nsamples] = data[...,dest_padded+left:dest_padded+left+nsamples]
             dest += nsamples
-            dest_padded += array.nsamples[islice]
+            dest_padded += data.nsamples[islice]
         return output
 
     def validate_input_direct(self, data, cls, reusein):
@@ -1101,15 +1101,15 @@ class CircularShift(Square):
         self.n = tuple(map(int, n))
         self.axes = tuple(map(int, axes))
 
-    def direct(self, array, reusein=False, reuseout=False):
+    def direct(self, data, reusein=False, reuseout=False):
         for axis, n in zip(self.axes, self.n):
-            array = numpy.roll(array, -n, axis=axis)
-        return array
+            data = numpy.roll(data, -n, axis=axis)
+        return data
 
-    def transpose(self, array, reusein=False, reuseout=False):
+    def transpose(self, data, reusein=False, reuseout=False):
         for axis, n in zip(self.axes, self.n):
-            array = numpy.roll(array, n, axis=axis)
-        return array
+            data = numpy.roll(data, n, axis=axis)
+        return data
 
 
 #-------------------------------------------------------------------------------
@@ -1134,13 +1134,13 @@ class Fft(Square):
         self.backward_plan = fftw3.Plan(self._in, self._out, direction='backward', flags=flags, nthreads=nthreads)
         self.dtype = get_default_dtype_complex()
 
-    def direct(self, array, reusein=False, reuseout=False):
-        self._in[:] = array
+    def direct(self, data, reusein=False, reuseout=False):
+        self._in[:] = data
         fftw3.execute(self.forward_plan)
         return Map(self._out)
 
-    def transpose(self, array, reusein=False, reuseout=False):
-        self._in[:] = array
+    def transpose(self, data, reusein=False, reuseout=False):
+        self._in[:] = data
         fftw3.execute(self.backward_plan)
         return Map(self._out / self.n, copy=False)
 
@@ -1166,17 +1166,17 @@ class FftHalfComplex(Square):
             self.backward_plan[i] = fftw3.Plan(farray, tarray, direction='backward', flags=['measure'], realtypes=['halfcomplex c2r'], nthreads=1)._get_parameter()
             
 
-    def direct(self, array, reusein=False, reuseout=False):
-        array = self.validate_input(array, Tod)
-        output = self.validate_output(array, reusein and reuseout)
-        output_ = _smart_reshape(output, (numpy.product(array.shape[:-1]), array.shape[-1]))
+    def direct(self, data, reusein=False, reuseout=False):
+        data = self.validate_input(data, Tod)
+        output = self.validate_output(data, reusein and reuseout)
+        output_ = _smart_reshape(output, (numpy.product(data.shape[:-1]), data.shape[-1]))
         tmf.fft_plan(output_.T, self.nsamples_array, self.forward_plan)
         return output
 
-    def transpose(self, array, reusein=False, reuseout=False):
-        array = self.validate_input(array, Tod)
-        output = self.validate_output(array, reusein and reuseout)
-        output_ = _smart_reshape(output, (numpy.product(array.shape[:-1]), array.shape[-1]))
+    def transpose(self, data, reusein=False, reuseout=False):
+        data = self.validate_input(data, Tod)
+        output = self.validate_output(data, reusein and reuseout)
+        output_ = _smart_reshape(output, (numpy.product(data.shape[:-1]), data.shape[-1]))
         tmf.fft_plan(output_.T, self.nsamples_array, self.backward_plan)
         dest = 0
         for n in self.nsamples:
@@ -1231,13 +1231,13 @@ class InterpolationLinear(Square):
 
 class AllReduce(Square):
 
-    def direct(self, array, reusein=False, reuseout=False, op=MPI.SUM):
-        array = self.validate_output(array, reusein and reuseout)
-        array[:] = MPI.COMM_WORLD.allreduce(array, op=MPI.SUM)
-        return array
-    def transpose(self, array, reusein=False, reuseout=False):
-        array = self.validate_output(array, reusein and reuseout)
-        return array
+    def direct(self, data, reusein=False, reuseout=False, op=MPI.SUM):
+        data = self.validate_output(data, reusein and reuseout)
+        data[:] = MPI.COMM_WORLD.allreduce(data, op=MPI.SUM)
+        return data
+    def transpose(self, data, reusein=False, reuseout=False):
+        data = self.validate_output(data, reusein and reuseout)
+        return data
 
 
 #-------------------------------------------------------------------------------
@@ -1297,13 +1297,13 @@ def _is_scientific_dtype(dtype):
 #-------------------------------------------------------------------------------
 
 
-def _smart_reshape(array, shape):
-    curr = array
+def _smart_reshape(data, shape):
+    curr = data
     shape = flatten_sliced_shape(shape)
     while True:
         if curr.shape == shape:
             return curr
-        if curr.base is None or curr.base.dtype != array.dtype or curr.base.__class__ != array.__class__:
+        if curr.base is None or curr.base.dtype != data.dtype or curr.base.__class__ != data.__class__:
             return curr.reshape(shape)
         curr = curr.base
 
