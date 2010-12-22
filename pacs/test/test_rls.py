@@ -31,3 +31,4 @@ map_mask = weights == 0
 
 # iterative map, taking all map pixels
 map_iter = mapper_rls(tod, model, hyper=1., tol=1.e-4)
+print 'Elapsed time: '+str(map_iter.header['TIME'])
