@@ -42,7 +42,7 @@ class AcquisitionModel(object):
     Author: P. Chanial
     """
 
-    def __init__(self, description=None, units=None):
+    def __init__(self, description=None, types=None, units=None):
 
         if description is None:
             description = self.__class__.__name__
@@ -52,6 +52,12 @@ class AcquisitionModel(object):
         # input and output shape are unconstrained
         self._shapein  = None
         self._shapeout = None
+        
+        # store type information
+        if type(types) not in (tuple, list):
+            types = (types,types)
+        self._typein = types[1] or numpy.ndarray
+        self._typeout = types[0] or numpy.ndarray
 
         # store unit information
         if type(units) not in (tuple, list):
@@ -59,10 +65,10 @@ class AcquisitionModel(object):
         self._unitin  = Quantity(1., units[1])._unit
         self._unitout = Quantity(1., units[0])._unit
 
-        # stores the input of the transpose model. Its memory allocation is re-used as the output of the direct model
+        # store the input of the transpose model. Its memory allocation is re-used as the output of the direct model
         self._output_direct = None
 
-        # stores the input of the direct model. Its memory allocation is re-used as the output of the transpose model
+        # store the input of the direct model. Its memory allocation is re-used as the output of the transpose model
         self._output_transpose = None
 
         # dtype
@@ -188,33 +194,33 @@ class AcquisitionModel(object):
             raise ValidationError("The input of '" + type(self).__name__ + ".T' has an incompatible shape " + str(shapeout) + ' instead of ' + str(self.shapeout) + '.')
         return self.shapein
 
-    def validate_input_direct(self, data, cls, cache):
+    def validate_input_direct(self, data, cache):
         data = numpy.asanyarray(data)
         if not _is_scientific_dtype(data.dtype):
             raise TypeError("The input of '" + type(self).__name__ + "' has a non-numeric type '" + str(data.dtype) + "'.")
         data = numpy.asanyarray(data, _get_dtype(self.dtype, data.dtype))
-        if not isinstance(data, cls):
-            data = data.view(cls)
+        if not isinstance(data, self._typein):
+            data = data.view(self._typein)
         _validate_input_unit(data, self._unitin)
         shapeout = self.validate_shape_direct(validate_sliced_shape(data.shape, getattr(data, 'nsamples', None)))
         if cache:
             self._output_transpose = data
         return data, shapeout
 
-    def validate_input_transpose(self, data, cls, cache):
+    def validate_input_transpose(self, data, cache):
         data = numpy.asanyarray(data)
         if not _is_scientific_dtype(data.dtype):
             raise TypeError("The input of '" + type(self).__name__ + ".T' has a non-numeric type '" + str(data.dtype) + "'.")
         data = numpy.asanyarray(data, _get_dtype(self.dtype, data.dtype))
-        if not isinstance(data, cls):
-            data = data.view(cls)
+        if not isinstance(data, self._typeout):
+            data = data.view(self._typeout)
         _validate_input_unit(data, self._unitout)
         shapein = self.validate_shape_transpose(validate_sliced_shape(data.shape, getattr(data, 'nsamples', None)))
         if cache:
             self._output_direct = data
         return data, shapein
 
-    def validate_output_direct(self, data, cls, shapeout, dtype, reuseout, **options):
+    def validate_output_direct(self, data, shapeout, dtype, reuseout, **options):
         """
         Allocate memory for the output of the direct operation.
         **options should not depend on the input array, since it might
@@ -226,10 +232,10 @@ class AcquisitionModel(object):
         shapeout_flat = flatten_sliced_shape(shapeout)
         if self._output_direct is None or shapeout_flat != self._output_direct.shape or self._output_direct.dtype != dtype:
             if __verbose__: print('Info: Allocating '+str(dtype.itemsize*numpy.product(shapeout_flat)/2.**20)+' MiB for the output of ' + type(self).__name__+'.')
-            if cls == numpy.ndarray:
+            if self._typeout == numpy.ndarray:
                 self._output_direct = numpy.empty(shapeout, dtype, **options)
             else:
-                self._output_direct = cls.empty(shapeout_flat, dtype=dtype, **options)
+                self._output_direct = self._typeout.empty(shapeout_flat, dtype=dtype, **options)
         output = self._output_direct
         print 'before voutputdirect', output.unit
         _validate_output_unit(data, output, self._unitin, self._unitout)
@@ -238,7 +244,7 @@ class AcquisitionModel(object):
             self._output_direct = None
         return output
 
-    def validate_output_transpose(self, data, cls, shapein, dtype, reuseout, **options):
+    def validate_output_transpose(self, data, shapein, dtype, reuseout, **options):
         """
         Allocate memory for the output of the transpose operation.
         **options should not depend on the input array
@@ -248,10 +254,10 @@ class AcquisitionModel(object):
         shapein_flat = flatten_sliced_shape(shapein)
         if self._output_transpose is None or shapein_flat != self._output_transpose.shape or self._output_transpose.dtype != dtype:
             if __verbose__: print('Info: Allocating '+str(dtype.itemsize*numpy.product(shapein_flat)/2.**20)+' MiB for the output of ' + type(self).__name__+'.T.')
-            if cls == numpy.ndarray:
+            if self._typein == numpy.ndarray:
                 self._output_transpose = numpy.empty(shapein, dtype, **options)
             else:
-                self._output_transpose = cls.empty(shapein_flat, dtype=dtype, **options)
+                self._output_transpose = self._typein.empty(shapein_flat, dtype=dtype, **options)
         output = self._output_transpose
         _validate_output_unit(data, output, self._unitout, self._unitin)
         if not reuseout:
@@ -391,16 +397,16 @@ class AcquisitionModelTranspose(AcquisitionModel):
     def validate_shape_transpose(self, shapeout):
         return self.model.validate_shape_direct(shapeout)
 
-    def validate_input_direct(self, data, cls, reusein):
+    def validate_input_direct(self, data, reusein):
         raise NotImplementedError()
 
-    def validate_input_transpose(self, data, cls, reusein):
+    def validate_input_transpose(self, data, reusein):
         raise NotImplementedError()
 
-    def validate_output_direct(self, data, cls, shapeout, dtype, reuseout, **options):
+    def validate_output_direct(self, data, shapeout, dtype, reuseout, **options):
         raise NotImplementedError()
 
-    def validate_output_transpose(self, data, cls, shapeout, dtype, reuseout, **options):
+    def validate_output_transpose(self, data, shapeout, dtype, reuseout, **options):
         raise NotImplementedError()
 
 
@@ -433,7 +439,6 @@ class Addition(AcquisitionModel):
         return output
 
     def transpose(self, data, reusein=False, reuseout=False):
-        data, shapein = self.validate_input_transpose(data, numpy.ndarray, reusein)
         output = self.blocks[0].transpose(data, reusein=False, reuseout=False)
         for i, model in enumerate(self.blocks[1:]):
             reusein_ = reusein and i == len(self.blocks)-1
@@ -604,8 +609,8 @@ class Square(AcquisitionModel):
     def validate_shape_transpose(self, shape):
         return self.validate_shape(shape)
     
-    def validate_input(self, data, cls):
-        return super(Square, self).validate_input_direct(data, cls, False)[0]
+    def validate_input(self, data):
+        return super(Square, self).validate_input_direct(data, False)[0]
 
     def validate_output(self, data, inplace):
         """
@@ -647,7 +652,7 @@ class Diagonal(Symmetric):
             self.shapein = validate_sliced_shape(self.diagonal.shape, nsamples)
 
     def direct(self, data, reusein=False, reuseout=False):
-        data = self.validate_input(data, numpy.ndarray)
+        data = self.validate_input(data)
         output = self.validate_output(data, reusein and reuseout)
         output *= self.diagonal
         return output
@@ -670,11 +675,11 @@ class DiscreteDifference(AcquisitionModel):
         self.axis = axis
 
     def direct(self, data, reusein=False, reuseout=False):
-        data, shapeout = self.validate_input_direct(data, numpy.ndarray, False)
+        data, shapeout = self.validate_input_direct(data, False)
         return numpy.diff(data, self.n, self.axis)
 
     def transpose(self, data, reusein=False, reuseout=False):
-        data, shapeout = self.validate_input_transpose(data, numpy.ndarray, False)
+        data, shapeout = self.validate_input_transpose(data, False)
         shape = list(data.shape)
         shape[self.axis] = 1
         border = numpy.zeros(shape)
@@ -718,7 +723,7 @@ class Projection(AcquisitionModel):
     def __init__(self, observation, method=None, header=None, resolution=None, npixels_per_sample=0, oversampling=True, description=None):
         self._pmatrix, self.header, ndetectors, nsamples, self.npixels_per_sample, units = \
             observation.get_pointing_matrix(header, resolution, npixels_per_sample, method=method, oversampling=oversampling)
-        AcquisitionModel.__init__(self, description, units=units)
+        AcquisitionModel.__init__(self, description, types=(Tod,Map), units=units)
 
         self.pmatrix = self._pmatrix.view([('weight', 'f4'), ('pixel', 'i4')]).view(numpy.recarray)
         self.pmatrix.resize((ndetectors, numpy.sum(nsamples), self.npixels_per_sample))
@@ -726,15 +731,15 @@ class Projection(AcquisitionModel):
         self.shapeout = combine_sliced_shape(ndetectors, nsamples)
 
     def direct(self, data, reusein=False, reuseout=False):
-        data, shapeout = self.validate_input_direct(data, Map, reusein)
-        output = self.validate_output_direct(data, Tod, shapeout, data.dtype, reuseout)
+        data, shapeout = self.validate_input_direct(data, reusein)
+        output = self.validate_output_direct(data, shapeout, data.dtype, reuseout)
         output.nsamples = self.shapeout[-1]
         tmf.pointing_matrix_direct(self._pmatrix, data.T, output.T, self.npixels_per_sample)
         return output
 
     def transpose(self, data, reusein=False, reuseout=False):
-        data, shapein = self.validate_input_transpose(data, Tod, reusein)
-        output = self.validate_output_transpose(data, Map, shapein, data.dtype, reuseout)
+        data, shapein = self.validate_input_transpose(data, reusein)
+        output = self.validate_output_transpose(data, shapein, data.dtype, reuseout)
         output.header = self.header
         tmf.pointing_matrix_transpose(self._pmatrix, data.T, output.T,  self.npixels_per_sample)
         return output
@@ -755,7 +760,7 @@ class Compression(AcquisitionModel):
     Author: P. Chanial
     """
     def __init__(self, compression_factor, description):
-        AcquisitionModel.__init__(self, description)
+        AcquisitionModel.__init__(self, description, types=Tod)
         if hasattr(compression_factor, 'compression_factor'):
             compression_factor = compression_factor.compression_factor
         elif hasattr(compression_factor, 'slice'):
@@ -775,8 +780,8 @@ class Compression(AcquisitionModel):
         if numpy.all(numpy.array(self.factor) == 1):
             if not reusein: return data.copy('a')
             return data
-        data, shapeout = self.validate_input_direct(data, Tod, reusein)
-        output = self.validate_output_direct(data, Tod, shapeout, data.dtype, reuseout)
+        data, shapeout = self.validate_input_direct(data, reusein)
+        output = self.validate_output_direct(data, shapeout, data.dtype, reuseout)
         output.nsamples = tuple(numpy.divide(data.nsamples, self.factor))
         self.compression_direct(data, output, self.factor)
         return output
@@ -785,8 +790,8 @@ class Compression(AcquisitionModel):
         if numpy.all(numpy.array(self.factor) == 1):
             if not reusein: return data.copy('a')
             return data
-        data, shapein = self.validate_input_transpose(data, Tod, reusein)
-        output = self.validate_output_transpose(data, Tod, shapein, data.dtype, reuseout)
+        data, shapein = self.validate_input_transpose(data, reusein)
+        output = self.validate_output_transpose(data, shapein, data.dtype, reuseout)
         output.nsamples = tuple(numpy.multiply(data.nsamples, self.factor))
         self.compression_transpose(data, output, self.factor)
         return output
@@ -854,7 +859,7 @@ class Identity(Symmetric):
         AcquisitionModel.__init__(self, description)
 
     def direct(self, data, reusein=False, reuseout=False):
-        data = self.validate_input(data, numpy.ndarray)
+        data = self.validate_input(data)
         return self.validate_output(data, reusein and reuseout)
        
 
@@ -893,7 +898,7 @@ class Masking(Symmetric):
         # shapein is not set, since it would fail for Tod with more than one slice
 
     def direct(self, data, reusein=False, reuseout=False):
-        data = self.validate_input(data, numpy.ndarray)
+        data = self.validate_input(data)
         output = self.validate_output(data, reusein and reuseout)
         if self.mask is None:
             return output
@@ -936,21 +941,21 @@ class Unpacking(AcquisitionModel):
     Author: P. Chanial
     """
     def __init__(self, mask, field=0., description=None):
-        AcquisitionModel.__init__(self, description)
+        AcquisitionModel.__init__(self, description, types=(Map,None))
         self.mask = numpy.array(mask, numpy.bool8, copy=False)
         self.field = field
         self.shapein  = (numpy.sum(self.mask == 0),)
         self.shapeout = self.mask.shape
 
     def direct(self, data, reusein=False, reuseout=False):
-        data, shapeout = self.validate_input_direct(data, numpy.ndarray, reusein)
-        output = self.validate_output_direct(data, Map, shapeout, data.dtype, reuseout)
+        data, shapeout = self.validate_input_direct(data, reusein)
+        output = self.validate_output_direct(data, shapeout, data.dtype, reuseout)
         tmf.unpack_direct(data.T, self.mask.view(numpy.int8).T, output.T, self.field)
         return output
 
     def transpose(self, data, reusein=False, reuseout=False):
-        data, shapein = self.validate_input_transpose(data, Map, reusein)
-        output = self.validate_output_transpose(data, numpy.ndarray, shapein, data.dtype, reuseout)
+        data, shapein = self.validate_input_transpose(data, reusein)
+        output = self.validate_output_transpose(data, shapein, data.dtype, reuseout)
         tmf.unpack_transpose(data.T, self.mask.view(numpy.int8).T, output.T)
         return output
 
@@ -995,7 +1000,7 @@ class Reshaping(AcquisitionModel):
             raise ValueError('The number of elements of the input and output of the Reshaping operator are incompatible.')
 
     def direct(self, data, reusein=False, reuseout=False):
-        data, junk = self.validate_input_direct(data, numpy.ndarray, False)
+        data, junk = self.validate_input_direct(data, False)
         output = data.copy('a') if not reusein or not reuseout else data
         output = _smart_reshape(output, self.shapeout)
         if type(self.shapeout[-1]) is tuple:
@@ -1003,7 +1008,7 @@ class Reshaping(AcquisitionModel):
         return output
 
     def transpose(self, data, reusein=False, reuseout=False):
-        data, junk = self.validate_input_transpose(data, numpy.ndarray, False)
+        data, junk = self.validate_input_transpose(data, False)
         output = data.copy('a') if not reusein or not reuseout else data
         output = _smart_reshape(output, self.shapein)
         if type(self.shapein[-1]) is tuple:
@@ -1017,7 +1022,7 @@ class Reshaping(AcquisitionModel):
 class Padding(AcquisitionModel):
     "Pads before and after a Tod."
     def __init__(self, left=0, right=0, value=0., description=None):
-        AcquisitionModel.__init__(self, description)
+        AcquisitionModel.__init__(self, description, types=Tod)
         left = numpy.array(left, ndmin=1, dtype=int)
         right = numpy.array(right, ndmin=1, dtype=int)
         if numpy.any(left < 0):
@@ -1031,8 +1036,8 @@ class Padding(AcquisitionModel):
         self.value = value
    
     def direct(self, data, reusein=False, reuseout=False):
-        data, shapeout = self.validate_input_direct(data, Tod, reusein)
-        output = self.validate_output_direct(data, Tod, shapeout, data.dtype, reuseout)
+        data, shapeout = self.validate_input_direct(data, reusein)
+        output = self.validate_output_direct(data, shapeout, data.dtype, reuseout)
         output.nsamples = tuple(numpy.array(data.nsamples) + self.left + self.right)
         dest = 0
         dest_padded = 0
@@ -1047,8 +1052,8 @@ class Padding(AcquisitionModel):
         return output
    
     def transpose(self, data, reusein=False, reuseout=False):
-        data, shapeout = self.validate_input_transpose(data, Tod, reusein)
-        output = self.validate_output_transpose(data, Tod, shapeout, data.dtype, reuseout)
+        data, shapeout = self.validate_input_transpose(data, reusein)
+        output = self.validate_output_transpose(data, shapeout, data.dtype, reuseout)
         output.nsamples = tuple(numpy.array(data.nsamples) - self.left - self.right)
         dest = 0
         dest_padded = 0
@@ -1060,15 +1065,15 @@ class Padding(AcquisitionModel):
             dest_padded += data.nsamples[islice]
         return output
 
-    def validate_input_direct(self, data, cls, reusein):
-        data, shapeout = super(Padding, self).validate_input_direct(data, cls, reusein)
+    def validate_input_direct(self, data, reusein):
+        data, shapeout = super(Padding, self).validate_input_direct(data, reusein)
         if len(self.left) != 1 and len(self.left) != len(data.nsamples):
             raise ValueError("The input Tod has a number of slices '" + str(len(data.nsamples)) +
                              "' incompatible with the specified padding.")
         return data, shapeout
        
-    def validate_input_transpose(self, data, cls, reusein):
-        data, shapein = super(Padding, self).validate_input_transpose(data, cls, reusein)
+    def validate_input_transpose(self, data, reusein):
+        data, shapein = super(Padding, self).validate_input_transpose(data, reusein)
         if len(self.left) != 1 and len(self.left) != len(data.nsamples):
             raise ValueError("The input Tod has a number of slices '" + str(len(data.nsamples)) +
                              "' incompatible with the specified padding.")
@@ -1153,7 +1158,7 @@ class FftHalfComplex(Square):
     Performs real-to-half-complex fft
     """
     def __init__(self, nsamples, description=None):
-        AcquisitionModel.__init__(self, description)
+        AcquisitionModel.__init__(self, description, types=Tod)
         self.nsamples_array = numpy.array(nsamples, ndmin=1, dtype='int64')
         self.nsamples = tuple(self.nsamples_array)
         self.nsamples_tot = numpy.sum(self.nsamples_array)
@@ -1167,14 +1172,14 @@ class FftHalfComplex(Square):
             
 
     def direct(self, data, reusein=False, reuseout=False):
-        data = self.validate_input(data, Tod)
+        data = self.validate_input(data)
         output = self.validate_output(data, reusein and reuseout)
         output_ = _smart_reshape(output, (numpy.product(data.shape[:-1]), data.shape[-1]))
         tmf.fft_plan(output_.T, self.nsamples_array, self.forward_plan)
         return output
 
     def transpose(self, data, reusein=False, reuseout=False):
-        data = self.validate_input(data, Tod)
+        data = self.validate_input(data)
         output = self.validate_output(data, reusein and reuseout)
         output_ = _smart_reshape(output, (numpy.product(data.shape[:-1]), data.shape[-1]))
         tmf.fft_plan(output_.T, self.nsamples_array, self.backward_plan)
