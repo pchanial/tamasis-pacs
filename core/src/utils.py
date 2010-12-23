@@ -309,7 +309,9 @@ def gaussian(shape, fwhm, origin=None, resolution=1., unit=None):
     sigma = fwhm / numpy.sqrt(8*numpy.log(2))
     d = distance(shape, origin=origin, resolution=resolution)
     d = numpy.exp(-d**2/(2*sigma**2)) / (2*numpy.pi*sigma**2)
-    d.unit = unit
+    d.unit = ''
+    if unit:
+        d.unit = unit
     return d
 
 

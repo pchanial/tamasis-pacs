@@ -2,6 +2,7 @@ import numpy
 import scipy.sparse.linalg
 
 from tamasis import *
+from tamasis.acquisitionmodels import ValidationError
 
 class TestFailure(Exception): pass
 

@@ -27,6 +27,14 @@ PACS_SAMPLING = 0.024996
 
 class _Pacs(Observation):
 
+    def get_derived_units(self):
+        detector = Quantity(self.instrument.detector_area[~self.instrument.detector_mask], 'arcsec^2')
+        return {
+            'detector_reference': Quantity(1./self.instrument.active_fraction, 'detector', {'detector':detector}),
+            'detector'        : detector,
+            'V'               : Quantity(1./self.instrument.responsivity, 'Jy')
+            }
+
     def get_pointing_matrix(self, header, resolution, npixels_per_sample=0, method=None, oversampling=True):
         if method is None:
             method = 'sharp'
@@ -81,7 +89,7 @@ class _Pacs(Observation):
         if npixels_per_sample == 0:
             return self.get_pointing_matrix(header, resolution, new_npixels_per_sample, method, oversampling)
 
-        return pmatrix, header, ndetectors, nsamples, npixels_per_sample, ('/detector', '/pixel')
+        return pmatrix, header, ndetectors, nsamples, npixels_per_sample, ('/detector', '/pixel'), self.get_derived_units()
 
     def get_filter_uncorrelated(self):
         """
@@ -410,15 +418,15 @@ class PacsObservation(_Pacs):
         self.pointing = Pointing(frame_time, frame_ra, frame_dec, frame_pa, frame_info, frame_masked, frame_removed, nsamples=self.slice.nsamples_all, dtype=PACS_POINTING_DTYPE)
         self.pointing.chop = frame_chop
 
-        # Store frame policy
+        # store frame policy
         self.policy = policy
 
-        # Status
+        # status
         self._status = None
 
         print(self)
 
-    def get_tod(self, unit='Jy/detector', flatfielding=True, subtraction_mean=True, raw_data=False, masks='activated'):
+    def get_tod(self, unit='Jy/detector', flatfielding=True, subtraction_mean=True, raw=False, masks='activated'):
         """
         Returns the signal and mask timelines.
 
@@ -427,7 +435,7 @@ class PacsObservation(_Pacs):
         be read and combined.
         """
 
-        if raw_data:
+        if raw:
             flatfielding = False
             subtraction_mean = False
 
@@ -482,20 +490,15 @@ class PacsObservation(_Pacs):
                                             sel_masks)
         if status != 0: raise RuntimeError()
        
-        detector = Quantity(self.instrument.detector_area[~self.instrument.detector_mask], 'arcsec^2')
-        derived_units = {
-            'detector_reference': Quantity(1./self.instrument.active_fraction, 'detector', {'detector':detector}),
-            'detector'        : detector,
-            'V'               : Quantity(1./self.instrument.responsivity, 'Jy')
-            }
         tod = Tod(signal.T, 
                   mask.T,
                   nsamples=self.get_nsamples(),
                   unit=self.slice[0].unit,
-                  derived_units=derived_units,
+                  derived_units=self.get_derived_units(),
                   copy=False)
 
-        tod.unit = unit
+        if not raw:
+            tod.unit = unit
         return tod
 
     def get_map_header(self, resolution=None, oversampling=True):

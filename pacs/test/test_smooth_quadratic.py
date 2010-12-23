@@ -69,7 +69,7 @@ if do_plot:
     #clim(-0.00002,0.00002)
 
 # compressed TOD
-tod = compression.direct(tod40Hz).copy()
+tod = compression(tod40Hz)
 print(tod)
 
 # naive map
