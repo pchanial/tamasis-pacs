@@ -381,6 +381,14 @@ class Map(FitsArray):
         else:
             self.origin = 'lower'
 
+    def __getitem__(self, key):
+        item = super(Quantity, self).__getitem__(key)
+        if not isinstance(item, Map):
+            return item
+        if item.coverage is not None:
+            item.coverage = item.coverage[key]
+        return item
+
     @staticmethod
     def empty(shape, coverage=None, error=None, origin='lower', header=None, unit=None, derived_units=None, dtype=None, order=None):
         return Map(numpy.empty(shape, dtype, order), coverage, error, origin, header, unit, derived_units, dtype, copy=False)
