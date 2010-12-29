@@ -7,6 +7,8 @@ from scipy.sparse import dia_matrix
 from scipy.sparse.linalg import LinearOperator, cgs
 from tamasis import *
 
+class TestFailure(Exception): pass
+
 tamasis.__verbose__ = False
 data_dir = os.path.dirname(__file__) + '/data/'
 obs = PacsObservation(filename=data_dir+'frames_blue.fits', fine_sampling_factor=1)
@@ -32,3 +34,5 @@ map_mask = weights == 0
 # iterative map, taking all map pixels
 map_iter = mapper_rls(tod, model, hyper=1., tol=1.e-4)
 print 'Elapsed time: '+str(map_iter.header['TIME'])
+if map_iter.header['NITER'] > 63:
+    raise TestFailure()

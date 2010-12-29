@@ -3,6 +3,8 @@ import os
 import tamasis
 from tamasis import *
 
+class TestFailure(Exception): pass
+
 tamasis.__verbose__ = False
 data_dir = os.path.dirname(__file__) + '/data/'
 obs = PacsObservation(data_dir+'frames_blue.fits', fine_sampling_factor=1)
@@ -27,7 +29,10 @@ unpacking = Unpacking(map_mask)
 old_settings = numpy.seterr(divide='ignore')
 M = unpacking.T(1./map_naive.coverage)
 numpy.seterr(**old_settings)
-map_iter1 = unpacking(mapper_ls(tod, model * unpacking, tol=1.e-4, M=M))
+m = mapper_ls(tod, model * unpacking, tol=1.e-4, M=M)
+map_iter1 = unpacking(m)
+if map_iter1.header['NITER'] > 11:
+    raise TestFailure()
 
 # iterative map, taking all map pixels
 unpacking = Masking(map_mask)
@@ -40,3 +45,5 @@ M0 = unpacking.transpose(1./map_naive.coverage)
 numpy.seterr(**old_settings)
 map_iter2 = mapper_ls(tod, model * unpacking, tol=1.e-4, maxiter=200, M=M)
 print(map_iter2.header['time'])
+if map_iter2.header['NITER'] > 11:
+    raise TestFailure()
