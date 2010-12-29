@@ -208,6 +208,20 @@ if a.SI.shape != (2,): raise TestFailure()
 a = Quantity(numpy.ones((1,10)), 'detector', derived_units=derived_units)
 if a.SI.shape != (2,10): raise TestFailure()
 
-a= Quantity(4., 'Jy/detector', {'detector':Quantity(2,'arcsec^2')})
+a = Quantity(4., 'Jy/detector', {'detector':Quantity(2,'arcsec^2')})
 a.unit = a.unit + ' / arcsec^2 * detector'
 if a.magnitude != 2 or a.unit != 'Jy / arcsec^2': raise TestFailure()
+
+a = Quantity(2., 'brou', {'brou':Quantity(2.,'bra'),'bra':Quantity(2.,'bri'),'bri':Quantity(2.,'bro'), 'bro':Quantity(2, 'bru'), 'bru':Quantity(2.,'stop')})
+b = a.tounit('bra')
+if b.magnitude != 4: raise TestFailure()
+b = a.tounit('bri')
+if b.magnitude != 8: raise TestFailure()
+b = a.tounit('bro')
+if b.magnitude != 16: raise TestFailure()
+b = a.tounit('bru')
+if b.magnitude != 32: raise TestFailure()
+b = a.tounit('stop')
+if b.magnitude != 64: raise TestFailure()
+b = a.SI
+if b.magnitude != 64 or b.unit != 'stop': raise TestFailure()

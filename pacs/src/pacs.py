@@ -28,12 +28,16 @@ PACS_SAMPLING = 0.024996
 class _Pacs(Observation):
 
     def get_derived_units(self):
-        detector = Quantity(self.instrument.detector_area[~self.instrument.detector_mask], 'arcsec^2')
-        return {
-            'detector_reference': Quantity(1./self.instrument.active_fraction, 'detector', {'detector':detector}),
-            'detector'        : detector,
-            'V'               : Quantity(1./self.instrument.responsivity, 'Jy')
+        volt = Quantity(1./self.instrument.responsivity, 'Jy')
+        return (
+            {
+                'detector_reference': Quantity(1./self.instrument.active_fraction, 'detector'),
+                'detector' : Quantity(self.instrument.detector_area[~self.instrument.detector_mask], 'arcsec^2'),
+                'V' : volt,
+            },{
+                'V' : volt
             }
+            )
 
     def get_pointing_matrix(self, header, resolution, npixels_per_sample=0, method=None, oversampling=True):
         if method is None:
@@ -494,7 +498,7 @@ class PacsObservation(_Pacs):
                   mask.T,
                   nsamples=self.get_nsamples(),
                   unit=self.slice[0].unit,
-                  derived_units=self.get_derived_units(),
+                  derived_units=self.get_derived_units()[0],
                   copy=False)
 
         if not raw:

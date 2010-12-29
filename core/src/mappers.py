@@ -2,10 +2,10 @@ import numpy
 import scipy
 import time
 
+from mpi4py import MPI
 from .acquisitionmodels import asacquisitionmodel, Diagonal, DiscreteDifference, Identity, Masking, AllReduce
 from .config import get_default_dtype_float
-from .datatypes import Map, Tod, create_fitsheader
-from mpi4py import MPI
+from .datatypes import Map, Tod, create_fitsheader, pixel_scale
 from .quantity import Quantity, UnitError
 
 
@@ -38,21 +38,23 @@ def mapper_naive(tod, model, unit=None):
     try:
         h = mymap.header
         cd = numpy.array([ [h['cd1_1'],h['cd1_2']], [h['cd2_1'],h['cd2_2']] ])
-        derived_units = {'pixel_reference' : Quantity(abs(numpy.linalg.det(cd)), 'deg^2').tounit('arcsec^2')}
+        derived_units = {'pixel': (pixel_scale, Quantity(1., 'pixel_reference')), 'pixel_reference' : Quantity(abs(numpy.linalg.det(cd)), 'deg^2').tounit('arcsec^2')}
     except:
         derived_units = None
 
     mymap = Map(mymap, derived_units=derived_units, copy=False)
     unity = Tod(tod, copy=copy)
     unity[:] = 1.
-    unity.unit = ''
     map_weights = model.T(unity, reusein=True)
+    map_weights.unit = ''
     old_settings = numpy.seterr(divide='ignore', invalid='ignore')
     mymap /= map_weights
     numpy.seterr(**old_settings)
     mymap.coverage = map_weights
    
     if unit is not None:
+        print 'in unit:', mymap.unit
+        print 'to unit:', unit
         mymap.unit = unit
     
     return mymap

@@ -39,7 +39,7 @@ class AcquisitionModel(object):
     Author: P. Chanial
     """
 
-    def __init__(self, description=None, types=None, units=None):
+    def __init__(self, description=None, types=None, units=None, derived_units=None):
 
         if description is None:
             description = self.__class__.__name__
@@ -51,16 +51,20 @@ class AcquisitionModel(object):
         self._shapeout = None
         
         # store type information
-        if type(types) not in (tuple, list):
+        if type(types) not in (list,tuple):
             types = (types,types)
-        self._typein = types[1] or numpy.ndarray
-        self._typeout = types[0] or numpy.ndarray
+        self.types = types
 
         # store unit information
-        if type(units) not in (tuple, list):
+        if type(units) not in (list,tuple):
             units = (units,units)
-        self._unitin  = Quantity(1., units[1])._unit
-        self._unitout = Quantity(1., units[0])._unit
+        self.units = (Quantity(1., units[1])._unit, Quantity(1., units[0])._unit)
+
+        # store derived units information
+        if type(derived_units) not in (list,tuple):
+            self.derived_units = (derived_units, derived_units)
+        else:
+            self.derived_units = tuple(derived_units)
 
         # store the input of the transpose model. Its memory allocation is re-used as the output of the direct model
         self._output_direct = None
@@ -198,9 +202,9 @@ class AcquisitionModel(object):
         if not _is_scientific_dtype(input.dtype):
             raise TypeError("The input of '" + type(self).__name__ + "' has a non-numeric type '" + str(input.dtype) + "'.")
         input = numpy.asanyarray(input, _get_dtype(self.dtype, input.dtype))
-        if not isinstance(input, self._typein):
-            input = input.view(self._typein)
-        compatible = _validate_input_unit(input, self._unitin)
+        if self.types[1] is not None and not isinstance(input, self.types[1]):
+            input = input.view(self.types[1])
+        compatible = _validate_input_unit(input, self.units[1])
 
         # store input for the transpose's output
         if reusein:
@@ -211,20 +215,22 @@ class AcquisitionModel(object):
         if shape is None:
             raise ValidationError('The shape of the output of ' + type(self).__name__+' is not known.')
         shape_flat = flatten_sliced_shape(shape)
-        if self._output_direct is None or shape_flat != self._output_direct.shape or self._output_direct.dtype != input.dtype:
+        typeout = self.types[0] or input.__class__
+        if self._output_direct is None or shape_flat != self._output_direct.shape or \
+           self._output_direct.dtype != input.dtype or typeout != type(self._output_transpose):
             self._output_direct = None
             if __verbose__: print('Info: Allocating '+str(input.dtype.itemsize*numpy.product(shape_flat)/2.**20)+' MiB for the output of ' + type(self).__name__+'.')
-            if self._typeout == numpy.ndarray:
+            if typeout == numpy.ndarray:
                 output = numpy.empty(shape, input.dtype, **options)
             else:
-                output = self._typeout.empty(shape, dtype=input.dtype, **options)
+                output = typeout.empty(shape, dtype=input.dtype, **options)
             if reuseout:
                 self._output_direct = output
         else:
             output = self._output_direct
             if not reuseout:
                 self._output_direct = None
-        _validate_output_unit(input, output, compatible, self._unitin, self._unitout)
+        _validate_output_unit(input, output, compatible, self.units[1], self.units[0], self.derived_units[0])
 
         return input, output
         
@@ -236,9 +242,9 @@ class AcquisitionModel(object):
         if not _is_scientific_dtype(input.dtype):
             raise TypeError("The input of '" + type(self).__name__ + ".T' has a non-numeric type '" + str(input.dtype) + "'.")
         input = numpy.asanyarray(input, _get_dtype(self.dtype, input.dtype))
-        if not isinstance(input, self._typeout):
-            input = input.view(self._typeout)
-        compatible = _validate_input_unit(input, self._unitout)
+        if self.types[0] is not None and not isinstance(input, self.types[0]):
+            input = input.view(self.types[0])
+        compatible = _validate_input_unit(input, self.units[0])
 
         # store input for the direct's output
         if reusein:
@@ -249,20 +255,22 @@ class AcquisitionModel(object):
         if shape is None:
             raise ValidationError('The shape of the output of ' + type(self).__name__+' is not known.')
         shape_flat = flatten_sliced_shape(shape)
-        if self._output_transpose is None or shape_flat != self._output_transpose.shape or self._output_transpose.dtype != input.dtype:
+        typeout = self.types[1] or input.__class__
+        if self._output_transpose is None or shape_flat != self._output_transpose.shape or \
+           self._output_transpose.dtype != input.dtype or typeout != type(self._output_transpose):
             self._output_transpose = None
             if __verbose__: print('Info: Allocating '+str(input.dtype.itemsize*numpy.product(shape_flat)/2.**20)+' MiB for the output of ' + type(self).__name__+'.T.')
-            if self._typein == numpy.ndarray:
+            if typeout == numpy.ndarray:
                 output = numpy.empty(shape_flat, input.dtype, **options)
             else:
-                output = self._typein.empty(shape_flat, dtype=input.dtype, **options)
+                output = typeout.empty(shape_flat, dtype=input.dtype, **options)
             if reuseout:
                 self._output_transpose = output
         else:
             output = self._output_transpose
             if not reuseout:
                 self._output_transpose = None
-        _validate_output_unit(input, output, compatible, self._unitout, self._unitin)
+        _validate_output_unit(input, output, compatible, self.units[0], self.units[1], self.derived_units[1])
 
         return input, output
 
@@ -584,8 +592,8 @@ class SquareBase(AcquisitionModel):
         if not _is_scientific_dtype(input.dtype):
             raise TypeError("The input of '" + type(self).__name__ + "' has a non-numeric type '" + str(input.dtype) + "'.")
         input = numpy.asanyarray(input, _get_dtype(self.dtype, input.dtype))
-        if not isinstance(input, self._typein):
-            input = input.view(self._typein)
+        if self.types[1] is not None and not isinstance(input, self.types[1]):
+            input = input.view(self.types[1])
 
         shape = self.validate_shape_direct(validate_sliced_shape(input.shape, getattr(input, 'nsamples', None)))
         if shape is None:
@@ -604,8 +612,8 @@ class SquareBase(AcquisitionModel):
         if not _is_scientific_dtype(input.dtype):
             raise TypeError("The input of '" + type(self).__name__ + ".T' has a non-numeric type '" + str(input.dtype) + "'.")
         input = numpy.asanyarray(input, _get_dtype(self.dtype, input.dtype))
-        if not isinstance(input, self._typeout):
-            input = input.view(self._typeout)
+        if self.types[0] is not None and not isinstance(input, self.types[0]):
+            input = input.view(self.types[0])
 
         shape = self.validate_shape_transpose(validate_sliced_shape(input.shape, getattr(input, 'nsamples', None)))
         if shape is None:
@@ -759,9 +767,9 @@ class Projection(AcquisitionModel):
     Author: P. Chanial
     """
     def __init__(self, observation, method=None, header=None, resolution=None, npixels_per_sample=0, oversampling=True, description=None):
-        self._pmatrix, self.header, ndetectors, nsamples, self.npixels_per_sample, units, self.derived_units = \
+        self._pmatrix, self.header, ndetectors, nsamples, self.npixels_per_sample, units, derived_units = \
             observation.get_pointing_matrix(header, resolution, npixels_per_sample, method=method, oversampling=oversampling)
-        AcquisitionModel.__init__(self, description, types=(Tod,Map), units=units)
+        AcquisitionModel.__init__(self, description, types=(Tod,Map), units=units, derived_units=derived_units)
 
         self.pmatrix = self._pmatrix.view([('weight', 'f4'), ('pixel', 'i4')]).view(numpy.recarray)
         self.pmatrix.resize((ndetectors, numpy.sum(nsamples), self.npixels_per_sample))
@@ -771,14 +779,14 @@ class Projection(AcquisitionModel):
     def direct(self, input, reusein=False, reuseout=False):
         input, output = self.validate_input_direct(input, reusein, reuseout)
         output.nsamples = self.shapeout[-1]
-        output._derived_units = self.derived_units
+        output.derived_units = self.derived_units[0]
         tmf.pointing_matrix_direct(self._pmatrix, input.T, output.T, self.npixels_per_sample)
         return output
 
     def transpose(self, input, reusein=False, reuseout=False):
         input, output = self.validate_input_transpose(input, reusein, reuseout)
         output.header = self.header
-        output._derived_units = self.derived_units
+        output.derived_units = self.derived_units[1]
         tmf.pointing_matrix_transpose(self._pmatrix, input.T, output.T,  self.npixels_per_sample)
         return output
 
@@ -975,7 +983,7 @@ class Unpacking(AcquisitionModel):
     Author: P. Chanial
     """
     def __init__(self, mask, field=0., description=None):
-        AcquisitionModel.__init__(self, description, types=(Map,None))
+        AcquisitionModel.__init__(self, description)
         self.mask = numpy.array(mask, numpy.bool8, copy=False)
         self.field = field
         self.shapein  = (numpy.sum(self.mask == 0),)
@@ -1357,12 +1365,13 @@ def _validate_input_unit(input, expected):
 #-------------------------------------------------------------------------------
 
 
-def _validate_output_unit(input, output, compatible, unitin, unitout):
+def _validate_output_unit(input, output, compatible, unitin, unitout, duout):
     if not hasattr(output, '_unit'):
         return
     if hasattr(input, '_unit'):
         output._unit = input._unit
-        output._derived_units = input._derived_units
+        duout = duout or input.derived_units
+    output.derived_units = duout
     if unitout is None or not compatible:
         return
     if output._unit is None:

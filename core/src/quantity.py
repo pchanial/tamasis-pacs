@@ -170,7 +170,7 @@ class Quantity(numpy.ndarray):
 
     A more useful conversion:
     >>> sky = Quantity(4*numpy.pi, 'sr')
-    >>> print sky.tounit('deg^2')
+    >>> print(sky.tounit('deg^2'))
     41252.9612494 deg^2
     
     Quantities can be compared:
@@ -192,22 +192,22 @@ class Quantity(numpy.ndarray):
     Quantity(100.0, '?')
 
     A derived unit can be converted to a SI one:
-    >>> print Quantity(2, 'Jy').SI
+    >>> print(Quantity(2, 'Jy').SI)
     2e-26 kg / s^2
 
     It is also possible to add a new derived unit:
     >>> unit['kloug'] = Quantity(3, 'kg')
-    >>> print Quantity(2, 'kloug').SI
+    >>> print(Quantity(2, 'kloug').SI)
     6.0 kg
 
     In fact, a non-standard unit is not handled differently than one of
     the 7 SI units, as long as it is not in the unit table:
     >>> unit['krouf'] = Quantity(0.5, 'broug^2')
-    >>> print Quantity(1, 'krouf').SI
+    >>> print(Quantity(1, 'krouf').SI)
     0.5 broug^2
     """
 
-    __slots__ = ('_unit','_derived_units')
+    __slots__ = ('_unit','derived_units')
 
     def __new__(cls, data, unit=None, derived_units=None, dtype=None, copy=True, order='C', subok=False, ndmin=0):
 
@@ -222,9 +222,9 @@ class Quantity(numpy.ndarray):
         # set derived_units attribute
         if derived_units is not None:
             for key in derived_units.keys():
-                if not isinstance(derived_units[key], Quantity):
+                if not isinstance(derived_units[key], Quantity) and not type(derived_units[key]) is tuple:
                     raise UnitError("The user derived unit '" + key + "' is not a Quantity.")
-            result._derived_units = derived_units
+            result.derived_units.update(derived_units)
 
         # copy unit attribute
         if unit is not None:            
@@ -261,7 +261,7 @@ class Quantity(numpy.ndarray):
         # obj is None in __array_finalize__
         #if obj is None: return
         self._unit = getattr(obj, '_unit', None)
-        self._derived_units = getattr(obj, '_derived_units', None)
+        self.derived_units = getattr(obj, 'derived_units', {})
 
     @property
     def __array_priority__(self):
@@ -375,7 +375,7 @@ ities of different units may have changed operands to common unit '" + \
         item = super(Quantity, self).__getitem__(key)
         if isinstance(item, Quantity):
             return item
-        return Quantity(item, self._unit, self._derived_units, copy=False)
+        return Quantity(item, self._unit, self.derived_units, copy=False)
 
     @property
     def magnitude(self):
@@ -427,7 +427,7 @@ ities of different units may have changed operands to common unit '" + \
         -------
         >>> q = Quantity(1., 'km')
         >>> q.unit = 'm'
-        >>> print q
+        >>> print(q)
         1000.0 m
         """
         newunit = _extract_unit(unit)
@@ -435,10 +435,11 @@ ities of different units may have changed operands to common unit '" + \
             self._unit = newunit
             return
 
-        q1 = Quantity(1., self._unit, self._derived_units).SI
-        q2 = Quantity(1., newunit, self._derived_units).SI
+        q1 = Quantity(1., self._unit, self.derived_units).SI
+        q2 = Quantity(1., newunit, self.derived_units).SI
         if q1._unit != q2._unit:
-            raise UnitError("Units '"+self.unit+"' and '" + _strunit(newunit)+"' are incompatible.")
+            raise UnitError("Units '" + self.unit + "' and '" + \
+                            _strunit(newunit) + "' are incompatible.")
         factor = q1.magnitude / q2.magnitude
         if numpy.rank(self) == 0:
             self.magnitude = self.magnitude * factor
@@ -463,10 +464,10 @@ ities of different units may have changed operands to common unit '" + \
 
         Example
         -------
-        >>> print Quantity(1., 'km').tounit('m')
+        >>> print(Quantity(1., 'km').tounit('m'))
         1000.0 m
         """
-        q = Quantity(self, subok=True)
+        q = self.copy()
         q.unit = unit
         return q
 
@@ -477,12 +478,13 @@ ities of different units may have changed operands to common unit '" + \
 
         Example
         -------
-        >>> print Quantity(1., 'km').SI
+        >>> print(Quantity(1., 'km').SI)
         1000.0 m
         """
         if self._unit is None:
             return self
-        result = self.magnitude.copy()
+        result = self.copy()
+        result.unit = ''
         factor = Quantity(1., '')
         for key, val in self._unit.items():
 
@@ -496,35 +498,13 @@ ities of different units may have changed operands to common unit '" + \
                     factor._unit[key] = val
                 continue
             
-            # check if the unit is a custom derived unit
-            if self._derived_units is not None and (key,val) in self._derived_units:
-                newfactor = self._derived_units[(key,val)].SI
-            elif self._derived_units is not None and (key,-val) in self._derived_units:
-                newfactor = 1. / self._derived_units[(key,-val)].SI
-            elif self._derived_units is not None and key in self._derived_units:
-                if val == 1.:
-                    newfactor = self._derived_units[key].SI
-                elif val == -1.:
-                    newfactor = 1. / self._derived_units[key].SI
-                else:
-                    newfactor = self._derived_units[key].SI**val
-
             # check if the unit is a derived unit
-            elif (key,val) in unit:
-                newfactor = unit[(key,val)].SI
-            elif (key,-val) in unit:
-                newfactor = 1. / unit[(key,-val)].SI
-            elif key in unit:
-                if val == 1.:
-                    newfactor = unit[key].SI
-                elif val == -1.:
-                    newfactor = 1. / unit[key].SI
-                else:
-                    newfactor = unit[key].SI**val
-
+            newfactor = _check_du(self, key, val, self.derived_units)
+            if newfactor is None:
+                newfactor = _check_du(self, key, val, unit)
+                
             # the unit is not SI and not derived, we add it to the dictionary
-            else:
-
+            if newfactor is None:
                 if factor._unit is None:
                     factor._unit = { key : val }
                 elif key in factor._unit:
@@ -562,7 +542,8 @@ ities of different units may have changed operands to common unit '" + \
             result = result * factor
         else:
             result.T[:] *= factor.magnitude
-        return Quantity(result, factor._unit, self._derived_units, copy=False)
+        result._unit = factor._unit
+        return result
 
     def __repr__(self):
         return type(self).__name__+'(' + str(numpy.asarray(self)) + ", '" + _strunit(self._unit) + "')"
@@ -573,6 +554,26 @@ ities of different units may have changed operands to common unit '" + \
             return result
         return result + ' ' + _strunit(self._unit)
 
+
+def _get_du(input, key, d):
+    if type(d[key]) is tuple:
+        return d[key][0](input) * Quantity(d[key][1], derived_units=d, copy=False).SI
+    return Quantity(d[key], derived_units=d, copy=False).SI
+
+def _check_du(input, key, val, derived_units):
+    if len(derived_units) == 0:
+        return None
+    if (key,val) in derived_units:
+        return _get_du(input, (key,val), derived_units)
+    if (key,-val) in derived_units:
+        return 1. / _get_du(input, (key,-val), derived_units)
+    if key not in derived_units:
+        return None
+    if val == 1.:
+        return _get_du(input, key, derived_units)
+    if val == -1.:
+        return 1. / _get_du(input, key, derived_units)
+    return _get_du(input, key, derived_units)**val
 
 units_SI = {
     'A'   : Quantity(1., 'A'),
@@ -650,7 +651,7 @@ unit = Unit()
 
 def _wrap_func(func, array, unit, *args):
     result = func(array.magnitude, *args)
-    result = Quantity(result, unit, array._derived_units, copy=False)
+    result = Quantity(result, unit, array.derived_units, copy=False)
     return result
 
 def _grab_doc(doc, func):

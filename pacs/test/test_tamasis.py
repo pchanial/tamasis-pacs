@@ -27,10 +27,11 @@ model = projection
 print(model)
 
 # naive map
+tod.unit = 'Jy/arcsec^2'
 tod.mask[:] = 0
-backmap = model.transpose(tod)
+backmap = model.T(tod)
 unity = Tod.ones(tod.shape, nsamples=tod.nsamples)
-weights = model.transpose(unity)
+weights = model.T(unity)
 map_naive = backmap / weights
 
 header = projection.header
@@ -38,7 +39,7 @@ header2 = header.copy()
 header2['NAXIS1'] += 500
 header2['CRPIX1'] += 250
 projection2 = Projection(obs, header=header2, oversampling=False)
-map_naive2 = mapper_naive(tod, projection2)
+map_naive2 = mapper_naive(tod, projection2, unit='Jy/arcsec^2')
 map_naive3 = map_naive2[:,250:header['NAXIS1']+250]
 if any_neq(map_naive, map_naive3, 1.e-7): raise TestFailure('mapper_naive, with custom header')
 

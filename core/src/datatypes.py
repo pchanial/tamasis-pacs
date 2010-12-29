@@ -3,16 +3,15 @@ import matplotlib
 import matplotlib.pyplot as pyplot
 import numpy
 import pyfits
-from functools import reduce
 try:
     import ds9
     _imported_ds9 = True
 except:
     _imported_ds9 = False
 
+from functools import reduce
 from .numpyutils import _my_isscalar
-from scipy.special import jn
-from .quantity import Quantity
+from .quantity import Quantity, UnitError, _extract_unit, _strunit
 
 __all__ = [ 'FitsArray', 'Map', 'Tod', 'create_fitsheader' ]
 
@@ -315,6 +314,53 @@ class FitsArray(Quantity):
 
         return d
 
+    @property
+    def unit(self):
+        """
+        Return the Quantity unit as a string
+        
+        Example
+        -------
+        >>> Quantity(32., 'm/s').unit
+        'm / s'
+        """
+        return super(FitsArray, self).unit
+
+    @unit.setter
+    def unit(self, unit):
+        """
+        Convert a Quantity into a new unit
+
+        Parameters
+        ----------
+        unit : string or None
+             A string representing the unit into which the Quantity
+             should be converted
+
+        Example
+        -------
+        >>> q = Quantity(1., 'km')
+        >>> q.unit = 'm'
+        >>> print(q)
+        1000.0 m
+        """
+        newunit = _extract_unit(unit)
+        if self._unit is None or newunit is None:
+            self._unit = newunit
+            return
+
+        q1 = FitsArray(1., self.header, self._unit, self.derived_units).SI
+        q2 = FitsArray(1., self.header, newunit, self.derived_units).SI
+        if q1._unit != q2._unit:
+            raise UnitError("Units '" + self.unit + "' and '" + \
+                            _strunit(newunit) + "' are incompatible.")
+        factor = q1.magnitude / q2.magnitude
+        if numpy.rank(self) == 0:
+            self.magnitude = self.magnitude * factor
+        else:
+            self.magnitude.T[:] *= factor
+        self._unit = newunit
+
 
 #-------------------------------------------------------------------------------
 
@@ -326,7 +372,7 @@ class Map(FitsArray):
     """
     Represent a map, complemented with unit and FITS header.
     """
-    def __new__(cls, data, coverage=None, error=None, origin='lower', header=None, unit=None, derived_units=None, dtype=None, copy=True, order='C', subok=False, ndmin=0):
+    def __new__(cls, data,  header=None, unit=None, derived_units=None, coverage=None, error=None, origin='lower', dtype=None, copy=True, order='C', subok=False, ndmin=0):
 
         # get a new Map instance (or a subclass if subok is True)
         result = FitsArray(data, header, unit, derived_units, dtype, copy, order, True, ndmin)
@@ -391,15 +437,15 @@ class Map(FitsArray):
 
     @staticmethod
     def empty(shape, coverage=None, error=None, origin='lower', header=None, unit=None, derived_units=None, dtype=None, order=None):
-        return Map(numpy.empty(shape, dtype, order), coverage, error, origin, header, unit, derived_units, dtype, copy=False)
+        return Map(numpy.empty(shape, dtype, order), header, unit, derived_units, coverage, error, origin, dtype, copy=False)
 
     @staticmethod
     def ones(shape, coverage=None, error=None, origin='lower', header=None, unit=None, derived_units=None, dtype=None, order=None):
-        return Map(numpy.ones(shape, dtype, order), coverage, error, origin, header, unit, derived_units, dtype, copy=False)
+        return Map(numpy.ones(shape, dtype, order), header, unit, derived_units, coverage, error, origin, dtype, copy=False)
 
     @staticmethod
     def zeros(shape, coverage=None, error=None, origin='lower', header=None, unit=None, derived_units=None, dtype=None, order=None):
-        return Map(numpy.zeros(shape, dtype, order), coverage, error, origin, header, unit, derived_units, dtype, copy=False)
+        return Map(numpy.zeros(shape, dtype, order), header, unit, derived_units, coverage, error, origin, dtype, copy=False)
 
     def copy(self, order='C'):
         return Map(self, copy=True, order=order)
@@ -774,6 +820,25 @@ def create_fitsheader(array, extname=None, crval=(0.,0.), crpix=None, ctype=('RA
 
     return header
 
+
+#-------------------------------------------------------------------------------
+
+
+def pixel_scale(input):
+    """
+    Returns the pixel area in units of reference pixel.
+    """
+    if not isinstance(input, FitsArray):
+        raise TypeError('The input is a ' + type(input).__name__ + ' instead of a FitsArray.')
+    if not input.has_wcs():
+        return 1.
+    if input.header['CTYPE1'] != 'RA---TAN' or \
+       input.header['CTYPE2'] != 'DEC--TAN':
+        raise NotImplementedError("The distortion for projection '" + \
+              input.header['CTYPE1'] + ',' + input.header['CTYPE2'] + \
+              "' is not implemented.")
+    return 1.
+    
 
 #-------------------------------------------------------------------------------
 
