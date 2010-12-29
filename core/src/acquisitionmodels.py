@@ -729,7 +729,7 @@ class DiscreteDifference(AcquisitionModel):
         shape[self.axis] = 1
         border = numpy.zeros(shape)
         out = numpy.concatenate((border, input, border), axis=self.axis)
-        output[:] -numpy.diff(out, axis=self.axis)
+        output[:] = -numpy.diff(out, axis=self.axis)
         return output
 
     def validate_shape_direct(self, shapein):
