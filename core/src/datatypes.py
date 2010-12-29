@@ -18,7 +18,7 @@ __all__ = [ 'FitsArray', 'Map', 'Tod', 'create_fitsheader' ]
 
 class FitsArray(Quantity):
 
-    __slots__ = ('_header', '__dict__')
+    __slots__ = ('_header')
     def __new__(cls, data, header=None, unit=None, derived_units=None, dtype=None, copy=True, order='C', subok=False, ndmin=0):
 
         if type(data) is str:
