@@ -22,7 +22,7 @@ out = 'build'
 subdirs = ['core', 'madcap', 'pacs']
 
 # Required libraries
-libraries = ['CFITSIO', 'FFTW3', 'OPENMP', 'WCSLIB']
+libraries = ['CFITSIO', 'FFTW3', 'LAPACK', 'OPENMP', 'WCSLIB']
 
 # Required Python packages
 required_modules = ['numpy',
@@ -86,6 +86,7 @@ def configure(conf):
         conf.env.FCFLAGS += ['-debug', '-check', 'all', '-traceback'] if conf.options.debug else ['-fast']
         conf.env.LIB_OPENMP = ['iomp5']
         conf.env.F2PYFCOMPILER = 'intelem'
+    conf.env.LIB_LAPACK = ['lapack']
 
     if conf.options.precision_real == '16':
         conf.check_cc(
