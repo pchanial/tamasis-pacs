@@ -444,7 +444,7 @@ ities of different units may have changed operands to common unit '" + \
         if numpy.rank(self) == 0:
             self.magnitude = self.magnitude * factor
         else:
-            self.magnitude.T[:] *= factor
+            self.magnitude.T[:] *= factor.T
         self._unit = newunit
 
     def tounit(self, unit):
@@ -541,7 +541,7 @@ ities of different units may have changed operands to common unit '" + \
         if numpy.rank(result) == 0:
             result = result * factor
         else:
-            result.T[:] *= factor.magnitude
+            result.T[:] *= factor.magnitude.T
         result._unit = factor._unit
         return result
 
