@@ -58,7 +58,7 @@ class AcquisitionModel(object):
         # store unit information
         if type(units) not in (list,tuple):
             units = (units,units)
-        self.units = (Quantity(1., units[1])._unit, Quantity(1., units[0])._unit)
+        self.units = (Quantity(1., units[0])._unit, Quantity(1., units[1])._unit)
 
         # store derived units information
         if type(derived_units) not in (list,tuple):
