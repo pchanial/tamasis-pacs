@@ -230,6 +230,7 @@ class AcquisitionModel(object):
             output = self._output_direct
             if not reuseout:
                 self._output_direct = None
+        _propagate_attributes(input, output)
         _validate_output_unit(input, output, compatible, self.units[1], self.units[0], self.derived_units[0])
 
         return input, output
@@ -270,6 +271,7 @@ class AcquisitionModel(object):
             output = self._output_transpose
             if not reuseout:
                 self._output_transpose = None
+        _propagate_attributes(input, output)
         _validate_output_unit(input, output, compatible, self.units[0], self.units[1], self.derived_units[1])
 
         return input, output
@@ -1332,6 +1334,18 @@ def _is_scientific_dtype(dtype):
     """Return true if the data type is """
     return issubclass(dtype.type, numpy.number) or dtype.type == numpy.bool8
 
+
+#-------------------------------------------------------------------------------
+
+
+def _propagate_attributes(input, output):
+    cls = input.__class__
+    while not issubclass(type(output), cls):
+        cls = cls.__base__
+    while cls != numpy.ndarray:
+        for a in input.view(cls).__slots__:
+            setattr(output, a, getattr(input, a))
+        cls = cls.__base__
 
 #-------------------------------------------------------------------------------
 
