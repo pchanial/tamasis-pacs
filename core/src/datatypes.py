@@ -18,7 +18,7 @@ __all__ = [ 'FitsArray', 'Map', 'Tod', 'create_fitsheader' ]
 
 class FitsArray(Quantity):
 
-    __slots__ = ('_header')
+    __slots__ = ('_header',)
     def __new__(cls, data, header=None, unit=None, derived_units=None, dtype=None, copy=True, order='C', subok=False, ndmin=0):
 
         if type(data) is str:
@@ -367,7 +367,7 @@ class FitsArray(Quantity):
 
 class Map(FitsArray):
 
-    __slots__ = ['coverage', 'error', 'origin']
+    __slots__ = ('coverage', 'error', 'origin')
 
     """
     Represent a map, complemented with unit and FITS header.
