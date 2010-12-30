@@ -252,7 +252,7 @@ def distance(shape, origin=None, resolution=1.):
     rank = len(shape)
 
     if origin is None:
-        origin = (numpy.asanyarray(list(reversed(shape)), dtype=_FTYPE) - 1.) / 2.
+        origin = (numpy.asanyarray(list(reversed(shape)), dtype=_FTYPE) + 1) / 2
     else:
         origin = numpy.asanyarray(origin, dtype=_FTYPE)
 
