@@ -871,9 +871,12 @@ class CompressionAverage(Compression):
 
     def compression_direct(self, input, output, compression_factor):
         tmf.compression_average_direct(input.T, output.T, numpy.resize(compression_factor, [len(input.nsamples)]))
+        output.mask = None
         
     def compression_transpose(self, input, output, compression_factor):
         tmf.compression_average_transpose(input.T, output.T, numpy.resize(compression_factor, [len(input.nsamples)]))
+        output.mask = None
+        
         
 
 #-------------------------------------------------------------------------------
@@ -889,9 +892,11 @@ class DownSampling(Compression):
 
     def compression_direct(self, input, output, compression_factor):
         tmf.downsampling_direct(input.T, output.T, numpy.resize(compression_factor, [len(input.nsamples)]))
+        output.mask = None
         
     def compression_transpose(self, input, output, compression_factor):
         tmf.downsampling_transpose(input.T, output.T, numpy.resize(compression_factor, [len(input.nsamples)]))
+        output.mask = None
       
 
 #-------------------------------------------------------------------------------
