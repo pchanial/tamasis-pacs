@@ -47,9 +47,11 @@ for field in simul.status.dtype.names:
 
 if not numpy.allclose(tod, tod2): raise TestFailure()
 fields = [x for x in simul.slice.dtype.names if x not in ('filename','unit')]
-ok = True
 for field in fields:
     if getattr(simul.slice[0], field) != getattr(simul2.slice[0], field):
-        ok = False
-        print("Field '" + field + "' not implemented.")
+        str = "Field '" + field + "' not implemented."
+        if field == 'scan_step':
+            print(str)
+        else:
+            raise TestFailure(str)
 
