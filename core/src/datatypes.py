@@ -41,8 +41,8 @@ class FitsArray(Quantity):
                     unit = header['QTTY____'] # HCSS crap
 
         # get a new FitsArray instance (or a subclass if subok is True)
-        result = Quantity(data, unit, derived_units, dtype, copy, order, True, ndmin)
-        if not subok and result.__class__ is not cls or not issubclass(result.__class__, cls):
+        result = Quantity.__new__(cls, data, unit, derived_units, dtype, copy, order, True, ndmin)
+        if not subok and result.__class__ is not cls:
             result = result.view(cls)
 
         # copy header attribute
@@ -375,15 +375,17 @@ class Map(FitsArray):
     def __new__(cls, data,  header=None, unit=None, derived_units=None, coverage=None, error=None, origin='lower', dtype=None, copy=True, order='C', subok=False, ndmin=0):
 
         # get a new Map instance (or a subclass if subok is True)
-        result = FitsArray(data, header, unit, derived_units, dtype, copy, order, True, ndmin)
+        result = FitsArray.__new__(cls, data, header, unit, derived_units, dtype, copy, order, True, ndmin)
+        if not subok and result.__class__ is not cls:
+            result = result.view(cls)
 
         if type(data) is str:
             try:
-                error = pyfits.open(data)['Error'].data
+                if error is None: error = pyfits.open(data)['Error'].data
             except:
                 pass
             try:
-                coverage = pyfits.open(data)['Coverage'].data
+                if coverage is None: coverage = pyfits.open(data)['Coverage'].data
             except:
                 pass
 
@@ -409,23 +411,9 @@ class Map(FitsArray):
             self.origin = 'lower'
             return
 
-        # coverage
-        if hasattr(obj, 'coverage'):
-            self.coverage = obj.coverage
-        else:
-            self.coverage = None
-
-        # error
-        if hasattr(obj, 'error'):
-            self.error = obj.error
-        else:
-            self.error = None
-
-        # origin
-        if hasattr(obj, 'origin'):
-            self.origin = obj.origin
-        else:
-            self.origin = 'lower'
+        self.coverage = getattr(obj, 'coverage', None)
+        self.error = getattr(obj, 'error', None)
+        self.origin = getattr(obj, 'origin', 'lower')
 
     def __getitem__(self, key):
         item = super(Quantity, self).__getitem__(key)
@@ -434,6 +422,25 @@ class Map(FitsArray):
         if item.coverage is not None:
             item.coverage = item.coverage[key]
         return item
+
+    @property
+    def header(self):
+        return self._header
+
+    @header.setter
+    def header(self, header):
+        if header is not None and not isinstance(header, pyfits.Header):
+            raise TypeError('Incorrect type for the input header ('+str(type(header))+').')
+        self._header = header
+        if self.has_wcs():
+            area = 0.
+            if all([key in header for key in ('CD1_1', 'CD2_1', 'CD1_2', 'CD2_2')]):
+                cd = numpy.array([ [header['cd1_1'],header['cd1_2']], [header['cd2_1'],header['cd2_2']] ])
+                area = abs(numpy.linalg.det(cd))
+            if all([key in header for key in ('CDELT1', 'CDELT2')]):
+                area = abs(header['CDELT1'] * header['CDELT2'])
+            if area != 0:
+                self.derived_units.update({'pixel': (projection_scale, Quantity(1., 'pixel_reference')), 'pixel_reference' : Quantity(area, 'deg^2').tounit('arcsec^2')})
 
     @staticmethod
     def empty(shape, coverage=None, error=None, origin='lower', header=None, unit=None, derived_units=None, dtype=None, order=None):
@@ -512,8 +519,8 @@ class Tod(FitsArray):
     def __new__(cls, data, mask=None, nsamples=None, header=None, unit=None, derived_units=None, dtype=None, copy=True, order='C', subok=False, ndmin=0):
 
         # get a new Tod instance (or a subclass if subok is True)
-        result = FitsArray(data, header, unit, derived_units, dtype, copy, order, True, ndmin)
-        if not subok and result.__class__ is not cls or not issubclass(result.__class__, cls):
+        result = FitsArray.__new__(cls, data, header, unit, derived_units, dtype, copy, order, True, ndmin)
+        if not subok and result.__class__ is not cls:
             result = result.view(cls)
         
         # mask attribute
@@ -824,7 +831,7 @@ def create_fitsheader(array, extname=None, crval=(0.,0.), crpix=None, ctype=('RA
 #-------------------------------------------------------------------------------
 
 
-def pixel_scale(input):
+def projection_scale(input):
     """
     Returns the pixel area in units of reference pixel.
     """
@@ -832,12 +839,11 @@ def pixel_scale(input):
         raise TypeError('The input is a ' + type(input).__name__ + ' instead of a FitsArray.')
     if not input.has_wcs():
         return 1.
-    if input.header['CTYPE1'] != 'RA---TAN' or \
-       input.header['CTYPE2'] != 'DEC--TAN':
-        raise NotImplementedError("The distortion for projection '" + \
-              input.header['CTYPE1'] + ',' + input.header['CTYPE2'] + \
-              "' is not implemented.")
-    return 1.
+    scale, status = tmf.projection_scale(str(input.header).replace('\n',''), input.header['NAXIS1'], input.header['NAXIS2'])
+    if status != 0:
+        raise RuntimeError()
+
+    return scale
     
 
 #-------------------------------------------------------------------------------

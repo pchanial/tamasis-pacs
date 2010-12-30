@@ -3,22 +3,24 @@ module module_wcs
     use iso_c_binding
     use iso_fortran_env,  only : ERROR_UNIT
     use module_fitstools, only : FLEN_VALUE, ft_read_keyword
-    use module_math,      only : DEG2RAD, RAD2DEG
+    use module_math,      only : DEG2RAD, RAD2DEG, distance, neq_real
     use module_string,    only : strinteger, strlowcase, strupcase
     use module_tamasis,   only : p
     use module_wcslib
     implicit none
     private
 
-    type astrometry
+    type Astrometry
         integer          :: naxis(2)
         real(p)          :: crpix(2), crval(2), cd(2,2)
         character(len=8) :: ctype(2), cunit(2)
-    end type astrometry
+    end type Astrometry
 
-    public :: astrometry
+    public :: Astrometry
     public :: init_astrometry
     public :: print_astrometry
+    public :: cd_info
+    public :: projection_scale
     public :: init_gnomonic
     public :: ad2xy_gnomonic
     public :: ad2xy_gnomonic_vect
@@ -38,10 +40,10 @@ contains
     subroutine init_astrometry(header, astr, status)
 
         character(len=*), intent(in)            :: header
-        type(astrometry), intent(out), optional :: astr
+        type(Astrometry), intent(out), optional :: astr
         integer, intent(out)                    :: status
 
-        type(astrometry)          :: myastr
+        type(Astrometry)          :: myastr
         logical                   :: found
         integer                   :: has_cd
         real(p)                   :: crota2, cdelt1, cdelt2
@@ -162,7 +164,7 @@ contains
 
     subroutine print_astrometry(astr)
 
-        type(astrometry), intent(in) :: astr
+        type(Astrometry), intent(in) :: astr
 
         integer :: naxis, i
 
@@ -181,12 +183,39 @@ contains
 
     end subroutine print_astrometry
 
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine cd_info(cd, cdelt, rot)
+
+        real(p), intent(in) :: cd(2,2)
+        real(p), intent(out) :: cdelt(2)
+        real(p), intent(out) :: rot
+        
+        real(p) :: cd_(2,2), cdelt_im(2), vrot(2), junk, work(6)
+        integer :: status
+
+        cd_ = cd
+#if PRECISION_REAL == 4
+        call sgeev('N', 'N', 2, cd_, 2, cdelt, cdelt_im, junk, 1, junk, 1, work, size(work), status)
+#elif PRECISION_REAL == 8
+        call dgeev('N', 'N', 2, cd_, 2, cdelt, cdelt_im, junk, 1, junk, 1, work, size(work), status)
+#else
+        stop 'CD_INFO: PRECISION_REAL=16 is not implemented.'
+#endif
+        vrot = matmul(cd, [1._p, 0._p])
+        rot = atan(vrot(2),vrot(1)) * RAD2DEG
+
+    end subroutine cd_info
+
+
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
     subroutine init_gnomonic(astr)
 
-        type(astrometry), intent(in) :: astr
+        type(Astrometry), intent(in) :: astr
 
         real(p) :: lambda0                ! crval(1) in rad
         real(p) :: phi1, cosphi1, sinphi1 ! cos and sin of crval(2)
@@ -285,9 +314,62 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
+    subroutine projection_scale(astr, array, status)
+        
+        type(Astrometry), intent(in) :: astr
+        real(p), intent(out)         :: array(:,:)
+        integer, intent(out)         :: status
+
+        real(p) :: cdelt(2), rot
+
+        call cd_info(astr%cd, cdelt, rot)
+
+        if (astr%ctype(1) == 'RA---TAN' .and. astr%ctype(2) == 'DEC--TAN') then
+            if (neq_real(abs(cdelt(1)), abs(cdelt(2)))) then
+                write (ERROR_UNIT,'(a)') 'The scaling of a map with inhomogeneous CDELT is not implemented.'
+                status = 1
+                return
+            end if
+            call projection_scale_gnomonic(array, astr%crpix, cdelt)
+        else
+            write (ERROR_UNIT,'(a)') "Scaling for projection type '" // astr%ctype(1) // "', '" // astr%ctype(2) // "' is not imple&
+                  &mented."
+            status = 1
+            return
+        end if
+
+        status = 0
+
+    end subroutine projection_scale
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine projection_scale_gnomonic(array, origin, resolution)
+
+        real(p), intent(out) :: array(:,:)
+        real(p), intent(in)  :: origin(2)
+        real(p), intent(in)  :: resolution(2)
+
+        real(p) :: R
+
+        R = 1 / atan(resolution(1) * DEG2RAD)
+        call distance(array, origin, [1/R, 1/R])
+
+        !$omp parallel workshare
+        array = cos(atan(array))**3
+        !$omp end parallel workshare
+
+    end subroutine projection_scale_gnomonic
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
     subroutine init_rotation(astr)
 
-        type(astrometry), intent(in) :: astr
+        type(Astrometry), intent(in) :: astr
 
         real(p) :: cdinv(2,2), crpix(2)
         common /rotation/ cdinv, crpix

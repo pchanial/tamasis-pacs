@@ -5,7 +5,7 @@ import time
 from mpi4py import MPI
 from .acquisitionmodels import asacquisitionmodel, Diagonal, DiscreteDifference, Identity, Masking, AllReduce
 from .config import get_default_dtype_float
-from .datatypes import Map, Tod, create_fitsheader, pixel_scale
+from .datatypes import Map, Tod, create_fitsheader
 from .quantity import Quantity, UnitError
 
 
@@ -35,14 +35,6 @@ def mapper_naive(tod, model, unit=None):
         model = Masking(tod.mask) * model
 
     mymap = model.T(tod)
-    try:
-        h = mymap.header
-        cd = numpy.array([ [h['cd1_1'],h['cd1_2']], [h['cd2_1'],h['cd2_2']] ])
-        derived_units = {'pixel': (pixel_scale, Quantity(1., 'pixel_reference')), 'pixel_reference' : Quantity(abs(numpy.linalg.det(cd)), 'deg^2').tounit('arcsec^2')}
-    except:
-        derived_units = None
-
-    mymap = Map(mymap, derived_units=derived_units, copy=False)
     unity = Tod(tod, copy=copy)
     unity[:] = 1.
     map_weights = model.T(unity, reusein=True)
@@ -53,8 +45,6 @@ def mapper_naive(tod, model, unit=None):
     mymap.coverage = map_weights
    
     if unit is not None:
-        print 'in unit:', mymap.unit
-        print 'to unit:', unit
         mymap.unit = unit
     
     return mymap

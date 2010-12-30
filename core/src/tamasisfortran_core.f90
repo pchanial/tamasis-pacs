@@ -4,6 +4,8 @@
 
 subroutine test_broken_locale(ok)
 
+    implicit none
+
     !f2py intent(out) :: ok
 
     logical*1, intent(out) :: ok
@@ -756,3 +758,34 @@ subroutine distance_3d(nx, ny, nz, origin, resolution, array)
     call distance(array, origin, resolution)
 
 end subroutine distance_3d
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine projection_scale(header, nx, ny, array, status)
+
+    use module_tamasis, only : p
+    use module_wcs,     only : Astrometry, init_astrometry, projection_scale_ => projection_scale
+    implicit none
+
+    !f2py intent(in)             :: header
+    !f2py intent(in)             :: nx
+    !f2py intent(in)             :: ny
+    !f2py intent(out)            :: array
+    !f2py intent(out)            :: status
+
+    character(len=*), intent(in) :: header
+    integer, intent(in)          :: nx, ny
+    real(p), intent(out)         :: array(nx,ny)
+    integer, intent(out)         :: status
+
+    type(Astrometry) :: astr
+
+    call init_astrometry(header, astr, status)
+    if (status /= 0) return
+
+    call projection_scale_(astr, array, status)
+    if (status /= 0) return
+
+end subroutine projection_scale
