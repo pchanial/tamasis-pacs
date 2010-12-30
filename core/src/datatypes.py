@@ -9,6 +9,8 @@ try:
 except:
     _imported_ds9 = False
 
+import tamasisfortran as tmf
+
 from functools import reduce
 from .numpyutils import _my_isscalar
 from .quantity import Quantity, UnitError, _extract_unit, _strunit
@@ -90,14 +92,11 @@ class FitsArray(Quantity):
         """
         if self.header is None:
             return False
-        rank = numpy.rank(self)
-        if rank == 0:
-            return False
 
         required = 'CRPIX,CRVAL,CTYPE'.split(',')
         keywords = numpy.concatenate(
             [(lambda i: [r+str(i+1) for r in required])(i) 
-             for i in range(rank)])
+             for i in range(self.header['NAXIS'])])
 
         return all([k in self.header for k in keywords])
 
