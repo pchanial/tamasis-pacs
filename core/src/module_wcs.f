@@ -205,7 +205,7 @@ contains
         stop 'CD_INFO: PRECISION_REAL=16 is not implemented.'
 #endif
         vrot = matmul(cd, [1._p, 0._p])
-        rot = atan(vrot(2),vrot(1)) * RAD2DEG
+        rot = atan2(vrot(2),vrot(1)) * RAD2DEG
 
     end subroutine cd_info
 
