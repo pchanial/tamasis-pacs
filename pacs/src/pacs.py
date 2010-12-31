@@ -694,7 +694,7 @@ def pacs_plot_scan(patterns, title=None, new_figure=True):
                 pass
 
         if ifile == 0:
-            image = plot_scan(status.RaArray, status.DecArray, title=title, new_figure=new_figure)
+            image = plot_scan((status.RaArray, status.DecArray), title=title, new_figure=new_figure)
         else:
             x, y = image.topixel(status.RaArray, status.DecArray)
             p = pyplot.plot(x, y, linewidth=2)

@@ -117,35 +117,32 @@ def minmax_degrees(array):
 #-------------------------------------------------------------------------------
 
 
-def plot_scan(input, map=None, mask=None, title=None, new_figure=True, color='magenta', linewidth=2):
+def plot_scan(input, map=None, title=None, new_figure=True, color='magenta', linewidth=2):
     if hasattr(input, 'pointing'):
-        ra   = input.pointing.ra.copy()
-        dec  = input.pointing.dec
-        if mask is None:
-            mask = input.pointing.removed
-    elif hasattr(input, 'ra') and hasattr(input, 'dec'):
-        ra  = input.ra.copy()
+        input = input.pointing
+    if hasattr(input, 'ra') and hasattr(input, 'dec'):
+        ra  = input.ra
         dec = input.dec
-        if mask is None:
-            if hasattr(input, 'mask'):
-                mask = input.mask
-            elif hasattr(input, 'removed'):
-                mask = input.removed
-    else:
-        ra  = input[0].copy()
+        if hasattr(input, 'removed'):
+            ra = ra.copy()
+            dec = dec.copy()
+            ra [input.removed] = numpy.nan
+            dec[input.removed] = numpy.nan
+    elif type(input) in (list,tuple):
+        ra  = input[0]
         dec = input[1]
+    else:
+        ra = None
 
-    nvalids = ra.size
-    if mask is not None:
-        nvalids -= numpy.sum(mask)
+    if not isinstance(ra, numpy.ndarray) or \
+       not isinstance(dec, numpy.ndarray):
+        raise TypeError("Invalid input type '" + type(input) + "'.")
+
+    nvalids = numpy.sum(numpy.isfinite(ra*dec))
     if nvalids == 0:
         raise ValueError('There is no valid pointing.')
 
-    if mask is not None:
-        ra [mask] = numpy.nan
-        dec[mask] = numpy.nan
-
-    if map is not None and map.has_wcs():
+    if isinstance(map, Map) and map.has_wcs():
         image = map.imshow(title=title)
         x, y = image.topixel(ra, dec)
         p = pyplot.plot(x, y, color=color, linewidth=linewidth)
@@ -161,7 +158,6 @@ def plot_scan(input, map=None, mask=None, title=None, new_figure=True, color='ma
     proj = kapteyn.wcs.Projection(header)
     coords = numpy.array([ra, dec]).T
     xy = proj.topixel(coords)
-    xy[mask,:] = numpy.nan
     xmin = int(numpy.round(numpy.nanmin(xy[:,0])))
     xmax = int(numpy.round(numpy.nanmax(xy[:,0])))
     ymin = int(numpy.round(numpy.nanmin(xy[:,1])))
