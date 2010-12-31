@@ -4,15 +4,57 @@ import os
 import tamasis
 
 from tamasis import *
+from uuid import uuid1
 
 class TestFailure(Exception): pass
 
 tamasis.__verbose__ = False
 
 data_dir = os.path.dirname(__file__) + '/data/'
-obs = PacsObservation(data_dir+'frames_blue.fits', fine_sampling_factor=1)
 
+# slice[10:19]
+obs = PacsObservation(data_dir+'frames_blue.fits[11:20]')
 tod = obs.get_tod()
+
+filename = 'obs-'+str(uuid1())+'.fits'
+try:
+    obs.save(filename, tod)
+    obs2 = PacsObservation(filename)
+    tod2 = obs2.get_tod(raw=True)
+    status2 = obs2.status
+finally:
+    try:
+        os.remove(filename)
+    except:
+        pass
+for field in obs.status.dtype.names:
+    status = obs.status[10:20]
+    if isinstance(status[field][0], str):
+        if numpy.any(status[field] != status2[field]): raise TestFailure('Status problem with: '+field)
+    elif not numpy.allclose(status[field], status2[field]): raise TestFailure('Status problem with: '+field)
+if not numpy.allclose(tod, tod2): raise TestFailure()
+if not numpy.all(tod.mask == tod2.mask): raise TestFailure()
+
+# all observation
+obs = PacsObservation(data_dir+'frames_blue.fits')
+tod = obs.get_tod()
+filename = 'obs-'+str(uuid1())+'.fits'
+try:
+    obs.save(filename, tod)
+    obs2 = PacsObservation(filename)
+    tod2 = obs2.get_tod(raw=True)
+    status2 = obs2.status
+finally:
+    try:
+        os.remove(filename)
+    except:
+        pass
+for field in obs.status.dtype.names:
+    if isinstance(obs.status[field][0], str):
+        if numpy.any(obs.status[field] != status2[field]): raise TestFailure('Status problem with: '+field)
+    elif not numpy.allclose(obs.status[field], status2[field]): raise TestFailure('Status problem with: '+field)
+if not numpy.allclose(tod, tod2): raise TestFailure()
+if not numpy.all(tod.mask == tod2.mask): raise TestFailure()
 
 telescope    = Identity('Telescope PSF')
 projection   = Projection(obs, resolution=3.2, oversampling=False, npixels_per_sample=6)

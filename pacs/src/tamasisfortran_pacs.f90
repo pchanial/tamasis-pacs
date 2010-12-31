@@ -568,9 +568,6 @@ subroutine pacs_tod(band, filename, nslices, npointings, nsamples_tot, compressi
         call divide_vectordim2(signal, pacs%flatfield_detector)
     end if
 
-    ! remove NaN
-    call remove_nan(signal, mask)
-    
     ! subtract the mean of each detector timeline
     if (do_subtraction_mean) then
         destination = 1
@@ -581,6 +578,9 @@ subroutine pacs_tod(band, filename, nslices, npointings, nsamples_tot, compressi
         end do
     end if
 
+    ! remove NaN
+    call remove_nan(signal, mask)
+    
 end subroutine pacs_tod
 
 
@@ -772,3 +772,36 @@ subroutine pacs_multiplexing_transpose(multiplexed, signal, fine_sampling_factor
     call multiplexing_transpose(multiplexed, signal, fine_sampling_factor, ij)
 
 end subroutine pacs_multiplexing_transpose
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine pacs_bitmask(mask, nsamples, ndetectors, bitmask)
+
+    implicit none
+
+    !f2py intent(in)       :: mask
+    !f2py intent(hide)     :: nsamples = shape(mask,0)
+    !f2py intent(hide)     :: ndetectors = shape(mask,1)
+    !f2py intent(out)      :: bitmask
+
+    logical*1, intent(in)  :: mask(nsamples, ndetectors)
+    integer, intent(in)    :: nsamples, ndetectors
+    integer*4, intent(out) :: bitmask((nsamples-1)/32+1,ndetectors)
+
+    integer :: idetector, isample
+
+    bitmask = 0
+
+    !$omp parallel do
+    do idetector = 1, ndetectors
+        do isample = 1, nsamples
+            if (mask(isample,idetector)) then
+                bitmask((isample-1)/32+1,idetector) = ibset(bitmask((isample-1)/32+1,idetector), modulo(isample-1,32))
+            end if
+        end do
+    end do
+    !$omp end parallel do
+
+end subroutine pacs_bitmask

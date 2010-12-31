@@ -107,47 +107,36 @@ class _Pacs(Observation):
 
         return data.T
 
-    @property
-    def status(self):
-        if self._status is not None:
-            return self._status
+    def save(self, filename, tod):
         
-        status = []
-        for filename in self.slice.filename:
-            hdu = pyfits.open(filename)['STATUS']
-            while True:
-                try:
-                    s = hdu.data
-                    break
-                except IndexError as errmsg:
-                    pass
-            
-            status.append(s.base)
+        if numpy.rank(tod) != 3:
+            tod = self.unpack(tod)
 
-        # check number of records
-        if numpy.any([len(s) for s in status] != self.slice.nsamples_all):
-            raise ValueError("The status has a number of records '" + str([len(s) for s in status]) + "' incompatible with that of the pointings '" + str(self.slice.nsamples_all) + "'.")
+        nsamples = numpy.sum(~self.pointing.removed)
+        if nsamples != tod.shape[-1]:
+            raise ValueError("The input Tod has a number of samples'" + str(tod.shape[-1]) + "' incompatible with that of this observation '" + str(nsamples) + "'.")
 
-        # merge status if necessary
-        if any([status[i].dtype != status[0].dtype for i in range(1,len(status))]):
-            newdtype = []
-            for d in status[0].dtype.names:
-                newdtype.append((d, max(status, key=lambda s: s[d].dtype.itemsize)[d].dtype))
-            self._status = numpy.recarray(int(numpy.sum(self.slice.nsamples_all)), newdtype)
-            dest = 0
-            for s in status:
-                for n in status[0].dtype.names:
-                    self._status[n][dest:dest+len(s)] = s[n]
-                dest += len(s)
+        _write_status(self, filename)
+
+        if tod.header is None:
+            header = create_fitsheader(tod, extname='Signal')
         else:
-            self._status = numpy.concatenate(status).view(numpy.recarray)
-        return self._status
+            header = tod.header.copy()
+            header.update('EXTNAME', 'Signal')
 
+        if tod.unit != '':
+            header.update('QTTY____', tod.unit)
+
+        pyfits.append(filename, tod, header)
+
+        if tod.mask is not None:
+            _write_mask(self, tod.mask, filename)
+        
     def __str__(self):
 
         # some helpers
         def same(a):
-            return all(a == a[0])
+            return numpy.all(a == a[0])
         def plural(s,n,prepend=True,s2=''):
             if n == 0:
                 return 'no ' + s
@@ -383,6 +372,7 @@ class PacsObservation(_Pacs):
             mask_len_max = numpy.max([len(mask_name_flat[(i*32+j)*70:(i*32+j+1)*70].strip()) for j in range(nmasks[i]) for i in range(nfilenames)])
         else:
             mask_len_max = 1
+        nmasks_max = max(nmasks_max, 2) # otherwise 'mask_name' and 'mask_activated' can be scalar in slice
 
         mask_name      = numpy.ndarray((nfilenames, nmasks_max), 'S'+str(mask_len_max))
         mask_activated = mask_activated.T
@@ -531,6 +521,42 @@ class PacsObservation(_Pacs):
         header = _str2fitsheader(header)
         return header
    
+    @property
+    def status(self):
+        if self._status is not None:
+            return self._status
+        
+        status = []
+        for filename in self.slice.filename:
+            hdu = pyfits.open(filename)['STATUS']
+            while True:
+                try:
+                    s = hdu.data
+                    break
+                except IndexError as errmsg:
+                    pass
+            
+            status.append(s.base)
+
+        # check number of records
+        if numpy.any([len(s) for s in status] != self.slice.nsamples_all):
+            raise ValueError("The status has a number of records '" + str([len(s) for s in status]) + "' incompatible with that of the pointings '" + str(self.slice.nsamples_all) + "'.")
+
+        # merge status if necessary
+        if any([status[i].dtype != status[0].dtype for i in range(1,len(status))]):
+            newdtype = []
+            for d in status[0].dtype.names:
+                newdtype.append((d, max(status, key=lambda s: s[d].dtype.itemsize)[d].dtype))
+            self._status = numpy.recarray(int(numpy.sum(self.slice.nsamples_all)), newdtype)
+            dest = 0
+            for s in status:
+                for n in status[0].dtype.names:
+                    self._status[n][dest:dest+len(s)] = s[n]
+                dest += len(s)
+        else:
+            self._status = numpy.concatenate(status).view(numpy.recarray)
+        return self._status
+
 
 #-------------------------------------------------------------------------------
 
@@ -594,33 +620,34 @@ class PacsSimulation(_Pacs):
         # store policy
         self.policy = MaskPolicy('inscan,turnaround,other,invalid', 'keep,keep,remove,mask', 'Frame Policy')
 
-        self._status = _write_status(self)
+        # status
+        self._status = None
 
         print(self)
 
-    def save(self, filename, tod):
-        
-        if numpy.rank(tod) != 3:
-            tod = self.unpack(tod)
+    @property
+    def status(self):
+        if self._status is not None:
+            return self._status
 
-        nsamples = numpy.sum(self.slice.nsamples_all)
-        if nsamples != tod.shape[-1]:
-            raise ValueError("The input Tod has a number of samples'" + str(tod.shape[-1]) + "' incompatible with that of this observation '" + str(nsamples) + "'.")
+        p = self.pointing
+        if p.size != numpy.sum(self.slice.nsamples_all):
+            raise ValueError('The pointing and slice attribute are incompatible. This should not happen.')
 
-        _write_status(self, filename)
-        if tod.header is None:
-            header = create_fitsheader(tod, extname='Signal')
-        else:
-            header = tod.header.copy()
-            header.update('EXTNAME', 'Signal')
+        status = numpy.recarray(p.size, dtype=[('BBID', numpy.int64), ('FINETIME', numpy.int64), ('BAND', 'S2'), ('CHOPFPUANGLE', numpy.float64), ('RaArray', numpy.float64), ('DecArray', numpy.float64), ('PaArray', numpy.float64)])
+        status.BAND     = {'blue':'BS', 'green':'BL', 'red':'R '}[self.instrument.band]
+        status.FINETIME = numpy.round(p.time*1000000.)
+        status.RaArray  = p.ra
+        status.DecArray = p.dec
+        status.PaArray  = p.pa
+        status.CHOPFPUANGLE = 0. if not hasattr(p, 'chop') else p.chop
+        status.BBID = 0
+        #XXX Numpy ticket #1645
+        status.BBID[p.info == Pointing.INSCAN] = 0xcd2 << 16
+        status.BBID[p.info == Pointing.TURNAROUND] = 0x4000 << 16
+        self._status = status
 
-        if tod.unit != '':
-            header.update('QTTY____', tod.unit)
-
-        pyfits.append(filename, tod, header)
-        if tod.mask is not None:
-            print 'Warning: the saving of the tod mask is not implemented.'
-        
+        return status
    
 #-------------------------------------------------------------------------------
 
@@ -857,7 +884,27 @@ def _str2fitsheader(string):
 #-------------------------------------------------------------------------------
 
 
-def _write_status(obs, filename=None):
+def _write_mask(obs, mask, filename):
+
+    header = create_fitsheader(numpy.ones(0), extname='Mask')
+    header.update('DSETS___', 1)
+    header.update('DS_0', 4)
+    pyfits.append(filename, None, header)
+
+    mask = mask.view()
+    mask.shape = (numpy.product(obs.instrument.shape),-1)
+    bitmask = tmf.pacs_bitmask(mask.T.view(numpy.int8))
+    bitmask = bitmask.T
+    bitmask.shape = (obs.instrument.shape[0], obs.instrument.shape[1],-1)
+    header = create_fitsheader(bitmask, extname='Tamasis')
+    header.update('INFO____', 'Tamasis mask')
+    pyfits.append(filename, bitmask, header)
+
+
+#-------------------------------------------------------------------------------
+
+
+def _write_status(obs, filename):
 
     s = obs.slice[0]
 
@@ -868,7 +915,6 @@ def _write_status(obs, filename=None):
     if any(obs.slice.mode != obs.slice[0].mode):
         raise ValueError('Unable to save into a single file. The observations do not have the same observing mode.')
     mode = s.mode
-    band_status = {'blue':'BS', 'green':'BL', 'red':'R '}[obs.instrument.band]
     band_type   = {'blue':'BS', 'green':'BL', 'red':'RS'}[obs.instrument.band]
 
     cusmode = {'prime':'PacsPhoto', 'parallel':'SpirePacsParallel', 'transparent':'__PacsTranspScan', 'unknown':'__Calibration'}
@@ -890,25 +936,10 @@ def _write_status(obs, filename=None):
     else:
         scan_speed = str(obs.slice[0].scan_speed)
         
-    p = obs.pointing
-    if p.size != numpy.sum(obs.slice.nsamples_all):
-        raise ValueError('The pointing and slice attribute are incompatible. This case should not happen.')
+    if obs.pointing.size != numpy.sum(obs.slice.nsamples_all):
+        raise ValueError('The pointing and slice attribute are incompatible. This should not happen.')
 
-    # get status
-    table = numpy.recarray(p.size, dtype=[('BBID', numpy.int64), ('FINETIME', numpy.int64), ('BAND', 'S2'), ('CHOPFPUANGLE', numpy.float64), ('RaArray', numpy.float64), ('DecArray', numpy.float64), ('PaArray', numpy.float64)])
-    table.BAND     = band_status
-    table.FINETIME = numpy.round(p.time*1000000.)
-    table.RaArray  = p.ra
-    table.DecArray = p.dec
-    table.PaArray  = p.pa
-    table.CHOPFPUANGLE = 0. if not hasattr(p, 'chop') else p.chop
-    table.BBID = 0
-    #XXX Numpy ticket #1645
-    table.BBID[p.info == Pointing.INSCAN] = 0xcd2 << 16
-    table.BBID[p.info == Pointing.TURNAROUND] = 0x4000 << 16
-
-    if filename is None:
-        return table
+    status = obs.status[~obs.pointing.removed]
 
     fits = pyfits.HDUList()
 
@@ -953,8 +984,7 @@ def _write_status(obs, filename=None):
     hdu = pyfits.PrimaryHDU(None, header)
     fits.append(hdu)
     
-    status = pyfits.BinTableHDU(table, None, 'STATUS')
+    status = pyfits.BinTableHDU(status, None, 'STATUS')
     fits.append(status)
     fits.writeto(filename, clobber=True)
 
-    return table
