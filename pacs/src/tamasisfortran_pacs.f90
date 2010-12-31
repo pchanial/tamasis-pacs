@@ -578,7 +578,7 @@ subroutine pacs_tod(band, filename, nslices, npointings, nsamples_tot, compressi
             call subtract_meandim1(signal(destination:destination+obs%slice(iobs)%nvalids-1,:),                                    &
                                    mask(destination:destination+obs%slice(iobs)%nvalids-1,:))
             destination = destination + obs%slice(iobs)%nvalids
-         end do
+        end do
     end if
 
 end subroutine pacs_tod

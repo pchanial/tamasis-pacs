@@ -1,6 +1,6 @@
 module module_preprocessor
 
-    use module_math,    only : NaN, median, sum_kahan
+    use module_math,    only : NaN, mean, median, sum_kahan
     use module_sort,    only : histogram, reorder
     use module_tamasis, only : p
     implicit none
@@ -58,14 +58,12 @@ contains
         real(p), intent(inout) :: data(:,:)
         logical*1, intent(in)  :: mask(size(data,1),size(data,2))
 
-        integer                :: ndetectors, nsamples, idetector
+        integer                :: ndetectors, idetector
 
         ndetectors = size(data,2)
-        !$omp parallel do private(nsamples)
+        !$omp parallel do
         do idetector=1, size(data,2)
-            nsamples = count(.not. mask(:,idetector))
-            if (nsamples == 0) cycle
-            data(:,idetector) = data(:,idetector) - sum(data(:,idetector), logical(mask(:,idetector), kind(.true.))) / nsamples
+            data(:,idetector) = data(:,idetector) - mean(data(:,idetector), logical(mask(:,idetector)))
         end do
         !$omp end parallel do
 
