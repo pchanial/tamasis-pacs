@@ -47,7 +47,7 @@ class _Pacs(Observation):
 
         nsamples = self.get_nfinesamples() if oversampling else self.get_nsamples()
         if header is None:
-            if MPI.COMM_WORLD.Get_size() > 1:
+            if var.mpi_comm.Get_size() > 1:
                 raise ValueError('With MPI, the map header must be specified.')
             header = self.get_map_header(resolution, oversampling)
         elif isinstance(header, str):
@@ -161,9 +161,9 @@ class _Pacs(Observation):
         ndetectors = self.get_ndetectors()
         sp = len('Info: ')*' '
         unit = 'unknown' if self.slice[0].unit == '' else self.slice[0].unit
-        if MPI.COMM_WORLD.Get_size() > 1:
-            mpistr = 'Process '+str(MPI.COMM_WORLD.Get_rank()+1) + '/' +       \
-                     str(MPI.COMM_WORLD.Get_size()) + ' on node ' +            \
+        if var.mpi_comm.Get_size() > 1:
+            mpistr = 'Process '+str(var.mpi_comm.Get_rank()+1) + '/' +       \
+                     str(var.mpi_comm.Get_size()) + ' on node ' +            \
                      MPI.Get_processor_name() + ', '
         else:
             mpistr = ''
@@ -494,7 +494,7 @@ class PacsObservation(_Pacs):
         return tod
 
     def get_map_header(self, resolution=None, oversampling=True):
-        if MPI.COMM_WORLD.Get_size() > 1:
+        if var.mpi_comm.Get_size() > 1:
             raise NotImplementedError('The common map header should be specified if more than one job is running.')
         if resolution is None:
             resolution = DEFAULT_RESOLUTION[self.instrument.band]
@@ -818,7 +818,7 @@ def _files2tmf(filename):
 
 
 def _split_observation(nobservations, ndetectors):
-    nnodes  = MPI.COMM_WORLD.Get_size()
+    nnodes  = var.mpi_comm.Get_size()
     nthreads = tmf.info_nthreads()
 
     # number of observations. They should approximatively be of the same length
@@ -843,7 +843,7 @@ def _split_observation(nobservations, ndetectors):
             break
         blocksize += 1
 
-    rank = MPI.COMM_WORLD.Get_rank()
+    rank = var.mpi_comm.Get_rank()
 
     ix = rank // ny_block
     iy = rank %  ny_block

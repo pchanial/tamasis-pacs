@@ -1,9 +1,11 @@
 import numpy
 import os
 import tamasisfortran as tmf
+from mpi4py import MPI
 
-verbose = False
+mpi_comm = MPI.COMM_WORLD
 path = os.path.abspath(os.path.dirname(__file__) + '/../../../../share/tamasis')
+verbose = False
 
 FLOAT_DTYPE = {
     4  : numpy.dtype(numpy.float32),
@@ -26,4 +28,4 @@ def get_default_dtype(data):
     else:
         return FLOAT_DTYPE
 
-del os, tmf
+del MPI, os, tmf

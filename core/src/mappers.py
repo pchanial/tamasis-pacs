@@ -71,9 +71,9 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None, tol=
     C = model.T * weight * model
 
     if hyper != 0:
-        ntods = MPI.COMM_WORLD.allreduce(numpy.sum(tod.mask == 0), op=MPI.SUM)
+        ntods = var.mpi_comm.allreduce(numpy.sum(tod.mask == 0), op=MPI.SUM)
         nmaps = C.aslinearoperator(unpacking=unpacking).shape[0]
-        if MPI.COMM_WORLD.Get_rank() == 0:
+        if var.mpi_comm.Get_rank() == 0:
             hyper = numpy.array(hyper * ntods / nmaps, dtype=var.FLOAT_DTYPE)
             dX = DiscreteDifference(axis=1)
             dY = DiscreteDifference(axis=0)
@@ -115,7 +115,7 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None, tol=
             self.residual = parent_locals['resid']
             if self.residual < tol:
                 self.niterations += 1
-            if verbose and MPI.COMM_WORLD.Get_rank() == 0: 
+            if verbose and var.mpi_comm.Get_rank() == 0: 
                 print('Iteration ' + str(self.niterations) + ': ' + str(self.residual))
 
     if callback is None:

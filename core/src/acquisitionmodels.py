@@ -1255,7 +1255,7 @@ class InvNtt(Diagonal):
         if status != 0: raise RuntimeError()
         Diagonal.__init__(self, tod_filter.T, nsamples, description)
         self.ncorrelations = ncorrelations
-        self.diagonal /= MPI.COMM_WORLD.allreduce(numpy.max(self.diagonal), op=MPI.MAX)
+        self.diagonal /= var.mpi_comm.allreduce(numpy.max(self.diagonal), op=MPI.MAX)
 
 
 #-------------------------------------------------------------------------------
@@ -1279,7 +1279,7 @@ class AllReduce(Square):
 
     def direct(self, input, reusein=False, reuseout=False, op=MPI.SUM):
         input = self.validate_input(input, reusein and reuseout)
-        input[:] = MPI.COMM_WORLD.allreduce(input, op=MPI.SUM)
+        input[:] = var.mpi_comm.allreduce(input, op=MPI.SUM)
         return input
     def transpose(self, input, reusein=False, reuseout=False):
         input = self.validate_input(input, reusein and reuseout)
