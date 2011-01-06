@@ -2,15 +2,6 @@
 !
 ! Author: P. Chanial
 
-subroutine pacs_test(array, n)
-    !f2py intent(hide):: n = size(array)
-    !f2py intent(in), depend(n) :: array(n)
-    real*8, intent(in) :: array(n)
-    real*8,allocatable :: tmp(:)
-    allocate(tmp(3))
-    print *, 'shape:', shape(tmp)
-    print *, 'shape:', shape(array)
-end subroutine
 subroutine pacs_info_init(filename, nfilenames, band, transparent_mode, nsamples, status)
 
     use iso_fortran_env,        only : ERROR_UNIT
