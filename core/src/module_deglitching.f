@@ -154,7 +154,7 @@ contains
         deallocate (map)
         call system_clock(count2, count_rate, count_max)
         if (verbose_) then
-            write (*,'(f6.2,a,i0,a)') real(count2-count1)/count_rate, 's (number of flagged samples: ', count(mask)-nbads, ')'
+            write (*,'(f10.2,a,i0,a)') real(count2-count1)/count_rate, 's (number of flagged samples: ', count(mask)-nbads, ')'
         end if
 
     end subroutine deglitch_l2b
