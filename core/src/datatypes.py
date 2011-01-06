@@ -85,6 +85,9 @@ class FitsArray(Quantity):
     def zeros(shape, header=None, unit=None, derived_units=None, dtype=None, order=None):
         return FitsArray(numpy.zeros(shape, dtype, order), header, unit, derived_units, dtype, copy=False)
 
+    def copy(self, order='C'):
+        return FitsArray(self, copy=True, order=order)
+
     def has_wcs(self):
         """
         Returns True is the array has a FITS header with a defined World
