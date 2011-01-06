@@ -190,6 +190,9 @@ contains
         val = NaN
         iNaN = 1
         hasNaN = .false.
+#ifdef GFORTRAN
+        ival = 0 ! suppress bogus initialision warning
+#endif
 
         do i = 1, size(data)
 
