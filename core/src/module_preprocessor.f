@@ -187,7 +187,6 @@ contains
             return
         end if
 
-        ival = 0 ! to silence a bogus warning message
         val = NaN
         iNaN = 1
         hasNaN = .false.
@@ -218,11 +217,13 @@ contains
         end do
 
         ! deal with trailing NaN
-        if (hasNaN .and. val == val .and. data(ival-1) == data(ival-1)) then
-            delta = val - data(ival-1)
-            do j = ival+1, size(data)
-                data(j) = val + delta * (j - ival)
-            end do
+        if (hasNaN .and. val == val) then
+            if (data(ival-1) == data(ival-1)) then
+                delta = val - data(ival-1)
+                do j = ival+1, size(data)
+                    data(j) = val + delta * (j - ival)
+                end do
+            end if
         end if
 
     end subroutine interpolate_linear_equally_spaced_1d_1d
