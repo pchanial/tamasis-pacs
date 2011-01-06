@@ -9,7 +9,7 @@ import scipy.sparse.linalg
 import tamasisfortran as tmf
 
 from mpi4py import MPI
-from .config import __verbose__, get_default_dtype, get_default_dtype_float, get_default_dtype_complex
+from . import var
 from .datatypes import Map, Tod, combine_sliced_shape, flatten_sliced_shape, validate_sliced_shape
 from .numpyutils import _my_isscalar
 from .processing import interpolate_linear
@@ -118,7 +118,7 @@ class AcquisitionModel(object):
         for block in self.blocks:
             if block.dtype.type in (numpy.complex64, numpy.complex128, numpy.complex256):
                 return block.dtype
-        return get_default_dtype_float()
+        return var.FLOAT_DTYPE
 
     @dtype.setter
     def dtype(self, dtype):
@@ -219,7 +219,7 @@ class AcquisitionModel(object):
         if self._output_direct is None or shape_flat != self._output_direct.shape or \
            self._output_direct.dtype != input.dtype or typeout != type(self._output_transpose):
             self._output_direct = None
-            if __verbose__: print('Info: Allocating '+str(input.dtype.itemsize*numpy.product(shape_flat)/2.**20)+' MiB for the output of ' + type(self).__name__+'.')
+            if var.verbose: print('Info: Allocating '+str(input.dtype.itemsize*numpy.product(shape_flat)/2.**20)+' MiB for the output of ' + type(self).__name__+'.')
             if typeout == numpy.ndarray:
                 output = numpy.empty(shape, input.dtype, **options)
             else:
@@ -260,7 +260,7 @@ class AcquisitionModel(object):
         if self._output_transpose is None or shape_flat != self._output_transpose.shape or \
            self._output_transpose.dtype != input.dtype or typeout != type(self._output_transpose):
             self._output_transpose = None
-            if __verbose__: print('Info: Allocating '+str(input.dtype.itemsize*numpy.product(shape_flat)/2.**20)+' MiB for the output of ' + type(self).__name__+'.T.')
+            if var.verbose: print('Info: Allocating '+str(input.dtype.itemsize*numpy.product(shape_flat)/2.**20)+' MiB for the output of ' + type(self).__name__+'.T.')
             if typeout == numpy.ndarray:
                 output = numpy.empty(shape_flat, input.dtype, **options)
             else:
@@ -604,7 +604,7 @@ class SquareBase(AcquisitionModel):
         if inplace:
             return input
 
-        if __verbose__:
+        if var.verbose:
             print('Info: Allocating ' + str(input.dtype.itemsize * numpy.product(input.shape)/2.**20) + ' MiB in ' + \
                   type(self).__name__ + '.')
         return input.copy('a')
@@ -624,7 +624,7 @@ class SquareBase(AcquisitionModel):
         if inplace:
             return input
 
-        if __verbose__:
+        if var.verbose:
             print('Info: Allocating ' + str(input.dtype.itemsize * numpy.product(input.shape)/2.**20) + ' MiB in ' + \
                   type(self).__name__ + '.T.')
         return input.copy('a')
@@ -694,7 +694,7 @@ class Diagonal(Symmetric):
     """Diagonal operator"""
     def __init__(self, diagonal, nsamples=None, description=None):
         AcquisitionModel.__init__(self, description)
-        self.diagonal = numpy.asarray(diagonal, dtype=get_default_dtype(diagonal))
+        self.diagonal = numpy.asarray(diagonal, dtype=var.get_default_dtype(diagonal))
         if not _my_isscalar(self.diagonal):
             self.shapein = validate_sliced_shape(self.diagonal.shape, nsamples)
 
@@ -978,7 +978,7 @@ class Masking(Symmetric):
     def dtype(self):
         if self.mask is not None and numpy.iscomplexobj(self.mask):
             return self.mask.dtype
-        return get_default_dtype_float()
+        return var.FLOAT_DTYPE
 
 
 #-------------------------------------------------------------------------------
@@ -1176,11 +1176,11 @@ class Fft(Square):
         self.shapein = shape
         self.n = numpy.product(shape)
         self.axes = axes
-        self._in  = numpy.zeros(shape, dtype=get_default_dtype_complex())
-        self._out = numpy.zeros(shape, dtype=get_default_dtype_complex())
+        self._in  = numpy.zeros(shape, dtype=var.COMPLEX_DTYPE)
+        self._out = numpy.zeros(shape, dtype=var.COMPLEX_DTYPE)
         self.forward_plan = fftw3.Plan(self._in, self._out, direction='forward', flags=flags, nthreads=nthreads)
         self.backward_plan = fftw3.Plan(self._in, self._out, direction='backward', flags=flags, nthreads=nthreads)
-        self.dtype = get_default_dtype_complex()
+        self.dtype = var.COMPLEX_DTYPE
 
     def direct(self, input, reusein=False, reuseout=False):
         self._in[:] = input
@@ -1208,8 +1208,8 @@ class FftHalfComplex(Square):
         self.forward_plan = numpy.empty(self.nsamples_array.size, dtype='int64')
         self.backward_plan = numpy.empty(self.nsamples_array.size, dtype='int64')
         for i, n in enumerate(self.nsamples):
-            tarray = numpy.empty(n, dtype=get_default_dtype_float())
-            farray = numpy.empty(n, dtype=get_default_dtype_float())
+            tarray = numpy.empty(n, dtype=var.FLOAT_DTYPE)
+            farray = numpy.empty(n, dtype=var.FLOAT_DTYPE)
             self.forward_plan[i] = fftw3.Plan(tarray, farray, direction='forward', flags=['measure'], realtypes=['halfcomplex r2c'], nthreads=1)._get_parameter()
             self.backward_plan[i] = fftw3.Plan(farray, tarray, direction='backward', flags=['measure'], realtypes=['halfcomplex c2r'], nthreads=1)._get_parameter()
             

@@ -1,5 +1,7 @@
 import numpy
 
+numpy.seterr(all='ignore')
+
 __all__ = [ 'any_neq' ]
 
 def any_neq(a, b, rtol=None, atol=0.):

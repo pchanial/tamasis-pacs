@@ -1,6 +1,6 @@
 import numpy
 import re
-from .config import get_default_dtype
+from . import var
 
 __all__ = ['Quantity', 'UnitError', 'unit']
 
@@ -212,7 +212,7 @@ class Quantity(numpy.ndarray):
     def __new__(cls, data, unit=None, derived_units=None, dtype=None, copy=True, order='C', subok=False, ndmin=0):
 
         if dtype is None:
-            dtype = get_default_dtype(data)
+            dtype = var.get_default_dtype(data)
 
         # get a new Quantity instance (or a subclass if subok is True)
         result = numpy.array(data, dtype, copy=copy, order=order, subok=True, ndmin=ndmin)

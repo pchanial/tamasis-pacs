@@ -1,6 +1,6 @@
 import numpy
 
-from .config import get_default_dtype_float
+from . import var
 from .datatypes import Map, Tod, create_fitsheader
 from .numpyutils import _my_isscalar
 from .quantity import Quantity
@@ -264,8 +264,8 @@ class MaskPolicy(object):
 
 #-------------------------------------------------------------------------------
 
-POINTING_DTYPE = [('time', get_default_dtype_float()), ('ra', get_default_dtype_float()),
-                  ('dec', get_default_dtype_float()), ('pa', get_default_dtype_float()),
+POINTING_DTYPE = [('time', var.FLOAT_DTYPE), ('ra', var.FLOAT_DTYPE),
+                  ('dec', var.FLOAT_DTYPE), ('pa', var.FLOAT_DTYPE),
                   ('info', numpy.int64), ('masked', numpy.bool8), ('removed', numpy.bool8)]
 
 class Pointing(numpy.recarray):

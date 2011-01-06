@@ -1,5 +1,6 @@
 import tamasisfortran as tmf
-from .config import *
+import var
+from .var import VERSION as __version__
 from .numpyutils import *
 from .quantity import *
 from .datatypes import *
@@ -9,4 +10,4 @@ from .acquisitionmodels import *
 from .mappers import *
 from .observations import MaskPolicy, Pointing
 
-__all__ = [x for x in dir() if not x.startswith('_') or x in ('__version__', '__verbose__')]
+__all__ = [x for x in dir() if not x.startswith('_') or x == '__version__']

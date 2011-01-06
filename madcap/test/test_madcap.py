@@ -5,7 +5,7 @@ import tamasis
 
 from tamasis import *
 
-tamasis.__verbose__ = False
+tamasis.var.verbose = False
 path = os.path.abspath(os.path.dirname(__file__)) + '/data/madmap1/'
 obs = MadMap1Observation(path+'todSpirePsw_be', path+'invnttSpirePsw_be', 
                          path+'madmapSpirePsw.fits[coverage]', 'big_endian',

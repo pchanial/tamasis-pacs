@@ -8,7 +8,7 @@ from uuid import uuid1
 class TestFailure(Exception):
     pass
 
-tamasis.__verbose__ = False
+tamasis.var.verbose = False
 
 # creation of the sky map
 msize = 50

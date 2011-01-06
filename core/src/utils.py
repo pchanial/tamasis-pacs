@@ -6,17 +6,12 @@ import re
 import tamasisfortran as tmf
 import time
 from matplotlib import pyplot
-from . import config
+from . import var
 from .datatypes import Map, create_fitsheader
 from .numpyutils import _my_isscalar
 from .quantity import Quantity
 
 __all__ = [ 'ds9', 'hs', 'mean_degrees', 'minmax_degrees', 'plot_scan', 'airy_disk', 'aperture_circular', 'distance', 'gaussian', 'phasemask_fourquadrant' ]
-
-_FTYPE = config.get_default_dtype_float()
-
-
-#-------------------------------------------------------------------------------
 
 
 class Ds9(object):
@@ -100,7 +95,7 @@ def mean_degrees(array):
     Returns the mean value of an array of values in degrees, by taking into 
     account the discrepancy at 0 degrees
     """
-    return tmf.mean_degrees(numpy.asarray(array, dtype=_FTYPE).ravel())
+    return tmf.mean_degrees(numpy.asarray(array, dtype=var.FLOAT_DTYPE).ravel())
 
 
 #-------------------------------------------------------------------------------
@@ -111,7 +106,7 @@ def minmax_degrees(array):
     Returns the minimum and maximum value of an array of values in degrees, 
     by taking into account the discrepancy at 0 degrees
     """
-    return tmf.minmax_degrees(numpy.asarray(array, dtype=_FTYPE).ravel())
+    return tmf.minmax_degrees(numpy.asarray(array, dtype=var.FLOAT_DTYPE).ravel())
 
 
 #-------------------------------------------------------------------------------
@@ -248,9 +243,9 @@ def distance(shape, origin=None, resolution=1.):
     rank = len(shape)
 
     if origin is None:
-        origin = (numpy.asanyarray(list(reversed(shape)), dtype=_FTYPE) + 1) / 2
+        origin = (numpy.asanyarray(list(reversed(shape)), dtype=var.FLOAT_DTYPE) + 1) / 2
     else:
-        origin = numpy.asanyarray(origin, dtype=_FTYPE)
+        origin = numpy.asanyarray(origin, dtype=var.FLOAT_DTYPE)
 
     if isinstance(resolution, Quantity):
         unit = resolution._unit
@@ -258,7 +253,7 @@ def distance(shape, origin=None, resolution=1.):
         unit = None
     if _my_isscalar(resolution):
         resolution = numpy.resize(resolution, rank)
-    resolution = numpy.asanyarray(resolution, dtype=_FTYPE)
+    resolution = numpy.asanyarray(resolution, dtype=var.FLOAT_DTYPE)
 
     if rank == 1:
         d = tmf.distance_1d(shape[0], origin[0], resolution[0])
@@ -267,7 +262,7 @@ def distance(shape, origin=None, resolution=1.):
     elif rank == 3:
         d = tmf.distance_3d(shape[2], shape[1], shape[0], origin, resolution).T
     else:
-        d = _distance_slow(shape, origin, resolution, _FTYPE)
+        d = _distance_slow(shape, origin, resolution, var.FLOAT_DTYPE)
 
     return Map(d, copy=False, unit=unit)
 
@@ -290,7 +285,7 @@ def _distance_slow(shape, origin, resolution, dtype):
     index = []
     for n, o, r in zip(reversed(shape), origin, resolution):
         index.append(slice(0,n))
-    d = numpy.asarray(numpy.mgrid[index], dtype=_FTYPE).T
+    d = numpy.asarray(numpy.mgrid[index], dtype=var.FLOAT_DTYPE).T
     d -= numpy.asanyarray(origin) - 1.
     d *= resolution
     numpy.square(d, d)
@@ -315,7 +310,7 @@ def gaussian(shape, fwhm, origin=None, resolution=1., unit=None):
 
 
 def phasemask_fourquadrant(shape, phase=-1):
-    array = Map.ones(shape, dtype=config.get_default_dtype_complex())
+    array = Map.ones(shape, dtype=var.COMPLEX_DTYPE)
     array[0:shape[0]//2,shape[1]//2:] = phase
     array[shape[0]//2:,0:shape[1]//2] = phase
     return array

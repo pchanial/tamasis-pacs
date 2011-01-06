@@ -8,7 +8,7 @@ from uuid import uuid1
 
 class TestFailure(Exception): pass
 
-tamasis.__verbose__ = False
+tamasis.var.verbose = False
 
 data_dir = os.path.dirname(__file__) + '/data/'
 

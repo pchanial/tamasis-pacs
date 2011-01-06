@@ -5,7 +5,7 @@ from tamasis import *
 
 class TestFailure(Exception): pass
 
-tamasis.__verbose__ = False
+tamasis.var.verbose = False
 data_dir = os.path.dirname(__file__) + '/data/'
 obs = PacsObservation(data_dir+'frames_blue.fits', fine_sampling_factor=1)
 tod = obs.get_tod()

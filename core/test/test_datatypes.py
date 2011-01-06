@@ -1,12 +1,13 @@
 import numpy
 import glob
 import os
+import tamasis
 from tamasis import *
 from tamasis.datatypes import validate_sliced_shape
 from uuid import uuid1
 
 filename = 'tamasistest-'+str(uuid1())
-deftype = get_default_dtype_float().type
+deftype = tamasis.var.FLOAT_DTYPE.type
 
 def test_cleanup():
     files = glob.glob(filename+'*')

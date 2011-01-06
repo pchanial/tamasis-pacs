@@ -6,7 +6,7 @@ import tamasis
 from   matplotlib.pyplot import clim, figure, plot, show, ioff
 from   tamasis import *
 
-tamasis.__verbose__ = False
+tamasis.var.verbose = False
 do_plot = True
 ioff()
 
@@ -18,7 +18,7 @@ if not all(map(os.path.exists, datafile)):
     print('The data files are not found: ' + ', '.join(datafile))
     exit(0)
 
-pacs = PacsObservation(filename=[datafile[0]+'[6065:]', datafile[1]+'[6066:]'],
+pacs = PacsObservation(filename=[datafile[0]+'[6065:20000]', datafile[1]+'[6066:20001]'],
                        fine_sampling_factor=1)
 
 telescope    = Identity('Telescope PSF')

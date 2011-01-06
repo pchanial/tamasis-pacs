@@ -6,19 +6,19 @@ import pyfits
 import re
 import tempfile
 
+from . import var
 from matplotlib import pyplot
 from mpi4py import MPI
 from tamasis.core import *
-from tamasis.config import __verbose__, __version__
 from tamasis.observations import Observation, Instrument, FlatField, create_scan
 
 __all__ = [ 'PacsObservation', 'PacsSimulation', 'pacs_create_scan', 'pacs_plot_scan', 'pacs_preprocess' ]
 
 DEFAULT_RESOLUTION = {'blue':3.2, 'green':3.2, 'red':6.4}
 
-PACS_POINTING_DTYPE = [('time', get_default_dtype_float()), ('ra', get_default_dtype_float()),
-                       ('dec', get_default_dtype_float()), ('pa', get_default_dtype_float()),
-                       ('chop', get_default_dtype_float()), ('info', numpy.int64), ('masked', numpy.bool8),
+PACS_POINTING_DTYPE = [('time', var.FLOAT_DTYPE), ('ra', var.FLOAT_DTYPE),
+                       ('dec', var.FLOAT_DTYPE), ('pa', var.FLOAT_DTYPE),
+                       ('chop', var.FLOAT_DTYPE), ('info', numpy.int64), ('masked', numpy.bool8),
                        ('removed', numpy.bool8)]
 
 PACS_ACCELERATION = 4.
@@ -335,7 +335,6 @@ class PacsObservation(_Pacs):
         detector_mask = numpy.ones(detector_mask.shape, numpy.bool8)
         detector_mask.flat[igood[slice_detector]] = 0
         filename_, nfilenames = _files2tmf(filename)
-        ftype = get_default_dtype_float()
 
         # frame policy
         policy = MaskPolicy('inscan,turnaround,other,invalid', (policy_inscan, policy_turnaround, policy_other, policy_invalid), 'Frame Policy')
@@ -358,10 +357,10 @@ class PacsObservation(_Pacs):
         self.instrument.band = band
         self.instrument.reject_bad_line = reject_bad_line
         self.instrument.fine_sampling_factor = fine_sampling_factor
-        self.instrument.detector_center = detector_center.T.swapaxes(0,1).copy().view(dtype=[('u',ftype),('v',ftype)]).view(numpy.recarray)
-        self.instrument.detector_corner = detector_corner.T.swapaxes(0,1).copy().view(dtype=[('u',ftype),('v',ftype)]).view(numpy.recarray)
+        self.instrument.detector_center = detector_center.T.swapaxes(0,1).copy().view(dtype=[('u',var.FLOAT_DTYPE),('v',var.FLOAT_DTYPE)]).view(numpy.recarray)
+        self.instrument.detector_corner = detector_corner.T.swapaxes(0,1).copy().view(dtype=[('u',var.FLOAT_DTYPE),('v',var.FLOAT_DTYPE)]).view(numpy.recarray)
         self.instrument.detector_area = Map(numpy.ascontiguousarray(detector_area), unit='arcsec^2', origin='upper')
-        self.instrument.distortion_yz = distortion_yz.T.view(dtype=[('y',ftype), ('z',ftype)]).view(numpy.recarray)
+        self.instrument.distortion_yz = distortion_yz.T.view(dtype=[('y',var.FLOAT_DTYPE), ('z',var.FLOAT_DTYPE)]).view(numpy.recarray)
         self.instrument.flatfield = FlatField(oflat, dflat)
         self.instrument.responsivity = Quantity(responsivity, 'V/Jy')
 
@@ -579,11 +578,10 @@ class PacsSimulation(_Pacs):
             compression_factor = 8 if mode == 'parallel' and band != 'red' else 1 if mode == 'transparent' else 4
 
         detector_mask = self._get_detector_mask(band, detector_mask, mode == 'transparent', reject_bad_line)
-        ftype = get_default_dtype_float()
 
         # store pointing information
         if not hasattr(pointing, 'chop'):
-            pointing.chop = numpy.zeros(pointing.size, ftype)
+            pointing.chop = numpy.zeros(pointing.size, var.FLOAT_DTYPE)
         self.pointing = pointing
         self.pointing.removed = policy_inscan == 'remove' and self.pointing.info == Pointing.INSCAN or \
                                 policy_turnaround == 'remove' and self.pointing.info == Pointing.TURNAROUND
@@ -596,10 +594,10 @@ class PacsSimulation(_Pacs):
         self.instrument.band = band
         self.instrument.reject_bad_line = reject_bad_line
         self.instrument.fine_sampling_factor = fine_sampling_factor
-        self.instrument.detector_center = detector_center.T.swapaxes(0,1).copy().view(dtype=[('u',ftype),('v',ftype)]).view(numpy.recarray)
-        self.instrument.detector_corner = detector_corner.T.swapaxes(0,1).copy().view(dtype=[('u',ftype),('v',ftype)]).view(numpy.recarray)
+        self.instrument.detector_center = detector_center.T.swapaxes(0,1).copy().view(dtype=[('u',var.FLOAT_DTYPE),('v',var.FLOAT_DTYPE)]).view(numpy.recarray)
+        self.instrument.detector_corner = detector_corner.T.swapaxes(0,1).copy().view(dtype=[('u',var.FLOAT_DTYPE),('v',var.FLOAT_DTYPE)]).view(numpy.recarray)
         self.instrument.detector_area = Map(numpy.ascontiguousarray(detector_area), unit='arcsec^2/detector', origin='upper')
-        self.instrument.distortion_yz = distortion_yz.T.view(dtype=[('y',ftype), ('z',ftype)]).view(numpy.recarray)
+        self.instrument.distortion_yz = distortion_yz.T.view(dtype=[('y',var.FLOAT_DTYPE), ('z',var.FLOAT_DTYPE)]).view(numpy.recarray)
         self.instrument.flatfield = FlatField(oflat, dflat)
         self.instrument.responsivity = Quantity(responsivity, 'V/Jy')
 
@@ -951,7 +949,7 @@ def _write_status(obs, filename):
             cc('NAXIS', 0), 
             cc('EXTEND', True, 'May contain datasets'), 
             cc('TYPE', 'HPPAVG'+band_type, 'Product Type Identification'), 
-            cc('CREATOR', 'TAMASIS v' + __version__, 'Generator of this file'), 
+            cc('CREATOR', 'TAMASIS v' + var.VERSION, 'Generator of this file'), 
             cc('INSTRUME', 'PACS', 'Instrument attached to this file'), 
             cc('TELESCOP', 'Herschel Space Observatory', 'Name of telescope'),
             cc('OBS_MODE', 'Scan map', 'Observation mode name'),
