@@ -167,7 +167,7 @@ contains
     ! positive if a, b, c are counter-clockwise, negative otherwise
     pure function point_on_or_left(a, b, c)
 
-        real(p), intent(in) :: a(2), b(2), c(2)
+        real(p), intent(in) :: a(:), b(:), c(:)
         logical             :: point_on_or_left
 
         point_on_or_left = surface_parallelogram(a, b, c) >= 0
@@ -184,7 +184,7 @@ contains
     pure function surface_parallelogram(a, b, c)
 
         real(p)             :: surface_parallelogram
-        real(p), intent(in) :: a(2), b(2), c(2)
+        real(p), intent(in) :: a(:), b(:), c(:)
 
         surface_parallelogram = (b(1) - a(1)) * (c(2) - a(2)) - (c(1) - a(1)) * (b(2) - a(2))
 
