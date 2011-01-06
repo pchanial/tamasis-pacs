@@ -56,7 +56,7 @@ contains
     subroutine subtract_meandim1_mask(data, mask)
 
         real(p), intent(inout) :: data(:,:)
-        logical*1, intent(in)  :: mask(size(data,1),size(data,2))
+        logical*1, intent(in)  :: mask(:,:)
 
         integer                :: ndetectors, idetector
 
@@ -256,7 +256,7 @@ contains
     subroutine median_filtering_mask_1d_1d(data, mask, length)
 
         real(p), intent(inout) :: data(:)
-        logical*1, intent(in)  :: mask(size(data))
+        logical*1, intent(in)  :: mask(:)
         integer, intent(in)    :: length
 
         integer                :: nbins, ndata, nvalids, order(size(data)), i, old, new, half_minus, half_plus, ibin, irank
@@ -428,7 +428,7 @@ contains
     subroutine median_filtering_mask_1d_2d(data, mask, length)
 
         real(p), intent(inout) :: data(:,:)
-        logical*1, intent(in)  :: mask(size(data,1),size(data,2))
+        logical*1, intent(in)  :: mask(:,:)
         integer, intent(in)    :: length
 
         integer                :: i
