@@ -8,12 +8,12 @@ import numpy
 import scipy.sparse.linalg
 import tamasisfortran as tmf
 
+from mpi4py import MPI
 from .config import __verbose__, get_default_dtype, get_default_dtype_float, get_default_dtype_complex
 from .datatypes import Map, Tod, combine_sliced_shape, flatten_sliced_shape, validate_sliced_shape
-from mpi4py import MPI
 from .numpyutils import _my_isscalar
 from .processing import interpolate_linear
-from quantity import Quantity, UnitError, _divide_unit, _multiply_unit
+from .quantity import Quantity, UnitError, _divide_unit, _multiply_unit
 
 __all__ = ['AcquisitionModel', 'Diagonal', 'Scalar', 'Identity', 'DiscreteDifference',
            'Projection', 'CompressionAverage', 'DownSampling', 'Masking',

@@ -1,9 +1,9 @@
 import numpy
 
 from .config import get_default_dtype_float
+from .datatypes import Map, Tod, create_fitsheader
 from .numpyutils import _my_isscalar
 from .quantity import Quantity
-from .datatypes import Map, Tod, create_fitsheader
 
 __all__ = ['Observation', 'Instrument', 'FlatField', 'MaskPolicy', 'Pointing']
 

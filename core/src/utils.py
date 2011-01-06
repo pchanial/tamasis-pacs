@@ -1,4 +1,3 @@
-from . import config
 import kapteyn
 import numpy
 import os
@@ -6,8 +5,9 @@ import pyfits
 import re
 import tamasisfortran as tmf
 import time
-from .datatypes import Map, create_fitsheader
 from matplotlib import pyplot
+from . import config
+from .datatypes import Map, create_fitsheader
 from .numpyutils import _my_isscalar
 from .quantity import Quantity
 

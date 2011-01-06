@@ -8,7 +8,6 @@ import tempfile
 
 from matplotlib import pyplot
 from mpi4py import MPI
-from tamasis import numpyutils
 from tamasis.core import *
 from tamasis.config import __verbose__, __version__
 from tamasis.observations import Observation, Instrument, FlatField, create_scan
