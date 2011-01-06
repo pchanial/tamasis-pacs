@@ -148,10 +148,10 @@ class _Pacs(Observation):
                 a = []
                 d = []
             else:
-                a = [m for i, m in enumerate(slice[islice].mask_name)          \
-                     if m != '' and slice[islice].mask_activated[i]]
-                d = [m for i, m in enumerate(slice[islice].mask_name)          \
-                     if m != '' and not slice[islice].mask_activated[i]]
+                masks  = slice[islice].mask_name[0:slice[islice].nmasks]
+                active = slice[islice].mask_activated[0:slice[islice].nmasks]
+                a = [m for m, act in zip(masks, active) if act]
+                d = [m for m, act in zip(masks, active) if not act]
             return (plural('activated mask',   len(a), 0, ': ').capitalize() + \
                         ', '.join(a), 
                     plural('deactivated mask', len(d), 0, ': ').capitalize() + \
