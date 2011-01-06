@@ -173,12 +173,12 @@ subroutine compression_average_direct(data, compressed, factor, nsamples, ndetec
     !f2py intent(in)      :: data
     !f2py intent(inout)   :: compressed
     !f2py intent(in)      :: factor
-    !f2py intent(hide)    :: nsamples = shape(data,0)/factor
+    !f2py intent(hide)    :: nsamples = shape(data,0)
     !f2py intent(hide)    :: ndetectors = shape(data,1)
 
     integer, intent(in)   :: factor, nsamples, ndetectors
-    real(p), intent(in)   :: data(nsamples*factor,ndetectors)
-    real(p), intent(out)  :: compressed(nsamples,ndetectors)
+    real(p), intent(in)   :: data(nsamples,ndetectors)
+    real(p), intent(out)  :: compressed(nsamples/factor,ndetectors)
 
     call direct(data, compressed, factor)
 
@@ -195,11 +195,11 @@ subroutine compression_average_transpose(compressed, data, factor, nsamples, nde
     implicit none
 
     !f2py threadsafe
-    !f2py intent(inout)   :: compressed
-    !f2py intent(in)      :: data
+    !f2py intent(in)      :: compressed
+    !f2py intent(inout)   :: data
     !f2py intent(in)      :: factor
-    !f2py intent(hide)    :: nsamples = shape(data,0)/factor
-    !f2py intent(hide)    :: ndetectors = shape(data,1)
+    !f2py intent(hide)    :: nsamples = shape(compressed,0)
+    !f2py intent(hide)    :: ndetectors = shape(compressed,1)
 
     integer, intent(in)   :: factor, nsamples, ndetectors
     real(p), intent(in)   :: compressed(nsamples,ndetectors)
