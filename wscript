@@ -76,15 +76,20 @@ def configure(conf):
     conf.check_fortran_mangling()
 
     if conf.env.FC_NAME == 'GFORTRAN':
-        conf.env.FCFLAGS = ['-ffree-form', '-fopenmp', '-Wall', '-fPIC', '-cpp']
-        conf.env.FCFLAGS += ['-O0', '-g', '-fcheck=all', '-fbacktrace'] if conf.options.debug else ['-O3']
-        conf.env.LIB_OPENMP = ['gomp']
+        conf.env.FCFLAGS = ['-ffree-form', '-Wall', '-fPIC', '-cpp', '-O3']
+        if conf.options.debug:
+            conf.env.FCFLAGS += ['-g', '-fcheck=all', '-fbacktrace']
+        if 'OPENMP' in libraries:
+            conf.env.FCFLAGS_OPENMP = ['-fopenmp']
+            conf.env.LIB_OPENMP = ['gomp']
         conf.env.F2PYFCOMPILER = 'gnu95'
     elif conf.env.FC_NAME == 'IFORT':
-        # '-warn all' removed because of internal compilation error
-        conf.env.FCFLAGS = ['-fpp', '-fPIC', '-free', '-openmp', '-ftz', '-fp-model', 'precise', '-ftrapuv']
-        conf.env.FCFLAGS += ['-debug', '-check', 'all', '-traceback'] if conf.options.debug else ['-fast']
-        conf.env.LIB_OPENMP = ['iomp5']
+        conf.env.FCFLAGS = ['-fpp', '-fPIC', '-free', '-ftz', '-fp-model', 'precise', '-ftrapuv', '-fast', '-warn', 'all']
+        if conf.options.debug:
+            conf.env.FCFLAGS += ['-debug', '-check', 'all', '-traceback']
+        if 'OPENMP' in libraries:
+            conf.env.FCFLAGS_OPENMP = ['-openmp']
+            conf.env.LIB_OPENMP = ['iomp5']
         conf.env.F2PYFCOMPILER = 'intelem'
     conf.env.LIB_LAPACK = ['lapack']
 
@@ -125,7 +130,25 @@ end program test""",
         compile_filename = 'test.f',
         features         = 'fc fcprogram',
         msg              = "Checking for 'fftw3' double precision",
-        use=['FFTW3', 'OPENMP'])
+        use=['FFTW3'])
+
+    fragment = """
+program test
+    integer, parameter :: p = kind(1.d0)
+    integer            :: status
+    real(p)            :: cd(2,2), vr(2), vim(2), junk, work(6)
+    cd = 0
+    call dgeev('N', 'N', 2, cd, 2, vr, vim, junk, 1, junk, 1, work, size(work), status)
+end program test
+"""
+    if conf.options.precision_real == '4':
+        fragment = fragment.replace('kind(1.d0)', 'kind(1.)').replace('dgeev','sgeev')
+    conf.check_cc(
+        fragment         = fragment,
+        compile_filename = 'test.f',
+        features         = 'fc fcprogram',
+        msg              = "Checking for 'lapack'",
+        use=['LAPACK'])
     conf.check_cfg(package='wcslib',  args=['--libs', '--cflags'])
     conf.check_cfg(modversion='wcslib')
     check_wcslib_external(conf.env)
