@@ -370,7 +370,8 @@ subroutine filter_median(data, mask, length, nsamples, nsamples_tot, nslices, nd
 
     use iso_fortran_env,     only : ERROR_UNIT, OUTPUT_UNIT
     use module_preprocessor, only : median_filtering
-    use module_tamasis,      only : p
+    use module_tamasis,      only : p, info_time
+    use module_string,       only : strinteger
     implicit none
 
     !f2py threadsafe
@@ -393,7 +394,7 @@ subroutine filter_median(data, mask, length, nsamples, nsamples_tot, nslices, nd
     integer, intent(out)   :: status
 
     integer :: islice, start
-    integer :: count1, count2, count_rate, count_max
+    integer :: count_start
 
     if (sum(nsamples) /= nsamples_tot) then
         status = 1
@@ -409,15 +410,13 @@ subroutine filter_median(data, mask, length, nsamples, nsamples_tot, nslices, nd
 
     status = 0
 
-    write (OUTPUT_UNIT,'(a,i0,a)', advance='no') 'Info: Median filtering (length=', length, ')... '
-    call system_clock(count1, count_rate, count_max)
+    call system_clock(count_start)
     start = 1
     do islice = 1, nslices
         call median_filtering(data(start:start+nsamples(islice)-1,:), mask(start:start+nsamples(islice)-1,:), length)
         start = start + nsamples(islice)
     end do
-    call system_clock(count2, count_rate, count_max)
-    write (OUTPUT_UNIT,'(f7.2,a)') real(count2-count1)/count_rate, 's'
+    call info_time('Median filtering (length=' // strinteger(length) // ')', count_start)
 
 end subroutine filter_median
 

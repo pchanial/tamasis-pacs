@@ -9,7 +9,7 @@ module module_pacsinstrument
     use module_pointingmatrix,  only : PointingElement, xy2pmatrix, xy2roi, roi2pmatrix
     use module_projection,      only : convex_hull, surface_convex_polygon
     use module_string,          only : strinteger, strlowcase
-    use module_tamasis,         only : tamasis_dir, p, POLICY_KEEP, POLICY_MASK, POLICY_REMOVE
+    use module_tamasis,         only : tamasis_dir, p, POLICY_KEEP, POLICY_MASK, POLICY_REMOVE, info_time
     use module_wcs,             only : init_astrometry, ad2xy_gnomonic, ad2xy_gnomonic_vect, ad2xys_gnomonic, refpix_area
     use omp_lib
     implicit none
@@ -689,15 +689,10 @@ contains
         integer, intent(out)               :: npixels_per_sample
         integer, intent(out)               :: status
 
-        integer :: count1, count2, count_rate, count_max
+        integer :: count_start
         logical :: out
 
-        if (size(pmatrix,1) > 0) then
-            write(*,'(a)', advance='no') 'Info: Computing the projector... '
-        else
-            write(*,'(a)', advance='no') 'Info: Computing the projector size... '
-        end if
-        call system_clock(count1, count_rate, count_max)
+        call system_clock(count_start)
 
         call init_astrometry(header, status=status)
         if (status /= 0) return
@@ -712,8 +707,11 @@ contains
 
         end select
 
-        call system_clock(count2, count_rate, count_max)
-        write(*,'(f7.2,a)') real(count2-count1)/count_rate, 's'
+        if (size(pmatrix,1) > 0) then
+            call info_time('Computing the projector', count_start)
+        else
+            call info_time('Computing the projector size', count_start)
+        end if
 
         if (npixels_per_sample > size(pmatrix,1) .and. size(pmatrix,1) > 0) then
             status = 1
@@ -908,16 +906,13 @@ contains
 
         integer :: dest
         integer :: iobs, nobs
-        integer :: count1, count2, count_rate, count_max
+        integer :: count_start
         logical :: verbose_
 
         verbose_ = .false.
         if (present(verbose)) verbose_ = verbose
 
-        if (verbose_) then
-            write(*,'(a)', advance='no') 'Info: Reading timeline... '
-        end if
-        call system_clock(count1, count_rate, count_max)
+        call system_clock(count_start)
 
         status = 1
         nobs   = obs%nslices
@@ -941,9 +936,8 @@ contains
             dest = dest + obs%slice(iobs)%nvalids
         end do
 
-        call system_clock(count2, count_rate, count_max)
         if (verbose_) then
-            write (*,'(f6.2,a)') real(count2-count1) / count_rate, 's'
+            call info_time('Reading timeline', count_start)
         end if
 
     end subroutine read

@@ -159,17 +159,17 @@ class _Pacs(Observation):
 
         nthreads = tmf.info_nthreads()
         ndetectors = self.get_ndetectors()
-        sp = len('Info: ')*' '
+        sp = len('Info ')*' '
         unit = 'unknown' if self.slice[0].unit == '' else self.slice[0].unit
         if var.mpi_comm.Get_size() > 1:
             mpistr = 'Process '+str(var.mpi_comm.Get_rank()+1) + '/' +       \
-                     str(var.mpi_comm.Get_size()) + ' on node ' +            \
-                     MPI.Get_processor_name() + ', '
+                     str(var.mpi_comm.Get_size()) + ', '
         else:
             mpistr = ''
 
         # print general informations
-        result = '\nInfo: ' + mpistr + plural('core', nthreads) + ' handling '+ plural('detector', ndetectors) + '\n'
+        result = '\nInfo ' + MPI.Get_processor_name() + ': ' + mpistr + plural('core', nthreads) + ' handling ' + \
+                 plural('detector', ndetectors) + '\n'
         result += sp + self.instrument.band.capitalize() + ' band, unit is ' + unit + '\n'
 
         # check if the masks are the same for all the slices
@@ -222,10 +222,10 @@ class _Pacs(Observation):
                 result += sp + '      ' + a + '\n'
                 result += sp + '      ' + d + '\n'
 
-            result += sp + '      Compression: x' + str(slice.compression_factor) + '\n'
-            result += sp + '      In-scan:     ' + _str_policy(p.info == Pointing.INSCAN) + '\n'
-            result += sp + '      Turnaround:  ' + _str_policy(p.info == Pointing.TURNAROUND) + '\n'
-            result += sp + '      Other:       ' + _str_policy(p.info == Pointing.OTHER)
+            result += sp + '     Compression: x' + str(slice.compression_factor) + '\n'
+            result += sp + '     In-scan:     ' + _str_policy(p.info == Pointing.INSCAN) + '\n'
+            result += sp + '     Turnaround:  ' + _str_policy(p.info == Pointing.TURNAROUND) + '\n'
+            result += sp + '     Other:       ' + _str_policy(p.info == Pointing.OTHER)
             if islice + 1 < self.slice.size:
                 result += '\n'
 

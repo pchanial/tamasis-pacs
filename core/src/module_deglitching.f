@@ -2,8 +2,8 @@ module module_deglitching
 
     use module_math,           only : moment, mad, sigma_clipping
     use module_pointingmatrix, only : pointingelement, backprojection_weighted_roi
-    use module_string,         only : strternary
-    use module_tamasis,        only : p
+    use module_string,         only : strinteger, strternary
+    use module_tamasis,        only : p, info_time
     implicit none
     private
 
@@ -36,18 +36,15 @@ contains
         real(p), allocatable :: arrv(:)
         integer, allocatable :: arrt(:)
         logical, allocatable :: isglitch(:)
-        integer              :: count1, count2, count_rate, count_max
+        integer              :: count_start
         integer*8            :: nbads
         logical              :: verbose_
         
         verbose_ = .false.
         if (present(verbose)) verbose_ = verbose
-        if (verbose_) then
-            write (*,'(a,$)') 'Info: Deglitching (' // strternary(use_mad, 'mad','std') // ')...'
-        end if
 
         nbads = count(mask)
-        call system_clock(count1, count_rate, count_max)
+        call system_clock(count_start)
 
         npixels_per_sample = size(pmatrix,1)
         ntimes     = size(pmatrix,2)
@@ -152,9 +149,10 @@ contains
         !$omp end parallel
 
         deallocate (map)
-        call system_clock(count2, count_rate, count_max)
+
         if (verbose_) then
-            write (*,'(f10.2,a,i0,a)') real(count2-count1)/count_rate, 's (number of flagged samples: ', count(mask)-nbads, ')'
+            call info_time('Deglitching (' // strternary(use_mad, 'mad','std') // ')', count_start,                                &
+                           '(number of flagged samples: ' // strinteger(count(mask)-nbads) // ')')
         end if
 
     end subroutine deglitch_l2b
