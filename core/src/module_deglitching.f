@@ -91,7 +91,7 @@ contains
         allocate (isglitch(nhits_max))
 
         ! we loop over each sky pixel
-        !$omp do
+        !$omp do schedule(dynamic, 128)
         do imap = 0, nx*ny-1
 
             i = mod(imap, nx) + 1
