@@ -127,6 +127,13 @@ try:
 except UnitError:
     pass
 
+a = Quantity(1, 'MJy/sr').tounit('uJy/arcsec^2')
+if not numpy.allclose(a, 23.5044305391): raise TestFailure()
+if a.unit != 'uJy / arcsec^2': raise TestFailure()
+a = (Quantity(1, 'MJy/sr')/Quantity(1, 'uJy/arcsec^2')).SI
+if not numpy.allclose(a, 23.5044305391): raise TestFailure()
+if a.unit != '': raise TestFailure()
+
 # test __array_prepare__
 if Quantity(10, 'm') >  Quantity(1,'km')  : testFailure()
 if Quantity(10, 'm') >= Quantity(1,'km')  : testFailure()

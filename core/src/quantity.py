@@ -2,7 +2,7 @@ import numpy
 import re
 from . import var
 
-__all__ = ['Quantity', 'UnitError', 'unit']
+__all__ = ['Quantity', 'UnitError', 'units']
 
 _re_unit = re.compile(r' *([/*])? *([a-zA-Z_]+|\?+)(\^-?[0-9]+(\.[0-9]*)?)? *')
 
@@ -273,8 +273,11 @@ class Quantity(numpy.ndarray):
         argument of highest __array_priority__
         """
 
-        if self is not array:
+        if not isinstance(array, type(self)):
             array = array.view(type(self))
+
+        #XXX derived_units should be obtained from all arguments
+        array.derived_units = self.derived_units
         if context is None or self._unit is None:
             return array
        
@@ -488,27 +491,33 @@ ities of different units may have changed operands to common unit '" + \
         factor = Quantity(1., '')
         for key, val in self._unit.items():
 
-            # check if the unit is SI
-            if key in units_SI:
-                if factor._unit is None:
-                    factor._unit = { key : val }
-                elif key in factor._unit:
-                    factor._unit[key] += val
-                else:
-                    factor._unit[key] = val
-                continue
-            
-            # check if the unit is a derived unit
+            # check if the unit is a local derived unit
             newfactor = _check_du(self, key, val, self.derived_units)
+
+            # check if the unit is a global derived unit
             if newfactor is None:
-                newfactor = _check_du(self, key, val, unit)
+                newfactor = _check_du(self, key, val, units_derived)
                 
-            # the unit is not SI and not derived, we add it to the dictionary
             if newfactor is None:
+                # the unit is not derived, check if the unit is SI
+                if key in units_SI:
+                    if factor._unit is None:
+                        factor._unit = { key : val }
+                    elif key in factor._unit:
+                        factor._unit[key] += val
+                        if factor._unit[key] == 0:
+                            del factor._unit[key]
+                    else:
+                        factor._unit[key] = val
+                    continue
+            
+                # the unit is not derived and not SI, we add it to the dictionary
                 if factor._unit is None:
                     factor._unit = { key : val }
                 elif key in factor._unit:
                     factor._unit[key] += val
+                    if factor._unit[key] == 0:
+                        del factor._unit[key]
                 else:
                     factor._unit[key] = val
                 continue
@@ -557,23 +566,23 @@ ities of different units may have changed operands to common unit '" + \
 
 def _get_du(input, key, d):
     if type(d[key]) is tuple:
-        return d[key][0](input) * Quantity(d[key][1], derived_units=d, copy=False).SI
-    return Quantity(d[key], derived_units=d, copy=False).SI
+        return d[key][0](input) * Quantity(d[key][1], derived_units=d, copy=False)
+    return Quantity(d[key], derived_units=d, copy=False)
 
 def _check_du(input, key, val, derived_units):
     if len(derived_units) == 0:
         return None
     if (key,val) in derived_units:
-        return _get_du(input, (key,val), derived_units)
+        return _get_du(input, (key,val), derived_units).SI
     if (key,-val) in derived_units:
-        return 1. / _get_du(input, (key,-val), derived_units)
+        return (1. / _get_du(input, (key,-val), derived_units)).SI
     if key not in derived_units:
         return None
     if val == 1.:
-        return _get_du(input, key, derived_units)
+        return _get_du(input, key, derived_units).SI
     if val == -1.:
-        return 1. / _get_du(input, key, derived_units)
-    return _get_du(input, key, derived_units)**val
+        return (1. / _get_du(input, key, derived_units)).SI
+    return (_get_du(input, key, derived_units)**val).SI
 
 units_SI = {
     'A'   : Quantity(1., 'A'),
@@ -647,7 +656,7 @@ class Unit(dict):
             if isinstance(k, str):
                 setattr(self, k, v)
 
-unit = Unit()
+units = Unit()
 
 def _wrap_func(func, array, unit, *args):
     result = func(array.magnitude, *args)
