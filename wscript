@@ -288,7 +288,7 @@ def test_python_fun(bld):
 
 def loc(ctx):
     """total number of lines of code"""
-    os.system('find . \( -name ".waf*" -prune -or -name build -prune -or -name .git -prune -or -name include -prune -or -name "wscript" -or -name "*f" -or -name "*f90" -or -name "*py" \) -and -not -type l -and -not -type d | xargs cat | wc -l')
+    os.system('find . \( -name ".waf*" -prune -or -name build -prune -or -name .git -prune -or -name include -prune -or -name "wscript" -or -name "*.f" -or -name "*.f90" -or -name "*py" \) -and -not -type l -and -not -type d | xargs cat | wc -l')
 
 class loc_fortran(Context):
     """number of lines of Fortran code"""
@@ -296,7 +296,7 @@ class loc_fortran(Context):
     fun = 'loc_fortran_fun'
 
 def loc_fortran_fun(ctx):
-    os.system('find . \( -name ".waf*" -prune -or -name build -prune -name .git -prune -or -name include -prune -or -name "*f" -or -name "*f90" \) -and -not -type l -and -not -type d | xargs cat | wc -l')
+    os.system('find . \( -name ".waf*" -prune -or -name build -prune -or -name .git -prune -or -name include -prune -or -name "*.f" -or -name "*.f90" \) -and -not -type l -and -not -type d | xargs cat | wc -l')
 
 class loc_python(Context):
     """number of lines of Python code"""
@@ -304,7 +304,7 @@ class loc_python(Context):
     fun = 'loc_python_fun'
 
 def loc_python_fun(ctx):
-    os.system('find . \( -name ".waf*" -prune -or -name build -prune -name .git -prune -or -name include -prune -or -name "*py" \) -and -not -type l -and -not -type d | xargs cat | wc -l')
+    os.system('find . \( -name ".waf*" -prune -or -name build -prune -or -name .git -prune -or -name include -prune -or -name "*py" \) -and -not -type l -and -not -type d | xargs cat | wc -l')
 
 
 
