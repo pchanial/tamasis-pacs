@@ -1,7 +1,7 @@
 import numpy
 
 from . import var
-from .datatypes import Map, Tod, create_fitsheader
+from .datatypes import FitsArray, Map, Tod, create_fitsheader
 from .numpyutils import _my_isscalar
 from .quantity import Quantity
 
@@ -268,7 +268,7 @@ POINTING_DTYPE = [('time', var.FLOAT_DTYPE), ('ra', var.FLOAT_DTYPE),
                   ('dec', var.FLOAT_DTYPE), ('pa', var.FLOAT_DTYPE),
                   ('info', numpy.int64), ('masked', numpy.bool8), ('removed', numpy.bool8)]
 
-class Pointing(numpy.recarray):
+class Pointing(FitsArray, numpy.recarray):
     INSCAN     = 1
     TURNAROUND = 2
     OTHER      = 3
@@ -315,6 +315,7 @@ class Pointing(numpy.recarray):
         result.removed = removed
         result = result.view(cls)
         result.nsamples = nsamples
+        result.header = create_fitsheader(None, naxis=result.size)
         return result
 
     @property
