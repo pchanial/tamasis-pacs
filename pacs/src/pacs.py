@@ -92,7 +92,7 @@ class _Pacs(Observation):
         if npixels_per_sample == 0:
             return self.get_pointing_matrix(header, resolution, new_npixels_per_sample, method, oversampling)
 
-        return pmatrix, header, ndetectors, nsamples, npixels_per_sample, ('?/detector', '?/pixel'), self.get_derived_units()
+        return pmatrix, header, ndetectors, nsamples, npixels_per_sample, ('/detector', '/pixel'), self.get_derived_units()
 
     def get_filter_uncorrelated(self):
         """

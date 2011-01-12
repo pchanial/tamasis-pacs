@@ -204,7 +204,7 @@ class AcquisitionModel(object):
         input = numpy.asanyarray(input, _get_dtype(self.dtype, input.dtype))
         if self.types[1] is not None and not isinstance(input, self.types[1]):
             input = input.view(self.types[1])
-        compatible = _validate_input_unit(input, self.units[1])
+        _validate_input_unit(input, self.units[1])
 
         # store input for the transpose's output
         if reusein:
@@ -231,7 +231,7 @@ class AcquisitionModel(object):
             if not reuseout:
                 self._output_direct = None
         _propagate_attributes(input, output)
-        _validate_output_unit(input, output, compatible, self.units[1], self.units[0], self.derived_units[0])
+        _validate_output_unit(input, output, self.units[1], self.units[0], self.derived_units[0])
 
         return input, output
         
@@ -245,7 +245,7 @@ class AcquisitionModel(object):
         input = numpy.asanyarray(input, _get_dtype(self.dtype, input.dtype))
         if self.types[0] is not None and not isinstance(input, self.types[0]):
             input = input.view(self.types[0])
-        compatible = _validate_input_unit(input, self.units[0])
+        _validate_input_unit(input, self.units[0])
 
         # store input for the direct's output
         if reusein:
@@ -272,7 +272,7 @@ class AcquisitionModel(object):
             if not reuseout:
                 self._output_transpose = None
         _propagate_attributes(input, output)
-        _validate_output_unit(input, output, compatible, self.units[0], self.units[1], self.derived_units[1])
+        _validate_output_unit(input, output, self.units[0], self.units[1], self.derived_units[1])
 
         return input, output
 
@@ -1370,28 +1370,26 @@ def _smart_reshape(input, shape):
 
 
 def _validate_input_unit(input, expected):
-    if expected is None:
-        return True
-    if input._unit is None:
-        input._unit = expected
-        return True
+    if expected is None or input._unit is None:
+        return
     for u,v in expected.items():
         if u not in input._unit or input._unit[u] != v:
-            return False
+            raise ValidationError("The input unit '" + input.unit + "' is incompatible with the required unit '" + \
+                                  Quantity(1, expected).unit + "'.")
     return True
 
 
 #-------------------------------------------------------------------------------
 
 
-def _validate_output_unit(input, output, compatible, unitin, unitout, duout):
+def _validate_output_unit(input, output, unitin, unitout, duout):
     if not hasattr(output, '_unit'):
         return
     if hasattr(input, '_unit'):
-        output._unit = input._unit
+        output._unit = input._unit or unitin
         duout = duout or input.derived_units
     output.derived_units = duout
-    if unitout is None or not compatible:
+    if unitout is None:
         return
     if output._unit is None:
         output._unit = unitout

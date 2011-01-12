@@ -70,6 +70,7 @@ print(model)
 
 # naive map
 tod.unit = 'Jy/arcsec^2'
+tod.unit = ''
 tod.mask[:] = 0
 backmap = model.T(tod)
 unity = Tod.ones(tod.shape, nsamples=tod.nsamples)

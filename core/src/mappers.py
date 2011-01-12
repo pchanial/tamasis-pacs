@@ -30,11 +30,18 @@ def mapper_naive(tod, model, unit=None):
     else:
         copy = True
 
+    # model.T expects a quantity / detector, we hide our units to 
+    # prevent a unit validation execption
+    tod_unit = tod._unit
+    tod.unit = ''
+
     model = model * AllReduce().T
     if tod.mask is not None:
         model = Masking(tod.mask) * model
 
     mymap = model.T(tod)
+    mymap._unit = tod_unit
+
     unity = Tod(tod, copy=copy)
     unity[:] = 1.
     map_weights = model.T(unity, reusein=True)
