@@ -549,7 +549,7 @@ class Tod(FitsArray):
             if 'nsamples' in result.header:
                 nsamples = result.header['nsamples'][1:-1].replace(' ', '')
                 if len(nsamples) > 0:
-                    nsamples = [int(float(x)) for x in nsamples.split(',')]
+                    nsamples = [int(float(x)) for x in nsamples.split(',') if x.strip() != '']
         if nsamples is None:
             return result
         shape = validate_sliced_shape(result.shape, nsamples)
@@ -763,8 +763,11 @@ def create_fitsheader(array, extname=None, crval=(0.,0.), crpix=None, ctype=('RA
             typename = None
         else:
             typename = array.dtype.name
-    
+
+    if type(naxis) not in (list, tuple):
+        naxis = (naxis,)
     numaxis = len(naxis)
+
     if extname is None:
         card = pyfits.createCard('simple', True)
     else:
