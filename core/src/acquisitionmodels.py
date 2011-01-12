@@ -421,8 +421,9 @@ class AcquisitionModelTranspose(AcquisitionModel):
 
 class Addition(AcquisitionModel):
     """
-    This class adds two AcquisitionModel together.
+    Class for acquisition models addition
     """
+
     def __init__(self, models, description=None):
         AcquisitionModel.__init__(self, description)
         if len(models) == 0:
@@ -510,7 +511,8 @@ class Addition(AcquisitionModel):
 
 
 class Composition(AcquisitionModel):
-    """ This class represents the composition of AcquisitionModel instances."""
+    """Class for acquisition models composition"""
+
     def __init__(self, models, description=None):
         AcquisitionModel.__init__(self, description)
         if len(models) == 0:
@@ -585,8 +587,8 @@ class SquareBase(AcquisitionModel):
     Square operator
     
     The input and output must have the same number of elements.
-    This operator does not implement the cache mechanism, but operation on the input
-    can be done inplace or on a copy.
+    This operator does not implement the cache mechanism, but operation on
+    the input can be done inplace or on a copy.
     """
 
     def validate_input_direct(self, input, inplace):
@@ -638,8 +640,8 @@ class Square(SquareBase):
     Square operator
     
     The input and output must have the same shape
-    This operator does not implement the cache mechanism, but operation on the input
-    can be done inplace or on a copy.
+    This operator does not implement the cache mechanism, but operation on
+    the input can be done inplace or on a copy.
     """
 
     @property
@@ -692,6 +694,7 @@ class Symmetric(Square):
 
 class Diagonal(Symmetric):
     """Diagonal operator"""
+
     def __init__(self, diagonal, nsamples=None, description=None):
         AcquisitionModel.__init__(self, description)
         self.diagonal = numpy.asarray(diagonal, dtype=var.get_default_dtype(diagonal))
@@ -713,6 +716,7 @@ class Diagonal(Symmetric):
 
 class DiscreteDifference(AcquisitionModel):
     """Calculate the nth order discrete difference along given axis."""
+
     def __init__(self, n=1, axis=0, description=None):
         AcquisitionModel.__init__(self, description)
         if n != 1:
@@ -766,8 +770,8 @@ class Projection(AcquisitionModel):
         - pmatrix: transparent view of the pointing matrix
         - _pmatrix: opaque representation of the pointing matrix
         - npixels_per_sample: maximum number of sky map pixels that can be intercepted by a detector
-    Author: P. Chanial
     """
+
     def __init__(self, observation, method=None, header=None, resolution=None, npixels_per_sample=0, oversampling=True, description=None):
         self._pmatrix, self.header, ndetectors, nsamples, self.npixels_per_sample, units, derived_units = \
             observation.get_pointing_matrix(header, resolution, npixels_per_sample, method=method, oversampling=oversampling)
@@ -805,8 +809,8 @@ class Projection(AcquisitionModel):
 class Compression(AcquisitionModel):
     """
     Abstract class for compressing the input signal.
-    Author: P. Chanial
     """
+
     def __init__(self, compression_factor, description):
         AcquisitionModel.__init__(self, description, types=Tod)
         if hasattr(compression_factor, 'compression_factor'):
@@ -864,8 +868,8 @@ class Compression(AcquisitionModel):
 class CompressionAverage(Compression):
     """
     Compress the input signal by averaging blocks of specified size.
-    Author: P. Chanial
     """
+
     def __init__(self, compression_factor, description=None):
         Compression.__init__(self, compression_factor, description)
 
@@ -885,8 +889,8 @@ class CompressionAverage(Compression):
 class DownSampling(Compression):
     """
     Downsample the input signal by picking up one sample out of a number specified by the compression factor
-    Author: P. Chanial
     """
+
     def __init__(self, compression_factor, description=None):
         Compression.__init__(self, compression_factor, description)
 
@@ -906,6 +910,7 @@ class Identity(Symmetric):
     """
     Identity class.
     """
+
     def __init__(self, description=None):
         AcquisitionModel.__init__(self, description)
 
@@ -918,8 +923,9 @@ class Identity(Symmetric):
 
 class Scalar(Diagonal):
     """
-    This class represents a scalar operator.
+    Class for scalar multiplication
     """
+
     def __init__(self, value, description=None):
         if not numpy.iscomplex(value):
             value = numpy.real(value)
@@ -934,10 +940,11 @@ class Scalar(Diagonal):
 
 class Masking(Symmetric):
     """
-    Apply a mask.
+    Class for mask application
     Applying a boolean (or int8) mask sets to zero values whose mask is
     True (non-null). Otherwise, the input is multiplied by the mask.
     """
+
     def __init__(self, mask, description=None):
         AcquisitionModel.__init__(self, description)
         if mask is None:
@@ -987,8 +994,8 @@ class Masking(Symmetric):
 class Unpacking(AcquisitionModel):
     """
     Convert 1d map into 2d map, under the control of a mask (true means non-observed)
-    Author: P. Chanial
     """
+
     def __init__(self, mask, field=0., description=None):
         AcquisitionModel.__init__(self, description)
         self.mask = numpy.array(mask, numpy.bool8, copy=False)
@@ -1010,35 +1017,11 @@ class Unpacking(AcquisitionModel):
 #-------------------------------------------------------------------------------
 
 
-class Unpacking2(AcquisitionModel):
-    """
-    Convert 1d map into 2d map, under the control of a mask (true means non-observed)
-    Author: P. Chanial
-    """
-    def __init__(self, mask, field=0., description=None):
-        AcquisitionModel.__init__(self, description)
-        self.mask = numpy.array(mask, numpy.bool8, copy=False)
-        self.field = field
-        self.shapein  = (numpy.sum(self.mask),)
-        self.shapeout = tuple(self.mask.shape)
-
-    def direct(self, input, reusein=False, reuseout=False):
-        output = numpy.zeros(self.shapeout) + self.field
-        output[self.mask] = input
-        return output
-
-    def transpose(self, input, reusein=False, reuseout=False):
-        return input[self.mask]
-
-
-#-------------------------------------------------------------------------------
-
-
 class Reshaping(SquareBase):
     """
     Reshape arrays
-    Author: P. Chanial
     """
+
     def __init__(self, shapein, shapeout, description=None):
         AcquisitionModel.__init__(self, description)
         self.shapein  = shapein
@@ -1066,6 +1049,7 @@ class Reshaping(SquareBase):
 
 class Padding(AcquisitionModel):
     "Pads before and after a Tod."
+
     def __init__(self, left=0, right=0, value=0., description=None):
         AcquisitionModel.__init__(self, description, types=Tod)
         left = numpy.array(left, ndmin=1, dtype=int)
@@ -1167,6 +1151,7 @@ class Fft(Square):
     """
     Performs complex fft
     """
+
     def __init__(self, shape, axes=None, flags=['estimate'], description=None):
         AcquisitionModel.__init__(self, description)
         if fftw3.planning.lib_threads is None:
@@ -1200,6 +1185,7 @@ class FftHalfComplex(Square):
     """
     Performs real-to-half-complex fft
     """
+
     def __init__(self, nsamples, description=None):
         AcquisitionModel.__init__(self, description, types=Tod)
         self.nsamples_array = numpy.array(nsamples, ndmin=1, dtype='int64')
@@ -1262,6 +1248,7 @@ class InvNtt(Diagonal):
 
 
 class InterpolationLinear(Square):
+
     def __init__(self, mask, description=None):
         Square.__init__(self, description)
         self.mask = mask
@@ -1278,12 +1265,12 @@ class InterpolationLinear(Square):
 class AllReduce(Square):
 
     def direct(self, input, reusein=False, reuseout=False, op=MPI.SUM):
-        input = self.validate_input(input, reusein and reuseout)
-        input[:] = var.mpi_comm.allreduce(input, op=MPI.SUM)
-        return input
+        output = self.validate_input(input, reusein and reuseout)
+        output[:] = var.mpi_comm.allreduce(output, op=MPI.SUM)
+        return output
     def transpose(self, input, reusein=False, reuseout=False):
-        input = self.validate_input(input, reusein and reuseout)
-        return input
+        output = self.validate_input(input, reusein and reuseout)
+        return output
 
 
 #-------------------------------------------------------------------------------
