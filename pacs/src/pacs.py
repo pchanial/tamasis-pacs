@@ -273,7 +273,7 @@ class PacsObservation(_Pacs):
     Class which encapsulates handy information about the PACS instrument and 
     the observations to be processed.
     """
-    def __init__(self, filename, fine_sampling_factor=1, detector_mask='calibration', reject_bad_line=False, policy_inscan='keep', policy_turnaround='keep', policy_other='remove', policy_invalid='mask'):
+    def __init__(self, filename, fine_sampling_factor=1, detector_mask='calibration', reject_bad_line=False, policy_inscan='keep', policy_turnaround='keep', policy_other='remove', policy_invalid='mask', active_fraction=0):
         """
         Parameters
         ----------
@@ -301,6 +301,8 @@ class PacsObservation(_Pacs):
               This sets the policy for the other frames
         policy_invalid: 'keep', 'mask' or 'remove'
               This sets the policy for the invalid frames
+        active_fraction: ratio of the geometric and reference detector area
+              If set to 0, the value from the calibration file will be used
 
         Returns
         -------
@@ -349,7 +351,7 @@ class PacsObservation(_Pacs):
 
         # store instrument information
         detector_center, detector_corner, detector_area, distortion_yz, oflat, dflat, responsivity, active_fraction, status = \
-            tmf.pacs_info_instrument(band, numpy.asfortranarray(detector_mask, numpy.int8))
+            tmf.pacs_info_instrument(band, numpy.asfortranarray(detector_mask, numpy.int8), float(active_fraction))
         if status != 0: raise RuntimeError()
 
         self.instrument = Instrument('PACS/' + band.capitalize(), detector_mask)
@@ -563,7 +565,7 @@ class PacsSimulation(_Pacs):
     """
     This class creates a simulated PACS observation.
     """
-    def __init__(self, pointing, band, mode='prime', fine_sampling_factor=1, detector_mask='calibration', reject_bad_line=False, policy_inscan='keep', policy_turnaround='keep', policy_other='remove', policy_invalid='mask'):
+    def __init__(self, pointing, band, mode='prime', fine_sampling_factor=1, detector_mask='calibration', reject_bad_line=False, policy_inscan='keep', policy_turnaround='keep', policy_other='remove', policy_invalid='mask', active_fraction=0):
         band = band.lower()
         if band not in ('blue', 'green', 'red'):
             raise ValueError("Band is not 'blue', 'green', nor 'red'.")
@@ -587,7 +589,7 @@ class PacsSimulation(_Pacs):
                                 policy_turnaround == 'remove' and self.pointing.info == Pointing.TURNAROUND
 
         # store instrument information
-        detector_center, detector_corner, detector_area, distortion_yz, oflat, dflat, responsivity, active_fraction, status = tmf.pacs_info_instrument(band, numpy.asfortranarray(detector_mask, numpy.int8))
+        detector_center, detector_corner, detector_area, distortion_yz, oflat, dflat, responsivity, active_fraction, status = tmf.pacs_info_instrument(band, numpy.asfortranarray(detector_mask, numpy.int8), float(active_fraction))
         if status != 0: raise RuntimeError()
         self.instrument = Instrument('PACS/'+band.capitalize(),detector_mask)
         self.instrument.active_fraction = active_fraction

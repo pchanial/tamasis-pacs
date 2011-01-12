@@ -114,6 +114,8 @@ contains
         real(p)              :: distortion_yz(NDIMS,DISTORTION_DEGREE,DISTORTION_DEGREE,DISTORTION_DEGREE)
         real(p)              :: responsivity, active_fraction
 
+        active_fraction = 0
+
         call this%read_calibration_files(band, detector_mask, detector_center_all, detector_corner_all, detector_area_all,         &
                                          flatfield_optical_all, flatfield_detector_all, distortion_yz, responsivity,               &
                                          active_fraction, status)
@@ -363,7 +365,7 @@ contains
         real(p), intent(out), allocatable :: flatfield_detector_all(:,:)
         real(p), intent(out)              :: distortion_yz(NDIMS,DISTORTION_DEGREE,DISTORTION_DEGREE,DISTORTION_DEGREE)
         real(p), intent(out)              :: responsivity
-        real(p), intent(out)              :: active_fraction
+        real(p), intent(inout)            :: active_fraction
         integer, intent(out)              :: status
 
         
@@ -372,13 +374,14 @@ contains
         integer, parameter   :: HDU_RESPONSIVITY(3) = [6, 4, 2]                                     ! v5
         integer, parameter   :: HDU_CORNER(4,2)     = reshape([7, 11, 15, 19, 5, 9, 13, 17], [4,2]) ! v5
 
-        integer              :: iband, ichannel, ip, iq, ivertex, ncolumns, nrows, unit
+        integer              :: iband, ichannel, ip, iq, iv, ncolumns, nrows, unit
         character(len=4)     :: channel
         real(p), allocatable :: tmp1(:)
         real(p), allocatable :: tmp2(:,:)
         real(p), allocatable :: tmp3(:,:,:)
         real(p), allocatable :: flatfield_total_all(:,:)
         real(p)              :: center(2,2)
+        real(p)              :: calib_active_fraction, coef
 
         status = 1
 
@@ -424,20 +427,21 @@ contains
         detector_center_all(2,:,:) = transpose(tmp2)
 
         ! UV corners
-        do ivertex=1, NVERTICES
-            call ft_read_image(get_calfile(FILENAME_SAA) // '+' // strinteger(HDU_CORNER(ivertex,ichannel)), tmp2, status)
+        do iv=1, NVERTICES
+            call ft_read_image(get_calfile(FILENAME_SAA) // '+' // strinteger(HDU_CORNER(iv,ichannel)), tmp2, status)
             if (status /= 0) return
-            detector_corner_all(1,ivertex,:,:) = transpose(tmp2)
-            call ft_read_image(get_calfile(FILENAME_SAA) // '+' // strinteger(HDU_CORNER(ivertex,ichannel)+1), tmp2, status)
+            detector_corner_all(1,iv,:,:) = transpose(tmp2)
+            call ft_read_image(get_calfile(FILENAME_SAA) // '+' // strinteger(HDU_CORNER(iv,ichannel)+1), tmp2, status)
             if (status /= 0) return
-            detector_corner_all(2,ivertex,:,:) = transpose(tmp2)
+            detector_corner_all(2,iv,:,:) = transpose(tmp2)
+            
         end do
 
         ! active fraction
         call ft_open(get_calfile(FILENAME_SAA), unit, status)
         if (status /= 0) return
 
-        call ft_read_keyword_hcss(unit, 'activeFraction', active_fraction, status=status)
+        call ft_read_keyword_hcss(unit, 'activeFraction', calib_active_fraction, status=status)
         if (status /= 0) return
 
         call ft_close(unit, status)
@@ -460,6 +464,21 @@ contains
         call ft_read_image(get_calfile(FILENAME_RES) // '+' // strinteger(HDU_RESPONSIVITY(iband)), tmp1, status)
         if (status /= 0) return
         responsivity = tmp1(1)
+
+        ! modify detector size if active_fraction is not set to zero
+        if (active_fraction /= 0) then
+            coef = sqrt(active_fraction/calib_active_fraction)
+            do ip = 1, nrows
+                do iq = 1, ncolumns
+                    do iv = 1, NVERTICES
+                        detector_corner_all(:,iv,ip,iq) = (detector_corner_all(:,iv,ip,iq) - detector_center_all(:,ip,iq)) *       &
+                                                           coef + detector_center_all(:,ip,iq)
+                    end do
+                end do
+            end do
+        else
+            active_fraction = calib_active_fraction
+        end if
 
         ! detector area
         do ip = 1, nrows

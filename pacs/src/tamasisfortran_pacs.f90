@@ -247,8 +247,9 @@ end subroutine pacs_info_detector_mask
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine pacs_info_instrument(band, detector_mask, nrows, ncolumns, detector_center, detector_corner, detector_area,             &
-                                distortion_yz, flatfield_optical, flatfield_detector, responsivity, active_fraction, status)
+subroutine pacs_info_instrument(band, detector_mask, nrows, ncolumns, input_active_fraction, detector_center, detector_corner,     &
+                                detector_area, distortion_yz, flatfield_optical, flatfield_detector, responsivity,                 &
+                                output_active_fraction, status)
 
     use module_pacsinstrument, only : read_calibration_files
     use module_tamasis,        only : p
@@ -259,6 +260,7 @@ subroutine pacs_info_instrument(band, detector_mask, nrows, ncolumns, detector_c
     !f2py intent(in)             :: detector_mask
     !f2py intent(hide)           :: nrows = shape(detector_mask,0)
     !f2py intent(hide)           :: ncolumns = shape(detector_mask,1)
+    !f2py intent(in)             :: input_active_fraction
     !f2py intent(out)            :: detector_center
     !f2py intent(out)            :: detector_corner
     !f2py intent(out)            :: detector_area
@@ -266,20 +268,21 @@ subroutine pacs_info_instrument(band, detector_mask, nrows, ncolumns, detector_c
     !f2py intent(out)            :: flatfield_optical
     !f2py intent(out)            :: flatfield_detector
     !f2py intent(out)            :: responsivity
-    !f2py intent(out)            :: active_fraction
+    !f2py intent(out)            :: output_active_fraction
     !f2py intent(out)            :: status
 
     character(len=*), intent(in) :: band
     logical*1, intent(in)        :: detector_mask(nrows,ncolumns)
     integer, intent(in)          :: nrows, ncolumns
-    real(p), intent(out)         :: responsivity
-    real(p), intent(out)         :: active_fraction
+    real(p), intent(in)          :: input_active_fraction
     real(p), intent(out)         :: detector_center(2,nrows,ncolumns)
     real(p), intent(out)         :: detector_corner(2,4,nrows,ncolumns)
     real(p), intent(out)         :: detector_area(nrows,ncolumns)
     real(p), intent(out)         :: distortion_yz(2,3,3,3)
     real(p), intent(out)         :: flatfield_optical(nrows,ncolumns)
     real(p), intent(out)         :: flatfield_detector(nrows,ncolumns)
+    real(p), intent(out)         :: responsivity
+    real(p), intent(out)         :: output_active_fraction
     integer, intent(out)         :: status
 
     real(p), allocatable :: detector_center_all(:,:,:)
@@ -289,8 +292,10 @@ subroutine pacs_info_instrument(band, detector_mask, nrows, ncolumns, detector_c
     real(p), allocatable :: flatfield_detector_all(:,:)
 
     ! read calibration files
+    output_active_fraction = input_active_fraction
     call read_calibration_files(band, detector_mask, detector_center_all, detector_corner_all, detector_area_all,                  &
-                                flatfield_optical_all, flatfield_detector_all, distortion_yz, responsivity, active_fraction, status)
+                                flatfield_optical_all, flatfield_detector_all, distortion_yz, responsivity, output_active_fraction,&
+                                status)
     if (status /= 0) return
 
     ! copy the allocatable arrays
