@@ -139,20 +139,19 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None, tol=
             print('Warning: mapper_rls: maxiter != niter...')
 
     output = Map(C.unpacking(solution))
-    if output.header is None:
-        output.header = create_fitsheader(solution)
+    map_naive = mapper_naive(tod, model)
+
+    output.header = map_naive.header
+    output.coverage = map_naive.coverage
 
     output.header.update('time', time.time() - time0)
 
     if hasattr(callback, 'niterations'):
         output.header.update('niter', callback.niterations)
-    output.header.update('nitermax', maxiter)
+    output.header.update('maxiter', maxiter)
     if hasattr(callback, 'residual'):
         output.header.update('residual', callback.residual)
     output.header.update('tol', tol)
     output.header.update('solver', solver.__name__)
-
-    map_naive = mapper_naive(tod, model)
-    output.coverage = map_naive.coverage
 
     return output
