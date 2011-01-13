@@ -1,5 +1,5 @@
 import numpy
-from tamasis.numpyutils import any_neq
+from tamasis.numpyutils import *
 
 class TestFailure(Exception):
     pass
@@ -17,3 +17,4 @@ if any_neq(NaN, NaN): raise TestFailure()
 if any_neq([NaN], [NaN]): raise TestFailure()
 if any_neq([NaN,1], [NaN,1]): raise TestFailure()
 if not any_neq([NaN,1,NaN], [NaN,1,3]): raise TestFailure()
+if any_neq(minmax([NaN, 1., 4., NaN, 10.]), [1., 10.]): raise TestFailure()

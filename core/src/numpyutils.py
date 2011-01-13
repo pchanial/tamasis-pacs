@@ -2,7 +2,7 @@ import numpy
 
 numpy.seterr(all='ignore')
 
-__all__ = [ 'any_neq' ]
+__all__ = [ 'any_neq', 'minmax' ]
 
 def any_neq(a, b, rtol=None, atol=0.):
     """
@@ -30,6 +30,15 @@ def any_neq(a, b, rtol=None, atol=0.):
         return result
     else:
         return numpy.any(result[~mask])
+
+
+#-------------------------------------------------------------------------------
+
+
+def minmax(v):
+    """Returns min and max values of an array, discarding NaN values."""
+    v = numpy.asanyarray(v)
+    return numpy.array((numpy.nanmin(v), numpy.nanmax(v)))
 
 
 #-------------------------------------------------------------------------------
