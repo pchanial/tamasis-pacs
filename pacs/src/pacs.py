@@ -12,19 +12,22 @@ from mpi4py import MPI
 from tamasis.core import *
 from tamasis.observations import Observation, Instrument, FlatField, create_scan
 
-__all__ = [ 'PacsObservation', 'PacsSimulation', 'pacs_create_scan', 'pacs_plot_scan', 'pacs_preprocess' ]
+__all__ = [ 'PacsObservation',
+            'PacsSimulation',
+            'pacs_create_scan',
+            'pacs_plot_scan',
+            'pacs_preprocess' ]
 
-DEFAULT_RESOLUTION = {'blue':3.2, 'green':3.2, 'red':6.4}
+class PacsBase(Observation):
 
-PACS_POINTING_DTYPE = [('time', var.FLOAT_DTYPE), ('ra', var.FLOAT_DTYPE),
-                       ('dec', var.FLOAT_DTYPE), ('pa', var.FLOAT_DTYPE),
-                       ('chop', var.FLOAT_DTYPE), ('info', numpy.int64), ('masked', numpy.bool8),
-                       ('removed', numpy.bool8)]
+    ACCELERATION = 4.
+    DEFAULT_RESOLUTION = {'blue':3.2, 'green':3.2, 'red':6.4}
+    POINTING_DTYPE = [('time', var.FLOAT_DTYPE), ('ra', var.FLOAT_DTYPE),
+                      ('dec', var.FLOAT_DTYPE), ('pa', var.FLOAT_DTYPE),
+                      ('chop', var.FLOAT_DTYPE), ('info', numpy.int64),
+                      ('masked', numpy.bool8), ('removed', numpy.bool8)]
+    SAMPLING = 0.024996
 
-PACS_ACCELERATION = 4.
-PACS_SAMPLING = 0.024996
-
-class _Pacs(Observation):
 
     def get_derived_units(self):
         volt = Quantity(1./self.instrument.responsivity, 'Jy')
@@ -42,7 +45,7 @@ class _Pacs(Observation):
         if var.mpi_comm.Get_size() > 1:
             raise NotImplementedError('The common map header should be specified if more than one job is running.')
         if resolution is None:
-            resolution = DEFAULT_RESOLUTION[self.instrument.band]
+            resolution = self.DEFAULT_RESOLUTION[self.instrument.band]
 
         header, status = tmf.pacs_map_header(self.instrument.band,
                                              numpy.ascontiguousarray(self.slice.nsamples_all, dtype='int32'),
@@ -294,7 +297,7 @@ class _Pacs(Observation):
 #-------------------------------------------------------------------------------
 
 
-class PacsObservation(_Pacs):
+class PacsObservation(PacsBase):
     """
     Class which encapsulates handy information about the PACS instrument and 
     the observations to be processed.
@@ -435,7 +438,7 @@ class PacsObservation(_Pacs):
         self.slice.mask_activated = mask_activated[:,0:nmasks_max]
         
         # store pointing information
-        self.pointing = Pointing(frame_time, frame_ra, frame_dec, frame_pa, frame_info, frame_masked, frame_removed, nsamples=self.slice.nsamples_all, dtype=PACS_POINTING_DTYPE)
+        self.pointing = Pointing(frame_time, frame_ra, frame_dec, frame_pa, frame_info, frame_masked, frame_removed, nsamples=self.slice.nsamples_all, dtype=self.POINTING_DTYPE)
         self.pointing.chop = frame_chop
 
         # store frame policy
@@ -561,7 +564,7 @@ class PacsObservation(_Pacs):
 #-------------------------------------------------------------------------------
 
 
-class PacsSimulation(_Pacs):
+class PacsSimulation(PacsBase):
     """
     This class creates a simulated PACS observation.
     """
@@ -796,9 +799,9 @@ def pacs_create_scan(ra0, dec0, cam_angle=0., scan_angle=0., scan_length=30., sc
                      compression_factor=4):
     if int(compression_factor) not in (1, 4, 8):
         raise ValueError("Input compression_factor must be 1, 4 or 8.")
-    scan = create_scan(ra0, dec0, PACS_ACCELERATION, PACS_SAMPLING * compression_factor, scan_angle=scan_angle,
+    scan = create_scan(ra0, dec0, PacsBase.ACCELERATION, PacsBase.SAMPLING * compression_factor, scan_angle=scan_angle,
                        scan_length=scan_length, scan_nlegs=scan_nlegs, scan_step=scan_step, scan_speed=scan_speed,
-                       dtype=PACS_POINTING_DTYPE)
+                       dtype=PacsBase.POINTING_DTYPE)
     scan.header.update('HIERARCH cam_angle', cam_angle)
     scan.chop = 0.
     return scan
