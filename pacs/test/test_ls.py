@@ -29,7 +29,7 @@ unpacking = Unpacking(map_mask)
 old_settings = numpy.seterr(divide='ignore')
 M = unpacking.T(1./map_naive.coverage)
 numpy.seterr(**old_settings)
-map_iter1 = unpacking(mapper_ls(tod, model * unpacking, tol=1.e-4, M=M))
+map_iter1 = mapper_ls(tod, model * unpacking, tol=1.e-4, M=M)
 if map_iter1.header['NITER'] > 11:
     raise TestFailure()
 

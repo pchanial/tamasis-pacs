@@ -875,11 +875,9 @@ class CompressionAverage(Compression):
 
     def compression_direct(self, input, output, compression_factor):
         tmf.compression_average_direct(input.T, output.T, numpy.resize(compression_factor, [len(input.nsamples)]))
-        output.mask = None
         
     def compression_transpose(self, input, output, compression_factor):
         tmf.compression_average_transpose(input.T, output.T, numpy.resize(compression_factor, [len(input.nsamples)]))
-        output.mask = None
         
         
 
@@ -896,11 +894,9 @@ class DownSampling(Compression):
 
     def compression_direct(self, input, output, compression_factor):
         tmf.downsampling_direct(input.T, output.T, numpy.resize(compression_factor, [len(input.nsamples)]))
-        output.mask = None
         
     def compression_transpose(self, input, output, compression_factor):
         tmf.downsampling_transpose(input.T, output.T, numpy.resize(compression_factor, [len(input.nsamples)]))
-        output.mask = None
       
 
 #-------------------------------------------------------------------------------
@@ -1074,7 +1070,7 @@ class Padding(AcquisitionModel):
             left = self.left[islice if len(self.left) > 1 else 0]
             output[...,dest_padded:dest_padded+left] = self.value
             output[...,dest_padded+left:dest_padded+left+nsamples] = input[...,dest:dest+nsamples]
-            output[...,dest_padded+left+nsamples:] = self.value
+            output[...,dest_padded+left+nsamples:dest_padded+output.nsamples[islice]] = self.value
             dest += nsamples
             dest_padded += output.nsamples[islice]
         return output
@@ -1331,10 +1327,20 @@ def _is_scientific_dtype(dtype):
 
 
 def _propagate_attributes(input, output):
+    """Copy over attributes"""
+    # get common base class
     cls = input.__class__
     while not issubclass(type(output), cls):
         cls = cls.__base__
-    while cls != numpy.ndarray:
+    # if the arguments do not have the same shape, only copy the units
+    if input.shape != output.shape:
+        if cls == numpy.ndarray:
+            return
+        output._unit = input._unit
+        output.derived_units = output.derived_units
+        return
+    # copy over slots
+    while cls != numpy.ndarray:            
         for a in input.view(cls).__slots__:
             setattr(output, a, getattr(input, a))
         cls = cls.__base__

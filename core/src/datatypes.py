@@ -616,7 +616,7 @@ class Tod(FitsArray):
         if not isinstance(item, Tod):
             return item
         if item.mask is not None:
-            item.mask = item.mask[key]
+            item.mask = self.mask[key]
         if not isinstance(key, tuple):
             return item
         if len(key) > 1:
