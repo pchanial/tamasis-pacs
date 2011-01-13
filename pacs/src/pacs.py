@@ -38,6 +38,32 @@ class _Pacs(Observation):
             }
             )
 
+    def get_map_header(self, resolution=None, oversampling=True):
+        if var.mpi_comm.Get_size() > 1:
+            raise NotImplementedError('The common map header should be specified if more than one job is running.')
+        if resolution is None:
+            resolution = DEFAULT_RESOLUTION[self.instrument.band]
+
+        header, status = tmf.pacs_map_header(self.instrument.band,
+                                             numpy.ascontiguousarray(self.slice.nsamples_all, dtype='int32'),
+                                             numpy.ascontiguousarray(self.slice.compression_factor, dtype='int32'),
+                                             self.instrument.fine_sampling_factor,
+                                             oversampling,
+                                             numpy.ascontiguousarray(self.pointing.time),
+                                             numpy.ascontiguousarray(self.pointing.ra),
+                                             numpy.ascontiguousarray(self.pointing.dec),
+                                             numpy.ascontiguousarray(self.pointing.pa),
+                                             numpy.ascontiguousarray(self.pointing.chop),
+                                             numpy.ascontiguousarray(self.pointing.masked, numpy.int8),
+                                             numpy.ascontiguousarray(self.pointing.removed,numpy.int8),
+                                             numpy.asfortranarray(self.instrument.detector_mask, numpy.int8),
+                                             self.instrument.detector_corner.base.base.swapaxes(0,1).copy().T,
+                                             self.instrument.distortion_yz.base.base.T,
+                                             resolution)
+        if status != 0: raise RuntimeError()
+        header = _str2fitsheader(header)
+        return header
+   
     def get_pointing_matrix(self, header, resolution, npixels_per_sample=0, method=None, oversampling=True):
         if method is None:
             method = 'sharp'
@@ -495,32 +521,6 @@ class PacsObservation(_Pacs):
             tod.unit = unit
         return tod
 
-    def get_map_header(self, resolution=None, oversampling=True):
-        if var.mpi_comm.Get_size() > 1:
-            raise NotImplementedError('The common map header should be specified if more than one job is running.')
-        if resolution is None:
-            resolution = DEFAULT_RESOLUTION[self.instrument.band]
-
-        header, status = tmf.pacs_map_header(self.instrument.band,
-                                             numpy.ascontiguousarray(self.slice.nsamples_all, dtype='int32'),
-                                             numpy.ascontiguousarray(self.slice.compression_factor, dtype='int32'),
-                                             self.instrument.fine_sampling_factor,
-                                             oversampling,
-                                             numpy.ascontiguousarray(self.pointing.time),
-                                             numpy.ascontiguousarray(self.pointing.ra),
-                                             numpy.ascontiguousarray(self.pointing.dec),
-                                             numpy.ascontiguousarray(self.pointing.pa),
-                                             numpy.ascontiguousarray(self.pointing.chop),
-                                             numpy.ascontiguousarray(self.pointing.masked, numpy.int8),
-                                             numpy.ascontiguousarray(self.pointing.removed,numpy.int8),
-                                             numpy.asfortranarray(self.instrument.detector_mask, numpy.int8),
-                                             self.instrument.detector_corner.base.base.swapaxes(0,1).copy().T,
-                                             self.instrument.distortion_yz.base.base.T,
-                                             resolution)
-        if status != 0: raise RuntimeError()
-        header = _str2fitsheader(header)
-        return header
-   
     @property
     def status(self):
         if self._status is not None:
