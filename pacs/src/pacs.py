@@ -795,7 +795,7 @@ def pacs_preprocess(obs,
 #-------------------------------------------------------------------------------
 
 
-def pacs_create_scan(ra0, dec0, cam_angle=0., scan_angle=0., scan_length=30., scan_nlegs=3, scan_step=20., scan_speed=10., 
+def pacs_create_scan(ra0, dec0, cam_angle=0., scan_angle=0., scan_length=30., scan_nlegs=3, scan_step=148., scan_speed=20., 
                      compression_factor=4):
     if int(compression_factor) not in (1, 4, 8):
         raise ValueError("Input compression_factor must be 1, 4 or 8.")
