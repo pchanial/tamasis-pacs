@@ -196,10 +196,21 @@ class PacsBase(Observation):
         else:
             mpistr = ''
 
+        # mode
+        mode = self.slice[0].mode
+        print_each_mode = numpy.any(self.slice.mode != mode)
+        str_all_mode = '' if print_each_mode else mode + ' mode, '
+
+        # compression factor
+        compression = self.slice[0].compression_factor
+        print_each_compression = numpy.any(self.slice.compression_factor != compression)
+        str_all_compression = '' if print_each_compression else 'compression factor x' + str(compression) + ', '
+
         # print general informations
         result = '\nInfo ' + MPI.Get_processor_name() + ': ' + mpistr + plural('core', nthreads) + ' handling ' + \
                  plural('detector', ndetectors) + '\n'
-        result += sp + self.instrument.band.capitalize() + ' band, unit is ' + unit + '\n'
+        result += sp + self.instrument.band.capitalize() + ' band, ' + \
+                  str_all_mode + str_all_compression + 'unit is ' + unit + '\n'
 
         # check if the masks are the same for all the slices
         homogeneous = 'nmasks' not in self.slice.dtype.names or \
@@ -251,7 +262,10 @@ class PacsBase(Observation):
                 result += sp + '      ' + a + '\n'
                 result += sp + '      ' + d + '\n'
 
-            result += sp + '     Compression: x' + str(slice.compression_factor) + '\n'
+            if print_each_mode:
+                result += sp + '     Mode:        ' + slice.mode + '\n'
+            if print_each_compression:
+                result += sp + '     Compression: x' + str(slice.compression_factor) + '\n'
             result += sp + '     In-scan:     ' + _str_policy(p.info == Pointing.INSCAN) + '\n'
             result += sp + '     Turnaround:  ' + _str_policy(p.info == Pointing.TURNAROUND) + '\n'
             result += sp + '     Other:       ' + _str_policy(p.info == Pointing.OTHER)
