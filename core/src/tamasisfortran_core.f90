@@ -574,6 +574,36 @@ end subroutine unpack_transpose
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
+subroutine add_inplace(a, b, n)
+
+    use module_tamasis,  only : p
+    implicit none
+
+    !f2py threadsafe
+    !f2py, intent(inout) :: a
+    !f2py, intent(hide)  :: n = size(a)
+    !f2py, intent(in)    :: b
+
+    real(p), intent(inout) :: a(n)
+    real(p), intent(in)    :: b(n)
+    integer, intent(in)    :: n
+    integer i
+
+!    !$omp parallel workshare
+!    a = a + b
+!    !$omp end parallel workshare
+
+    !$omp parallel do
+    do i = 1, n
+        a(i) = a(i) + b(i)
+    end do
+    !$omp end parallel do
+
+end subroutine add_inplace
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
 subroutine masking(input, ninputs, mask, nmasks, status)
 
     use iso_fortran_env, only : ERROR_UNIT
