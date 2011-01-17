@@ -91,7 +91,7 @@ def configure(conf):
             conf.env.FCFLAGS_OPENMP = ['-openmp']
             conf.env.LIB_OPENMP = ['iomp5']
         conf.env.F2PYFCOMPILER = 'intelem'
-    conf.env.LIB_BLAS = ['ptf77blas', 'ptcblas', 'atlas']
+    conf.env.LIB_BLAS = ['blas']
     conf.env.LIB_LAPACK = ['lapack']
 
     if conf.options.precision_real == '16':
