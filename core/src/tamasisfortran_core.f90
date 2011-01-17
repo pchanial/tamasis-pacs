@@ -587,11 +587,7 @@ subroutine add_inplace(a, b, n)
     real(p), intent(inout) :: a(n)
     real(p), intent(in)    :: b(n)
     integer, intent(in)    :: n
-    integer i
-
-!    !$omp parallel workshare
-!    a = a + b
-!    !$omp end parallel workshare
+    integer                :: i
 
     !$omp parallel do
     do i = 1, n
@@ -600,6 +596,132 @@ subroutine add_inplace(a, b, n)
     !$omp end parallel do
 
 end subroutine add_inplace
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine subtract_inplace(a, b, n)
+
+    use module_tamasis,  only : p
+    implicit none
+
+    !f2py threadsafe
+    !f2py, intent(inout) :: a
+    !f2py, intent(hide)  :: n = size(a)
+    !f2py, intent(in)    :: b
+
+    real(p), intent(inout) :: a(n)
+    real(p), intent(in)    :: b(n)
+    integer, intent(in)    :: n
+    integer                :: i
+
+    !$omp parallel do
+    do i = 1, n
+        a(i) = a(i) - b(i)
+    end do
+    !$omp end parallel do
+
+end subroutine subtract_inplace
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine multiply_inplace(a, b, n)
+
+    use module_tamasis,  only : p
+    implicit none
+
+    !f2py threadsafe
+    !f2py, intent(inout) :: a
+    !f2py, intent(hide)  :: n = size(a)
+    !f2py, intent(in)    :: b
+
+    real(p), intent(inout) :: a(n)
+    real(p), intent(in)    :: b(n)
+    integer, intent(in)    :: n
+    integer                :: i
+
+    !$omp parallel do
+    do i = 1, n
+        a(i) = a(i) * b(i)
+    end do
+    !$omp end parallel do
+
+end subroutine multiply_inplace
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine divide_inplace(a, b, n)
+
+    use module_tamasis,  only : p
+    implicit none
+
+    !f2py threadsafe
+    !f2py, intent(inout) :: a
+    !f2py, intent(hide)  :: n = size(a)
+    !f2py, intent(in)    :: b
+
+    real(p), intent(inout) :: a(n)
+    real(p), intent(in)    :: b(n)
+    integer, intent(in)    :: n
+    integer                :: i
+
+    !$omp parallel do
+    do i = 1, n
+        a(i) = a(i) / b(i)
+    end do
+    !$omp end parallel do
+
+end subroutine divide_inplace
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine add_inplace_blas(a, b, n)
+
+    use module_tamasis,  only : p
+    implicit none
+
+    !f2py threadsafe
+    !f2py, intent(inout) :: a
+    !f2py, intent(hide)  :: n = size(a)
+    !f2py, intent(in)    :: b
+
+    real(p), intent(inout) :: a(n)
+    real(p), intent(in)    :: b(n)
+    integer, intent(in)    :: n
+
+    call daxpy(n, 1._p, b, 1, a, 1)
+
+end subroutine add_inplace_blas
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine subtract_inplace_blas(a, b, n)
+
+    use module_tamasis,  only : p
+    implicit none
+
+    !f2py threadsafe
+    !f2py, intent(inout) :: a
+    !f2py, intent(hide)  :: n = size(a)
+    !f2py, intent(in)    :: b
+
+    real(p), intent(inout) :: a(n)
+    real(p), intent(in)    :: b(n)
+    integer, intent(in)    :: n
+
+    call daxpy(n, -1._p, b, 1, a, 1)
+
+end subroutine subtract_inplace_blas
+
 
 !-----------------------------------------------------------------------------------------------------------------------------------
 
