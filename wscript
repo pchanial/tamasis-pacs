@@ -22,7 +22,7 @@ out = 'build'
 subdirs = ['core', 'madcap', 'pacs']
 
 # Required libraries
-libraries = ['CFITSIO', 'FFTW3', 'LAPACK', 'OPENMP', 'WCSLIB']
+libraries = ['BLAS', 'CFITSIO', 'FFTW3', 'LAPACK', 'OPENMP', 'WCSLIB']
 
 # Required Python packages
 required_modules = ['numpy',
@@ -91,6 +91,7 @@ def configure(conf):
             conf.env.FCFLAGS_OPENMP = ['-openmp']
             conf.env.LIB_OPENMP = ['iomp5']
         conf.env.F2PYFCOMPILER = 'intelem'
+    conf.env.LIB_BLAS = ['ptf77blas', 'ptcblas', 'atlas']
     conf.env.LIB_LAPACK = ['lapack']
 
     if conf.options.precision_real == '16':
@@ -131,6 +132,24 @@ end program test""",
         features         = 'fc fcprogram',
         msg              = "Checking for 'fftw3' double precision",
         use=['FFTW3'])
+
+    fragment = """
+program test
+    integer, parameter :: p = kind(1.d0)
+    real(p)            :: u(2), v(2)
+    u = 1._p
+    v = 0._p
+    call daxpy(2, 3._p, u, 1, v, 1)
+end program test
+"""
+    if conf.options.precision_real == '4':
+        fragment = fragment.replace('kind(1.d0)', 'kind(1.)').replace('daxpy','saxpy')
+    conf.check_cc(
+        fragment         = fragment,
+        compile_filename = 'test.f',
+        features         = 'fc fcprogram',
+        msg              = "Checking for 'blas'",
+        use=['BLAS'])
 
     fragment = """
 program test

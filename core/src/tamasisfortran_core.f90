@@ -577,6 +577,7 @@ end subroutine unpack_transpose
 subroutine add_inplace(a, b, n)
 
     use module_tamasis,  only : p
+    use module_math, only : add
     implicit none
 
     !f2py threadsafe
@@ -587,13 +588,8 @@ subroutine add_inplace(a, b, n)
     real(p), intent(inout) :: a(n)
     real(p), intent(in)    :: b(n)
     integer, intent(in)    :: n
-    integer                :: i
 
-    !$omp parallel do
-    do i = 1, n
-        a(i) = a(i) + b(i)
-    end do
-    !$omp end parallel do
+    call add(a, b, n)
 
 end subroutine add_inplace
 
