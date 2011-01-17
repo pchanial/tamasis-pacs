@@ -7,7 +7,7 @@ from numpyutils import get_attributes
 
 __all__ = ['Quantity', 'UnitError', 'units']
 
-_re_unit = re.compile(r' *([/*])? *([a-zA-Z_]+|\?+)(\^-?[0-9]+(\.[0-9]*)?)? *')
+_re_unit = re.compile(r' *([/*])? *([a-zA-Z_"\']+|\?+)(\^-?[0-9]+(\.[0-9]*)?)? *')
 
 class UnitError(Exception): pass
 
@@ -687,6 +687,8 @@ units_table = {
     'sr'     : None,
 
     # angle
+    "'"      : Quantity(1., 'arcmin'), 
+    '"'      : Quantity(1., 'arcsec'),
     'arcmin' : Quantity(1./60., 'deg'), 
     'arcsec' : Quantity(1./3600., 'deg'),
     'deg'    : Quantity(numpy.pi/180., 'rad'),
