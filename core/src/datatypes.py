@@ -831,7 +831,7 @@ def validate_sliced_shape(shape, nsamples=None):
     return tuple(l)
 
 def _save_derived_units(filename, du):
-    if len(du) == 0:
+    if not du:
         return
     buffer = StringIO.StringIO()
     pickle.dump(du, buffer, pickle.HIGHEST_PROTOCOL)
