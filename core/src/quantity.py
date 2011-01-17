@@ -1,6 +1,9 @@
 import numpy
 import re
+import tamasisfortran as tmf
+
 from . import var
+from numpyutils import get_attributes
 
 __all__ = ['Quantity', 'UnitError', 'units']
 
@@ -13,14 +16,17 @@ def _extract_unit(string):
     Convert the input string into a unit as a dictionary
     """
 
-    if string is None or isinstance(string, dict):
+    if string is None:
+        return {}
+
+    if isinstance(string, dict):
         return string
 
     if not isinstance(string, str):
         raise TypeError('Invalid unit type. Valid types are string or dictionary.')
 
     string = string.strip()
-    result = None
+    result = {}
     start = 0
     while start < len(string):
         match = _re_unit.match(string, start)
@@ -47,8 +53,6 @@ def _multiply_unit_inplace(unit, key, val):
     the operation is done in place, to speed up main
     caller _extract_unit.
     """
-    if unit is None:
-        return { key : val }
     if key in unit:
         if unit[key] == -val:
             del unit[key]
@@ -62,8 +66,8 @@ def _power_unit(unit, power):
     """
     Raise to power a unit as a dictionary
     """
-    if unit is None or power == 0:
-        return None
+    if len(unit) == 0 or power == 0:
+        return {}
     result = unit.copy()
     for key in unit:
         result[key] *= power
@@ -72,13 +76,7 @@ def _power_unit(unit, power):
 def _multiply_unit(unit1, unit2):
     """
     Multiplication of units as dictionary. 
-    Unlike _power_unit, _divide_unit, the operation is done in place
-    of unit1, to speed up main caller _extract_unit.
     """
-    if unit2 is None:
-        return unit1
-    if unit1 is None:
-        return unit2
     unit = unit1.copy()
     for key, val in unit2.items():
         if key in unit:
@@ -94,10 +92,6 @@ def _divide_unit(unit1, unit2):
     """
     Division of units as dictionary
     """
-    if unit2 is None:
-        return unit1
-    if unit1 is None:
-        return _power_unit(unit2, -1)
     unit = unit1.copy()
     for key, val in unit2.items():
         if key in unit:
@@ -110,13 +104,13 @@ def _divide_unit(unit1, unit2):
     return unit
 
 def _get_units(units):
-    return [getattr(q, '_unit', None) for q in units]
+    return [getattr(q, '_unit', {}) for q in units]
 
 def _strunit(unit):
     """
     Convert a unit as dictionary into a string
     """
-    if unit is None:
+    if len(unit) == 0:
         return ''
     result = ''
     has_pos = False
@@ -164,7 +158,7 @@ class Quantity(numpy.ndarray):
 
     A Quantity can be converted to a different unit:
     >>> a = Quantity(18, 'm')
-    >>> a.unit = 'km'
+    >>> a.inunit('km')
     >>> a
     Quantity(0.018, 'km')
 
@@ -207,7 +201,7 @@ class Quantity(numpy.ndarray):
     0.5 broug^2
     """
 
-    __slots__ = ('_unit','derived_units')
+    __slots__ = ('_unit','_derived_units')
 
     def __new__(cls, data, unit=None, derived_units=None, dtype=None, copy=True, order='C', subok=False, ndmin=0):
 
@@ -219,53 +213,29 @@ class Quantity(numpy.ndarray):
         if not subok and type(result) is not cls or not isinstance(result, cls):
             result = result.view(cls)
 
-        # set derived_units attribute
-        if derived_units is not None:
-            for key in derived_units.keys():
-                if not isinstance(derived_units[key], Quantity) and not type(derived_units[key]) is tuple:
-                    raise UnitError("The user derived unit '" + key + "' is not a Quantity.")
-            result.derived_units.update(derived_units)
+        # set unit attribute
+        if unit is None:
+            result._unit = result._unit
+        else:
+            result.unit = unit
 
-        # copy unit attribute
-        if unit is not None:            
-            result._unit = _extract_unit(unit)
+        # set derived_units attribute
+        if derived_units is None:
+            result._derived_units = result._derived_units
+        else:
+            result.derived_units = derived_units
 
         return result
-
-    def min(self, axis=None, out=None):
-        return _wrap_func(numpy.min, self, self._unit, axis, out)
-    min.__doc__ = numpy.ndarray.min.__doc__
-
-    def max(self, axis=None, out=None):
-        return _wrap_func(numpy.max, self, self._unit, axis, out)
-    max.__doc__ = numpy.ndarray.max.__doc__
-
-    def sum(self, axis=None, dtype=None, out=None):
-        return _wrap_func(numpy.sum, self, self._unit, axis, dtype, out)
-    sum.__doc__ = numpy.ndarray.sum.__doc__
-
-    def mean(self, axis=None, dtype=None, out=None):
-        return _wrap_func(numpy.mean, self, self._unit, axis, dtype, out)
-    mean.__doc__ = numpy.ndarray.mean.__doc__
-
-    def std(self, axis=None, dtype=None, out=None, ddof=0):
-        return _wrap_func(numpy.std, self, self._unit, axis, dtype, out)
-    std.__doc__ = numpy.ndarray.std.__doc__
-
-    def var(self, axis=None, dtype=None, out=None, ddof=0):
-        return _wrap_func(numpy.var, self, _power_unit(self._unit,2), axis, dtype, out)
-    var.__doc__ = numpy.ndarray.var.__doc__
 
     def __array_finalize__(self, obj):
         # for some numpy methods (append): the result doesn't go through __new__ and
         # obj is None in __array_finalize__
-        #if obj is None: return
-        self._unit = getattr(obj, '_unit', None)
-        self.derived_units = getattr(obj, 'derived_units', {})
+        self._unit = getattr(obj, '_unit', {})
+        self._derived_units = getattr(obj, '_derived_units', {})
 
     @property
     def __array_priority__(self):
-        return 1. if self._unit is None else 1.5
+        return 1. if len(self._unit) == 0 else 1.5
 
     def __array_prepare__(self, array, context=None):
         """
@@ -273,12 +243,14 @@ class Quantity(numpy.ndarray):
         argument of highest __array_priority__
         """
 
-        if not isinstance(array, type(self)):
-            array = array.view(type(self))
-
-        #XXX derived_units should be obtained from all arguments
-        array.derived_units = self.derived_units
-        if context is None or self._unit is None:
+        if self is not array:
+            if not isinstance(array, type(self)):
+                array = array.view(type(self))
+            # copy over attributes
+            for a in get_attributes(self):
+                setattr(array, a, getattr(self, a))
+            
+        if context is None or len(self._unit) == 0:
             return array
        
         ufunc = context[0]
@@ -293,7 +265,7 @@ class Quantity(numpy.ndarray):
                 print("Warning: applying function '" + str(ufunc) + "' to Quant\
 ities of different units may have changed operands to common unit '" + \
                     _strunit(self._unit) + "'.")
-                arg.unit = self._unit
+                arg.inunit(self._unit)
 
         return array
 
@@ -323,8 +295,8 @@ ities of different units may have changed operands to common unit '" + \
                 array._unit = self._unit
             else:
                 # inplace operation
-                if array._unit is None:
-                    array._unit = getattr(args[1], '_unit', None)
+                if len(self._unit) == 0:
+                    self._unit = getattr(args[1], '_unit', {})
 
         elif ufunc is numpy.reciprocal:
             array._unit = _power_unit(args[0]._unit, -1)
@@ -359,26 +331,26 @@ ities of different units may have changed operands to common unit '" + \
                        numpy.sinh, numpy.tanh, numpy.cos, numpy.sin, numpy.tan,
                        numpy.log, numpy.log2, numpy.log10, numpy.exp, 
                        numpy.exp2):
-            array._unit = None
+            array._unit = {}
 
         elif ufunc in (numpy.bitwise_or, numpy.invert, numpy.logical_and,
                        numpy.logical_not, numpy.logical_or, numpy.logical_xor):
-            array._unit = None
+            array._unit = {}
 
         elif ufunc not in (numpy.abs, numpy.negative ):
             print('Quantity: unhandled ufunc ', ufunc, 'with', len(args), 'args')
-            array._unit = None
+            array._unit = {}
 
         else:
             array._unit = self._unit
-            
+
         return array
 
     def __getitem__(self, key):
-        item = super(Quantity, self).__getitem__(key)
+        item = numpy.ndarray.__getitem__(self, key)
         if isinstance(item, Quantity):
             return item
-        return Quantity(item, self._unit, self.derived_units, copy=False)
+        return Quantity(item, self._unit, self._derived_units, copy=False)
 
     @property
     def magnitude(self):
@@ -417,77 +389,109 @@ ities of different units may have changed operands to common unit '" + \
 
     @unit.setter
     def unit(self, unit):
+        self._unit = _extract_unit(unit)
+
+    @property
+    def derived_units(self):
+        """
+        Return the derived units associated with the quantity
+        """
+        return self._derived_units
+
+    @derived_units.setter
+    def derived_units(self, derived_units):
+        if derived_units is not None:
+            if not isinstance(derived_units, dict):
+                raise TypeError('Input derived units are not a dict.')
+            for key in derived_units.keys():
+                if not isinstance(derived_units[key], Quantity) and \
+                        not hasattr(derived_units[key], '__call__'):
+                    raise UnitError("The user derived unit '" + key + "' is not a Quantity.")
+        self._derived_units = derived_units
+
+    def tounit(self, unit):
         """
         Convert a Quantity into a new unit
 
         Parameters
         ----------
-        unit : string or None
-             A string representing the unit into which the Quantity
-             should be converted
-
-        Example
-        -------
-        >>> q = Quantity(1., 'km')
-        >>> q.unit = 'm'
-        >>> print(q)
-        1000.0 m
-        """
-        newunit = _extract_unit(unit)
-        if self._unit is None or newunit is None:
-            self._unit = newunit
-            return
-
-        q1 = Quantity(1., self._unit, self.derived_units).SI
-        q2 = Quantity(1., newunit, self.derived_units).SI
-        if q1._unit != q2._unit:
-            raise UnitError("Units '" + self.unit + "' and '" + \
-                            _strunit(newunit) + "' are incompatible.")
-        factor = q1.magnitude / q2.magnitude
-        if numpy.rank(self) == 0:
-            self.magnitude = self.magnitude * factor
-        else:
-            self.magnitude.T[:] *= factor.T
-        self._unit = newunit
-
-    def tounit(self, unit):
-        """
-        Return a copy of the Quantity in the specified unit
-
-        Parameters
-        ----------
-        unit : string or None
+        unit : string
              A string representing the unit into which the Quantity
              should be converted
 
         Returns
         -------
         res : Quantity
-            A copy of the Quantity in the new unit
+            A shallow copy of the Quantity in the new unit
 
         Example
         -------
-        >>> print(Quantity(1., 'km').tounit('m'))
+        >>> q = Quantity(1., 'km')
+        >>> p = q.tounit('m')
+        >>> print(p)
         1000.0 m
         """
-        q = self.copy()
-        q.unit = unit
-        return q
+        result = self.copy()
+        result.inunit(unit)
+        return result
+
+    def inunit(self, unit):
+        """
+        In-place conversion of a Quantity into a new unit
+
+        Parameters
+        ----------
+        unit : string
+             A string representing the unit into which the Quantity
+             should be converted
+
+        Example
+        -------
+        >>> q = Quantity(1., 'km')
+        >>> q.inunit('m')
+        >>> print(q)
+        1000.0 m
+        """
+
+        newunit = _extract_unit(unit)
+
+        if len(self._unit) == 0 or len(newunit) == 0:
+            self._unit = newunit
+            return
+
+        # the header may contain information used to do unit conversions
+        if hasattr(self, '_header'):
+            q1 = self.__class__(1, unit=self._unit, derived_units=self.derived_units, header=self._header).SI
+            q2 = self.__class__(1, unit=newunit, derived_units=self.derived_units, header=self._header).SI
+        else:
+            q1 = Quantity(1., self._unit, self.derived_units).SI
+            q2 = Quantity(1., newunit, self.derived_units).SI
+
+        if q1._unit != q2._unit:
+            raise UnitError("Units '" + self.unit + "' and '" + \
+                            _strunit(newunit) + "' are incompatible.")
+        factor = q1.magnitude / q2.magnitude
+        if numpy.rank(self) == 0:
+            self.magnitude *= factor
+        else:
+            self.magnitude.T[:] *= factor.T
+        self._unit = newunit
 
     @property
     def SI(self):
         """
-        Return a copy of the Quantity in SI unit
+        Return the quantity in SI unit. If the quantity has
+        no units, the quantity itself is returned, otherwise, a
+        shallow copy is returned.
 
         Example
         -------
         >>> print(Quantity(1., 'km').SI)
         1000.0 m
         """
-        if self._unit is None:
+        if len(self._unit) == 0:
             return self
-        result = self.copy()
-        result.unit = ''
+
         factor = Quantity(1., '')
         for key, val in self._unit.items():
 
@@ -496,78 +500,104 @@ ities of different units may have changed operands to common unit '" + \
 
             # check if the unit is a global derived unit
             if newfactor is None:
-                newfactor = _check_du(self, key, val, units_derived)
+                newfactor = _check_du(self, key, val, units)
                 
-            if newfactor is None:
-                # the unit is not derived, check if the unit is SI
-                if key in units_SI:
-                    if factor._unit is None:
-                        factor._unit = { key : val }
-                    elif key in factor._unit:
-                        factor._unit[key] += val
-                        if factor._unit[key] == 0:
-                            del factor._unit[key]
-                    else:
-                        factor._unit[key] = val
-                    continue
-            
-                # the unit is not derived and not SI, we add it to the dictionary
-                if factor._unit is None:
-                    factor._unit = { key : val }
-                elif key in factor._unit:
-                    factor._unit[key] += val
-                    if factor._unit[key] == 0:
-                        del factor._unit[key]
-                else:
-                    factor._unit[key] = val
+            # if the unit is not derived, we add it to the dictionary
+            if newfactor is None:            
+                _multiply_unit_inplace(factor._unit, key, val)
                 continue
 
             # factor may be broadcast
             factor = factor * newfactor
 
-            # if the unit factor is scalar, nothing more to do
-            if newfactor.size == 1:
-                continue
-            
-            # broadcast the result if it is a scalar
-            if numpy.rank(self) == 0:
-                newfactor[:] = 1.
-                result = result * newfactor
-                continue
+        if numpy.rank(self) == 0 or numpy.rank(factor) == 0:
+            result = self * factor.magnitude
+            result._unit = factor._unit
+            return result
 
-            # make sure dimensions are compatible
-            if self.shape[0] != 1 and self.shape[0] != newfactor.size:
-                raise ValueError("The derived unit '" + key + "' has a number of elements '" + str(newfactor.size) + "' which is incompatible with that along the first axis '" + str(shape[0]) + "'.")
+        # make sure that the unit factor can be broadcast
+        if any([d1 not in (1,d2) for (d1,d2) in zip(self.shape[0:factor.ndim], factor.shape)]):
+            raise ValueError("The derived unit '" + key + "' has a shape '" + str(newfactor.shape) + "' which is incompatible with the dimension(s) along the first axes '" + str(self.shape) + "'.")
 
-            # broadcast the result if necessary
-            if self.shape[0] == 1:
-                shape = numpy.ones(numpy.rank(self), dtype=int)
-                shape[0] = newfactor.size
-                newfactor = newfactor.reshape(shape)
-                newfactor[:] = 1.
-                result = result * newfactor
-
-        if numpy.rank(result) == 0:
-            result = result * factor
+        # Python's broadcast operates by adding slow dimensions. Since we
+        # need to use a unique conversion factor along the fast dimensions
+        # (ex: second axis in an array tod[detector,time]), we need to perform
+        # our own broadcast by adding fast dimensions
+        if numpy.any(self.shape[0:factor.ndim] != factor.shape):
+            broadcast = numpy.hstack([factor.shape, numpy.ones(self.ndim-factor.ndim,int)])
+            result = self * numpy.ones(broadcast)
         else:
-            result.T[:] *= factor.magnitude.T
+            result = self.copy()
+        result.T[:] *= factor.magnitude.T
         result._unit = factor._unit
+
         return result
+
+    def __reduce__(self):
+        state = list(numpy.ndarray.__reduce__(self))
+        try:
+            subclass_state = self.__dict__.copy()
+        except AttributeError:
+            subclass_state = {}
+        for cls in self.__class__.__mro__:
+            for slot in cls.__dict__.get('__slots__', ()):
+                try:
+                    subclass_state[slot] = getattr(self, slot)
+                except AttributeError:
+                    pass
+        state[2] = (state[2],subclass_state)
+        return tuple(state)
+    
+    def __setstate__(self,state):
+        ndarray_state, subclass_state = state
+        numpy.ndarray.__setstate__(self,ndarray_state)        
+        for k, v in subclass_state.items():
+            setattr(self, k, v)
 
     def __repr__(self):
         return type(self).__name__+'(' + str(numpy.asarray(self)) + ", '" + _strunit(self._unit) + "')"
 
     def __str__(self):
         result = str(numpy.asarray(self))
-        if self._unit is None:
+        if len(self._unit) == 0:
             return result
         return result + ' ' + _strunit(self._unit)
 
+    def min(self, axis=None, out=None):
+        return _wrap_func(numpy.min, self, self._unit, axis, out)
+    min.__doc__ = numpy.ndarray.min.__doc__
+
+    def max(self, axis=None, out=None):
+        return _wrap_func(numpy.max, self, self._unit, axis, out)
+    max.__doc__ = numpy.ndarray.max.__doc__
+
+    def sum(self, axis=None, dtype=None, out=None):
+        return _wrap_func(numpy.sum, self, self._unit, axis, dtype, out)
+    sum.__doc__ = numpy.ndarray.sum.__doc__
+
+    def mean(self, axis=None, dtype=None, out=None):
+        return _wrap_func(numpy.mean, self, self._unit, axis, dtype, out)
+    mean.__doc__ = numpy.ndarray.mean.__doc__
+
+    def std(self, axis=None, dtype=None, out=None, ddof=0):
+        return _wrap_func(numpy.std, self, self._unit, axis, dtype, out)
+    std.__doc__ = numpy.ndarray.std.__doc__
+
+    def var(self, axis=None, dtype=None, out=None, ddof=0):
+        return _wrap_func(numpy.var, self, _power_unit(self._unit,2), axis, dtype, out)
+    var.__doc__ = numpy.ndarray.var.__doc__
+
 
 def _get_du(input, key, d):
-    if type(d[key]) is tuple:
-        return d[key][0](input) * Quantity(d[key][1], derived_units=d, copy=False)
-    return Quantity(d[key], derived_units=d, copy=False)
+    if hasattr(d[key], '__call__'):
+        du = d[key](input)
+    else:
+        du = d[key]
+    if hasattr(input, '_header'):
+        du = du.view(type(input))
+        du._header = input._header
+    du._derived_units = input._derived_units
+    return du
 
 def _check_du(input, key, val, derived_units):
     if len(derived_units) == 0:
@@ -578,26 +608,81 @@ def _check_du(input, key, val, derived_units):
         return (1. / _get_du(input, (key,-val), derived_units)).SI
     if key not in derived_units:
         return None
+    du = _get_du(input, key, derived_units)
+    if key in du._unit:
+        return None
     if val == 1.:
-        return _get_du(input, key, derived_units).SI
+        return du.SI
     if val == -1.:
-        return (1. / _get_du(input, key, derived_units)).SI
-    return (_get_du(input, key, derived_units)**val).SI
+        return (1 / du).SI
+    return (du**val).SI        
 
-units_SI = {
-    'A'   : Quantity(1., 'A'),
-    'cd'  : Quantity(1., 'cd'),
-    'K'   : Quantity(1., 'K'),
-    'kg'  : Quantity(1., 'kg'),
-    'm'   : Quantity(1., 'm'),
-    'mol' : Quantity(1., 'mol'),
-    'rad' : Quantity(1., 'rad'),
-    's'   : Quantity(1., 's'),
-    'sr'  : Quantity(1., 'sr'),
-}
 
-units_derived = {
-    
+#-------------------------------------------------------------------------------
+
+
+def pixel_to_pixel_reference(input):
+    """
+    Returns the pixel area in units of reference pixel.
+    """
+    if not hasattr(input, 'header'):
+        return Quantity(1, 'pixel_reference')
+    required = 'CRPIX,CRVAL,CTYPE'.split(',')
+    keywords = numpy.concatenate(
+        [(lambda i: [r+str(i+1) for r in required])(i) 
+         for i in range(input.header['NAXIS'])])    
+    if not all([k in input.header for k in keywords]):
+        return Quantity(1, 'pixel_reference')
+
+    scale, status = tmf.projection_scale(str(input.header).replace('\n',''), input.header['NAXIS1'], input.header['NAXIS2'])
+    if status != 0:
+        raise RuntimeError()
+
+    return Quantity(scale.T, 'pixel_reference', copy=False)
+
+
+#-------------------------------------------------------------------------------
+
+
+def pixel_reference_to_solid_angle(input):
+    """
+    Returns the reference pixel area in the units defined by the FITSheader
+    """
+    if not hasattr(input, 'header'):
+        return Quantity(1., 'pixel_reference')
+
+    header = input.header
+    if all([key in header for key in ('CD1_1', 'CD2_1', 'CD1_2', 'CD2_2')]):
+        cd = numpy.array([ [header['cd1_1'],header['cd1_2']],
+                           [header['cd2_1'],header['cd2_2']] ])
+        area = abs(numpy.linalg.det(cd))
+    elif 'CDELT1' in header and 'CDELT2' in header:
+        area = abs(header['CDELT1'] * header['CDELT2'])
+    else:
+        print 'cannot convert pixref'
+        return Quantity(1., 'pixel_reference')
+
+    cunit1 = header['CUNIT1'] if 'CUNIT1' in header else 'deg'
+    cunit2 = header['CUNIT2'] if 'CUNIT2' in header else 'deg'
+    return area * Quantity(1, cunit1) * Quantity(1, cunit2)
+
+
+#-------------------------------------------------------------------------------
+
+
+units_table = {
+
+    # SI
+    'A'      : Quantity(1., 'A'),
+    'cd'     : Quantity(1., 'cd'),
+    'K'      : Quantity(1., 'K'),
+    'kg'     : Quantity(1., 'kg'),
+    'm'      : Quantity(1., 'm'),
+    'mol'    : Quantity(1., 'mol'),
+    'rad'    : Quantity(1., 'rad'),
+    's'      : Quantity(1., 's'),
+    'sr'     : Quantity(1., 'sr'),
+
     # angle
     'arcmin' : Quantity(1./60., 'deg'), 
     'arcsec' : Quantity(1./3600., 'deg'),
@@ -639,6 +724,8 @@ units_derived = {
     
     # solid angle
     ('rad',2): Quantity(1., 'sr'),
+    'pixel'  : pixel_to_pixel_reference,
+    'pixel_reference' : pixel_reference_to_solid_angle,
     
     # misc
     'C'      : Quantity(1., 'A s'),
@@ -647,14 +734,10 @@ units_derived = {
 
 class Unit(dict):
     def __init__(self):
-        
-        for k, v in units_SI.items():
-            self[k] = v
-            setattr(self, k, v)
-        for k, v in units_derived.items():
+        for k, v in units_table.items():
             self[k] = v
             if isinstance(k, str):
-                setattr(self, k, v)
+                setattr(self, k, Quantity(1, k))
 
 units = Unit()
 
@@ -681,3 +764,6 @@ ones.__doc__ = _grab_doc(numpy.ones.__doc__, 'ones')
 def zeros(shape, unit=None, dtype=None, order=None):
     return Quantity(numpy.zeros(shape, dtype, order), unit, copy=False)
 zeros.__doc__ = _grab_doc(numpy.zeros.__doc__, 'zeros')
+
+
+

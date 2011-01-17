@@ -1,11 +1,14 @@
 import numpy
 import glob
 import os
+import pickle
 import tamasis
 from tamasis import *
+from tamasis.numpyutils import get_attributes
 from tamasis.datatypes import validate_sliced_shape
 from uuid import uuid1
 
+tamasis.var.verbose = True
 filename = 'tamasistest-'+str(uuid1())
 deftype = tamasis.var.FLOAT_DTYPE.type
 
@@ -16,6 +19,7 @@ def test_cleanup():
 
 class TestFailure(Exception):
     test_cleanup()
+
 
 # validate scalars
 if validate_sliced_shape((),None) != ((),): raise TestFailure()
@@ -200,6 +204,45 @@ m.flat = numpy.random.random(m.size)*2
 a = Tod(numpy.random.random_sample((10,2,10)), mask=m, nsamples=(2,8), unit='Jy')
 a.save(filename+'_tod.fits')
 b = Tod(filename+'_tod.fits')
-if numpy.any(a != b) or numpy.any(a.mask != b.mask) or a.nsamples != b.nsamples: raise TestFailure()
+tamasis.var.verbose = False
+print 'start'
+tamasis.var.verbose = False
+a!=b
+print 'stop'
+tamasis.var.verbose = False
+if numpy.any(a != b): raise TestFailure()
+# or numpy.any(a.mask != b.mask) or a.nsamples != b.nsamples: raise TestFailure()
+
+class MAP(Map):
+    def __init__(self, data):
+        self.info = 'info'
+
+m = MAP(numpy.ones(3))
+if get_attributes(m) != ['info', 'coverage', 'error', 'origin', '_header', '_unit', '_derived_units']: raise TestFailure()
+
+# test pickling
+a = numpy.ones((4,3))
+a[1,2] = 4
+q = Quantity(a, unit='myunit', derived_units={'myunit': Quantity(2., 'Jy')})
+f = FitsArray(q, header=create_fitsheader(q, cdelt=0.5, crval=(4.,8.)))
+m = Map(f, origin='upper', error=a*2, coverage=a*3)
+mask = numpy.zeros((4,3), numpy.bool8)
+mask[0,2] = True
+t = Tod(f, mask=mask, nsamples=(2,1))
+
+objs = (q,f,m,t)
+for v in range(pickle.HIGHEST_PROTOCOL):
+    for o in objs:
+        o2 = pickle.loads(pickle.dumps(o,v))
+        if any_neq(o, o2): raise TestFailure()
+
+for o in objs[1:]:
+    test_cleanup()
+    o.save(filename+'_obj.fits')
+    o2 = type(o)(filename+'_obj.fits')
+    if any_neq(o, o2):
+        print 'o', repr(o)
+        print 'o2', repr(o2)
+        raise Exception()
 
 test_cleanup()

@@ -326,7 +326,7 @@ class Pointing(FitsArray, numpy.recarray):
         ddec = numpy.diff(dec)
         dtime = Quantity(numpy.diff(self.time), 's')
         vel = numpy.sqrt((dra*numpy.cos(dec[0:-1].tounit('rad')))**2 + ddec**2) / dtime
-        vel.unit = 'arcsec/s'
+        vel.inunit('arcsec/s')
         u = vel._unit
         vel = numpy.append(vel, vel[-1])
         # BUG: append eats the unit...

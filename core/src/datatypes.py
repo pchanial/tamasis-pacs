@@ -2,7 +2,10 @@ import kapteyn.maputils
 import matplotlib
 import matplotlib.pyplot as pyplot
 import numpy
+import pickle
 import pyfits
+import StringIO
+    
 try:
     import ds9
     _imported_ds9 = True
@@ -25,22 +28,31 @@ class FitsArray(Quantity):
 
         if type(data) is str:
             ihdu = 0
+            fits = pyfits.open(data)
             while True:
                 try:
-                    hdu = pyfits.open(data)[ihdu]
+                    hdu = fits[ihdu]
                 except IndexError:
                     raise IOError('The FITS file has no data.')
+                if hdu.header['NAXIS'] == 0:
+                    ihdu += 1
+                    continue
                 if hdu.data is not None:
                     break
-                ihdu += 1
             data = hdu.data
             header = hdu.header
             copy = False
             if unit is None:
-                if 'bunit' in header:
-                    unit = header['bunit']
+                if 'BUNIT' in header:
+                    unit = header['BUNIT']
                 elif 'QTTY____' in header:
                     unit = header['QTTY____'] # HCSS crap
+            del header['BUNIT']
+            try:
+                derived_units = fits['derived_units'].data
+                derived_units = pickle.loads(str(derived_units.data))
+            except KeyError:
+                pass
 
         # get a new FitsArray instance (or a subclass if subok is True)
         result = Quantity.__new__(cls, data, unit, derived_units, dtype, copy, order, True, ndmin)
@@ -62,16 +74,9 @@ class FitsArray(Quantity):
 
         return result
 
-    def __array_finalize__(self, obj):
-        Quantity.__array_finalize__(self, obj)
-        # obj might be None without __new__ being called... (ex: append)
-        #if obj is None: return
-        self._header = getattr(obj, '_header', None)
-
-    def __array_wrap__(self, obj, context=None):
-        result = Quantity.__array_wrap__(self, obj, context).view(type(self))
-        result._header = self._header
-        return result
+    def __array_finalize__(self, array):
+        Quantity.__array_finalize__(self, array)
+        self._header = getattr(array, '_header', None)
 
     @staticmethod
     def empty(shape, header=None, unit=None, derived_units=None, dtype=None, order=None):
@@ -84,9 +89,6 @@ class FitsArray(Quantity):
     @staticmethod
     def zeros(shape, header=None, unit=None, derived_units=None, dtype=None, order=None):
         return FitsArray(numpy.zeros(shape, dtype, order), header, unit, derived_units, dtype, copy=False)
-
-    def copy(self, order='C'):
-        return FitsArray(self, copy=True, order=order)
 
     def has_wcs(self):
         """
@@ -116,7 +118,7 @@ class FitsArray(Quantity):
     def tofile(self, fid, sep='', format='%s'):
         super(FitsArray,self).tofile(fid, sep, format)
 
-    def save(self, filename):
+    def save(self, filename, fitskw={}):
         """Save a FitsArray instance to a fits file given a filename
        
         If the same file already exist it overwrites it.
@@ -127,12 +129,12 @@ class FitsArray(Quantity):
         else:
             header = create_fitsheader(self)
        
-        unit = self.unit
-        if unit != '':
-            header.update('BUNIT', unit)
+        if len(self._unit) != 0:
+            header.update('BUNIT', self.unit)
 
-        if hasattr(self, 'nsamples'):
-            header.update('NSAMPLES', str(self.nsamples))
+        for k,v in fitskw.items():
+            if hasattr(self, k):
+                header.update(v, str(getattr(self, k)))
 
         if numpy.rank(self) == 0:
             value = self.reshape((1,))
@@ -140,6 +142,8 @@ class FitsArray(Quantity):
             value = self.T if numpy.isfortran(self) else self
         hdu = pyfits.PrimaryHDU(value, header)
         hdu.writeto(filename, clobber=True)
+        if not isinstance(self, Map) and not isinstance(self, Tod):
+            _save_derived_units(filename, self.derived_units)
 
     def imsave(self, filename, colorbar=True, **kw):
         from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
@@ -316,56 +320,6 @@ class FitsArray(Quantity):
 
         return d
 
-    @property
-    def unit(self):
-        """
-        Return the Quantity unit as a string
-        
-        Example
-        -------
-        >>> Quantity(32., 'm/s').unit
-        'm / s'
-        """
-        return super(FitsArray, self).unit
-
-    @unit.setter
-    def unit(self, unit):
-        """
-        Convert a Quantity into a new unit
-
-        Parameters
-        ----------
-        unit : string or None
-             A string representing the unit into which the Quantity
-             should be converted
-
-        Example
-        -------
-        >>> q = Quantity(1., 'km')
-        >>> q.unit = 'm'
-        >>> print(q)
-        1000.0 m
-        """
-        newunit = _extract_unit(unit)
-        if self._unit is None or newunit is None:
-            self._unit = newunit
-            return
-
-        q1 = FitsArray(1., self.header, self._unit, self.derived_units).SI
-        q2 = FitsArray(1., self.header, newunit, self.derived_units).SI
-        if q1._unit != q2._unit:
-            raise UnitError("Units '" + self.unit + "' and '" + \
-                            _strunit(newunit) + "' are incompatible.")
-        factor = q1.magnitude / q2.magnitude
-        if numpy.rank(self) == 0:
-            self.magnitude = self.magnitude * factor
-        else:
-            self.magnitude.T[:] *= factor
-        self._unit = newunit
-
-
-#-------------------------------------------------------------------------------
-
 
 class Map(FitsArray):
 
@@ -374,7 +328,7 @@ class Map(FitsArray):
     """
     Represent a map, complemented with unit and FITS header.
     """
-    def __new__(cls, data,  header=None, unit=None, derived_units=None, coverage=None, error=None, origin='lower', dtype=None, copy=True, order='C', subok=False, ndmin=0):
+    def __new__(cls, data,  header=None, unit=None, derived_units=None, coverage=None, error=None, origin=None, dtype=None, copy=True, order='C', subok=False, ndmin=0):
 
         # get a new Map instance (or a subclass if subok is True)
         result = FitsArray.__new__(cls, data, header, unit, derived_units, dtype, copy, order, True, ndmin)
@@ -382,6 +336,10 @@ class Map(FitsArray):
             result = result.view(cls)
 
         if type(data) is str:
+            if 'DISPORIG' in result.header:
+                if origin is None:
+                    origin = result.header['DISPORIG']
+                del result.header['DISPORIG']
             try:
                 if error is None: error = pyfits.open(data)['Error'].data
             except:
@@ -405,17 +363,11 @@ class Map(FitsArray):
 
         return result
 
-    def __array_finalize__(self, obj):
-        FitsArray.__array_finalize__(self, obj)
-        if obj is None:
-            self.coverage = None
-            self.error = None
-            self.origin = 'lower'
-            return
-
-        self.coverage = getattr(obj, 'coverage', None)
-        self.error = getattr(obj, 'error', None)
-        self.origin = getattr(obj, 'origin', 'lower')
+    def __array_finalize__(self, array):
+        FitsArray.__array_finalize__(self, array)
+        self.coverage = getattr(array, 'coverage', None)
+        self.error = getattr(array, 'error', None)
+        self.origin = getattr(array, 'origin', 'lower')
 
     def __getitem__(self, key):
         item = super(Quantity, self).__getitem__(key)
@@ -434,15 +386,6 @@ class Map(FitsArray):
         if header is not None and not isinstance(header, pyfits.Header):
             raise TypeError('Incorrect type for the input header ('+str(type(header))+').')
         self._header = header
-        if self.has_wcs():
-            area = 0.
-            if all([key in header for key in ('CD1_1', 'CD2_1', 'CD1_2', 'CD2_2')]):
-                cd = numpy.array([ [header['cd1_1'],header['cd1_2']], [header['cd2_1'],header['cd2_2']] ])
-                area = abs(numpy.linalg.det(cd))
-            if all([key in header for key in ('CDELT1', 'CDELT2')]):
-                area = abs(header['CDELT1'] * header['CDELT2'])
-            if area != 0:
-                self.derived_units.update({'pixel': (projection_scale, Quantity(1., 'pixel_reference')), 'pixel_reference' : Quantity(area, 'deg^2').tounit('arcsec^2')})
 
     @staticmethod
     def empty(shape, coverage=None, error=None, origin='lower', header=None, unit=None, derived_units=None, dtype=None, order=None):
@@ -455,9 +398,6 @@ class Map(FitsArray):
     @staticmethod
     def zeros(shape, coverage=None, error=None, origin='lower', header=None, unit=None, derived_units=None, dtype=None, order=None):
         return Map(numpy.zeros(shape, dtype, order), header, unit, derived_units, coverage, error, origin, dtype, copy=False)
-
-    def copy(self, order='C'):
-        return Map(self, copy=True, order=order)
 
     def imshow(self, mask=None, title=None, new_figure=True, origin=None, **kw):
         """A simple graphical display function for the Map class"""
@@ -502,13 +442,14 @@ class Map(FitsArray):
         return annim
 
     def save(self, filename):
-        super(Map, self).save(filename)
+        FitsArray.save(self, filename, fitskw={'origin':'DISPORIG'})
         if self.error is not None:
             header = create_fitsheader(self.error, extname='Error')
             pyfits.append(filename, self.error, header)
         if self.coverage is not None:
             header = create_fitsheader(self.coverage, extname='Coverage')
             pyfits.append(filename, self.coverage, header)
+        _save_derived_units(filename, self.derived_units)
 
 
 #-------------------------------------------------------------------------------
@@ -550,6 +491,7 @@ class Tod(FitsArray):
                 nsamples = result.header['nsamples'][1:-1].replace(' ', '')
                 if len(nsamples) > 0:
                     nsamples = [int(float(x)) for x in nsamples.split(',') if x.strip() != '']
+                del result.header['DISPORIG']
         if nsamples is None:
             return result
         shape = validate_sliced_shape(result.shape, nsamples)
@@ -594,29 +536,17 @@ class Tod(FitsArray):
         
         self._mask = mask
 
-    def __array_finalize__(self, obj):
-        FitsArray.__array_finalize__(self, obj)
-        # obj might be None without __new__ being called (ex: append, concatenate)
-        if obj is None:
-            self.nsamples = () if numpy.rank(self) == 0 else (self.shape[-1],)
-            self.mask = None
-            return
-        if hasattr(obj, 'mask') and obj.mask is not numpy.ma.nomask:
-            self._mask = None if obj.mask is numpy.ma.nomask else obj.mask
-        self.nsamples = getattr(obj, 'nsamples', () if numpy.rank(self) == 0 else (self.shape[-1],))
-
-    def __array_wrap__(self, obj, context=None):
-        result = FitsArray.__array_wrap__(self, obj, context=context).view(type(self))
-        result.mask = self.mask
-        result.nsamples = self.nsamples
-        return result
+    def __array_finalize__(self, array):
+        FitsArray.__array_finalize__(self, array)
+        self._mask = getattr(array, 'mask', None)
+        self.nsamples = getattr(array, 'nsamples', () if numpy.rank(self) == 0 else (self.shape[-1],))
 
     def __getitem__(self, key):
         item = super(Quantity, self).__getitem__(key)
         if not isinstance(item, Tod):
             return item
         if item.mask is not None:
-            item.mask = self.mask[key]
+            item.mask = item.mask[key]
         if not isinstance(key, tuple):
             return item
         if len(key) > 1:
@@ -628,7 +558,7 @@ class Tod(FitsArray):
         return item
 
     def reshape(self, newdims, order='C'):
-        result = super(Tod, self).reshape(newdims, order=order)
+        result = numpy.ndarray.reshape(self, newdims, order=order)
         if self.mask is not None:
             result.mask = self.mask.reshape(newdims, order=order)
         return result
@@ -651,9 +581,6 @@ class Tod(FitsArray):
         shape_flat = flatten_sliced_shape(shape)
         return Tod(numpy.zeros(shape_flat, dtype, order), mask, shape[-1], header, unit, derived_units, dtype, copy=False)
    
-    def copy(self, order='C'):
-        return Tod(self, copy=True, order=order)
-
     def flatten(self, order='C'):
         """
         Return a copy of the array collapsed into one dimension.
@@ -702,11 +629,12 @@ class Tod(FitsArray):
         return output + ']'
 
     def save(self, filename):
-        super(Tod, self).save(filename)
+        FitsArray.save(self, filename, fitskw={'nsamples':'NSAMPLES'})
         if self.mask is None:
             return
         header = create_fitsheader(self.mask, extname='Mask')
         pyfits.append(filename, self.mask.view(numpy.uint8), header)
+        _save_derived_units(filename, self.derived_units)
 
 
 #-------------------------------------------------------------------------------
@@ -836,24 +764,6 @@ def create_fitsheader(array, extname=None, crval=(0.,0.), crpix=None, ctype=('RA
 #-------------------------------------------------------------------------------
 
 
-def projection_scale(input):
-    """
-    Returns the pixel area in units of reference pixel.
-    """
-    if not isinstance(input, FitsArray):
-        raise TypeError('The input is a ' + type(input).__name__ + ' instead of a FitsArray.')
-    if not input.has_wcs():
-        return 1.
-    scale, status = tmf.projection_scale(str(input.header).replace('\n',''), input.header['NAXIS1'], input.header['NAXIS2'])
-    if status != 0:
-        raise RuntimeError()
-
-    return scale
-    
-
-#-------------------------------------------------------------------------------
-
-
 def flatten_sliced_shape(shape):
     if shape is None: return shape
     if _my_isscalar(shape):
@@ -919,3 +829,12 @@ def validate_sliced_shape(shape, nsamples=None):
     l = list(shape[0:-1])
     l.append(nsamples)
     return tuple(l)
+
+def _save_derived_units(filename, du):
+    if len(du) == 0:
+        return
+    buffer = StringIO.StringIO()
+    pickle.dump(du, buffer, pickle.HIGHEST_PROTOCOL)
+    data = numpy.frombuffer(buffer.getvalue(), numpy.uint8)
+    header = create_fitsheader(data, extname='derived_units')
+    pyfits.append(filename, data, header)

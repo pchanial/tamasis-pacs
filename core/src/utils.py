@@ -247,10 +247,8 @@ def distance(shape, origin=None, resolution=1.):
     else:
         origin = numpy.asanyarray(origin, dtype=var.FLOAT_DTYPE)
 
-    if isinstance(resolution, Quantity):
-        unit = resolution._unit
-    else:
-        unit = None
+    unit = getattr(resolution, '_unit', None)
+
     if _my_isscalar(resolution):
         resolution = numpy.resize(resolution, rank)
     resolution = numpy.asanyarray(resolution, dtype=var.FLOAT_DTYPE)

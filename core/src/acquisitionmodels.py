@@ -1194,7 +1194,6 @@ class FftHalfComplex(Square):
             farray = numpy.empty(n, dtype=var.FLOAT_DTYPE)
             self.forward_plan[i] = fftw3.Plan(tarray, farray, direction='forward', flags=['measure'], realtypes=['halfcomplex r2c'], nthreads=1)._get_parameter()
             self.backward_plan[i] = fftw3.Plan(farray, tarray, direction='backward', flags=['measure'], realtypes=['halfcomplex c2r'], nthreads=1)._get_parameter()
-            
 
     def direct(self, input, reusein=False, reuseout=False):
         output = self.validate_input(input, reusein and reuseout)
@@ -1337,7 +1336,7 @@ def _propagate_attributes(input, output):
         if cls == numpy.ndarray:
             return
         output._unit = input._unit
-        output.derived_units = output.derived_units
+        output._derived_units = output._derived_units
         return
     # copy over slots
     while cls != numpy.ndarray:            
@@ -1363,13 +1362,14 @@ def _smart_reshape(input, shape):
 
 
 def _validate_input_unit(input, expected):
-    if expected is None or input._unit is None:
+    if len(expected) == 0 or not hasattr(input, '_unit') or \
+       len(input._unit) == 0:
         return
     for u,v in expected.items():
         if u not in input._unit or input._unit[u] != v:
             raise ValidationError("The input unit '" + input.unit + "' is incompatible with the required unit '" + \
                                   Quantity(1, expected).unit + "'.")
-    return True
+    return
 
 
 #-------------------------------------------------------------------------------
@@ -1382,9 +1382,9 @@ def _validate_output_unit(input, output, unitin, unitout, duout):
         output._unit = input._unit or unitin
         duout = duout or input.derived_units
     output.derived_units = duout
-    if unitout is None:
+    if len(unitout) == 0:
         return
-    if output._unit is None:
+    if len(output._unit) == 0:
         output._unit = unitout
         return
     output._unit = _divide_unit(output._unit, unitin)

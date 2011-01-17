@@ -13,7 +13,7 @@ __all__ = [ 'mapper_naive', 'mapper_ls', 'mapper_rls' ]
 
 def mapper_naive(tod, model, unit=None):
     """
-    Returns a naive map, i.e.: model.transpose(tod) / model.transpose(1)
+    Returns a naive map, i.e.: model.T(tod) / model.T(1)
 
     The unit of the input Time Ordered Data (TOD) is not restricted, but because
     by construction, the unit of the output map is the same, it is advisable to 
@@ -21,38 +21,37 @@ def mapper_naive(tod, model, unit=None):
     """
 
     # make sure the input is a surface brightness
-    if tod._unit is not None and 'detector' in tod._unit:
+    if 'detector' in tod._unit:
         tod = tod.tounit(tod.unit + ' detector / arcsec^2')
         copy = False
-    elif tod._unit is not None and 'detector_reference' in tod._unit:
+    elif 'detector_reference' in tod._unit:
         tod = tod.tounit(tod.unit + ' detector_reference / arcsec^2')
         copy = False
     else:
         copy = True
 
-    # model.T expects a quantity / detector, we hide our units to 
-    # prevent a unit validation execption
-    tod_unit = tod._unit
-    tod.unit = ''
-
     model = model * AllReduce().T
     if tod.mask is not None:
         model = Masking(tod.mask) * model
 
-    mymap = model.T(tod)
-    mymap._unit = tod_unit
+    # model.T expects a quantity / detector, we hide our units to 
+    # prevent a unit validation exception
+    tod_ = tod.view()
+    tod_.unit = ''
+    mymap = model.T(tod_)
 
-    unity = Tod(tod, copy=copy)
+    unity = Tod(tod_, copy=copy)
     unity[:] = 1.
     map_weights = model.T(unity, reusein=True)
-    map_weights.unit = ''
     old_settings = numpy.seterr(divide='ignore', invalid='ignore')
     mymap /= map_weights
+    mymap.unit = tod.unit
+
     numpy.seterr(**old_settings)
     mymap.coverage = map_weights
    
     if unit is not None:
-        mymap.unit = unit
+        mymap.inunit(unit)
     
     return mymap
 

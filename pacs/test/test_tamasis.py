@@ -8,7 +8,7 @@ from uuid import uuid1
 
 class TestFailure(Exception): pass
 
-tamasis.var.verbose = False
+tamasis.var.verbose = True
 
 data_dir = os.path.dirname(__file__) + '/data/'
 
@@ -69,13 +69,12 @@ model = projection
 print(model)
 
 # naive map
-tod.unit = 'Jy/arcsec^2'
-tod.unit = ''
+tod.inunit('Jy/arcsec^2')
 tod.mask[:] = 0
-backmap = model.T(tod)
+backmap = model.T(tod.magnitude)
 unity = Tod.ones(tod.shape, nsamples=tod.nsamples)
 weights = model.T(unity)
-map_naive = backmap / weights
+map_naive = Map(backmap / weights, unit='Jy/arcsec^2')
 
 header = projection.header
 header2 = header.copy()

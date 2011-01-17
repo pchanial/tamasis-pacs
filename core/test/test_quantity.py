@@ -7,22 +7,36 @@ class TestFailure(Exception): pass
 def testFailure():
     if numpy.__version__ >= '1.4': raise TestFailure()
 
-#test scalar, array and slices
-na = numpy.array
+q = Quantity(1, 'km')
+if any_neq(q.SI, Quantity(1000, 'm')): raise TestFailure()
+
+q = Quantity(1, 'm')
+if any_neq(q, q.tounit('m')): raise TestFailure()
+q2 = q.copy()
+q.inunit('m')
+if any_neq(q, q2): raise TestFailure()
+
+q = Quantity(1, 'km').tounit('m')
+if q.magnitude != 1000 or q.unit != 'm': raise TestFailure()
+
+q = Quantity(1, 'km')
+q.inunit('m')
+q2 = q.copy()
+if q.magnitude != 1000 or q.unit != 'm': raise TestFailure()
 
 def test_unit_add(x, y, v, u):
     c = x + y
     if not isinstance(c, Quantity): raise TestFailure(str(c))
-    if na(c) != v: raise TestFailure(str(c))
+    if c.magnitude != v: raise TestFailure(str(c))
     if c._unit != u: raise TestFailure(str(c))
 
 q = Quantity(1.)
 q2 = Quantity(1.)
 a = numpy.array(1.)
 i = 1
-test_unit_add(q, q2, 2, None)
-test_unit_add(q, a, 2, None)
-test_unit_add(q, i, 2, None)
+test_unit_add(q, q2, 2, {})
+test_unit_add(q, a, 2, {})
+test_unit_add(q, i, 2, {})
 
 q = Quantity(1., 'm')
 test_unit_add(q, q2, 2, {'m':1.0})
@@ -45,8 +59,8 @@ if numpy.__version__ >= '1.4':
 q = Quantity(1.)
 a = numpy.array(1.)
 i = 1
-test_unit_add(a, q, 2, None)
-test_unit_add(i, q, 2, None)
+test_unit_add(a, q, 2, {})
+test_unit_add(i, q, 2, {})
 
 q = Quantity(1., 'm')
 q2 = Quantity(1.)
@@ -63,22 +77,22 @@ except UnitError:
 
 def test_unit_sub(x, y, v, u):
     if numpy.__version__ < '1.4':
-        if getattr(x, '_unit', None) is not None and getattr(y, '_unit', None) is not None:
+        if getattr(x, '_unit', {}) is not {} and getattr(y, '_unit', {}) is not {}:
             if x._unit != y._unit:
                 print('Disabling operation on Quantities for Numpy < 1.4')
                 return
     c = x - y
     if not isinstance(c, Quantity): raise TestFailure(str(c))
-    if na(c) != v: raise TestFailure(str(c))
+    if c.magnitude != v: raise TestFailure(str(c))
     if c._unit != u: raise TestFailure(str(c))
 
 q = Quantity(1.)
 q2 = Quantity(1.)
 a = numpy.array(1.)
 i = 1
-test_unit_sub(q, q2, 0, None)
-test_unit_sub(q, a, 0, None)
-test_unit_sub(q, i, 0, None)
+test_unit_sub(q, q2, 0, {})
+test_unit_sub(q, a, 0, {})
+test_unit_sub(q, i, 0, {})
 
 q = Quantity(1., 'm')
 test_unit_sub(q, q2, 0, {'m':1.0})
@@ -100,8 +114,8 @@ test_unit_sub(q, q2, 0.999, {'km':1.0})
 q = Quantity(1.)
 a = numpy.array(1.)
 i = 1
-test_unit_sub(a, q, 0, None)
-test_unit_sub(i, q, 0, None)
+test_unit_sub(a, q, 0, {})
+test_unit_sub(i, q, 0, {})
 
 q = Quantity(1., 'm')
 q2 = Quantity(1.)
@@ -117,13 +131,13 @@ except UnitError:
 # unit conversion
 a=Quantity(1., 'kloug')
 try:
-    a.unit = 'notakloug'
+    a.inunit('notakloug')
 except UnitError:
     pass
 a=Quantity(1., 'kloug')
 
 try:
-    a.unit = 'kloug^2'
+    a.inunit('kloug^2')
 except UnitError:
     pass
 
@@ -217,7 +231,7 @@ a = Quantity(numpy.ones((1,10)), 'detector', derived_units=derived_units)
 if a.SI.shape != (2,10): raise TestFailure()
 
 a = Quantity(4., 'Jy/detector', {'detector':Quantity(2,'arcsec^2')})
-a.unit = a.unit + ' / arcsec^2 * detector'
+a.inunit(a.unit + ' / arcsec^2 * detector')
 if a.magnitude != 2 or a.unit != 'Jy / arcsec^2': raise TestFailure()
 
 a = Quantity(2., 'brou', {'brou':Quantity(2.,'bra'),'bra':Quantity(2.,'bri'),'bri':Quantity(2.,'bro'), 'bro':Quantity(2, 'bru'), 'bru':Quantity(2.,'stop')})
@@ -233,3 +247,6 @@ b = a.tounit('stop')
 if b.magnitude != 64: raise TestFailure()
 b = a.SI
 if b.magnitude != 64 or b.unit != 'stop': raise TestFailure()
+
+# test pixels
+if any_neq(Quantity(1,'pixel/sr/pixel_reference').SI, Quantity(1, '/sr')): TestFailure()

@@ -521,7 +521,7 @@ class PacsObservation(PacsBase):
                   copy=False)
 
         if not raw:
-            tod.unit = unit
+            tod.inunit(unit)
         return tod
 
     @property
