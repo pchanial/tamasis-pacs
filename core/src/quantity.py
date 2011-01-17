@@ -593,6 +593,8 @@ def _get_du(input, key, d):
         du = d[key](input)
     else:
         du = d[key]
+    if du is None:
+        return None
     if hasattr(input, '_header'):
         du = du.view(type(input))
         du._header = input._header
@@ -603,19 +605,21 @@ def _check_du(input, key, val, derived_units):
     if len(derived_units) == 0:
         return None
     if (key,val) in derived_units:
-        return _get_du(input, (key,val), derived_units).SI
+        du = _get_du(input, (key,val), derived_units).SI
+        return None if du is None else du.SI
     if (key,-val) in derived_units:
-        return (1. / _get_du(input, (key,-val), derived_units)).SI
+        du = _get_du(input, (key,-val), derived_units)
+        return None if du is None else (1 / du).SI
     if key not in derived_units:
         return None
     du = _get_du(input, key, derived_units)
-    if key in du._unit:
+    if du is None:
         return None
     if val == 1.:
         return du.SI
     if val == -1.:
         return (1 / du).SI
-    return (du**val).SI        
+    return (du ** val).SI        
 
 
 #-------------------------------------------------------------------------------
@@ -649,7 +653,7 @@ def pixel_reference_to_solid_angle(input):
     Returns the reference pixel area in the units defined by the FITSheader
     """
     if not hasattr(input, 'header'):
-        return Quantity(1., 'pixel_reference')
+        return None
 
     header = input.header
     if all([key in header for key in ('CD1_1', 'CD2_1', 'CD1_2', 'CD2_2')]):
@@ -659,8 +663,7 @@ def pixel_reference_to_solid_angle(input):
     elif 'CDELT1' in header and 'CDELT2' in header:
         area = abs(header['CDELT1'] * header['CDELT2'])
     else:
-        print 'cannot convert pixref'
-        return Quantity(1., 'pixel_reference')
+        return None
 
     cunit1 = header['CUNIT1'] if 'CUNIT1' in header else 'deg'
     cunit2 = header['CUNIT2'] if 'CUNIT2' in header else 'deg'
@@ -673,15 +676,15 @@ def pixel_reference_to_solid_angle(input):
 units_table = {
 
     # SI
-    'A'      : Quantity(1., 'A'),
-    'cd'     : Quantity(1., 'cd'),
-    'K'      : Quantity(1., 'K'),
-    'kg'     : Quantity(1., 'kg'),
-    'm'      : Quantity(1., 'm'),
-    'mol'    : Quantity(1., 'mol'),
-    'rad'    : Quantity(1., 'rad'),
-    's'      : Quantity(1., 's'),
-    'sr'     : Quantity(1., 'sr'),
+    'A'      : None,
+    'cd'     : None,
+    'K'      : None,
+    'kg'     : None,
+    'm'      : None,
+    'mol'    : None,
+    'rad'    : None,
+    's'      : None,
+    'sr'     : None,
 
     # angle
     'arcmin' : Quantity(1./60., 'deg'), 
