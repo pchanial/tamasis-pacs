@@ -235,9 +235,12 @@ def build(bld):
     # Installation
     bld.install_files('${PYTHONDIR}/tamasis', bld.srcnode.ant_glob('*/src/*py') + ['tamasisfortran.so'])
     for subdir in subdirs:
-        datanode = bld.srcnode.find_node(subdir+'/data')
-        if datanode is not None:
-            bld.install_files('${SHAREDIR}/tamasis/'+subdir, datanode.ant_glob('*'))
+        node = bld.srcnode.find_node(subdir+'/data')
+        if node is not None:
+            bld.install_files('${SHAREDIR}/tamasis/'+subdir, node.ant_glob('*'))
+        node = bld.srcnode.find_node(subdir+'/example')
+        if node is not None:
+            bld.install_files('${SHAREDIR}/tamasis/'+subdir, node.ant_glob('*'))
     bld.install_files('${LIBDIR}/jython/tamasishcss', bld.srcnode.ant_glob('pacs/hcss/tamasishcss/*py'))
 
 
