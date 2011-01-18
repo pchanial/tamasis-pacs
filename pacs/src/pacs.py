@@ -11,6 +11,7 @@ from matplotlib import pyplot
 from mpi4py import MPI
 from tamasis.core import *
 from tamasis.observations import Observation, Instrument, FlatField, create_scan
+from tamasis.acquisitionmodels import Unpacking
 
 __all__ = [ 'PacsObservation',
             'PacsSimulation',
@@ -134,6 +135,30 @@ class PacsBase(Observation):
         if status != 0: raise RuntimeError()
 
         return data.T
+
+    def get_random(self):
+        if not numpy.all(self.slice.compression_factor == 4):
+            raise NotImplementedError('Only implemented for a compression factor of 4.')
+        path = os.path.join(var.path, 'pacs')
+        files = {'blue':('1342182424_blue_PreparedFrames.fits.gz', 10000,100000), 'green':('1342182427_green_PreparedFrames.fits.gz', 10000, 100000), 'red':('1342182427_red_PreparedFrames.fits.gz', 7400, 116400)}
+        file, istart, iend = files[self.instrument.band]
+        data = pyfits.open(os.path.join(path, file))['Signal'].data[:,:,istart:iend]
+        data /= self.instrument.active_fraction * self.instrument.responsivity
+        ndetectors = self.get_ndetectors()
+        nsamples = self.get_nsamples()
+        nsamples_tot = numpy.sum(nsamples)
+        if nsamples_tot > data.shape[-1]:
+            raise ValueError('There is not enough noise data for this observation.')
+
+        irandom = numpy.random.random_integers(0,iend-istart-nsamples_tot)
+        result = Tod(data[:,:,irandom:irandom+nsamples_tot],
+                     unit='Jy/detector',
+                     derived_units=self.get_derived_units()[0],
+                     nsamples=nsamples)
+        result = self.pack(result)
+        result.T[:] -= numpy.mean(result, axis=1)
+        result.T[:] /= self.instrument.flatfield.detector[~self.instrument.detector_mask]
+        return result
 
     def save(self, filename, tod):
         
