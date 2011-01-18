@@ -49,6 +49,50 @@ a = numpy.ones((1,1,3))
 if validate_sliced_shape((10,(10,3)), None) != (10, (10,3)): raise TestFailure()
 if validate_sliced_shape((10,13), None) != (10, 13): raise TestFailure()
 
+# check copies
+d = numpy.array([1,2])
+u = 'Jy'
+du = {'Jy':Quantity(1,'Yj')}
+h = create_fitsheader(d)
+h.update('myk', 10)
+o = 'upper'
+n = (0, 2)
+m = numpy.array([True, False])
+c = numpy.array([1., 2.])
+e = numpy.array([3., 4.])
+
+a = Quantity(d, u, du)
+b = FitsArray(a, header=h)
+c = Map(b, origin=o, error=e, coverage=c)
+d = Tod(b, nsamples=n, mask=m)
+objs = [a, b, c, d]
+for obj in objs:
+    obj2 = obj.__class__(obj, copy=False)
+    if id(obj) != id(obj2): raise TestFailure
+
+for obj in objs:
+    obj2 = obj.__class__(obj, copy=True)
+    for k in get_attributes(obj):
+        if (k in ['_unit', 'origin', 'nsamples']) is not \
+           (id(getattr(obj, k)) == id(getattr(obj2, k))):
+            print k, id(getattr(obj, k)), id(getattr(obj2, k))
+
+b = FitsArray(a, unit=u, derived_units=du, header=h)
+c = Map(a, unit=u, derived_units=du, header=h, origin=o, error=e, coverage=c)
+d = Tod(a, unit=u, derived_units=du, header=h, nsamples=n, mask=m)
+
+objs = [b, c, d]
+for obj in objs:
+    obj2 = obj.__class__(obj, copy=False)
+    if id(obj) != id(obj2): raise TestFailure
+
+for obj in objs:
+    obj2 = obj.__class__(obj, copy=True)
+    for k in get_attributes(obj):
+        if (k in ['_unit', 'origin', 'nsamples']) is not \
+           (id(getattr(obj, k)) == id(getattr(obj2, k))):
+            print k, id(getattr(obj, k)), id(getattr(obj2, k))
+
 # check errors
 try:
     junk = validate_sliced_shape((), 0)

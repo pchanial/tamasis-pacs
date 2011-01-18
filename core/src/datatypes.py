@@ -349,17 +349,22 @@ class Map(FitsArray):
             except:
                 pass
 
-        if not subok and result.__class__ is not cls or not issubclass(result.__class__, cls):
-            result = result.view(cls)
-
         if origin is not None:
             origin = origin.strip().lower()
-            if origin not in ('upper', 'lower'):
+            if origin not in ('upper', 'lower', 'none'):
                 raise ValueError("Invalid origin '"+origin+"'. Valid values are None, 'upper' or 'lower'.")
-        
-        result.coverage = coverage
-        result.error = error
-        result.origin = origin
+            if origin != 'none':
+                result.origin = origin
+
+        if error is not None:
+            result.error = error
+        elif copy and result.error is not None:
+            result.error = result.error.copy()
+
+        if coverage is not None:
+            result.coverage = coverage
+        elif copy and result.coverage is not None:
+            result.coverage = result.coverage.copy()
 
         return result
 
@@ -482,8 +487,6 @@ class Tod(FitsArray):
 
         if mask is not None:
             result._mask = numpy.array(mask, numpy.bool8, copy=copy)
-        else:
-            result._mask = None
         
         # nsamples attribute
         if type(data) is str and nsamples is None:
@@ -491,7 +494,7 @@ class Tod(FitsArray):
                 nsamples = result.header['nsamples'][1:-1].replace(' ', '')
                 if len(nsamples) > 0:
                     nsamples = [int(float(x)) for x in nsamples.split(',') if x.strip() != '']
-                del result.header['DISPORIG']
+                del result.header['NSAMPLES']
         if nsamples is None:
             return result
         shape = validate_sliced_shape(result.shape, nsamples)

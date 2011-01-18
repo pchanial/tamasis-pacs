@@ -214,22 +214,20 @@ class Quantity(numpy.ndarray):
             result = result.view(cls)
 
         # set unit attribute
-        if unit is None:
-            result._unit = result._unit
-        else:
+        if unit is not None:
             result.unit = unit
 
         # set derived_units attribute
-        if derived_units is None:
-            result._derived_units = result._derived_units
-        else:
+        if derived_units is not None:
             result.derived_units = derived_units
+        elif copy:
+            result.derived_units = result.derived_units.copy()
 
         return result
 
     def __array_finalize__(self, obj):
-        # for some numpy methods (append): the result doesn't go through __new__ and
-        # obj is None in __array_finalize__
+        # for some numpy methods (append): the result doesn't go through __new__
+        # and obj is None. We have to set the instance attributes
         self._unit = getattr(obj, '_unit', {})
         self._derived_units = getattr(obj, '_derived_units', {})
 
