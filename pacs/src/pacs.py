@@ -11,7 +11,6 @@ from matplotlib import pyplot
 from mpi4py import MPI
 from tamasis.core import *
 from tamasis.observations import Observation, Instrument, FlatField, create_scan
-from tamasis.acquisitionmodels import Unpacking
 
 __all__ = [ 'PacsObservation',
             'PacsSimulation',
@@ -137,8 +136,15 @@ class PacsBase(Observation):
         return data.T
 
     def get_random(self):
-        if not numpy.all(self.slice.compression_factor == 4):
-            raise NotImplementedError('Only implemented for a compression factor of 4.')
+        """
+        Return noise data from a random slice of a real pointed observation.
+
+        Currently, the required duration must be less than that of the 
+        real observation (around 3 hours).
+        """
+        if any([slice.compression_factor not in [4,8] for slice in self.slice]):
+            raise NotImplementedError('The compression factor must be 4 or 8.')
+
         path = os.path.join(var.path, 'pacs')
         files = {'blue':('1342182424_blue_PreparedFrames.fits.gz', 10000,100000), 'green':('1342182427_green_PreparedFrames.fits.gz', 10000, 100000), 'red':('1342182427_red_PreparedFrames.fits.gz', 7400, 116400)}
         file, istart, iend = files[self.instrument.band]
@@ -146,7 +152,7 @@ class PacsBase(Observation):
         data /= self.instrument.active_fraction * self.instrument.responsivity
         ndetectors = self.get_ndetectors()
         nsamples = self.get_nsamples()
-        nsamples_tot = numpy.sum(nsamples)
+        nsamples_tot = numpy.sum(nsamples*self.slice.compression_factor/4)
         if nsamples_tot > data.shape[-1]:
             raise ValueError('There is not enough noise data for this observation.')
 
@@ -158,6 +164,9 @@ class PacsBase(Observation):
         result = self.pack(result)
         result.T[:] -= numpy.mean(result, axis=1)
         result.T[:] /= self.instrument.flatfield.detector[~self.instrument.detector_mask]
+
+        compression = CompressionAverage(self.slice.compression_factor/4)
+        result = compression(result)
         return result
 
     def save(self, filename, tod):
