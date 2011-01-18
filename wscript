@@ -22,7 +22,7 @@ out = 'build'
 subdirs = ['core', 'madcap', 'pacs']
 
 # Required libraries
-libraries = ['BLAS', 'CFITSIO', 'FFTW3', 'LAPACK', 'OPENMP', 'WCSLIB']
+libraries = ['CFITSIO', 'FFTW3', 'LAPACK', 'OPENMP', 'WCSLIB']
 
 # Required Python packages
 required_modules = ['numpy',
@@ -83,6 +83,7 @@ def configure(conf):
             conf.env.FCFLAGS_OPENMP = ['-fopenmp']
             conf.env.LIB_OPENMP = ['gomp']
         conf.env.F2PYFCOMPILER = 'gnu95'
+        conf.env.LIB_LAPACK = ['lapack']
     elif conf.env.FC_NAME == 'IFORT':
         conf.env.FCFLAGS = ['-fpp', '-fPIC', '-free', '-ftz', '-fp-model', 'precise', '-ftrapuv', '-fast', '-warn', 'all']
         if conf.options.debug:
@@ -91,8 +92,7 @@ def configure(conf):
             conf.env.FCFLAGS_OPENMP = ['-openmp']
             conf.env.LIB_OPENMP = ['iomp5']
         conf.env.F2PYFCOMPILER = 'intelem'
-    conf.env.LIB_BLAS = ['blas']
-    conf.env.LIB_LAPACK = ['lapack']
+        conf.env.LIB_LAPACK = ['mkl_intel_lp64','mkl_intel_thread','mkl_core']
 
     if conf.options.precision_real == '16':
         conf.check_cc(
@@ -136,24 +136,6 @@ end program test""",
     fragment = """
 program test
     integer, parameter :: p = kind(1.d0)
-    real(p)            :: u(2), v(2)
-    u = 1._p
-    v = 0._p
-    call daxpy(2, 3._p, u, 1, v, 1)
-end program test
-"""
-    if conf.options.precision_real == '4':
-        fragment = fragment.replace('kind(1.d0)', 'kind(1.)').replace('daxpy','saxpy')
-    conf.check_cc(
-        fragment         = fragment,
-        compile_filename = 'test.f',
-        features         = 'fc fcprogram',
-        msg              = "Checking for 'blas'",
-        use=['BLAS'])
-
-    fragment = """
-program test
-    integer, parameter :: p = kind(1.d0)
     integer            :: status
     real(p)            :: cd(2,2), vr(2), vim(2), junk, work(6)
     cd = 0
@@ -167,7 +149,7 @@ end program test
         compile_filename = 'test.f',
         features         = 'fc fcprogram',
         msg              = "Checking for 'lapack'",
-        use=['LAPACK'])
+        use=['LAPACK', 'OPENMP'])
     conf.check_cfg(package='wcslib',  args=['--libs', '--cflags'])
     conf.check_cfg(modversion='wcslib')
     check_wcslib_external(conf.env)

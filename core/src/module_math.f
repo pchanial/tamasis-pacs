@@ -32,7 +32,6 @@ module module_math
     public :: eq_real
     public :: neq_real
     public :: add
-    public :: add_blas
 
     interface distance
         module procedure distance_1d, distance_2d, distance_3d
@@ -744,14 +743,5 @@ contains
         !$omp end parallel do
 
     end subroutine add
-
-    subroutine add_blas(a, b)
-
-        real(p), intent(inout) :: a(:)
-        real(p), intent(in)    :: b(:)
-
-        call daxpy(size(a), 1._p, b, 1, a, 1)
-        
-    end subroutine add_blas
 
 end module module_math
