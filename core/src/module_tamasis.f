@@ -38,9 +38,11 @@ contains
         character(len=*), intent(in), optional :: extra
 
         character(len=100) :: hostname
-        integer            :: count2, count_rate, status
+        integer            :: count2, count_rate
 
 #ifdef GFORTRAN
+        integer            :: status
+
         status = hostnm(hostname)
 #else
         call get_environment_variable(name="HOSTNAME", value=hostname)
