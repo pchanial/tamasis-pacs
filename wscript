@@ -22,7 +22,7 @@ out = 'build'
 subdirs = ['core', 'madcap', 'pacs']
 
 # Required libraries
-libraries = ['BLAS', 'CFITSIO', 'FFTW3', 'LAPACK', 'OPENMP', 'WCSLIB']
+libraries = ['CFITSIO', 'FFTW3', 'LAPACK', 'OPENMP', 'WCSLIB']
 
 # Required Python packages
 required_modules = ['numpy',
@@ -83,6 +83,7 @@ def configure(conf):
             conf.env.FCFLAGS_OPENMP = ['-fopenmp']
             conf.env.LIB_OPENMP = ['gomp']
         conf.env.F2PYFCOMPILER = 'gnu95'
+        conf.env.LIB_LAPACK = ['lapack', 'blas']
     elif conf.env.FC_NAME == 'IFORT':
         conf.env.FCFLAGS = ['-fpp', '-fPIC', '-free', '-ftz', '-fp-model', 'precise', '-ftrapuv', '-fast', '-warn', 'all']
         if conf.options.debug:
@@ -91,8 +92,7 @@ def configure(conf):
             conf.env.FCFLAGS_OPENMP = ['-openmp']
             conf.env.LIB_OPENMP = ['iomp5']
         conf.env.F2PYFCOMPILER = 'intelem'
-    conf.env.LIB_BLAS = ['blas']
-    conf.env.LIB_LAPACK = ['lapack']
+        conf.env.LIB_LAPACK = ['mkl_intel_lp64','mkl_intel_thread','mkl_core', 'iomp5']
 
     if conf.options.precision_real == '16':
         conf.check_cc(
@@ -149,7 +149,7 @@ end program test
         compile_filename = 'test.f',
         features         = 'fc fcprogram',
         msg              = "Checking for 'blas'",
-        use=['BLAS'])
+        use=['LAPACK'])
 
     fragment = """
 program test
