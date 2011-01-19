@@ -1230,10 +1230,12 @@ class Convolution(Symmetric):
 
     def __init__(self, kernel, description=None):
         AcquisitionModel.__init__(self, description)
-        self.kernel = numpy.asarray(kernel)
+        self.kernel = numpy.asanyarray(kernel)
 
     def direct(self, input, reusein=False, reuseout=False):
-        return scipy.signal.fftconvolve(input, self.kernel, mode='same')
+        output = self.validate_input(input, reusein and reuseout)
+        output[:] = scipy.signal.fftconvolve(input, self.kernel, mode='same')
+        return output
 
 
 #-------------------------------------------------------------------------------
