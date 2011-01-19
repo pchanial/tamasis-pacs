@@ -195,32 +195,39 @@ class PacsBase(Observation):
                      str(var.mpi_comm.Get_size()) + ', '
         else:
             mpistr = ''
+        
+        # print general information
+        result = '\nInfo ' + MPI.Get_processor_name() + ': ' + mpistr + plural('core', nthreads) + ' handling ' + \
+                 plural('detector', ndetectors) + '\n'
+        info = [ self.instrument.band.capitalize() + ' band' ]
 
-        # mode
+        # observing mode
         mode = self.slice[0].mode
         print_each_mode = numpy.any(self.slice.mode != mode)
-        str_all_mode = '' if print_each_mode else mode + ' mode, '
+        if not print_each_mode:
+            info.append(mode + ' mode')
 
         # compression factor
         compression = self.slice[0].compression_factor
         print_each_compression = numpy.any(self.slice.compression_factor != compression)
-        str_all_compression = '' if print_each_compression else 'compression factor x' + str(compression) + ', '
+        if not print_each_compression:
+            info.append('compression factor x' + str(compression))
 
-        # print general informations
-        result = '\nInfo ' + MPI.Get_processor_name() + ': ' + mpistr + plural('core', nthreads) + ' handling ' + \
-                 plural('detector', ndetectors) + '\n'
-        result += sp + self.instrument.band.capitalize() + ' band, ' + \
-                  str_all_mode + str_all_compression + 'unit is ' + unit + '\n'
+        if self.__class__.__name__ == 'PacsObservation':
+            info.append('unit is ' + unit)
 
-        # check if the masks are the same for all the slices
-        homogeneous = 'nmasks' not in self.slice.dtype.names or \
-                      same(self.slice.nmasks) and all([same(a) for a in self.slice.mask_name.T])
-        if homogeneous:
-            (a,d) = ad_masks(self.slice, 0)
-            result += sp + a + '\n'
-            result += sp + d + '\n'
-        else:
-            result += sp + 'The masks of the observations are heterogeneous\n'
+        result += sp + ', '.join(info) + '\n'
+
+        # mask information
+        if self.__class__.__name__ == 'PacsObservation':        
+            homogeneous = 'nmasks' not in self.slice.dtype.names or \
+                same(self.slice.nmasks) and all([same(a) for a in self.slice.mask_name.T])
+            if homogeneous:
+                (a,d) = ad_masks(self.slice, 0)
+                result += sp + a + '\n'
+                result += sp + d + '\n'
+            else:
+                result += sp + 'The masks of the observations are heterogeneous\n'
 
         # print slice-specific information
         dest = 0
@@ -257,7 +264,7 @@ class PacsBase(Observation):
             last = p.size - numpy.argmin(p.removed[::-1])
             result += '[' + str(first) + ':' + str(last) + ']:\n'
 
-            if not homogeneous:
+            if self.__class__.__name__ == 'PacsObservation' and not homogeneous:
                 (a,d) = ad_masks(self.slice, islice)
                 result += sp + '      ' + a + '\n'
                 result += sp + '      ' + d + '\n'
@@ -582,28 +589,57 @@ class PacsSimulation(PacsBase):
     """
     This class creates a simulated PACS observation.
     """
-    def __init__(self, pointing, band, mode='prime', fine_sampling_factor=1, detector_mask='calibration', reject_bad_line=False, policy_inscan='keep', policy_turnaround='keep', policy_other='remove', policy_invalid='mask', active_fraction=0):
+    def __init__(self, pointing, band, mode=None, fine_sampling_factor=1, detector_mask='calibration', reject_bad_line=False, policy_inscan='keep', policy_turnaround='keep', policy_other='keep', policy_invalid='keep', active_fraction=0):
+
+        pointing_ = pointing.copy()
+        if pointing.header is not None:
+            pointing_.header = pointing.header.copy()
+        pointing = pointing_
+
         band = band.lower()
         if band not in ('blue', 'green', 'red'):
             raise ValueError("Band is not 'blue', 'green', nor 'red'.")
 
-        mode = mode.lower()
-        if mode not in ('prime', 'parallel', 'transparent'):
-            raise ValueError("Observing mode is not 'prime', 'parallel', nor 'transparent'.")
-        
-        if pointing.header is not None and 'compression_factor' in pointing.header:
-            compression_factor = pointing.header['compression_factor']
-        else:
-            compression_factor = 8 if mode == 'parallel' and band != 'red' else 1 if mode == 'transparent' else 4
+        # get compression factor from input pointing
+        delta = numpy.median(pointing.time[1:]-pointing.time[0:-1])
+        compression_factor = int(numpy.round(delta / self.SAMPLING))
+        if compression_factor <= 0:
+            raise ValueError('Invalid time in pointing argument. Use PacsSimulation.SAMPLING.')
+        if numpy.abs(delta / compression_factor - self.SAMPLING) > 0.01 * self.SAMPLING:
+            print('Warning: the pointing time has unexpected sampling rate. Assuming a compression factor of ' + str(compression_factor) + '.')
 
+        # observing mode
+        if mode is None:
+            if compression_factor == 4:
+                mode = 'prime' # might not be the case for the red band
+            elif compression_factor == 8:
+                mode = 'calibration' if band == 'red' else 'parallel'
+            else:
+                mode = 'calibration'
+        else:
+            mode = mode.lower()
+            if mode not in ('prime', 'parallel', 'calibration', 'transparent'):
+                raise ValueError("Observing mode is not 'prime', 'parallel', 'calibration' nor 'transparent'.")
+            if mode == 'prime' and compression_factor != 4 or \
+               mode == 'parallel' and compression_factor != (4 if band == 'red' else 8) or \
+               mode == 'transparent' and compression_factor != 1:
+                raise ValueError("The observing mode '" + mode + \
+                    "' in the " + band + " band is incompatible with the compression factor '" + \
+                    str(compression_factor) + "'.")
+
+        # detector mask
         detector_mask = self._get_detector_mask(band, detector_mask, mode == 'transparent', reject_bad_line)
 
         # store pointing information
         if not hasattr(pointing, 'chop'):
             pointing.chop = numpy.zeros(pointing.size, var.FLOAT_DTYPE)
+        pointing.masked  = policy_inscan     == 'mask'   and pointing.info == Pointing.INSCAN     or \
+                           policy_turnaround == 'mask'   and pointing.info == Pointing.TURNAROUND or \
+                           policy_other      == 'mask'   and pointing.info == Pointing.OTHER
+        pointing.removed = policy_inscan     == 'remove' and pointing.info == Pointing.INSCAN     or \
+                           policy_turnaround == 'remove' and pointing.info == Pointing.TURNAROUND or \
+                           policy_other      == 'remove' and pointing.info == Pointing.OTHER
         self.pointing = pointing
-        self.pointing.removed = policy_inscan == 'remove' and self.pointing.info == Pointing.INSCAN or \
-                                policy_turnaround == 'remove' and self.pointing.info == Pointing.TURNAROUND
 
         # store instrument information
         detector_center, detector_corner, detector_area, distortion_yz, oflat, dflat, responsivity, active_fraction, status = tmf.pacs_info_instrument(band, numpy.asfortranarray(detector_mask, numpy.int8), float(active_fraction))
