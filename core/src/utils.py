@@ -3,6 +3,7 @@ import numpy
 import os
 import pyfits
 import re
+import scipy.special
 import tamasisfortran as tmf
 import time
 from matplotlib import pyplot
@@ -191,8 +192,10 @@ def plot_scan(input, map=None, title=None, new_figure=True, color='magenta', lin
 
 def airy_disk(shape, fwhm, origin=None, resolution=1.):
     d  = distance(shape, origin=origin, resolution=resolution)
+    index = numpy.where(d == 0)
+    d[index] = 1.e-30
     d *= 1.61633 / (fwhm/2.)
-    d  = (2 * jn(1,d)/d)**2
+    d  = (2 * scipy.special.jn(1,d)/d)**2
     d /= numpy.sum(d)
     return d
 
@@ -240,6 +243,7 @@ def distance(shape, origin=None, resolution=1.):
         shape = (shape,)
     else:
         shape = tuple(shape)
+    shape = tuple(int(numpy.round(s)) for s in shape)
     rank = len(shape)
 
     if origin is None:
@@ -295,10 +299,14 @@ def _distance_slow(shape, origin, resolution, dtype):
 
 
 def gaussian(shape, fwhm, origin=None, resolution=1., unit=None):
-    sigma = fwhm / numpy.sqrt(8*numpy.log(2))
+    if len(shape) == 2:
+        sigma = fwhm / numpy.sqrt(8*numpy.log(2))
+    else:
+        raise NotImplementedError()
     d = distance(shape, origin=origin, resolution=resolution)
-    d = numpy.exp(-d**2/(2*sigma**2)) / (2*numpy.pi*sigma**2)
     d.unit = ''
+    d = numpy.exp(-d**2/(2*sigma**2))
+    d /= numpy.sum(d)
     if unit:
         d.unit = unit
     return d

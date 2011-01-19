@@ -22,6 +22,7 @@ class PacsBase(Observation):
 
     ACCELERATION = 4.
     DEFAULT_RESOLUTION = {'blue':3.2, 'green':3.2, 'red':6.4}
+    PSF_FWHM = {'blue':5.2, 'green':7.7, 'red':12.}
     POINTING_DTYPE = [('time', var.FLOAT_DTYPE), ('ra', var.FLOAT_DTYPE),
                       ('dec', var.FLOAT_DTYPE), ('pa', var.FLOAT_DTYPE),
                       ('chop', var.FLOAT_DTYPE), ('info', numpy.int64),
@@ -134,6 +135,32 @@ class PacsBase(Observation):
         if status != 0: raise RuntimeError()
 
         return data.T
+
+    def get_psf(self, resolution, type='calibration'):
+        """
+        Return gaussian, airy or calibration PSFs
+
+        Calibration PSFs are rescaled to the required pixel resolution
+        by a bilinear interpolation.
+
+        Parameters
+        ----------
+        resolution : float
+            Pixel resolution of the PSF
+        type : string
+            Values can be 'gaussian', 'airy' or 'calibration'
+        """
+
+        if type not in ('airy', 'gaussian', 'calibration'):
+            raise ValueError("PSF type must be 'gaussian', 'airy' or 'calibration'.")
+        
+        if type in ('airy', 'gaussian'):
+            func = { 'airy': airy_disk, 'gaussian' : gaussian }[type]
+            fwhm = self.PSF_FWHM[self.instrument.band]
+            size = int(numpy.round(10 * fwhm / resolution)) // 2 * 2 + 1
+            return func((size,size), fwhm=fwhm, resolution=resolution)
+
+        raise NotImplementedError()
 
     def get_random(self):
         """
