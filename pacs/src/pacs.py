@@ -15,6 +15,7 @@ from tamasis.observations import Observation, Instrument, FlatField, create_scan
 __all__ = [ 'PacsObservation',
             'PacsSimulation',
             'pacs_create_scan',
+            'pacs_get_psf',
             'pacs_plot_scan',
             'pacs_preprocess' ]
 
@@ -135,32 +136,6 @@ class PacsBase(Observation):
         if status != 0: raise RuntimeError()
 
         return data.T
-
-    def get_psf(self, resolution, type='calibration'):
-        """
-        Return gaussian, airy or calibration PSFs
-
-        Calibration PSFs are rescaled to the required pixel resolution
-        by a bilinear interpolation.
-
-        Parameters
-        ----------
-        resolution : float
-            Pixel resolution of the PSF
-        type : string
-            Values can be 'gaussian', 'airy' or 'calibration'
-        """
-
-        if type not in ('airy', 'gaussian', 'calibration'):
-            raise ValueError("PSF type must be 'gaussian', 'airy' or 'calibration'.")
-        
-        if type in ('airy', 'gaussian'):
-            func = { 'airy': airy_disk, 'gaussian' : gaussian }[type]
-            fwhm = self.PSF_FWHM[self.instrument.band]
-            size = int(numpy.round(10 * fwhm / resolution)) // 2 * 2 + 1
-            return func((size,size), fwhm=fwhm, resolution=resolution)
-
-        raise NotImplementedError()
 
     def get_random(self):
         """
@@ -916,6 +891,38 @@ def pacs_create_scan(ra0, dec0, cam_angle=0., scan_angle=0., scan_length=30., sc
     scan.header.update('HIERARCH cam_angle', cam_angle)
     scan.chop = 0.
     return scan
+
+
+def pacs_get_psf(band, resolution, type='calibration'):
+    """
+    Return gaussian, airy or calibration PSFs
+
+    Calibration PSFs are rescaled to the required pixel resolution
+    by a bilinear interpolation.
+
+    Parameters
+    ----------
+    band : string
+        PACS band ('blue', 'green' or 'red')
+    resolution : float
+        Pixel resolution of the PSF
+    type : string
+        Values can be 'gaussian', 'airy' or 'calibration'
+    """
+
+    if band not in ('blue', 'green', 'red'):
+        raise ValueError("Invalid band '" + str(band) + "'.")
+
+    if type not in ('airy', 'gaussian', 'calibration'):
+        raise ValueError("PSF type must be 'gaussian', 'airy' or 'calibration'.")
+
+    if type in ('airy', 'gaussian'):
+        func = { 'airy': airy_disk, 'gaussian' : gaussian }[type]
+        fwhm = PacsBase.PSF_FWHM[band]
+        size = int(numpy.round(10 * fwhm / resolution)) // 2 * 2 + 1
+        return func((size,size), fwhm=fwhm, resolution=resolution)
+
+    raise NotImplementedError()
 
 
 #-------------------------------------------------------------------------------
