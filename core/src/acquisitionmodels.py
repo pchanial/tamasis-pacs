@@ -5,6 +5,7 @@ except:
 
 import multiprocessing
 import numpy
+import scipy.signal
 import scipy.sparse.linalg
 import tamasisfortran as tmf
 
@@ -15,11 +16,13 @@ from .numpyutils import _my_isscalar
 from .processing import interpolate_linear
 from .quantity import Quantity, UnitError, _divide_unit, _multiply_unit
 
-__all__ = ['AcquisitionModel', 'Diagonal', 'Scalar', 'Identity', 'DiscreteDifference',
-           'Projection', 'CompressionAverage', 'DownSampling', 'Masking',
-           'Unpacking', 'Reshaping', 'Padding', 'Fft', 'FftHalfComplex',
-           'InvNtt', 'InterpolationLinear', 'AllReduce', 'CircularShift', 
-           'asacquisitionmodel']
+__all__ = [
+    'AcquisitionModel', 'AllReduce', 'CircularShift', 'CompressionAverage',
+    'Convolution', 'Diagonal', 'DiscreteDifference', 'DownSampling',
+    'Fft', 'FftHalfComplex', 'Identity', 'InterpolationLinear', 'InvNtt',
+    'Masking', 'Padding', 'Projection', 'Reshaping', 'Scalar', 'Unpacking',
+    'asacquisitionmodel',
+]
 
 
 class ValidationError(Exception): pass
@@ -1218,6 +1221,19 @@ class FftHalfComplex(Square):
         if nsamples != self.nsamples and nsamples != self.nsamples_tot:
             raise ValidationError("Invalid FFT size '"+str(nsamples)+"' instead of '"+str(self.nsamples)+"'.")
         return combine_sliced_shape(shape[0:-1], self.nsamples)
+
+
+#-------------------------------------------------------------------------------
+
+
+class Convolution(Symmetric):
+
+    def __init__(self, kernel, description=None):
+        AcquisitionModel.__init__(self, description)
+        self.kernel = numpy.asarray(kernel)
+
+    def direct(self, input, reusein=False, reuseout=False):
+        return scipy.signal.fftconvolve(input, self.kernel, mode='same')
 
 
 #-------------------------------------------------------------------------------
