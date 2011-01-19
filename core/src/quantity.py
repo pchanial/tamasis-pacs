@@ -336,7 +336,6 @@ ities of different units may have changed operands to common unit '" + \
             array._unit = {}
 
         elif ufunc not in (numpy.abs, numpy.negative ):
-            print('Quantity: unhandled ufunc ', ufunc, 'with', len(args), 'args')
             array._unit = {}
 
         else:
