@@ -26,9 +26,13 @@ class Ds9(object):
     >>> ds9(my new map)
     """
     def __call__(self, array, origin=None, **keywords):
-        array = numpy.asanyarray(array)
-        array = Map(array, dtype=array.dtype, copy=False)
-        array.ds9(origin=origin, new=self.open_in_new_window, **keywords)
+        if not isinstance(array, str):
+            array = numpy.asanyarray(array)
+            dtype = array.dtype
+        else:
+            dtype = None
+        array = Map(array, dtype=dtype, copy=False, origin=origin)
+        array.ds9(new=self.open_in_new_window, **keywords)
 
     @property
     def targets(self):
