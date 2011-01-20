@@ -6,13 +6,28 @@ import re
 import scipy.special
 import tamasisfortran as tmf
 import time
+import scipy.signal
+
 from matplotlib import pyplot
 from . import var
 from .datatypes import Map, create_fitsheader
 from .numpyutils import _my_isscalar
 from .quantity import Quantity
 
-__all__ = [ 'ds9', 'hs', 'mean_degrees', 'minmax_degrees', 'plot_scan', 'airy_disk', 'aperture_circular', 'distance', 'gaussian', 'phasemask_fourquadrant' ]
+__all__ = [ 
+    'airy_disk',
+    'aperture_circular',
+    'distance',
+    'ds9',
+    'gaussian',
+    'hs',
+    'mean_degrees',
+    'minmax_degrees',
+    'phasemask_fourquadrant',
+    'plot_scan',
+    'profile',
+    'psd2',
+]
 
 
 class Ds9(object):
@@ -185,6 +200,32 @@ def plot_scan(input, map=None, title=None, new_figure=True, color='magenta', lin
     p = pyplot.plot(x, y, color=color, linewidth=linewidth)
     pyplot.plot(x[0], y[0], 'o', color = p[0]._color)
     return image
+
+
+#-------------------------------------------------------------------------------
+
+
+def profile(input, origin=None, resolution=1., bin=5):
+    input = numpy.asanyarray(input)
+    d = distance(input.shape, origin=origin, resolution=resolution)
+    d /= bin
+    d = d.astype(int)
+    m = numpy.max(d)
+    p = numpy.ndarray(int(m+1))
+    for i in range(m+1):
+        p[i] = numpy.mean(input[d == i])
+    return p
+
+
+#-------------------------------------------------------------------------------
+
+
+def psd2(input):
+    input = numpy.asanyarray(input)
+    s = numpy.abs(scipy.signal.fft2(input))
+    for axis, n in zip((-2,-1), s.shape[-2:]):
+        s = numpy.roll(s, n // 2, axis=axis)
+    return Map(s)
 
 
 #-------------------------------------------------------------------------------
