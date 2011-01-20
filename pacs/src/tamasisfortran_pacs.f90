@@ -384,7 +384,7 @@ end subroutine pacs_read_filter_calibration
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine pacs_map_header(band, nslices, npointings, nsamples_tot, compression_factor, fine_sampling_factor,             &
+subroutine pacs_map_header(band, nslices, npointings, nsamples_tot, compression_factor, delay, fine_sampling_factor,               &
                            oversampling, time, ra, dec, pa, chop, masked, removed, detector_mask, nrows, ncolumns, detector_corner,&
                            distortion_yz, resolution, header, status)
 
@@ -399,6 +399,7 @@ subroutine pacs_map_header(band, nslices, npointings, nsamples_tot, compression_
     !f2py intent(in)                               :: npointings(nslices)
     !f2py intent(hide),                            :: nsamples_tot = size(time)
     !f2py intent(in)                               :: compression_factor(nslices)
+    !f2py intent(in)                               :: delay(nslices)
     !f2py intent(in)                               :: fine_sampling_factor
     !f2py intent(in)                               :: oversampling
     !f2py intent(in)                               :: time(nsamples_tot)
@@ -422,6 +423,7 @@ subroutine pacs_map_header(band, nslices, npointings, nsamples_tot, compression_
     integer, intent(in)                            :: npointings(nslices)
     integer*8, intent(in)                          :: nsamples_tot
     integer, intent(in)                            :: compression_factor(nslices)
+    real(p), intent(in)                            :: delay(nslices)
     integer, intent(in)                            :: fine_sampling_factor
     logical, intent(in)                            :: oversampling
     real(p), intent(in), dimension(nsamples_tot)   :: time, ra, dec, pa, chop
@@ -440,7 +442,7 @@ subroutine pacs_map_header(band, nslices, npointings, nsamples_tot, compression_
 
     ! initialise observations
     allocate(obs)
-    call obs%init_with_variables(time, ra, dec, pa, chop, masked, removed, npointings, compression_factor, status)
+    call obs%init_with_variables(time, ra, dec, pa, chop, masked, removed, npointings, compression_factor, delay, status)
     if (status /= 0) return
 
     ! initialise pacs instrument
@@ -458,8 +460,8 @@ end subroutine pacs_map_header
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine pacs_tod(band, filename, nslices, npointings, nsamples_tot, compression_factor, fine_sampling_factor, time, ra, dec,    &
-                    pa, chop, masked, removed, detector_mask, flatfield_detector, do_flatfielding, do_subtraction_mean,            &
+subroutine pacs_tod(band, filename, nslices, npointings, nsamples_tot, compression_factor, delay, fine_sampling_factor, time, ra,  &
+                    dec, pa, chop, masked, removed, detector_mask, flatfield_detector, do_flatfielding, do_subtraction_mean,       &
                     nvalids, ndetectors, selected_mask, nrows, ncolumns, signal, mask, status)
 
 
@@ -478,6 +480,7 @@ subroutine pacs_tod(band, filename, nslices, npointings, nsamples_tot, compressi
     !f2py intent(in)                               :: npointings(nslices)
     !f2py intent(hide)                             :: nsamples_tot = size(time)
     !f2py intent(in)                               :: compression_factor(nslices)
+    !f2py intent(in)                               :: delay(nslices)
     !f2py intent(in)                               :: fine_sampling_factor
     !f2py intent(in)                               :: time(nsamples_tot)
     !f2py intent(in)                               :: ra(nsamples_tot)
@@ -505,6 +508,7 @@ subroutine pacs_tod(band, filename, nslices, npointings, nsamples_tot, compressi
     integer, intent(in)                            :: npointings(nslices)
     integer*8, intent(in)                          :: nsamples_tot
     integer, intent(in)                            :: compression_factor(nslices)
+    real(p), intent(in)                            :: delay(nslices)
     integer, intent(in)                            :: fine_sampling_factor
     real(p), intent(in), dimension(nsamples_tot)   :: time, ra, dec, pa, chop
     logical*1, intent(in), dimension(nsamples_tot) :: masked, removed
@@ -527,7 +531,7 @@ subroutine pacs_tod(band, filename, nslices, npointings, nsamples_tot, compressi
 
     ! initialise observations
     allocate(obs)
-    call obs%init_with_variables(time, ra, dec, pa, chop, masked, removed, npointings, compression_factor, status)
+    call obs%init_with_variables(time, ra, dec, pa, chop, masked, removed, npointings, compression_factor, delay, status)
     if (status /= 0) return
 
     ! split input filename
@@ -583,7 +587,7 @@ end subroutine pacs_tod
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine pacs_pointing_matrix(band, nslices, nvalids, npointings, nsamples_tot, compression_factor, fine_sampling_factor,        &
+subroutine pacs_pointing_matrix(band, nslices, nvalids, npointings, nsamples_tot, compression_factor, delay, fine_sampling_factor, &
                                 oversampling, time, ra, dec, pa, chop, masked, removed, method, detector_mask, nrows, ncolumns,    &
                                 ndetectors, detector_center, detector_corner, detector_area, distortion_yz, npixels_per_sample,    &
                                 header, pmatrix, new_npixels_per_sample, status)
@@ -603,6 +607,7 @@ subroutine pacs_pointing_matrix(band, nslices, nvalids, npointings, nsamples_tot
     !f2py intent(in)                               :: npointings(nslices)
     !f2py intent(hide),                            :: nsamples_tot = size(time)
     !f2py intent(in)                               :: compression_factor(nslices)
+    !f2py intent(in)                               :: delay(nslices)
     !f2py intent(in)                               :: fine_sampling_factor
     !f2py intent(in)                               :: oversampling
     !f2py intent(in)                               :: time(nsamples_tot)
@@ -633,6 +638,7 @@ subroutine pacs_pointing_matrix(band, nslices, nvalids, npointings, nsamples_tot
     integer, intent(in)                            :: npointings(nslices)
     integer*8, intent(in)                          :: nsamples_tot
     integer, intent(in)                            :: compression_factor(nslices)
+    real(p), intent(in)                            :: delay(nslices)
     integer, intent(in)                            :: fine_sampling_factor
     logical, intent(in)                            :: oversampling
     real(p), intent(in), dimension(nsamples_tot)   :: time, ra, dec, pa, chop
@@ -658,7 +664,7 @@ subroutine pacs_pointing_matrix(band, nslices, nvalids, npointings, nsamples_tot
 
     ! initialise observations
     allocate(obs)
-    call obs%init_with_variables(time, ra, dec, pa, chop, masked, removed, npointings, compression_factor, status)
+    call obs%init_with_variables(time, ra, dec, pa, chop, masked, removed, npointings, compression_factor, delay, status)
     if (status /= 0) return
 
     ! initialise pacs instrument

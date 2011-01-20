@@ -50,8 +50,9 @@ class PacsBase(Observation):
             resolution = self.DEFAULT_RESOLUTION[self.instrument.band]
 
         header, status = tmf.pacs_map_header(self.instrument.band,
-                                             numpy.ascontiguousarray(self.slice.nsamples_all, dtype='int32'),
-                                             numpy.ascontiguousarray(self.slice.compression_factor, dtype='int32'),
+                                             numpy.ascontiguousarray(self.slice.nsamples_all, numpy.int32),
+                                             numpy.ascontiguousarray(self.slice.compression_factor, numpy.int32),
+                                             numpy.ascontiguousarray(self.slice.delay),
                                              self.instrument.fine_sampling_factor,
                                              oversampling,
                                              numpy.ascontiguousarray(self.pointing.time),
@@ -96,8 +97,9 @@ class PacsBase(Observation):
         new_npixels_per_sample, status = \
             tmf.pacs_pointing_matrix(self.instrument.band,
                                      nvalids,
-                                     numpy.ascontiguousarray(self.slice.nsamples_all, dtype='int32'),
-                                     numpy.ascontiguousarray(self.slice.compression_factor, dtype='int32'),
+                                     numpy.ascontiguousarray(self.slice.nsamples_all, numpy.int32),
+                                     numpy.ascontiguousarray(self.slice.compression_factor, numpy.int32),
+                                     numpy.ascontiguousarray(self.slice.delay),
                                      self.instrument.fine_sampling_factor,
                                      oversampling,
                                      numpy.ascontiguousarray(self.pointing.time),
@@ -105,10 +107,10 @@ class PacsBase(Observation):
                                      numpy.ascontiguousarray(self.pointing.dec),
                                      numpy.ascontiguousarray(self.pointing.pa),
                                      numpy.ascontiguousarray(self.pointing.chop),
-                                     numpy.ascontiguousarray(self.pointing.masked, dtype='int8'),
-                                     numpy.ascontiguousarray(self.pointing.removed,dtype='int8'),
+                                     numpy.ascontiguousarray(self.pointing.masked, numpy.int8),
+                                     numpy.ascontiguousarray(self.pointing.removed,numpy.int8),
                                      method,
-                                     numpy.asfortranarray(self.instrument.detector_mask, dtype='int8'),
+                                     numpy.asfortranarray(self.instrument.detector_mask, numpy.int8),
                                      self.get_ndetectors(),
                                      self.instrument.detector_center.base.base.swapaxes(0,1).copy().T,
                                      self.instrument.detector_corner.base.base.swapaxes(0,1).copy().T,
@@ -359,7 +361,7 @@ class PacsObservation(PacsBase):
     Class which encapsulates handy information about the PACS instrument and 
     the observations to be processed.
     """
-    def __init__(self, filename, fine_sampling_factor=1, detector_mask='calibration', reject_bad_line=False, policy_inscan='keep', policy_turnaround='keep', policy_other='remove', policy_invalid='mask', active_fraction=0):
+    def __init__(self, filename, fine_sampling_factor=1, detector_mask='calibration', reject_bad_line=False, policy_inscan='keep', policy_turnaround='keep', policy_other='remove', policy_invalid='mask', active_fraction=0, delay=0.):
         """
         Parameters
         ----------
@@ -389,6 +391,7 @@ class PacsObservation(PacsBase):
               This sets the policy for the invalid frames
         active_fraction: ratio of the geometric and reference detector area
               If set to 0, the value from the calibration file will be used
+        delay: instrument clock lag wrt the spacecraft clock, in ms
 
         Returns
         -------
@@ -428,7 +431,7 @@ class PacsObservation(PacsBase):
         policy = MaskPolicy('inscan,turnaround,other,invalid', (policy_inscan, policy_turnaround, policy_other, policy_invalid), 'Frame Policy')
 
         # store observation information
-        mode, compression_factor, unit, ra, dec, cam_angle, scan_angle, scan_length, scan_speed, scan_step, scan_nlegs, frame_time, frame_ra, frame_dec, frame_pa, frame_chop, frame_info, frame_masked, frame_removed, nmasks, mask_name_flat, mask_activated, status = tmf.pacs_info_observation(filename_, nfilenames, numpy.array(policy, dtype='int32'), numpy.sum(nsamples_all))
+        mode, compression_factor, unit, ra, dec, cam_angle, scan_angle, scan_length, scan_speed, scan_step, scan_nlegs, frame_time, frame_ra, frame_dec, frame_pa, frame_chop, frame_info, frame_masked, frame_removed, nmasks, mask_name_flat, mask_activated, status = tmf.pacs_info_observation(filename_, nfilenames, numpy.array(policy, numpy.int32), numpy.sum(nsamples_all))
         if status != 0: raise RuntimeError()
 
         flen_value = len(unit) // nfilenames
@@ -470,7 +473,25 @@ class PacsObservation(PacsBase):
             mask_name     [ifile,0:nmasks[ifile]] = mask_name     [ifile,isort]
             mask_activated[ifile,0:nmasks[ifile]] = mask_activated[ifile,isort]
 
-        self.slice = numpy.recarray(nfilenames, dtype=[('filename', 'S256'), ('nsamples_all', int), ('mode', 'S32'), ('compression_factor', int), ('unit', 'S32'), ('ra', float), ('dec', float), ('cam_angle', float), ('scan_angle', float), ('scan_length', float), ('scan_nlegs', int), ('scan_step', float), ('scan_speed', float), ('nmasks', int), ('mask_name', 'S'+str(mask_len_max), nmasks_max), ('mask_activated', bool, nmasks_max)])
+        self.slice = numpy.recarray(nfilenames, dtype=[
+                ('filename', 'S256'),
+                ('nsamples_all', int),
+                ('mode', 'S32'),
+                ('compression_factor', int),
+                ('delay', float),
+                ('unit', 'S32'),
+                ('ra', float),
+                ('dec', float),
+                ('cam_angle', float),
+                ('scan_angle', float),
+                ('scan_length', float),
+                ('scan_nlegs', int),
+                ('scan_step', float),
+                ('scan_speed', float),
+                ('nmasks', int),
+                ('mask_name', 'S'+str(mask_len_max), nmasks_max),
+                ('mask_activated', bool, nmasks_max)
+                ])
 
         regex = re.compile(r'(.*?)(\[[0-9]*:?[0-9]*\])? *$')
         for ifile, file in enumerate(filename):
@@ -481,6 +502,7 @@ class PacsObservation(PacsBase):
         self.slice.nfinesamples = nsamples_all * compression_factor * fine_sampling_factor
         self.slice.mode = mode
         self.slice.compression_factor = compression_factor
+        self.slice.delay = delay
         self.slice.unit = unit
         self.slice.ra = ra
         self.slice.dec = dec
@@ -551,8 +573,9 @@ class PacsObservation(PacsBase):
 
         signal, mask, status = tmf.pacs_tod(self.instrument.band,
                                             _files2tmf(self.slice.filename)[0],
-                                            numpy.asarray(self.slice.nsamples_all, dtype='int32'),
-                                            numpy.asarray(self.slice.compression_factor, dtype='int32'),
+                                            numpy.asarray(self.slice.nsamples_all, numpy.int32),
+                                            numpy.asarray(self.slice.compression_factor, numpy.int32),
+                                            numpy.ascontiguousarray(self.slice.delay),
                                             self.instrument.fine_sampling_factor,
                                             numpy.ascontiguousarray(self.pointing.time),
                                             numpy.ascontiguousarray(self.pointing.ra),
@@ -625,7 +648,7 @@ class PacsSimulation(PacsBase):
     """
     This class creates a simulated PACS observation.
     """
-    def __init__(self, pointing, band, mode=None, fine_sampling_factor=1, detector_mask='calibration', reject_bad_line=False, policy_inscan='keep', policy_turnaround='keep', policy_other='keep', policy_invalid='keep', active_fraction=0):
+    def __init__(self, pointing, band, mode=None, fine_sampling_factor=1, detector_mask='calibration', reject_bad_line=False, policy_inscan='keep', policy_turnaround='keep', policy_other='keep', policy_invalid='keep', active_fraction=0, delay=0.):
 
         pointing_ = pointing.copy()
         if pointing.header is not None:
@@ -692,11 +715,28 @@ class PacsSimulation(PacsBase):
         self.instrument.flatfield = FlatField(oflat, dflat)
         self.instrument.responsivity = Quantity(responsivity, 'V/Jy')
 
-        self.slice = numpy.recarray(1, dtype=[('filename', 'S256'), ('nsamples_all', int), ('mode', 'S32'), ('compression_factor', int), ('unit', 'S32'), ('ra', float), ('dec', float), ('cam_angle', float), ('scan_angle', float), ('scan_length', float), ('scan_nlegs', int), ('scan_step', float), ('scan_speed', float)])
+        self.slice = numpy.recarray(1, dtype=[
+                ('filename', 'S256'),
+                ('nsamples_all', int),
+                ('mode', 'S32'),
+                ('compression_factor', int),
+                ('delay', float),
+                ('unit', 'S32'),
+                ('ra', float),
+                ('dec', float),
+                ('cam_angle', float),
+                ('scan_angle', float),
+                ('scan_length', float),
+                ('scan_nlegs', int),
+                ('scan_step', float),
+                ('scan_speed', float)
+                ])
+
         self.slice.filename = ''
         self.slice.nsamples_all = self.pointing.size
         self.slice.mode = mode
         self.slice.compression_factor = compression_factor
+        self.slice.delay = delay
         self.slice.unit = ''
         for field in ('ra', 'dec', 'cam_angle', 'scan_angle', 'scan_nlegs', 'scan_length', 'scan_step', 'scan_speed'):
             self.slice[field] = pointing.header[field] if field in pointing.header else 0

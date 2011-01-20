@@ -63,6 +63,8 @@ public :: PacsObservationSlice
 !!$        type(pointing), allocatable :: p(:)
 !!$    end type observationslice
 
+    real(p), parameter :: PACS_SAMPLING = 0.024996_p
+
 !!$ type, extends(observationslice) :: PacsObservationSlice
     type PacsObservationSlice
 
@@ -75,6 +77,7 @@ public :: PacsObservationSlice
         integer                   :: scan_nlegs
         character(len=FLEN_VALUE) :: unit
         integer                   :: compression_factor
+        real(p)                   :: offset
         real(p)                   :: sampling_interval
         integer                   :: nmasks
         character(len=FLEN_VALUE), allocatable :: mask_name(:)
@@ -92,6 +95,7 @@ public :: PacsObservationSlice
         procedure :: set_unit
         procedure :: set_flags
         procedure :: set_sampling_interval
+        procedure :: set_offset
 
     end type PacsObservationSlice
 
@@ -184,10 +188,11 @@ contains
     ! if there is a gap in the timeline (which should not happen, and should be
     ! corrected beforehand), it will not be taken into account so that finer
     ! sampling will be interpolated using the start and end of the gap.
-    subroutine get_position_index(this, islice, itime, sampling_factor, ra, dec, pa, chop)
+    subroutine get_position_index(this, islice, itime, sampling_factor, offset, ra, dec, pa, chop)
 
         class(observation), intent(in) :: this
         integer, intent(in)            :: islice, itime, sampling_factor
+        real(p), intent(in)            :: offset
         real(p), intent(out)           :: ra, dec, pa, chop
         integer                        :: i, itime_max
         real(p)                        :: frac
@@ -204,7 +209,7 @@ contains
         end if
 
         i    = min((itime - 1) / sampling_factor, this%slice(islice)%nsamples-2)
-        frac = real(itime - 1 - sampling_factor * i, p) / sampling_factor
+        frac = real(itime - 1 - sampling_factor * i, p) / sampling_factor - offset
         i    = i + 1
 
         ra   = this%slice(islice)%p(i)%ra   * (1 - frac) + this%slice(islice)%p(i+1)%ra   * frac
@@ -861,7 +866,7 @@ contains
 
         ! special case if there is only one sample
         if (this%nsamples == 1) then
-            this%sampling_interval = this%compression_factor * 0.024996_p
+            this%sampling_interval = this%compression_factor * PACS_SAMPLING
             return
         end if
 
@@ -912,8 +917,8 @@ contains
         end if
         
         ! check the compression factor from the data themselves
-        compression_factor = nint(this%sampling_interval / 0.024996_p)
-        if (neq_real(compression_factor * 0.024996_p, this%sampling_interval, 1e-2_p)) then
+        compression_factor = nint(this%sampling_interval / PACS_SAMPLING)
+        if (neq_real(compression_factor * PACS_SAMPLING, this%sampling_interval, 1e-2_p)) then
             write (ERROR_UNIT,'(a)') 'Error: The sampling time is not an integer number of PACS sampling time (40Hz).'
             return
         end if
@@ -928,6 +933,21 @@ contains
         status = 0
 
     end subroutine set_sampling_interval
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine set_offset(this)
+    ! offset of the fine time of the compressed frame wrt the fine time of the first frame
+    ! the fine time of a compressed frame is the average of the fine times of the contributing frames
+    ! the offset is in fraction of sampling interval
+
+        class(PacsObservationSlice), intent(inout) :: this
+
+        this%offset = (this%compression_factor - 1) / (2._p * this%compression_factor)
+
+    end subroutine set_offset
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
@@ -994,6 +1014,8 @@ contains
             call this%slice(islice)%set_sampling_interval(status, verbose_)
             if (status /= 0) return
 
+            call this%slice(islice)%set_offset()
+
             call this%slice(islice)%set_policy(this%policy, first, last, status)
             if (status /= 0) return
 
@@ -1051,13 +1073,15 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine init_with_variables(this, time, ra, dec, pa, chop, masked, removed, nsamples, compression_factor, status)
+    subroutine init_with_variables(this, time, ra, dec, pa, chop, masked, removed, nsamples, compression_factor, delay, status)
+        ! delay is the instrument lag wrt the telescope
 
         class(PacsObservation), intent(inout) :: this
         real(p), intent(in)                   :: time(:),ra(:),dec(:),pa(:),chop(:)
         logical*1, intent(in)                 :: masked(:), removed(:)
         integer, intent(in)                   :: nsamples(:)
         integer, intent(in)                   :: compression_factor(:)
+        real(p), intent(in)                   :: delay(:)
         integer, intent(out)                  :: status
 
         integer :: islice, dest, nsamples_tot
@@ -1103,6 +1127,8 @@ contains
         allocate (this%slice(size(nsamples)))
         this%slice%nsamples = nsamples
         this%slice%compression_factor = compression_factor
+        this%slice%offset = (compression_factor-1) / (2._p * compression_factor) +                                                 &
+                            delay / (1000 * PACS_SAMPLING * compression_factor)
         this%slice%filename = ''
         this%slice%band  = ''
         this%slice%observing_mode = ''
