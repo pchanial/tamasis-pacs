@@ -42,7 +42,7 @@ program test_pacspointing
 
     ! test interpolation (evenly spaced sampling)
     call obs%init_with_variables([1._p, 2._p], [0._p, 1._p], [3._p, 3._p], [2._p, 1._p], [0._p, 0._p], [FALSE, FALSE],             &
-                                 [FALSE, FALSE], [2], [1], status)
+                                 [FALSE, FALSE], [2], [1], [0._p], status)
     if (status /= 0) call failure('init_with_var 1')
 
     index = 0
@@ -58,7 +58,7 @@ program test_pacspointing
     ! test slow interpolation (unevenly spaced sampling)
     call obs%init_with_variables([0.5_p, 1.5_p, 2.5_p, 3._p], [0._p, 1._p, 2._p, 2.5_p], [3._p, 3._p, 3._p, 3._p],                 &
                                  [3._p, 2._p, 1._p, 0.5_p], [0._p, 0._p, 0._p, 1._p], [(FALSE, i=1, 4)], [(FALSE, i=1, 4)], [4],   &
-                                 [1], status)
+                                 [1], [0._p], status)
     if (status /= 0) call failure('init_with_var 2')
 
     index = 0
@@ -75,7 +75,7 @@ program test_pacspointing
     end if
 
     do i = 1, size(time)
-        call obs%get_position_index(1, i, 3, ra(i), dec(i), pa(i), chop(i))
+        call obs%get_position_index(1, i, 3, 0._p, ra(i), dec(i), pa(i), chop(i))
     end do
 
     if (any( neq_real(ra, [(0+i/3._p,i=0,2), (1+i/3._p,i=0,2), (2+0.5_p*i/3._p,i=0,2),(2.5_p+0.5_p*i/3._p,i=0,2)])                 &

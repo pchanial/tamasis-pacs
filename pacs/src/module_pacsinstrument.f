@@ -640,7 +640,7 @@ contains
         logical, intent(in)                :: oversampling
         real(p), intent(out)               :: xmin, xmax, ymin, ymax
 
-        real(p)              :: ra, dec, pa, chop
+        real(p)              :: ra, dec, pa, chop, offset
         real(p), allocatable :: hull_uv(:,:), hull(:,:)
         integer, allocatable :: ihull(:)
         integer              :: sampling_factor, isample, islice, itime
@@ -661,8 +661,10 @@ contains
             ! check if it is required to interpolate pointing positions
             if (oversampling) then
                sampling_factor = this%fine_sampling_factor * obs%slice(islice)%compression_factor
+               offset = obs%slice(islice)%offset
             else
                sampling_factor = 1
+               offset = 0
             end if
 
 #ifndef IFORT
@@ -674,7 +676,7 @@ contains
                 isample = (itime - 1) / sampling_factor + 1
                 if (obs%slice(islice)%p(isample)%removed) cycle
 
-                call obs%get_position_index(islice, itime, sampling_factor, ra, dec, pa, chop)
+                call obs%get_position_index(islice, itime, sampling_factor, offset, ra, dec, pa, chop)
                 hull = this%uv2yz(hull_uv, this%distortion_yz, chop)
                 hull = this%yz2ad(hull, ra, dec, pa)
                 hull = ad2xy_gnomonic(hull)
@@ -762,7 +764,7 @@ contains
 
         real(p) :: coords(NDIMS,this%ndetectors), coords_yz(NDIMS,this%ndetectors)
         real(p) :: x(this%ndetectors), y(this%ndetectors), s(this%ndetectors)
-        real(p) :: ra, dec, pa, chop, chop_old, reference_area
+        real(p) :: ra, dec, pa, chop, chop_old, reference_area, offset
         integer :: ifine, isample, islice, itime, ivalid, nsamples, nvalids, sampling_factor, dest
         integer, allocatable :: valids(:)
 
@@ -783,8 +785,10 @@ contains
             ! check if it is required to interpolate pointing positions
             if (oversampling) then
                sampling_factor = this%fine_sampling_factor * obs%slice(islice)%compression_factor
+               offset = obs%slice(islice)%offset
             else
                sampling_factor = 1
+               offset = 0
             end if
 
             allocate (valids(nvalids))
@@ -804,7 +808,7 @@ contains
                 isample = valids(ivalid)
                 do ifine = 1, sampling_factor
                      itime = (isample - 1) * sampling_factor + ifine
-                     call obs%get_position_index(islice, itime, sampling_factor, ra, dec, pa, chop)
+                     call obs%get_position_index(islice, itime, sampling_factor, offset, ra, dec, pa, chop)
                      if (abs(chop-chop_old) > 1.e-2_p) then
                          coords_yz = this%uv2yz(this%detector_center, this%distortion_yz, chop)
                          chop_old = chop
@@ -847,7 +851,7 @@ contains
         logical, intent(out)               :: out
 
         real(p) :: coords(NDIMS,this%ndetectors*NVERTICES), coords_yz(NDIMS,this%ndetectors*NVERTICES)
-        real(p) :: ra, dec, pa, chop, chop_old
+        real(p) :: ra, dec, pa, chop, chop_old, offset
         integer :: roi(NDIMS,2,this%ndetectors)
         integer :: ifine, isample, islice, itime, ivalid, nsamples, nvalids, sampling_factor, dest
         integer, allocatable :: valids(:)
@@ -867,8 +871,10 @@ contains
             ! check if it is required to interpolate pointing positions
             if (oversampling) then
                sampling_factor = this%fine_sampling_factor * obs%slice(islice)%compression_factor
+               offset = obs%slice(islice)%offset
             else
                sampling_factor = 1
+               offset = 0
             end if
 
             allocate (valids(nvalids))
@@ -888,7 +894,7 @@ contains
                 isample = valids(ivalid)
                 do ifine = 1, sampling_factor
                      itime = (isample - 1) * sampling_factor + ifine
-                     call obs%get_position_index(islice, itime, sampling_factor, ra, dec, pa, chop)
+                     call obs%get_position_index(islice, itime, sampling_factor, offset, ra, dec, pa, chop)
                      if (abs(chop-chop_old) > 1.e-2_p) then
                          coords_yz = this%uv2yz(this%detector_corner, this%distortion_yz, chop)
                          chop_old = chop

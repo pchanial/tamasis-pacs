@@ -112,7 +112,7 @@ program test_ngc6946_bpj
     isample = 1
     do ipointing = 1, obs%slice(1)%nsamples
         if (obs%slice(1)%p(ipointing)%removed) cycle
-        call obs%get_position_index(1, ipointing, 1, ra, dec, pa, chop)
+        call obs%get_position_index(1, ipointing, 1, obs%slice(1)%offset, ra, dec, pa, chop)
         if (abs(chop-chop_old) > 1.e-2_p) then
             coords_yz = pacs%uv2yz(pacs%detector_corner, pacs%distortion_yz, chop)
             chop_old = chop
