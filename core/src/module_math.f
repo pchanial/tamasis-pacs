@@ -33,6 +33,7 @@ module module_math
     public :: neq_real
     public :: add
     public :: add_blas
+    public :: diff1, diff2, diff3
 
     interface distance
         module procedure distance_1d, distance_2d, distance_3d
@@ -753,5 +754,91 @@ contains
         call daxpy(size(a), 1._p, b, 1, a, 1)
         
     end subroutine add_blas
+
+
+    subroutine diff1(array, dim)
+
+        real(p), intent(inout) :: array(:,:)
+        integer, intent(in)    :: dim
+
+        integer :: i, m, n
+
+        m = size(array, 1)
+        n = size(array, 2)
+        if (dim == 1) then
+            do i = 1, n
+                array(1:m-1,i) = array(1:m-1,i) - array(2:m,i)
+            end do
+            array(m,:) = 0
+        else if (dim == 2) then
+            do i = 1, n - 1
+                array(:,i) = array(:,i) - array(:,i+1)
+            end do
+            array(:,n) = 0
+        end if
+
+    end subroutine diff1
+
+    subroutine diff2(array, dim)
+
+        real(p), intent(inout) :: array(:,:)
+        integer, intent(in)    :: dim
+
+        integer :: i, j, m, n
+
+        m = size(array, 1)
+        n = size(array, 2)
+        if (dim == 1) then
+!            !$omp parallel do private(i,j)
+            do j = 1, n
+                do i = 1, m-1
+                    array(i,j) = array(i,j) - array(i+1,j)
+                end do
+                array(i,j) = 0
+            end do
+!            !$omp end parallel do
+        else if (dim == 2) then
+!            !$omp parallel do private(i,j)
+            do j = 1, n - 1
+                do i = 1, m
+                    array(i,j) = array(i,j) - array(i,j+1)
+                end do
+            end do
+!           !$omp end parallel do
+            array(:,n) = 0
+        end if
+
+    end subroutine diff2
+
+    subroutine diff3(array, dim)
+
+        real(p), intent(inout) :: array(:,:)
+        integer, intent(in)    :: dim
+
+        integer, parameter :: block = 1024
+        integer :: i, j, k, m, n, a, z
+
+        m = size(array, 1)
+        n = size(array, 2)
+        if (dim == 1) then
+            do j = 1, n
+                do i = 1, m-1
+                    array(i,j) = array(i,j) - array(i+1,j)
+                end do
+                array(i,j) = 0
+            end do
+        else if (dim == 2) then
+            do k = 1, (m-1) / block + 1
+                a = (k-1) * block + 1
+                z = k * block 
+                do j = 1, n - 1
+                    array(a:z,j) = array(a:z,j) - array(a:z,j+1)
+                end do
+            end do
+            array(:,n) = 0
+        end if
+
+    end subroutine diff3
+
 
 end module module_math

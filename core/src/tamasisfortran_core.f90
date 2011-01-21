@@ -722,6 +722,95 @@ end subroutine subtract_inplace_blas
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
+subroutine diff1(array, m, n, axis)
+
+    use module_tamasis,  only : p
+    use module_math,     only : diff1_ => diff1
+    implicit none
+
+    !f2py threadsafe
+    !f2py, intent(inout)   :: array
+    !f2py, intent(hide)    :: m = shape(array,0), n=shape(array,1)
+    !f2py, intent(in)      :: axis
+
+    real(p), intent(inout) :: array(m,n)
+    integer, intent(in)    :: m, n
+    integer, intent(in)    :: axis
+
+    call diff1_(array, 2 - axis)
+
+end subroutine diff1
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine diff_1d(array, n)
+
+    use module_tamasis,  only : p
+    implicit none
+
+    !f2py, intent(inout)   :: array
+    !f2py, intent(hide)    :: n=size(array)
+
+    real(p), intent(inout) :: array(n)
+    integer, intent(in)    :: n
+
+    array(1:n-1) = array(1:n-1) - array(2:n)
+    array(n) = 0
+
+end subroutine diff_1d
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine diff2(array, m, n, axis)
+
+    use module_tamasis,  only : p
+    use module_math,     only : diff2_ => diff2
+    implicit none
+
+    !f2py threadsafe
+    !f2py, intent(inout)   :: array
+    !f2py, intent(hide)    :: m = shape(array,0), n=shape(array,1)
+    !f2py, intent(in)      :: axis
+
+    real(p), intent(inout) :: array(m,n)
+    integer, intent(in)    :: m, n
+    integer, intent(in)    :: axis
+
+    call diff2_(array, 2 - axis)
+
+end subroutine diff2
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine diff3(array, m, n, axis)
+
+    use module_tamasis,  only : p
+    use module_math,     only : diff3_ => diff3
+    implicit none
+
+    !f2py threadsafe
+    !f2py, intent(inout)   :: array
+    !f2py, intent(hide)    :: m = shape(array,0), n=shape(array,1)
+    !f2py, intent(in)      :: axis
+
+    real(p), intent(inout) :: array(m,n)
+    integer, intent(in)    :: m, n
+    integer, intent(in)    :: axis
+
+    call diff3_(array, 2 - axis)
+
+end subroutine diff3
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
 subroutine masking(input, ninputs, mask, nmasks, status)
 
     use iso_fortran_env, only : ERROR_UNIT
