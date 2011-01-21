@@ -634,9 +634,9 @@ subroutine pacs_pointing_matrix(band, nslices, nvalids, npointings, nsamples_tot
 
     character(len=*), intent(in)                   :: band
     integer, intent(in)                            :: nslices
-    integer, intent(in)                            :: nvalids
+    integer*8, intent(in)                          :: nvalids
     integer, intent(in)                            :: npointings(nslices)
-    integer*8, intent(in)                          :: nsamples_tot
+    integer, intent(in)                            :: nsamples_tot
     integer, intent(in)                            :: compression_factor(nslices)
     real(p), intent(in)                            :: delay(nslices)
     integer, intent(in)                            :: fine_sampling_factor
