@@ -698,12 +698,10 @@ class Diagonal(Symmetric):
     def __init__(self, diagonal, nsamples=None, description=None):
         AcquisitionModel.__init__(self, description)
         self.diagonal = numpy.asarray(diagonal, dtype=var.get_default_dtype(diagonal))
-        if not _my_isscalar(self.diagonal):
-            self.shapein = validate_sliced_shape(self.diagonal.shape, nsamples)
 
     def direct(self, input, reusein=False, reuseout=False):
         output = self.validate_input(input, reusein and reuseout)
-        output *= self.diagonal
+        output.T[:] *= self.diagonal.T
         return output
 
     @property
