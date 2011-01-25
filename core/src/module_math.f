@@ -796,8 +796,8 @@ contains
 
     subroutine diff_slow(array, m, n, o)
 
-        real(p), intent(inout) :: array(m,n,o)
         integer, intent(in)    :: m, n, o
+        real(p), intent(inout) :: array(m,n,o)
 
         integer, parameter     :: block = 4096
         integer                :: i, j, k, a, z
@@ -846,8 +846,8 @@ contains
 
     subroutine diffT_slow(array, m, n, o)
 
-        real(p), intent(inout) :: array(m,n,o)
         integer, intent(in)    :: m, n, o
+        real(p), intent(inout) :: array(m,n,o)
 
         integer, parameter     :: block = 4096
         integer                :: i, j, k, a, z
@@ -911,8 +911,8 @@ contains
         use module_tamasis,  only : p
         implicit none
 
-        real(p), intent(inout) :: array(m,n,o)
         integer, intent(in)    :: m, n, o
+        real(p), intent(inout) :: array(m,n,o)
 
         integer, parameter :: block = 4096
         integer :: h, i, j, k, a, z

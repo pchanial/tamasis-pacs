@@ -722,23 +722,23 @@ end subroutine subtract_inplace_blas
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine diff(array, size, dim, ashape, rank)
+subroutine diff(array, asize, dim, ashape, arank)
 
     use module_math,    only : diff_fast, diff_slow
     use module_tamasis, only : p
     implicit none
 
-    !f2py intent(inout)    :: array(size)
-    !f2py intent(hide)     :: size
+    !f2py intent(inout)    :: array(asize)
+    !f2py intent(hide)     :: asize
     !f2py intent(in)       :: dim
     !f2py intent(in)       :: ashape
-    !f2py intent(hide)     :: rank=size(ashape)
+    !f2py intent(hide)     :: arank=size(ashape)
 
-    real(p), intent(inout) :: array(size)
-    integer*8, intent(in)  :: size
+    integer*8, intent(in)  :: asize
+    real(p), intent(inout) :: array(asize)
     integer, intent(in)    :: dim
-    integer*8, intent(in)  :: ashape(rank)
-    integer, intent(in)    :: rank
+    integer, intent(in)    :: arank
+    integer*8, intent(in)  :: ashape(arank)
 
     integer :: idim, nfast, ndiff, nslow
 
@@ -748,7 +748,7 @@ subroutine diff(array, size, dim, ashape, rank)
         nfast = nfast * ashape(idim)
     end do
     ndiff = ashape(dim)
-    do idim = dim+1, rank
+    do idim = dim+1, arank
         nslow = nslow * ashape(idim)
     end do
 
@@ -764,23 +764,23 @@ end subroutine diff
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine diffT(array, size, dim, ashape, rank)
+subroutine diffT(array, asize, dim, ashape, arank)
 
     use module_math,    only : diffT_fast, diffT_slow
     use module_tamasis, only : p
     implicit none
 
     !f2py intent(inout)    :: array(size)
-    !f2py intent(hide)     :: size
+    !f2py intent(hide)     :: asize
     !f2py intent(in)       :: dim
     !f2py intent(in)       :: ashape
-    !f2py intent(hide)     :: rank=size(ashape)
+    !f2py intent(hide)     :: arank=size(ashape)
 
-    real(p), intent(inout) :: array(size)
-    integer*8, intent(in)  :: size
+    integer*8, intent(in)  :: asize
+    real(p), intent(inout) :: array(asize)
     integer, intent(in)    :: dim
-    integer*8, intent(in)  :: ashape(rank)
-    integer, intent(in)    :: rank
+    integer, intent(in)    :: arank
+    integer*8, intent(in)  :: ashape(arank)
 
     integer :: idim, nfast, ndiff, nslow
 
@@ -790,7 +790,7 @@ subroutine diffT(array, size, dim, ashape, rank)
         nfast = nfast * ashape(idim)
     end do
     ndiff = ashape(dim)
-    do idim = dim+1, rank
+    do idim = dim+1, arank
         nslow = nslow * ashape(idim)
     end do
 
@@ -806,23 +806,23 @@ end subroutine diffT
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine diffTdiff(array, size, dim, ashape, rank)
+subroutine diffTdiff(array, asize, dim, ashape, arank)
 
     use module_math,    only : diffTdiff_fast, diffTdiff_slow
     use module_tamasis, only : p
     implicit none
 
-    !f2py intent(inout)    :: array(size)
-    !f2py intent(hide)     :: size
+    !f2py intent(inout)    :: array(asize)
+    !f2py intent(hide)     :: asize
     !f2py intent(in)       :: dim
     !f2py intent(in)       :: ashape
-    !f2py intent(hide)     :: rank=size(ashape)
+    !f2py intent(hide)     :: arank=size(ashape)
 
-    real(p), intent(inout) :: array(size)
-    integer*8, intent(in)  :: size
+    integer*8, intent(in)  :: asize
+    real(p), intent(inout) :: array(asize)
     integer, intent(in)    :: dim
-    integer*8, intent(in)  :: ashape(rank)
-    integer, intent(in)    :: rank
+    integer, intent(in)    :: arank
+    integer*8, intent(in)  :: ashape(arank)
 
     integer :: idim, nfast, ndiff, nslow
 
@@ -832,7 +832,7 @@ subroutine diffTdiff(array, size, dim, ashape, rank)
         nfast = nfast * ashape(idim)
     end do
     ndiff = ashape(dim)
-    do idim = dim+1, rank
+    do idim = dim+1, arank
         nslow = nslow * ashape(idim)
     end do
 
