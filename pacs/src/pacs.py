@@ -787,7 +787,7 @@ class PacsMultiplexing(AcquisitionModel):
     Author: P. Chanial
     """
     def __init__(self, obs, description=None):
-        AcquisitionModel.__init__(self, description)
+        AcquisitionModelLinear.__init__(self, description=description)
         self.fine_sampling_factor = obs.instrument.fine_sampling_factor
         self.ij = obs.instrument.ij
 

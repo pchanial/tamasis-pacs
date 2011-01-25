@@ -10,10 +10,10 @@ data_dir = os.path.dirname(__file__) + '/data/'
 obs = PacsObservation(data_dir+'frames_blue.fits', fine_sampling_factor=1)
 tod = obs.get_tod()
 
-telescope    = Identity('Telescope PSF')
+telescope    = Identity(description='Telescope PSF')
 projection   = Projection(obs, oversampling=False, npixels_per_sample=6)
-multiplexing = CompressionAverage(obs.instrument.fine_sampling_factor, 'Multiplexing')
-crosstalk    = Identity('Crosstalk')
+multiplexing = CompressionAverage(obs.instrument.fine_sampling_factor, description='Multiplexing')
+crosstalk    = Identity(description='Crosstalk')
 compression  = CompressionAverage(obs)
 masking_tod  = Masking(tod.mask)
 

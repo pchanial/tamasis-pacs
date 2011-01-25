@@ -30,7 +30,7 @@ subroutine info_version(version)
     !f2py intent(out) :: version
 
     character(len=80), intent(out) :: version
-    
+
     version = tamasis_version
 
 end subroutine info_version
@@ -46,7 +46,7 @@ subroutine info_nbytes_real(nbytes)
     !f2py intent(out)    :: nbytes
 
     integer, intent(out) :: nbytes
-    
+
     nbytes = PRECISION_REAL
 
 end subroutine info_nbytes_real
@@ -63,7 +63,7 @@ subroutine info_nthreads(nthreads)
     !f2py intent(out)    :: nthreads
 
     integer, intent(out) :: nthreads
-    
+
     nthreads = omp_get_max_threads()
 
 end subroutine info_nthreads
@@ -496,7 +496,7 @@ subroutine fft_plan(data, nsamples, nslices, plan, nsamples_tot, ndetectors)
 
     dest = 1
     do islice = 1, nslices
-       
+
         call fft_tod(plan(islice), data(dest:dest+nsamples(islice)-1,:))
         dest = dest + nsamples(islice)
 
@@ -581,9 +581,9 @@ subroutine add_inplace(a, b, n)
     implicit none
 
     !f2py threadsafe
-    !f2py, intent(inout) :: a
-    !f2py, intent(hide)  :: n = size(a)
-    !f2py, intent(in)    :: b
+    !f2py intent(inout) :: a
+    !f2py intent(hide)  :: n = size(a)
+    !f2py intent(in)    :: b
 
     real(p), intent(inout) :: a(n)
     real(p), intent(in)    :: b(n)
@@ -603,9 +603,9 @@ subroutine subtract_inplace(a, b, n)
     implicit none
 
     !f2py threadsafe
-    !f2py, intent(inout) :: a
-    !f2py, intent(hide)  :: n = size(a)
-    !f2py, intent(in)    :: b
+    !f2py intent(inout) :: a
+    !f2py intent(hide)  :: n = size(a)
+    !f2py intent(in)    :: b
 
     real(p), intent(inout) :: a(n)
     real(p), intent(in)    :: b(n)
@@ -630,9 +630,9 @@ subroutine multiply_inplace(a, b, n)
     implicit none
 
     !f2py threadsafe
-    !f2py, intent(inout) :: a
-    !f2py, intent(hide)  :: n = size(a)
-    !f2py, intent(in)    :: b
+    !f2py intent(inout) :: a
+    !f2py intent(hide)  :: n = size(a)
+    !f2py intent(in)    :: b
 
     real(p), intent(inout) :: a(n)
     real(p), intent(in)    :: b(n)
@@ -657,9 +657,9 @@ subroutine divide_inplace(a, b, n)
     implicit none
 
     !f2py threadsafe
-    !f2py, intent(inout) :: a
-    !f2py, intent(hide)  :: n = size(a)
-    !f2py, intent(in)    :: b
+    !f2py intent(inout) :: a
+    !f2py intent(hide)  :: n = size(a)
+    !f2py intent(in)    :: b
 
     real(p), intent(inout) :: a(n)
     real(p), intent(in)    :: b(n)
@@ -684,9 +684,9 @@ subroutine add_inplace_blas(a, b, n)
     implicit none
 
     !f2py threadsafe
-    !f2py, intent(inout) :: a
-    !f2py, intent(hide)  :: n = size(a)
-    !f2py, intent(in)    :: b
+    !f2py intent(inout) :: a
+    !f2py intent(hide)  :: n = size(a)
+    !f2py intent(in)    :: b
 
     real(p), intent(inout) :: a(n)
     real(p), intent(in)    :: b(n)
@@ -706,9 +706,9 @@ subroutine subtract_inplace_blas(a, b, n)
     implicit none
 
     !f2py threadsafe
-    !f2py, intent(inout) :: a
-    !f2py, intent(hide)  :: n = size(a)
-    !f2py, intent(in)    :: b
+    !f2py intent(inout) :: a
+    !f2py intent(hide)  :: n = size(a)
+    !f2py intent(in)    :: b
 
     real(p), intent(inout) :: a(n)
     real(p), intent(in)    :: b(n)
@@ -722,90 +722,127 @@ end subroutine subtract_inplace_blas
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine diff1(array, m, n, axis)
+subroutine diff(array, size, dim, ashape, rank)
 
-    use module_tamasis,  only : p
-    use module_math,     only : diff1_ => diff1
+    use module_math,    only : diff_fast, diff_slow
+    use module_tamasis, only : p
     implicit none
 
-    !f2py threadsafe
-    !f2py, intent(inout)   :: array
-    !f2py, intent(hide)    :: m = shape(array,0), n=shape(array,1)
-    !f2py, intent(in)      :: axis
+    !f2py intent(inout)    :: array(size)
+    !f2py intent(hide)     :: size
+    !f2py intent(in)       :: dim
+    !f2py intent(in)       :: ashape
+    !f2py intent(hide)     :: rank=size(ashape)
 
-    real(p), intent(inout) :: array(m,n)
-    integer, intent(in)    :: m, n
-    integer, intent(in)    :: axis
+    real(p), intent(inout) :: array(size)
+    integer*8, intent(in)  :: size
+    integer, intent(in)    :: dim
+    integer*8, intent(in)  :: ashape(rank)
+    integer, intent(in)    :: rank
 
-    call diff1_(array, 2 - axis)
+    integer :: idim, nfast, ndiff, nslow
 
-end subroutine diff1
+    nfast = 1
+    nslow = 1
+    do idim = 1, dim-1
+        nfast = nfast * ashape(idim)
+    end do
+    ndiff = ashape(dim)
+    do idim = dim+1, rank
+        nslow = nslow * ashape(idim)
+    end do
+
+    if (dim == 1) then
+        call diff_fast(array(1), ndiff, nslow)
+    else
+        call diff_slow(array(1), nfast, ndiff, nslow)
+    end if
+
+end subroutine diff
 
 
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine diff_1d(array, n)
+subroutine diffT(array, size, dim, ashape, rank)
 
-    use module_tamasis,  only : p
+    use module_math,    only : diffT_fast, diffT_slow
+    use module_tamasis, only : p
     implicit none
 
-    !f2py, intent(inout)   :: array
-    !f2py, intent(hide)    :: n=size(array)
+    !f2py intent(inout)    :: array(size)
+    !f2py intent(hide)     :: size
+    !f2py intent(in)       :: dim
+    !f2py intent(in)       :: ashape
+    !f2py intent(hide)     :: rank=size(ashape)
 
-    real(p), intent(inout) :: array(n)
-    integer, intent(in)    :: n
+    real(p), intent(inout) :: array(size)
+    integer*8, intent(in)  :: size
+    integer, intent(in)    :: dim
+    integer*8, intent(in)  :: ashape(rank)
+    integer, intent(in)    :: rank
 
-    array(1:n-1) = array(1:n-1) - array(2:n)
-    array(n) = 0
+    integer :: idim, nfast, ndiff, nslow
 
-end subroutine diff_1d
+    nfast = 1
+    nslow = 1
+    do idim = 1, dim-1
+        nfast = nfast * ashape(idim)
+    end do
+    ndiff = ashape(dim)
+    do idim = dim+1, rank
+        nslow = nslow * ashape(idim)
+    end do
+
+    if (dim == 1) then
+        call diffT_fast(array(1), ndiff, nslow)
+    else
+        call diffT_slow(array(1), nfast, ndiff, nslow)
+    end if
+
+end subroutine diffT
 
 
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine diff2(array, m, n, axis)
+subroutine diffTdiff(array, size, dim, ashape, rank)
 
-    use module_tamasis,  only : p
-    use module_math,     only : diff2_ => diff2
+    use module_math,    only : diffTdiff_fast, diffTdiff_slow
+    use module_tamasis, only : p
     implicit none
 
-    !f2py threadsafe
-    !f2py, intent(inout)   :: array
-    !f2py, intent(hide)    :: m = shape(array,0), n=shape(array,1)
-    !f2py, intent(in)      :: axis
+    !f2py intent(inout)    :: array(size)
+    !f2py intent(hide)     :: size
+    !f2py intent(in)       :: dim
+    !f2py intent(in)       :: ashape
+    !f2py intent(hide)     :: rank=size(ashape)
 
-    real(p), intent(inout) :: array(m,n)
-    integer, intent(in)    :: m, n
-    integer, intent(in)    :: axis
+    real(p), intent(inout) :: array(size)
+    integer*8, intent(in)  :: size
+    integer, intent(in)    :: dim
+    integer*8, intent(in)  :: ashape(rank)
+    integer, intent(in)    :: rank
 
-    call diff2_(array, 2 - axis)
+    integer :: idim, nfast, ndiff, nslow
 
-end subroutine diff2
+    nfast = 1
+    nslow = 1
+    do idim = 1, dim-1
+        nfast = nfast * ashape(idim)
+    end do
+    ndiff = ashape(dim)
+    do idim = dim+1, rank
+        nslow = nslow * ashape(idim)
+    end do
 
+    if (dim == 1) then
+        call diffTdiff_fast(array(1), ndiff, nslow)
+    else
+        call diffTdiff_slow(array(1), nfast, ndiff, nslow)
+    end if
 
-!-----------------------------------------------------------------------------------------------------------------------------------
-
-
-subroutine diff3(array, m, n, axis)
-
-    use module_tamasis,  only : p
-    use module_math,     only : diff3_ => diff3
-    implicit none
-
-    !f2py threadsafe
-    !f2py, intent(inout)   :: array
-    !f2py, intent(hide)    :: m = shape(array,0), n=shape(array,1)
-    !f2py, intent(in)      :: axis
-
-    real(p), intent(inout) :: array(m,n)
-    integer, intent(in)    :: m, n
-    integer, intent(in)    :: axis
-
-    call diff3_(array, 2 - axis)
-
-end subroutine diff3
+end subroutine diffTdiff
 
 
 !-----------------------------------------------------------------------------------------------------------------------------------
@@ -831,7 +868,7 @@ subroutine masking(input, ninputs, mask, nmasks, status)
 
     if (ninputs /= nmasks) then
         write (ERROR_UNIT,'(a,2(i0,a))') "The data array has a size incompatible with the mask ('", ninputs, "' instead of '",     &
-              nmasks, "')."
+             nmasks, "')."
         status = 1
         return
     end if
@@ -861,7 +898,7 @@ subroutine remove_nan(signal, mask, nsamples, ndetectors)
     !f2py intent(in)         :: mask
     !f2py intent(hide)       :: nsamples = shape(signal,0)
     !f2py intent(hide)       :: ndetectors = shape(signal,1)
-    
+
     integer, intent(in)      :: nsamples
     integer, intent(in)      :: ndetectors
     real(p), intent(inout)   :: signal(nsamples, ndetectors)

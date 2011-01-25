@@ -21,10 +21,10 @@ if not all(map(os.path.exists, datafile)):
 pacs = PacsObservation(filename=[datafile[0]+'[6065:20000]', datafile[1]+'[6066:20001]'],
                        fine_sampling_factor=1)
 
-telescope    = Identity('Telescope PSF')
+telescope    = Identity(description='Telescope PSF')
 projection   = Projection(pacs, resolution=3.2, npixels_per_sample=5)
-multiplexing = CompressionAverage(1, 'Multiplexing')
-crosstalk    = Identity('Crosstalk')
+multiplexing = CompressionAverage(1, description='Multiplexing')
+crosstalk    = Identity(description='Crosstalk')
 compression  = CompressionAverage(4)
 
 model = compression * crosstalk * multiplexing * projection * telescope

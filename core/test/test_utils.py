@@ -1,7 +1,6 @@
 import numpy
-from tamasis.utils import *
-from tamasis.utils import _distance_slow
-from tamasis.numpyutils import any_neq
+from tamasis import *
+from tamasis.utils import _distance_slow, diff as udiff, diffT, diffTdiff
 
 class TestFailure(Exception):
     pass
@@ -37,3 +36,39 @@ m = airy_disk((1000,1000),fwhm=10, resolution=1)
 if numpy.sum(m[500,:] > numpy.max(m)/2) != 10: raise TestFailure()
 m = airy_disk((1000,1000),fwhm=100, resolution=10)
 if numpy.sum(m[500,:] > numpy.max(m)/2) != 10: raise TestFailure()
+
+# diff
+for axis in range(2):
+    a=numpy.random.random_integers(1, 10, size=(8,9)).astype(float)
+    ref = -numpy.diff(a, axis=axis)
+    s = ref.shape
+    udiff(a, axis=axis)
+    a[:s[0],:s[1]] -= ref
+    if any_neq(a, 0): raise TestFailure()
+
+for axis in range(3):
+    a=numpy.random.random_integers(1, 10, size=(8,9,10)).astype(float)
+    ref = -numpy.diff(a, axis=axis)
+    s = ref.shape
+    udiff(a, axis=axis)
+    a[:s[0],:s[1],:s[2]] -= ref
+    if any_neq(a, 0): raise TestFailure()
+
+for axis in range(4):
+    a=numpy.random.random_integers(1, 10, size=(8,9,10,11)).astype(float)
+    ref = -numpy.diff(a, axis=axis)
+    s = ref.shape
+    udiff(a, axis=axis)
+    a[:s[0],:s[1],:s[2],:s[3]] -= ref
+    if any_neq(a, 0): raise TestFailure()
+
+# diff.T
+for axis in range(4):
+    dX = DiscreteDifference(((3,4,5,6),(3,4,5,6)), axis=axis)
+    if any_neq(dX.dense().T, dX.T.dense()): raise TestFailure()
+
+# diff.T
+for axis in range(4):
+    dX = DiscreteDifference(((3,4,5,6),(3,4,5,6)), axis=axis)
+    dtd = DdTdd(((3,4,5,6),(3,4,5,6)), axis=axis)
+    if any_neq(numpy.matrix(dX.T.dense()) * numpy.matrix(dX.dense()), dtd.dense()): raise TestFailure()

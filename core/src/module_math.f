@@ -33,19 +33,24 @@ module module_math
     public :: neq_real
     public :: add
     public :: add_blas
-    public :: diff1, diff2, diff3
+    public :: diff_fast
+    public :: diff_slow
+    public :: diffT_fast
+    public :: diffT_slow
+    public :: diffTdiff_fast
+    public :: diffTdiff_slow
 
     interface distance
         module procedure distance_1d, distance_2d, distance_3d
-    end interface distance
+    end interface
 
     interface sum_kahan
         module procedure sum_kahan_1d, sum_kahan_2d, sum_kahan_3d
-    end interface sum_kahan
+    end interface
 
     interface median
         module procedure median_nomask, median_mask
-    end interface median
+    end interface
 
     real(p), parameter :: PI = 4._p * atan(1._p)
     real(p), parameter :: DEG2RAD = PI / 180._p
@@ -84,11 +89,11 @@ contains
         real(p), allocatable :: residuals(:)
 
         nsamples = size(input)
-        
+
         if (present(mask)) then
             if (size(mask) /= nsamples) then
                 write (ERROR_UNIT,'(a,2(i0,a))'), 'Error: the mask has an incompatible dimension (', size(mask), ' instead of ',   &
-                       size(input), ').'
+                     size(input), ').'
                 stop 1
             end if
             nsamples = nsamples - count(mask)
@@ -102,8 +107,8 @@ contains
         end if
         if (present(mean)) mean = m
 
-        if (.not. present(meandev)  .and. .not. present(stddev)   .and.&
-            .not. present(variance) .and. .not. present(skewness) .and.&
+        if (.not. present(meandev)  .and. .not. present(stddev)   .and.                                                            &
+            .not. present(variance) .and. .not. present(skewness) .and.                                                            &
             .not. present(kurtosis)) return
 
         allocate(residuals(size(input)))
@@ -119,7 +124,7 @@ contains
             var = sum_kahan(residuals**2, mask) / (nsamples-1)
         end if
         if (present(variance)) variance = var
-        
+
         ! compute standard deviation
         sdev = sqrt(var)
         if (present(stddev)) stddev = sdev
@@ -155,7 +160,7 @@ contains
         real(p)                      :: mean
         real(p), intent(in)          :: input(:)
         logical, intent(in),optional :: mask(:)
-        
+
         call moment(input, mean, mask=mask)
 
     end function mean
@@ -169,7 +174,7 @@ contains
         real(p)                       :: stddev
         real(p), intent(in)           :: input(:)
         logical, intent(in), optional :: mask(:)
-        
+
         call moment(input, stddev=stddev, mask=mask)
 
     end function stddev
@@ -194,7 +199,7 @@ contains
         if (present(mask)) then
             if (size(mask) /= size(input)) then
                 write (ERROR_UNIT,'(a,2(i0,a))'), 'Error: the mask has an incompatible dimension (', size(mask), ' instead of ',   &
-                       size(input), ').'
+                     size(input), ').'
                 stop 1
             end if
             do i = 1, size(input)
@@ -207,7 +212,7 @@ contains
         else
             i = 1
         end if
-        
+
         sum = input(i)
         c = 0
         do i = i+1, size(input)
@@ -283,7 +288,7 @@ contains
         real(p), intent(in)           :: array(:)
         logical, optional, intent(in) :: mask(:)
         real(p)                       :: mean_degrees
-        
+
         real(p) :: value
         integer :: isample, n180, nvalids
         logical :: zero_minus, zero_plus
@@ -317,7 +322,7 @@ contains
         else
             mean_degrees = NaN
         end if
-            
+
     end function mean_degrees
 
 
@@ -328,7 +333,7 @@ contains
 
         real(p), intent(in)  :: array(:)
         real(p), intent(out) :: minv, maxv
-        
+
         real(p) :: value, meanv
         integer :: isample
 
@@ -358,7 +363,7 @@ contains
 
         minv = modulo(minv, 360._p)
         maxv = modulo(maxv, 360._p)
-            
+
     end subroutine minmax_degrees
 
 
@@ -366,7 +371,7 @@ contains
 
 
     subroutine distance_1d(distance, origin, resolution)
-    
+
         real(p), intent(out) :: distance(:)
         real(p), intent(in)  :: origin
         real(p), intent(in)  :: resolution
@@ -389,7 +394,7 @@ contains
 
 
     subroutine distance_2d(distance, origin, resolution)
-    
+
         real(p), intent(out) :: distance(:,:)
         real(p), intent(in)  :: origin(2)
         real(p), intent(in)  :: resolution(2)
@@ -413,7 +418,7 @@ contains
 
 
     subroutine distance_3d(distance, origin, resolution)
-    
+
         real(p), intent(out) :: distance(:,:,:)
         real(p), intent(in)  :: origin(3)
         real(p), intent(in)  :: resolution(3)
@@ -473,7 +478,7 @@ contains
 
         integer             :: nint_down
         real(p), intent(in) :: x
-        
+
         nint_down = nint(x)
         if (x > 0 .and. abs(x-nint_down) == 0.5_p) then
             nint_down = nint_down - 1
@@ -489,7 +494,7 @@ contains
 
         integer             :: nint_up
         real(p), intent(in) :: x
-        
+
         nint_up = nint(x)
         if (x < 0 .and. abs(x-nint_up) == 0.5_p) then
             nint_up = nint_up + 1
@@ -523,7 +528,7 @@ contains
         real(p), intent(in) :: array(:)
 
         real(p), allocatable :: array_copy(:)
-        
+
 #ifdef IFORT
         allocate (array_copy(count(array == array)))
 #endif
@@ -604,22 +609,22 @@ contains
                 do 
                     ll = ll + 1
                     if (arr(low) <= arr(ll)) exit
-                end do 
-    
+                end do
+
                 do 
                     hh = hh - 1
                     if (arr(hh)  <= arr(low)) exit
                 end do
 
                 if (hh < ll) exit
- 
+
                 call swap(arr(ll), arr(hh)) 
 
             end do
 
             ! Swap middle item (in position low) back into correct position
             call swap(arr(low), arr(hh)) 
-    
+
             ! Re-set active partition
             if (hh <= imedian) low = ll
             if (hh >= imedian) high = hh - 1
@@ -640,7 +645,7 @@ contains
         real(p), intent(out), optional :: m
 
         real(p)                        :: x_(size(x)), med
- 
+
         x_ = x
         med = median_nocopy(x_)
         x_ = abs(x_ - med)
@@ -727,10 +732,14 @@ contains
         logical                       :: neq_real
         real(p), intent(in)           :: a, b
         real(p), intent(in), optional :: rtol
-        
+
         neq_real = .not. eq_real(a, b, rtol)
 
     end function neq_real
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
 
     subroutine add(a, b, n)
         real(p), intent(inout) :: a(n)
@@ -746,99 +755,194 @@ contains
 
     end subroutine add
 
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
     subroutine add_blas(a, b)
 
         real(p), intent(inout) :: a(:)
         real(p), intent(in)    :: b(:)
 
         call daxpy(size(a), 1._p, b, 1, a, 1)
-        
+
     end subroutine add_blas
 
 
-    subroutine diff1(array, dim)
+    !-------------------------------------------------------------------------------------------------------------------------------
 
-        real(p), intent(inout) :: array(:,:)
-        integer, intent(in)    :: dim
 
-        integer :: i, m, n
+    subroutine diff_fast(array, m, n)
 
-        m = size(array, 1)
-        n = size(array, 2)
-        if (dim == 1) then
-            do i = 1, n
-                array(1:m-1,i) = array(1:m-1,i) - array(2:m,i)
+        real(p), intent(inout) :: array(m,n)
+        integer, intent(in)    :: m, n
+
+        integer :: i, j
+
+!        !$omp parallel do private(i,j)
+        do j = 1, n
+            do i = 1, m-1
+                array(i,j) = array(i,j) - array(i+1,j)
             end do
-            array(m,:) = 0
-        else if (dim == 2) then
-            do i = 1, n - 1
-                array(:,i) = array(:,i) - array(:,i+1)
-            end do
-            array(:,n) = 0
-        end if
+            array(m,j) = 0
+        end do
+!        !$omp end parallel do
 
-    end subroutine diff1
+    end subroutine diff_fast
 
-    subroutine diff2(array, dim)
 
-        real(p), intent(inout) :: array(:,:)
-        integer, intent(in)    :: dim
+    !-------------------------------------------------------------------------------------------------------------------------------
 
-        integer :: i, j, m, n
 
-        m = size(array, 1)
-        n = size(array, 2)
-        if (dim == 1) then
-!            !$omp parallel do private(i,j)
-            do j = 1, n
-                do i = 1, m-1
-                    array(i,j) = array(i,j) - array(i+1,j)
-                end do
-                array(i,j) = 0
-            end do
-!            !$omp end parallel do
-        else if (dim == 2) then
-!            !$omp parallel do private(i,j)
-            do j = 1, n - 1
-                do i = 1, m
-                    array(i,j) = array(i,j) - array(i,j+1)
-                end do
-            end do
-!           !$omp end parallel do
-            array(:,n) = 0
-        end if
+    subroutine diff_slow(array, m, n, o)
 
-    end subroutine diff2
+        real(p), intent(inout) :: array(m,n,o)
+        integer, intent(in)    :: m, n, o
 
-    subroutine diff3(array, dim)
+        integer, parameter     :: block = 4096
+        integer                :: i, j, k, a, z
 
-        real(p), intent(inout) :: array(:,:)
-        integer, intent(in)    :: dim
-
-        integer, parameter :: block = 1024
-        integer :: i, j, k, m, n, a, z
-
-        m = size(array, 1)
-        n = size(array, 2)
-        if (dim == 1) then
-            do j = 1, n
-                do i = 1, m-1
-                    array(i,j) = array(i,j) - array(i+1,j)
-                end do
-                array(i,j) = 0
-            end do
-        else if (dim == 2) then
-            do k = 1, (m-1) / block + 1
-                a = (k-1) * block + 1
-                z = k * block 
+!        !$omp parallel do private(i,j,k,a,z)
+        do k = 1, o
+            ! block computation to avoid cache exhaustion
+            do i = 1, (m-1) / block + 1
+                a = (i-1) * block + 1
+                z = min(m, i * block)
                 do j = 1, n - 1
-                    array(a:z,j) = array(a:z,j) - array(a:z,j+1)
+                    array(a:z,j,k) = array(a:z,j,k) - array(a:z,j+1,k)
                 end do
             end do
-            array(:,n) = 0
+            array(:,n,k) = 0
+        end do
+!        !$omp end parallel do
+
+    end subroutine diff_slow
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine diffT_fast(array, m, n)
+
+        real(p), intent(inout) :: array(m,n)
+        integer, intent(in)    :: m, n
+
+        integer :: i, j
+
+!        !$omp parallel do private(i,j)
+        do j = 1, n
+            array(m,j) = -array(m-1,j)
+            do i = m-1, 2, -1
+                array(i,j) = array(i,j) - array(i-1,j)
+            end do
+        end do
+!        !$omp end parallel do
+
+    end subroutine diffT_fast
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine diffT_slow(array, m, n, o)
+
+        real(p), intent(inout) :: array(m,n,o)
+        integer, intent(in)    :: m, n, o
+
+        integer, parameter     :: block = 4096
+        integer                :: i, j, k, a, z
+
+!        !$omp parallel do private(i,j,k,a,z)
+        do k = 1, o
+            do i = 1, (m-1) / block + 1
+                a = (i-1) * block + 1
+                z = min(m, i * block)
+                array(a:z,n,k) = -array(a:z,n-1,k)
+                do j = n-1, 2, -1
+                    array(a:z,j,k) = array(a:z,j,k) - array(a:z,j-1,k)
+                end do
+            end do
+        end do
+!        !$omp end parallel do
+
+    end subroutine diffT_slow
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine diffTdiff_fast(array, m, n)
+
+        use module_tamasis,  only : p
+        implicit none
+
+        real(p), intent(inout) :: array(m,n)
+        integer, intent(in)    :: m, n
+
+        integer :: i, j
+        real(p) :: v, w
+
+        if (m == 1) then
+            array = 0
+            return
         end if
 
-    end subroutine diff3
+!        !$omp parallel do private(i,j,v,w)
+        do j = 1, n
+            v = array(1,j)
+            array(1,j) = array(1,j) - array(2,j)
+            do i = 2, m-1
+                w = array(i,j)
+                array(i,j) = 2 * w - v - array(i+1,j)
+                v = w
+            end do
+            array(m,j) = array(m,j) - v
+        end do
+!        !$omp end parallel do
+
+    end subroutine diffTdiff_fast
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine diffTdiff_slow(array, m, n, o)
+
+        use module_tamasis,  only : p
+        implicit none
+
+        real(p), intent(inout) :: array(m,n,o)
+        integer, intent(in)    :: m, n, o
+
+        integer, parameter :: block = 4096
+        integer :: h, i, j, k, a, z
+        real(p) :: w, v(block)
+        
+        if (n == 1) then
+            array = 0
+            return
+        end if
+
+!        !$omp parallel do private(i,j,k,a,z,v,w)
+        do k = 1, o
+            do i = 1, (m-1) / block + 1
+                a = (i-1) * block + 1
+                z = min(i * block, m)
+                v(1:z-a+1) = array(a:z,1,k)
+                array(a:z,1,k) = v(1:z-a+1) - array(a:z,2,k)
+                do j = 2, n-1
+                    do h = a, z
+                        w = array(h,j,k)
+                        array(h,j,k) = 2 * w - v(h-a+1) - array(h,j+1,k)
+                        v(h-a+1) = w
+                    end  do
+                end do
+                array(a:z,n,k) = array(a:z,n,k) - v(1:z-a+1)
+            end do
+        end do
+!        !$omp end parallel do
+
+    end subroutine diffTdiff_slow
 
 
 end module module_math

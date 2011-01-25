@@ -259,6 +259,69 @@ def aperture_circular(shape, diameter, origin=None, resolution=1.):
 #-------------------------------------------------------------------------------
 
 
+def diff(array, axis=0):
+    """
+    Inplace discrete difference
+    """
+    array = numpy.asanyarray(array)
+    rank = array.ndim
+
+    size = int(numpy.product(array.shape))
+    
+    if rank == 0:
+        array.shape = (1,)
+        array[:] = 0
+        array.shape = ()
+    else:
+        tmf.diff(array.ravel(), rank-axis, numpy.asarray(array.T.shape))
+    return array
+
+    
+#-------------------------------------------------------------------------------
+
+
+def diffT(array, axis=0):
+    """
+    Inplace discrete difference transpose
+    """
+    array = numpy.asanyarray(array)
+    rank = array.ndim
+
+    size = int(numpy.product(array.shape))
+    
+    if rank == 0:
+        array.shape = (1,)
+        array[:] = 0
+        array.shape = ()
+    else:
+        tmf.difft(array.ravel(), rank-axis, numpy.asarray(array.T.shape))
+    return array
+
+    
+#-------------------------------------------------------------------------------
+
+
+def diffTdiff(array, axis=0):
+    """
+    Inplace discrete difference transpose times discrete difference
+    """
+    array = numpy.asanyarray(array)
+    rank = array.ndim
+
+    size = int(numpy.product(array.shape))
+    
+    if rank == 0:
+        array.shape = (1,)
+        array[:] = 0
+        array.shape = ()
+    else:
+        tmf.difftdiff(array.ravel(), rank-axis, numpy.asarray(array.T.shape))
+    return array
+
+    
+#-------------------------------------------------------------------------------
+
+
 def distance(shape, origin=None, resolution=1.):
     """
     Returns an array whose values are the distances to a given origin.

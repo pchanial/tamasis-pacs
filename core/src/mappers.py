@@ -69,7 +69,7 @@ def mapper_ls(tod, model, weight=None, unpacking=None, x0=None, tol=1.e-5, maxit
 def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None, tol=1.e-5, maxiter=300, M=None, solver=None, verbose=True, callback=None):
 
     if weight is None:
-        weight = Identity('Weight')
+        weight = Identity(description='Weight')
 
     if solver is None:
         solver = scipy.sparse.linalg.cgs
@@ -89,7 +89,7 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None, tol=
     C = C.aslinearoperator(unpacking=unpacking)
 
     if M is None:
-        M = Identity('Preconditioner')
+        M = Identity(description='Preconditioner')
     elif isinstance(M, numpy.ndarray):
         M = M.copy()
         M[~numpy.isfinite(M)] = numpy.max(M[numpy.isfinite(M)])
