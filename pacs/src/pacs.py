@@ -23,14 +23,14 @@ CALIBFILE_BTC = var.path + '/pacs/PCalPhotometer_PhotTimeConstant_FM_v2.fits'
 
 class PacsBase(Observation):
 
-    ACCELERATION = 4.
+    ACCELERATION = Quantity(4., '"/s^2')
     DEFAULT_RESOLUTION = {'blue':3.2, 'green':3.2, 'red':6.4}
     PSF_FWHM = {'blue':5.2, 'green':7.7, 'red':12.}
     POINTING_DTYPE = [('time', var.FLOAT_DTYPE), ('ra', var.FLOAT_DTYPE),
                       ('dec', var.FLOAT_DTYPE), ('pa', var.FLOAT_DTYPE),
                       ('chop', var.FLOAT_DTYPE), ('info', numpy.int64),
                       ('masked', numpy.bool8), ('removed', numpy.bool8)]
-    SAMPLING = Quantity(0.024996, 's')
+    SAMPLING_PERIOD = Quantity(0.024996, 's')
 
 
     def get_bolometer_time(self):
@@ -670,10 +670,10 @@ class PacsSimulation(PacsBase):
 
         # get compression factor from input pointing
         delta = numpy.median(pointing.time[1:]-pointing.time[0:-1])
-        compression_factor = int(numpy.round(delta / self.SAMPLING))
+        compression_factor = int(numpy.round(delta / self.SAMPLING_PERIOD))
         if compression_factor <= 0:
-            raise ValueError('Invalid time in pointing argument. Use PacsSimulation.SAMPLING.')
-        if numpy.abs(delta / compression_factor - self.SAMPLING) > 0.01 * self.SAMPLING:
+            raise ValueError('Invalid time in pointing argument. Use PacsSimulation.SAMPLING_PERIOD.')
+        if numpy.abs(delta / compression_factor - self.SAMPLING_PERIOD) > 0.01 * self.SAMPLING_PERIOD:
             print('Warning: the pointing time has unexpected sampling rate. Assuming a compression factor of ' + str(compression_factor) + '.')
 
         # observing mode
@@ -790,29 +790,32 @@ class PacsSimulation(PacsBase):
 #-------------------------------------------------------------------------------
 
 
-class PacsMultiplexing(AcquisitionModel):
+class PacsMultiplexing(AcquisitionModelLinear):
     """
     Performs the multiplexing of the PACS subarrays. The subarray columns are read one after the
     other, in a 0.025s cycle (40Hz).
     Author: P. Chanial
     """
-    def __init__(self, obs, description=None):
-        AcquisitionModelLinear.__init__(self, description=description)
+    def __init__(self, obs, shapein=None, description=None):
+        shapeout = self.validate_shapein(shapein)
+        AcquisitionModelLinear.__init__(self,
+                                        shapein=shapein,
+                                        shapeout=shapeout,
+                                        types=Tod,
+                                        description=description)
         self.fine_sampling_factor = obs.instrument.fine_sampling_factor
         self.ij = obs.instrument.ij
 
-    def direct(self, signal, reusein=False, reuseout=False):
-        signal, shapeout = self.validate_input_direct(Tod, signal, reusein)
-        output = self.validate_output_direct(Tod, shapeout, reuseout)
-        output.nsamples = tuple(numpy.divide(signal.nsamples, self.fine_sampling_factor))
-        tmf.pacs_multiplexing_direct(signal.T, output.T, self.fine_sampling_factor, self.ij)
+    def direct(self, input, reusein=False, reuseout=False):
+        input, output = self.validate_input_direct(input, reusein, reuseout)
+        output.nsamples = tuple(numpy.divide(input.nsamples, self.fine_sampling_factor))
+        tmf.pacs_multiplexing_direct(input.T, output.T, self.fine_sampling_factor, self.ij)
         return output
 
-    def transpose(self, signal, reusein=False, reuseout=False):
-        signal, shapein = self.validate_input_transpose(Tod, signal, reusein)
-        output = self.validate_output_transpose(Tod, shapein, reuseout)
-        output.nsamples = tuple(numpy.multiply(signal.nsamples, self.fine_sampling_factor))
-        tmf.pacs_multiplexing_transpose(signal.T, output.T, self.fine_sampling_factor, self.ij)
+    def transpose(self, input, reusein=False, reuseout=False):
+        input, output = self.validate_input_transpose(input, reusein, reuseout)
+        output.nsamples = tuple(numpy.multiply(input.nsamples, self.fine_sampling_factor))
+        tmf.pacs_multiplexing_transpose(input.T, output.T, self.fine_sampling_factor, self.ij)
         return output
 
     def validate_shapein(self, shapein):
@@ -826,7 +829,7 @@ class PacsMultiplexing(AcquisitionModel):
 
     def validate_shapeout(self, shapeout):
         if shapeout is None:
-            return
+            return None
         super(PacsMultiplexing, self).validate_shapeout(shapeout)
         shapein = list(shapeout)
         shapein[1] = shapein[1] * self.fine_sampling_factor
@@ -935,8 +938,14 @@ def pacs_create_scan(ra0, dec0, cam_angle=0., scan_angle=0., scan_length=30., sc
                      compression_factor=4):
     if int(compression_factor) not in (1, 4, 8):
         raise ValueError("Input compression_factor must be 1, 4 or 8.")
-    scan = create_scan(ra0, dec0, PacsBase.ACCELERATION, PacsBase.SAMPLING * compression_factor, scan_angle=scan_angle,
-                       scan_length=scan_length, scan_nlegs=scan_nlegs, scan_step=scan_step, scan_speed=scan_speed,
+    scan = create_scan(ra0, dec0,
+                       PacsBase.ACCELERATION,
+                       PacsBase.SAMPLING_PERIOD * compression_factor,
+                       scan_angle=scan_angle,
+                       scan_length=scan_length,
+                       scan_nlegs=scan_nlegs,
+                       scan_step=scan_step,
+                       scan_speed=scan_speed,
                        dtype=PacsBase.POINTING_DTYPE)
     scan.header.update('HIERARCH cam_angle', cam_angle)
     scan.chop = 0.

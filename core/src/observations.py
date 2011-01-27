@@ -337,7 +337,7 @@ class Pointing(FitsArray, numpy.recarray):
 #-------------------------------------------------------------------------------
 
 
-def create_scan(ra0, dec0, scan_acceleration, sampling, scan_angle=0., scan_length=30., scan_nlegs=3, scan_step=20.,
+def create_scan(ra0, dec0, scan_acceleration, sampling_period, scan_angle=0., scan_length=30., scan_nlegs=3, scan_step=20.,
                 scan_speed=10., dtype=None):
     """
     compute the pointing timeline of the instrument reference point
@@ -347,6 +347,14 @@ def create_scan(ra0, dec0, scan_acceleration, sampling, scan_angle=0., scan_leng
     
     scan_angle -= 90.
 
+    scan_acceleration = float(scan_acceleration)
+    if scan_acceleration <= 0:
+        raise ValueError('Input scan_acceleration must be strictly positive.')
+
+    sampling_period = float(sampling_period)
+    if sampling_period <= 0:
+        raise ValueError('Input sampling_period must be strictly positive.')
+    
     scan_length = float(scan_length)
     if scan_length <= 0:
         raise ValueError('Input scan_length must be strictly positive.')
@@ -362,9 +370,6 @@ def create_scan(ra0, dec0, scan_acceleration, sampling, scan_angle=0., scan_leng
     scan_speed = float(scan_speed)
     if scan_speed <= 0:
         raise ValueError('Input scan_speed must be strictly positive.')
-
-    sampling_frequency = 1. / sampling
-    sampling_period    = 1. / sampling_frequency
 
     # compute the different times and the total number of points
     # acceleration time at the beginning of a leg, and deceleration time
@@ -385,7 +390,7 @@ def create_scan(ra0, dec0, scan_acceleration, sampling, scan_angle=0., scan_leng
     total_time = full_line_time * scan_nlegs - 2 * extra_time2
 
     # Number of samples
-    nsamples = int(numpy.ceil(total_time * sampling_frequency))
+    nsamples = int(numpy.ceil(total_time / sampling_period))
 
     # initialization
     time          = numpy.zeros(nsamples)
@@ -444,7 +449,7 @@ def create_scan(ra0, dec0, scan_acceleration, sampling, scan_angle=0., scan_leng
             alpha = (alpha0+scan_step/2.) + speed*dt - 0.5*scan_acceleration*dt*dt
             info  = Pointing.TURNAROUND
 
-        time[i] = i / sampling_frequency
+        time[i] = i * sampling_period
         infos[i] = info
         latitude[i] = delta
         longitude[i] = alpha
