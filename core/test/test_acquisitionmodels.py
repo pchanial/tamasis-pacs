@@ -3,6 +3,7 @@ import scipy.sparse.linalg
 
 from tamasis import *
 from tamasis.acquisitionmodels import ValidationError
+from tamasis.var import FLOAT_DTYPE as FTYPE, COMPLEX_DTYPE as CTYPE
 
 class TestFailure(Exception): pass
 
@@ -219,10 +220,9 @@ if numpy.any(model.T(vec) != diagonal): raise TestFailure()
 # AcquisitionModel -> Linearoperator
 #------------------------------------
 
-M2 = model.aslinearoperator()
-if M2.__class__ != scipy.sparse.linalg.interface.LinearOperator: raise TestFailure()
-if numpy.any(M2.matvec(vec)  != diagonal): raise TestFailure()
-if numpy.any(M2.rmatvec(vec) != diagonal): raise TestFailure()
+if scipy.sparse.linalg.interface.LinearOperator not in model.__class__.__bases__: raise TestFailure()
+if numpy.any(model.matvec(vec)  != diagonal): raise TestFailure()
+if numpy.any(model.rmatvec(vec) != diagonal): raise TestFailure()
 
 
 #---------------------------
@@ -244,31 +244,30 @@ if id(a) != id(a.T): raise TestFailure()
 
 # dtype
 a = Fft((3,4))
-if a.dtype.type is not numpy.complex128: raise TestFailure()
+if a.dtype is not CTYPE: raise TestFailure()
 a = Scalar(complex(0,1))
-if a.dtype.type is not numpy.complex128: raise TestFailure()
+if a.dtype is not CTYPE: raise TestFailure()
 a = Scalar(complex(1,0))
-if a.dtype.type is not numpy.float64: raise TestFailure()
+if a.dtype is not FTYPE: raise TestFailure()
 a = Scalar(3) + Scalar(1)
-if a.dtype.type is not numpy.float64: raise TestFailure()
+if a.dtype is not FTYPE: raise TestFailure()
 a = Diagonal(numpy.array([2,3,4]))
-if a.dtype.type is not numpy.float64: raise TestFailure()
+if a.dtype is not FTYPE: raise TestFailure()
 a = Diagonal(numpy.array([2,complex(3,1),4]))
-if a.dtype.type is not numpy.complex128: raise TestFailure()
+if a.dtype is not CTYPE: raise TestFailure()
 a = Masking(numpy.array([1, complex(2,2)]))
-if a.dtype.type is not numpy.complex128: raise TestFailure()
+if a.dtype is not CTYPE: raise TestFailure()
 a = Masking([True, False])
-if a.dtype.type is not numpy.float64: raise TestFailure()
+if a.dtype is not FTYPE: raise TestFailure()
 a = Masking(numpy.array([0,1,0], dtype='int8'))
-if a.dtype.type is not numpy.float64: raise TestFailure()
+if a.dtype is not FTYPE: raise TestFailure()
 
 
 #------------------------------
 # ResponseTruncatedExponential
 #------------------------------
 
-r = ResponseTruncatedExponential(1.)
-r.shape = (10,10)
+r = ResponseTruncatedExponential(1., shapein=(1,10))
 a = Tod.ones((1,10))
 b = r(a)
 if any_neq(a, b): raise TestFailure()

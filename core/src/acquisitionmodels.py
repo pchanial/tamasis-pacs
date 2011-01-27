@@ -62,24 +62,24 @@ class AcquisitionModel(object):
     Author: P. Chanial
     """
 
-    def __init__(self, shape=None, dtype=None, types=None, units=None, derived_units=None, description=None):
-
-        if shape is not None and not isinstance(shape, tuple):
-            raise TypeError('Input shape should be a tuple.')
-
-        if description is None:
-            description = self.__class__.__name__
-
-        self.description = description
+    def __init__(self, shapein=None, shapeout=None, direct=None, dtype=None, types=None, units=None, derived_units=None, description=None):
 
         # store input and output shape
-        self._shapein  = None if shape is None else shape[1]
-        self._shapeout = None if shape is None else shape[0]
+        self._shapein  = validate_sliced_shape(shapein)
+        self._shapeout = validate_sliced_shape(shapeout)
         
         # store type information
         if type(types) not in (list,tuple):
             types = (types,types)
         self.types = types
+
+        if direct is not None:
+            if not hasattr(direct, '__call__'):
+                raise TypeError('The input direct method is not callable.')
+            self.direct = direct
+
+        # dtype
+        self._dtype = dtype
 
         # store unit information
         if type(units) not in (list,tuple):
@@ -92,6 +92,11 @@ class AcquisitionModel(object):
         else:
             self.derived_units = tuple(derived_units)
 
+        # description
+        if description is None:
+            description = self.__class__.__name__
+        self.description = description
+
         # store the input of the transpose model.
         # Its memory allocation is re-used as the output of the direct model
         self._cacheout = None
@@ -100,12 +105,6 @@ class AcquisitionModel(object):
         # Its memory allocation is re-used as the output of the transpose model
         self._cachein = None
 
-        # dtype
-        self._dtype = dtype
-
-        # Acquisition model components
-        self.blocks = []
-    
     def __call__(self, input, reusein=False, reuseout=False):
         return self.direct(input, reusein, reuseout)
 
@@ -113,78 +112,27 @@ class AcquisitionModel(object):
         raise NotImplementedError()
 
     @property
+    def shape(self):
+        return (numpy.product(flatten_sliced_shape(self.shapeout)),
+                numpy.product(flatten_sliced_shape(self.shapein)))
+
+    @property
     def shapein(self):
         return self._shapein
-
-    @shapein.setter
-    def shapein(self, shape):
-        self._shapein = validate_sliced_shape(shape)
 
     @property
     def shapeout(self):
         return self._shapeout
 
-    @shapeout.setter
-    def shapeout(self, shape):
-        self._shapeout = validate_sliced_shape(shape)
-
     @property
     def dtype(self):
         if self._dtype is not None:
             return self._dtype
-        for block in self.blocks:
-            if block.dtype.type in (numpy.complex64, numpy.complex128, numpy.complex256):
-                return block.dtype
         return var.FLOAT_DTYPE
 
     @dtype.setter
     def dtype(self, dtype):
-        if len(self.blocks) != 0:
-            raise ValueError('It is not possible to set the dtype of a composite AcquisitionModel.')
         self._dtype = numpy.dtype(dtype)
-
-    def aslinearoperator(self, shape=None, packing=None, unpacking=None):
-        """Returns the AcquisitionModel as a LinearOperator"""
-
-        if unpacking is not None:
-            if packing is None:
-                packing = unpacking.T
-                model = packing * self * unpacking
-        elif packing is not None:
-            unpacking = packing.T
-            model = packing * self * unpacking
-        else:
-            packing = Identity()
-            unpacking = Identity()
-            model = self
-            
-        shapein  = numpy.product(flatten_sliced_shape(model.shapein))
-        shapeout = numpy.product(flatten_sliced_shape(model.shapeout))
-        if shape is None:
-            if (model.shapein is None or model.shapeout is None):
-                raise ValidationError('You must specify the shape of the linear operator: the AcquisitionModel is not constrained.')
-            shape = (shapeout, shapein)
-        else:
-            if shapein is not None and shapein != shape[1] or \
-               shapeout is not None and shapeout != shape[0]:
-                raise ValidationError("The input shape '" + str(shape) + 
-                      "' is incompatible with the AcquisitionModel '" + str((shapein,shapeout)) + "'.")
-
-        # ensure that input and output of model are vectors
-        if model.shapein is not None and model.shapein != (shape[1],):
-            reshape = Reshaping(shape[1], model.shapein)
-            unpacking = unpacking * reshape
-            model = model * reshape
-        if model.shapeout is not None and model.shapeout != (shape[0],):
-            reshape = Reshaping(model.shapeout, shape[0])
-            packing = reshape * packing
-            model = reshape * model
-
-        operator = LinearOperator(shape, matvec=model.direct, rmatvec=model.transpose, dtype=self.dtype)
-        operator.packing   = packing
-        operator.unpacking = unpacking
-        operator.model = model
-        return operator
     
     def validate_shapein(self, shapein):
         """
@@ -251,7 +199,6 @@ class AcquisitionModel(object):
         _validate_output_unit(input, output, self.units[1], self.units[0], self.derived_units[0])
 
         return input, output
-        
 
     def validate_input_transpose(self, input, reusein, reuseout, **options):
 
@@ -356,39 +303,23 @@ class AcquisitionModel(object):
 
 class AcquisitionModelLinear(AcquisitionModel, LinearOperator):
 
-    def __init__(self, shape=None, dtype=None, types=None, units=None, derived_units=None, description=None, matvec=None, rmatvec=None, matmat=None):
-        AcquisitionModel.__init__(self,
-                                  shape=shape,
-                                  dtype=dtype,
-                                  types=types,
-                                  units=units,
-                                  derived_units=derived_units,
-                                  description=description)
-        if matvec is None:
-            def  matvec(v):
-                v = v.reshape(self.shapein)
-                return self.direct(v).ravel()
-
-        if rmatvec is None:
-            def rmatvec(v):
-                v = v.reshape(self.shapeout)
-                return self.transpose(v).ravel()
-
-        if shape is not None:
-            LinearOperator.__init__(self,
-                                    (numpy.product(flatten_sliced_shape(self.shapeout)),
-                                     numpy.product(flatten_sliced_shape(self.shapein))),
-                                    matvec,
-                                    rmatvec=rmatvec,
-                                    matmat=matmat,
-                                    dtype=self.dtype)
-        else:
-            self.matvec = matvec
-            self.rmatvec = rmatvec
-            self.shape = None
+    def __init__(self, transpose=None, **kw):
+        AcquisitionModel.__init__(self, **kw)
+        if transpose is not None:
+            if not hasattr(transpose, '__call__'):
+                raise TypeError('The input transpose method is not callable.')
+            self.transpose = transpose
 
     def transpose(self, input, reusein=False, reuseout=False):
         raise NotImplementedError()
+
+    def matvec(self, v):
+        v = v.reshape(self.shapein)
+        return self.direct(v).ravel()
+
+    def rmatvec(self, v):
+        v = v.reshape(self.shapeout)
+        return self.transpose(v).ravel()
 
     def dense(self):
         m = numpy.product(self.shape[0])
@@ -412,17 +343,11 @@ class AcquisitionModelLinear(AcquisitionModel, LinearOperator):
 class AcquisitionModelTranspose(AcquisitionModelLinear):
 
     def __init__(self, model):
-        shape = model.shape
-        if shape is not None:
-            shape = (shape[1], shape[0])
         self.model = model
-        AcquisitionModelLinear.__init__(self, shape, description=model.description + '.T')
-
-    def direct(self, input, reusein=False, reuseout=False):
-        return self.model.transpose(input, reusein=reusein, reuseout=reuseout)
-
-    def transpose(self, input, reusein=False, reuseout=False):
-        return self.model.direct(input, reusein=reusein, reuseout=reuseout)
+        AcquisitionModelLinear.__init__(self,
+                                        direct=model.transpose,
+                                        transpose=model.direct,
+                                        description=model.description + '.T')
 
     @property
     def T(self):
@@ -432,43 +357,9 @@ class AcquisitionModelTranspose(AcquisitionModelLinear):
     def shapein(self):
         return self.model.shapeout
 
-    @shapein.setter
-    def shapein(self, value):
-        self.model.shapeout = value
-
     @property
     def shapeout(self):
         return self.model.shapein
-
-    @shapeout.setter
-    def shapeout(self, value):
-        self.model.shapein = value
-
-    @property
-    def _cacheout(self):
-        return self.model._cachein
-
-    @_cacheout.setter
-    def _cacheout(self, value):
-        self.model._cachein = value
-
-    @property
-    def _cachein(self):
-        return self.model._cacheout
-
-    @_cachein.setter
-    def _cachein(self, value):
-        self.model._cacheout = value
-
-    @property
-    def blocks(self):
-        if len(self.model.blocks) != 0:
-            raise NotImplementedError('This case should not happen.')
-        return self.model.blocks
-
-    @blocks.setter
-    def blocks(self, value):
-        pass
 
     def validate_shapein(self, shapein):
         return self.model.validate_shapeout(shapein)
@@ -476,35 +367,62 @@ class AcquisitionModelTranspose(AcquisitionModelLinear):
     def validate_shapeout(self, shapeout):
         return self.model.validate_shapein(shapeout)
 
-    def validate_input_direct(self, input, reusein, reuseout):
-        raise NotImplementedError()
 
-    def validate_input_transpose(self, input, reusein, reuseout):
-        raise NotImplementedError()
+#-------------------------------------------------------------------------------
+
+
+class Composite(AcquisitionModel):
+    """
+    Class for grouping acquisition models
+    """
+
+    def __init__(self, models, description=None):
+
+        self.blocks = []
+
+        if len(models) == 0:
+            models = [models]
+        models = [ asacquisitionmodel(m) for m in models ]
+
+        for model in models:
+            model = asacquisitionmodel(model)
+            if isinstance(model, self.__class__):
+                for block in model.blocks:
+                    self.blocks.append(block)
+            else:
+                self.blocks.append(model)
+
+        AcquisitionModel.__init__(self, description=description)
+
+        if all([hasattr(m, 'matvec') for m in self.blocks]):
+            self.matvec = lambda v: self.direct(v.reshape(self.shapein)).ravel()
+        if all([hasattr(m, 'rmatvec') for m in self.blocks]):
+            self.rmatvec = lambda v: self.transpose(v.reshape(self.shapeout)).ravel()
+
+    @property
+    def dtype(self):
+        for block in self.blocks:
+            if block.dtype.type in (numpy.complex64, numpy.complex128, numpy.complex256):
+                return block.dtype
+        return var.FLOAT_DTYPE
+
+    @dtype.setter
+    def dtype(self, dtype):
+        raise RuntimeError('The dtype of a composite AcquisitionModel cannot be set.')
+
+    @property
+    def T(self):
+        return AcquisitionModelTranspose(self)
 
 
 #-------------------------------------------------------------------------------
 
 
-class Addition(AcquisitionModel):
+class Addition(Composite):
     """
     Class for acquisition models addition
     """
 
-    def __init__(self, models, description=None):
-        AcquisitionModel.__init__(self, description=description)
-        if len(models) == 0:
-            models = [models]
-        for model in models:
-            model = asacquisitionmodel(model)
-            if isinstance(model, Addition):
-                for block in model:
-                    self.blocks.append(block)
-            else:
-                self.blocks.append(model)
-        shapein = self.shapein
-        shapeout = self.shapeout
-   
     def direct(self, input, reusein=False, reuseout=False):
         output = self.blocks[0].direct(input, reusein=False, reuseout=False)
         for i, model in enumerate(self.blocks[1:]):
@@ -518,10 +436,6 @@ class Addition(AcquisitionModel):
             reusein_ = reusein and i == len(self.blocks)-1
             output += model.transpose(input, reusein=reusein_, reuseout=True)
         return output
-
-    @property
-    def T(self):
-        return Addition([model.T for model in self.blocks])
 
     @property
     def shapein(self):
@@ -577,54 +491,36 @@ class Addition(AcquisitionModel):
 #-------------------------------------------------------------------------------
 
 
-class Composition(AcquisitionModel):
+class Composition(Composite):
     """Class for acquisition models composition"""
 
-    def __init__(self, models, description=None):
-        AcquisitionModel.__init__(self, description=description)
-        if len(models) == 0:
-            models = [models]
-        for model in reversed(models):
-            model = asacquisitionmodel(model)
-            if isinstance(model, Composition):
-                for block in model.blocks:
-                    self.blocks.append(block)
-            else:
-                self.blocks.append(model)
-        shapein = self.shapein
-        shapeout = self.shapeout
-
     def direct(self, input, reusein=False, reuseout=False):
-        for i, model in enumerate(self.blocks):
+        for i, model in enumerate(reversed(self.blocks)):
             reusein_  = reusein  or i != 0
             reuseout_ = reuseout or i != len(self.blocks)-1
             input = model.direct(input, reusein=reusein_, reuseout=reuseout_)
         return input
 
     def transpose(self, input, reusein=False, reuseout=False):
-        for i, model in enumerate(reversed(self.blocks)):
+        for i, model in enumerate(self.blocks):
             reusein_  = reusein  or i != 0
             reuseout_ = reuseout or i != len(self.blocks)-1
             input = model.transpose(input, reusein=reusein_, reuseout=reuseout_)
         return input
 
     @property
-    def T(self):
-        return Composition([model.T for model in self.blocks])
-
-    @property
     def shapein(self):
-        shapein = None
-        for model in reversed(self.blocks):
-            shapein = model.validate_shapeout(shapein)
-        return shapein
+        shapeout = None
+        for model in self.blocks:
+            shapeout = model.validate_shapeout(shapeout)
+        return shapeout
 
     @property
     def shapeout(self):
-        shapeout = None
-        for model in self.blocks:
-            shapeout = model.validate_shapein(shapeout)
-        return shapeout
+        shapein = None
+        for model in reversed(self.blocks):
+            shapein = model.validate_shapein(shapein)
+        return shapein
 
     def __imul__(self, other):
         oldblocks = self.blocks
@@ -711,32 +607,11 @@ class Square(SquareBase):
     the input can be done inplace or on a copy.
     """
 
-    @property
-    def shapein(self):
-        return self._shapein
+    def __init__(self, shapein=None, **kw):
+        AcquisitionModelLinear.__init__(self, shapein=shapein, shapeout=shapein, **kw)
 
-    @shapein.setter
-    def shapein(self, shape):
-        self._shapein  = shape
-        self._shapeout = shape
-
-    @property
-    def shapeout(self):
-        return self._shapeout
-
-    @shapeout.setter
-    def shapeout(self, shape):
-        self._shapein  = shape
-        self._shapeout = shape
-
-    def validate_shape(self, shape):
-        return super(Square, self).validate_shapein(shape)
-
-    def validate_shapein(self, shape):
-        return self.validate_shape(shape)
-
-    def validate_shapeout(self, shape):
-        return self.validate_shape(shape)
+    def validate_shapeout(self, shapeout):
+        return self.validate_shapein(shapeout)
 
     def validate_input(self, input, inplace):
         return super(Square,self).validate_input_direct(input, inplace)
@@ -762,20 +637,32 @@ class Symmetric(Square):
 class Diagonal(Symmetric):
     """Diagonal operator"""
 
-    def __init__(self, diagonal, nsamples=None, description=None):
-        AcquisitionModelLinear.__init__(self, description=description)
+    def __init__(self, diagonal, shapein=None, description=None):
         self.diagonal = numpy.asarray(diagonal, dtype=var.get_default_dtype(diagonal))
-        if not _my_isscalar(self.diagonal):
-            self.shapein = validate_sliced_shape(self.diagonal.shape, nsamples)
+        Symmetric.__init__(self, shapein=shapein, description=description)
 
     def direct(self, input, reusein=False, reuseout=False):
         output = self.validate_input(input, reusein and reuseout)
-        output *= self.diagonal
+        if output.ndim == 0:
+            return output * self.diagonal
+        output.T[:] *= self.diagonal.T
         return output
 
     @property
     def dtype(self):
         return self.diagonal.dtype
+
+    @dtype.setter
+    def dtype(self, value):
+        pass
+
+    def validate_shapein(self, shapein):
+        if shapein is None:
+            return self.shapein
+        if flatten_sliced_shape(shapein[0:self.diagonal.ndim]) != self.diagonal.shape:
+            print 'diag', self.diagonal.shape
+            raise ValueError('The input has an incompatible shape ' + str(shapein) + '.')
+        return shapein
 
 
 #-------------------------------------------------------------------------------
@@ -784,8 +671,8 @@ class Diagonal(Symmetric):
 class DiscreteDifference(Square):
     """Calculate the nth order discrete difference along given axis."""
 
-    def __init__(self, shape=None, n=1, axis=0, description=None):
-        AcquisitionModelLinear.__init__(self, shape=shape, description=description)
+    def __init__(self, n=1, axis=0, shapein=None, description=None):
+        Square.__init__(self, shapein=shapein, description=description)
         self.n = n
         self.axis = axis
 
@@ -805,8 +692,8 @@ class DiscreteDifference(Square):
 class DdTdd(Symmetric):
     """Calculate operator dX.T dX along a given axis."""
 
-    def __init__(self, shape=None, axis=0, description=None):
-        AcquisitionModelLinear.__init__(self, shape=shape, description=description)
+    def __init__(self, shapein=None, axis=0, description=None):
+        Symmetric.__init__(self, shapein=shapein, description=description)
         self.axis = axis
 
     def direct(self, input, reusein=False, reuseout=False):
@@ -847,7 +734,9 @@ class Projection(AcquisitionModelLinear):
         shapein = tuple([self.header['naxis'+str(i+1)] \
                          for i in reversed(list(range(self.header['naxis'])))])
         shapeout = combine_sliced_shape(ndetectors, nsamples)
-        AcquisitionModelLinear.__init__(self, (shapeout, shapein),
+        AcquisitionModelLinear.__init__(self,
+                                        shapein=shapein,
+                                        shapeout=shapeout,
                                         types=(Tod,Map),
                                         units=units,
                                         derived_units=derived_units,
@@ -886,8 +775,12 @@ class Compression(AcquisitionModelLinear):
     Abstract class for compressing the input signal.
     """
 
-    def __init__(self, compression_factor, description):
-        AcquisitionModelLinear.__init__(self, types=Tod, description=description)
+    def __init__(self, compression_factor, shapein=None, description=None):
+        if shapein is not None:
+            shapeout = self.validate_shapein(shapein)
+        else:
+            shapeout = None
+        AcquisitionModelLinear.__init__(self, shapein=shapein, shapeout=shapeout, types=Tod, description=description)
         if hasattr(compression_factor, 'compression_factor'):
             compression_factor = compression_factor.compression_factor
         elif hasattr(compression_factor, 'slice'):
@@ -945,8 +838,8 @@ class CompressionAverage(Compression):
     Compress the input signal by averaging blocks of specified size.
     """
 
-    def __init__(self, compression_factor, description=None):
-        Compression.__init__(self, compression_factor, description)
+    def __init__(self, compression_factor, shapein=None, description=None):
+        Compression.__init__(self, compression_factor, shapein=shapein, description=description)
 
     def compression_direct(self, input, output, compression_factor):
         tmf.compression_average_direct(input.T, output.T, numpy.resize(compression_factor, [len(input.nsamples)]))
@@ -964,8 +857,8 @@ class DownSampling(Compression):
     Downsample the input signal by picking up one sample out of a number specified by the compression factor
     """
 
-    def __init__(self, compression_factor, description=None):
-        Compression.__init__(self, compression_factor, description)
+    def __init__(self, compression_factor, shapein=None, description=None):
+        Compression.__init__(self, compression_factor, shapein=shapein, description=description)
 
     def compression_direct(self, input, output, compression_factor):
         tmf.downsampling_direct(input.T, output.T, numpy.resize(compression_factor, [len(input.nsamples)]))
@@ -982,8 +875,8 @@ class Identity(Symmetric):
     Identity class.
     """
 
-    def __init__(self, shape=None, description=None):
-        AcquisitionModelLinear.__init__(self, shape=shape, description=description)
+    def __init__(self, shapein=None, description=None):
+        Symmetric.__init__(self, shapein=shapein, description=description)
 
     def direct(self, input, reusein=False, reuseout=False):
         return self.validate_input(input, reusein and reuseout)
@@ -997,10 +890,10 @@ class Scalar(Diagonal):
     Class for scalar multiplication
     """
 
-    def __init__(self, value, description=None):
+    def __init__(self, value, shapein=None, description=None):
         if not numpy.iscomplex(value):
             value = numpy.real(value)
-        Diagonal.__init__(self, value, description)
+        Diagonal.__init__(self, value, shapein=shapein, description=description)
        
     def __str__(self):
         return super(self.__class__, self).__str__()+' (' + str(self.diagonal) + ')'
@@ -1016,8 +909,8 @@ class Masking(Symmetric):
     True (non-null). Otherwise, the input is multiplied by the mask.
     """
 
-    def __init__(self, mask, description=None):
-        AcquisitionModelLinear.__init__(self, description=description)
+    def __init__(self, mask, shapein=None, description=None):
+        Symmetric.__init__(self, shapein=shapein, description=description)
         if mask is None:
             self.mask = None
             print('Warning: input mask is None.')
@@ -1068,11 +961,13 @@ class Unpacking(AcquisitionModelLinear):
     """
 
     def __init__(self, mask, field=0., description=None):
-        AcquisitionModelLinear.__init__(self, description=description)
-        self.mask = numpy.array(mask, numpy.bool8, copy=False)
+        mask = numpy.array(mask, numpy.bool8, copy=False)
+        AcquisitionModelLinear.__init__(self,
+                                        shapein=numpy.sum(mask == 0),
+                                        shapeout=mask.shape,
+                                        description=description)
+        self.mask = mask
         self.field = field
-        self.shapein  = (numpy.sum(self.mask == 0),)
-        self.shapeout = self.mask.shape
 
     def direct(self, input, reusein=False, reuseout=False):
         input, output = self.validate_input_direct(input, reusein, reuseout)
@@ -1094,9 +989,11 @@ class Reshaping(SquareBase):
     """
 
     def __init__(self, shapein, shapeout, description=None):
-        AcquisitionModelLinear.__init__(self,description= description)
-        self.shapein  = shapein
-        self.shapeout = shapeout
+        AcquisitionModelLinear.__init__(self, shapein=shapein, shapeout=shapeout, description=description)
+        if shapein is None or shapeout is None:
+            raise ValueError('The shapes are not defined.')
+        self._shapein  = validate_sliced_shape(shapein)
+        self._shapeout = validate_sliced_shape(shapeout)
         if numpy.product(flatten_sliced_shape(self.shapein)) != numpy.product(flatten_sliced_shape(self.shapeout)):
             raise ValueError('The number of elements of the input and output of the Reshaping operator are incompatible.')
 
@@ -1131,10 +1028,10 @@ class ResponseTruncatedExponential(Square):
         Time constant divided by the signal sampling time
     """
     
-    def __init__(self, tau, shape=None, description=None):
+    def __init__(self, tau, shapein=None, description=None):
         """
         """
-        AcquisitionModelLinear.__init__(self, shape, types=Tod, description=description)
+        Square.__init__(self, shapein=shapein, types=Tod, description=description)
         self.tau = numpy.array(tau, dtype=var.FLOAT_DTYPE, ndmin=1)
 
     def direct(self, input, reusein=False, reuseout=False):
@@ -1154,8 +1051,12 @@ class ResponseTruncatedExponential(Square):
 class Padding(AcquisitionModelLinear):
     "Pads before and after a Tod."
 
-    def __init__(self, left=0, right=0, value=0., description=None):
-        AcquisitionModelLinear.__init__(self, types=Tod, description=description)
+    def __init__(self, left=0, right=0, value=0., shapein=None, description=None):
+        if shapein is not None:
+            shapeout = self.validate_shapein(shapein)
+        else:
+            shapeout = None
+        AcquisitionModelLinear.__init__(self, shapein=shapein, shapeout=shapeout, types=Tod, description=description)
         left = numpy.array(left, ndmin=1, dtype=int)
         right = numpy.array(right, ndmin=1, dtype=int)
         if numpy.any(left < 0):
@@ -1226,8 +1127,8 @@ class Padding(AcquisitionModelLinear):
 
 class CircularShift(Square):
     
-    def __init__(self, n, axes=None, description=None):
-        Square.__init__(self, description=description)
+    def __init__(self, n, axes=None, shapein=None, description=None):
+        Square.__init__(self, shapein=shapein, description=description)
         if _my_isscalar(n):
             n = (n,)
         if axes is None:
@@ -1257,19 +1158,17 @@ class Fft(Square):
     """
 
     def __init__(self, shape, axes=None, flags=['estimate'], description=None):
-        AcquisitionModelLinear.__init__(self, description=description)
+        Square.__init__(self, shapein=shape, dtype=var.COMPLEX_DTYPE, description=description)
         if fftw3.planning.lib_threads is None:
             nthreads = 1
         else:
             nthreads = tmf.info_nthreads()
-        self.shapein = shape
         self.n = numpy.product(shape)
         self.axes = axes
         self._in  = numpy.zeros(shape, dtype=var.COMPLEX_DTYPE)
         self._out = numpy.zeros(shape, dtype=var.COMPLEX_DTYPE)
         self.forward_plan = fftw3.Plan(self._in, self._out, direction='forward', flags=flags, nthreads=nthreads)
         self.backward_plan = fftw3.Plan(self._in, self._out, direction='backward', flags=flags, nthreads=nthreads)
-        self.dtype = var.COMPLEX_DTYPE
 
     def direct(self, input, reusein=False, reuseout=False):
         self._in[:] = input
@@ -1290,8 +1189,8 @@ class FftHalfComplex(Square):
     Performs real-to-half-complex fft
     """
 
-    def __init__(self, nsamples, description=None):
-        AcquisitionModelLinear.__init__(self, types=Tod, description=description)
+    def __init__(self, nsamples, shapein=None, description=None):
+        Square.__init__(self, shapein=shapein, types=Tod, description=description)
         self.nsamples_array = numpy.array(nsamples, ndmin=1, dtype='int64')
         self.nsamples = tuple(self.nsamples_array)
         self.nsamples_tot = numpy.sum(self.nsamples_array)
@@ -1319,7 +1218,7 @@ class FftHalfComplex(Square):
             dest += n
         return output
 
-    def validate_shape(self, shape):
+    def validate_shapein(self, shape):
         if shape is None:
             return None
         nsamples = shape[-1]
@@ -1333,8 +1232,8 @@ class FftHalfComplex(Square):
 
 class Convolution(Symmetric):
 
-    def __init__(self, kernel, description=None):
-        AcquisitionModelLinear.__init__(self, description=description)
+    def __init__(self, kernel, shapein=None, description=None):
+        Symmetric.__init__(self, shapein=shapein, description=description)
         self.kernel = numpy.asanyarray(kernel)
 
     def direct(self, input, reusein=False, reuseout=False):
@@ -1349,7 +1248,6 @@ class Convolution(Symmetric):
 class InvNtt(Diagonal):
 
     def __init__(self, nsamples, filter, description=None):
-        AcquisitionModelLinear.__init__(self, description=description)
         nsamples = numpy.asarray(nsamples)
         ndetectors = filter.shape[-2]
         ncorrelations = filter.shape[-1] - 1
@@ -1358,7 +1256,7 @@ class InvNtt(Diagonal):
             filter = numpy.resize(filter, (nslices, ndetectors, ncorrelations+1))
         tod_filter, status = tmf.fft_filter_uncorrelated(filter.T, numpy.asarray(nsamples, dtype='int32'), numpy.sum(nsamples))
         if status != 0: raise RuntimeError()
-        Diagonal.__init__(self, tod_filter.T, nsamples, description)
+        Diagonal.__init__(self, tod_filter.T, shapein=tod_filter.T.shape, description=description)
         self.ncorrelations = ncorrelations
         self.diagonal /= var.mpi_comm.allreduce(numpy.max(self.diagonal), op=MPI.MAX)
 
@@ -1368,8 +1266,8 @@ class InvNtt(Diagonal):
 
 class InterpolationLinear(Square):
 
-    def __init__(self, mask, description=None):
-        Square.__init__(self, description)
+    def __init__(self, mask, shapein=None, description=None):
+        Square.__init__(self, shapein=shapein, description=description)
         self.mask = mask
     def direct(self, input, reusein=False, reuseout=False):
         input.mask = self.mask
@@ -1387,6 +1285,7 @@ class AllReduce(Square):
         output = self.validate_input(input, reusein and reuseout)
         output[:] = var.mpi_comm.allreduce(output, op=MPI.SUM)
         return output
+
     def transpose(self, input, reusein=False, reuseout=False):
         output = self.validate_input(input, reusein and reuseout)
         return output
@@ -1401,13 +1300,17 @@ def asacquisitionmodel(operator, description=None):
     if _my_isscalar(operator):
         return Scalar(operator)
     if isinstance(operator, LinearOperator):
-        model = AcquisitionModelLinear(operator.shape,
+        direct    = lambda input, reusein=False, reuseout=False: operator.matvec(input)
+        transpose = lambda input, reusein=False, reuseout=False: operator.rmatvec(input)
+        model = AcquisitionModelLinear(direct=direct,
+                                       transpose=transpose,
+                                       shapein=operator.shape[1],
+                                       shapeout=operator.shape[0],
                                        dtype=operator.dtype,
                                        description=description)
-        model.direct    = lambda input, reusein=False, reuseout=False: operator.matvec(input)
-        model.transpose = lambda input, reusein=False, reuseout=False: operator.rmatvec(input)
         return model
-    return asacquisitionmodel(scipy.sparse.linalg.aslinearoperator(operator))
+    return asacquisitionmodel(scipy.sparse.linalg.aslinearoperator(operator),
+                              description=description)
 
 
 #-------------------------------------------------------------------------------

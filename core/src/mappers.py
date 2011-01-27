@@ -4,7 +4,7 @@ import time
 
 from mpi4py import MPI
 from . import var
-from .acquisitionmodels import asacquisitionmodel, Diagonal, DiscreteDifference, Identity, Masking, AllReduce
+from .acquisitionmodels import asacquisitionmodel, Diagonal, DiscreteDifference, Identity, Masking, AllReduce, Reshaping
 from .datatypes import Map, Tod, create_fitsheader
 from .quantity import Quantity, UnitError
 
@@ -71,6 +71,9 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None, tol=
     if weight is None:
         weight = Identity(description='Weight')
 
+    if unpacking is None:
+        unpacking = Reshaping(shapein=model.shape[1], shapeout=model.shapein)
+
     if solver is None:
         solver = scipy.sparse.linalg.cgs
 
@@ -78,37 +81,33 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None, tol=
 
     if hyper != 0:
         ntods = var.mpi_comm.allreduce(numpy.sum(tod.mask == 0), op=MPI.SUM)
-        nmaps = C.aslinearoperator(unpacking=unpacking).shape[0]
+        nmaps = unpacking.shape[1]
         if var.mpi_comm.Get_rank() == 0:
             hyper = numpy.array(hyper * ntods / nmaps, dtype=var.FLOAT_DTYPE)
             dX = DiscreteDifference(axis=1)
             dY = DiscreteDifference(axis=0)
             C += hyper * ( dX.T * dX + dY.T * dY )
 
-    C = AllReduce() * C
-    C = C.aslinearoperator(unpacking=unpacking)
+    C   = AllReduce() * unpacking.T * C * unpacking
+    rhs = AllReduce() * unpacking.T * model.T * weight * tod
 
-    if M is None:
-        M = Identity(description='Preconditioner')
-    elif isinstance(M, numpy.ndarray):
-        M = M.copy()
-        M[~numpy.isfinite(M)] = numpy.max(M[numpy.isfinite(M)])
-        M = Diagonal(M, description='Preconditioner')
-    else:
-        M = asacquisitionmodel(M)
-    M0 = M.aslinearoperator(C.shape, unpacking=unpacking)
-
-    rhs = C.packing * AllReduce() * model.T * weight * tod
     if not numpy.all(numpy.isfinite(rhs)):
         raise ValueError('RHS contains not finite values.')
-    if rhs.shape != C.shape[1]:
+    if rhs.shape != (C.shape[1],):
         raise ValueError("Incompatible size for RHS: '"+str(rhs.shape)+"' instead of '"+str(C.shape[1])+"'.")
 
+    if M is not None:
+        if isinstance(M, numpy.ndarray):
+            M = M.copy()
+            M[~numpy.isfinite(M)] = numpy.max(M[numpy.isfinite(M)])
+            M = Diagonal(M, description='preconditioner')
+        M = unpacking.T * M
+
     if x0 is not None:
-        x0 = C.packing(x0)
+        x0 = unpacking.T * x0
         x0[numpy.isnan(x0)] = 0.
-        if x0.shape != C.shape[0]:
-            raise ValueError("Incompatible size for x0: '"+str(x0.shape)+"' instead of '"+str(C.shape[0])+"'.")
+        if x0.shape != (C.shape[1],):
+            raise ValueError("Incompatible size for x0: '"+str(x0.shape)+"' instead of '"+str(C.shape[1])+"'.")
 
     class PcgCallback():
         def __init__(self):
@@ -126,9 +125,9 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None, tol=
 
     if callback is None:
         callback = PcgCallback()
-    
+
     time0 = time.time()
-    solution, info = solver(C, rhs, x0=x0, tol=tol, maxiter=maxiter, callback=callback, M=M0)
+    solution, info = solver(C, rhs, x0=x0, tol=tol, maxiter=maxiter, callback=callback, M=M)
     if info < 0:
         raise RuntimeError('Solver failure (code='+str(info)+' after '+str(callback.niterations)+' iterations).')
 
@@ -137,7 +136,7 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None, tol=
         if callback.niterations != maxiter:
             print('Warning: mapper_rls: maxiter != niter...')
 
-    output = Map(C.unpacking(solution))
+    output = Map(unpacking(solution, reusein=True, reuseout=True), copy=False)
     map_naive = mapper_naive(tod, model)
 
     output.header = map_naive.header

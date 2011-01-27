@@ -64,11 +64,11 @@ for axis in range(4):
 
 # diff.T
 for axis in range(4):
-    dX = DiscreteDifference(((3,4,5,6),(3,4,5,6)), axis=axis)
+    dX = DiscreteDifference(axis=axis, shapein=(3,4,5,6))
     if any_neq(dX.dense().T, dX.T.dense()): raise TestFailure()
 
-# diff.T
+# diff.T diff
 for axis in range(4):
-    dX = DiscreteDifference(((3,4,5,6),(3,4,5,6)), axis=axis)
-    dtd = DdTdd(((3,4,5,6),(3,4,5,6)), axis=axis)
+    dX = DiscreteDifference(axis=axis, shapein=(3,4,5,6))
+    dtd = DdTdd(axis=axis, shapein=(3,4,5,6))
     if any_neq(numpy.matrix(dX.T.dense()) * numpy.matrix(dX.dense()), dtd.dense()): raise TestFailure()
