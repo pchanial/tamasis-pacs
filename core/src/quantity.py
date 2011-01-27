@@ -728,6 +728,10 @@ units_table = {
     ('rad',2): Quantity(1., 'sr'),
     'pixel'  : pixel_to_pixel_reference,
     'pixel_reference' : pixel_reference_to_solid_angle,
+
+    # time
+    'ms'     : Quantity(1e-3, 's'),
+    'us'     : Quantity(1e-6, 's'),
     
     # misc
     'C'      : Quantity(1., 'A s'),
