@@ -779,14 +779,14 @@ contains
 
         integer :: i, j
 
-!        !$omp parallel do private(i,j)
+        !$omp parallel do private(i,j)
         do j = 1, n
             do i = 1, m-1
                 array(i,j) = array(i,j) - array(i+1,j)
             end do
             array(m,j) = 0
         end do
-!        !$omp end parallel do
+        !$omp end parallel do
 
     end subroutine diff_fast
 
@@ -802,7 +802,7 @@ contains
         integer, parameter     :: block = 4096
         integer                :: i, j, k, a, z
 
-!        !$omp parallel do private(i,j,k,a,z)
+        !$omp parallel do private(i,j,k,a,z)
         do k = 1, o
             ! block computation to avoid cache exhaustion
             do i = 1, (m-1) / block + 1
@@ -814,7 +814,7 @@ contains
             end do
             array(:,n,k) = 0
         end do
-!        !$omp end parallel do
+        !$omp end parallel do
 
     end subroutine diff_slow
 
@@ -829,14 +829,14 @@ contains
 
         integer :: i, j
 
-!        !$omp parallel do private(i,j)
+        !$omp parallel do private(i,j)
         do j = 1, n
             array(m,j) = -array(m-1,j)
             do i = m-1, 2, -1
                 array(i,j) = array(i,j) - array(i-1,j)
             end do
         end do
-!        !$omp end parallel do
+        !$omp end parallel do
 
     end subroutine diffT_fast
 
@@ -852,7 +852,7 @@ contains
         integer, parameter     :: block = 4096
         integer                :: i, j, k, a, z
 
-!        !$omp parallel do private(i,j,k,a,z)
+        !$omp parallel do private(i,j,k,a,z)
         do k = 1, o
             do i = 1, (m-1) / block + 1
                 a = (i-1) * block + 1
@@ -863,7 +863,7 @@ contains
                 end do
             end do
         end do
-!        !$omp end parallel do
+        !$omp end parallel do
 
     end subroutine diffT_slow
 
@@ -887,7 +887,7 @@ contains
             return
         end if
 
-!        !$omp parallel do private(i,j,v,w)
+        !$omp parallel do private(i,j,v,w)
         do j = 1, n
             v = array(1,j)
             array(1,j) = array(1,j) - array(2,j)
@@ -898,7 +898,7 @@ contains
             end do
             array(m,j) = array(m,j) - v
         end do
-!        !$omp end parallel do
+        !$omp end parallel do
 
     end subroutine diffTdiff_fast
 
@@ -923,7 +923,7 @@ contains
             return
         end if
 
-!        !$omp parallel do private(i,j,k,a,z,v,w)
+        !$omp parallel do private(i,j,k,a,z,v,w)
         do k = 1, o
             do i = 1, (m-1) / block + 1
                 a = (i-1) * block + 1
@@ -940,7 +940,7 @@ contains
                 array(a:z,n,k) = array(a:z,n,k) - v(1:z-a+1)
             end do
         end do
-!        !$omp end parallel do
+        !$omp end parallel do
 
     end subroutine diffTdiff_slow
 
