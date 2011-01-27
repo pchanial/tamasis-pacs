@@ -261,3 +261,19 @@ a = Masking([True, False])
 if a.dtype.type is not numpy.float64: raise TestFailure()
 a = Masking(numpy.array([0,1,0], dtype='int8'))
 if a.dtype.type is not numpy.float64: raise TestFailure()
+
+
+#------------------------------
+# ResponseTruncatedExponential
+#------------------------------
+
+r = ResponseTruncatedExponential(1.)
+r.shape = (10,10)
+a = Tod.ones((1,10))
+b = r(a)
+if any_neq(a, b): raise TestFailure()
+
+a[0,1:]=0
+b = r(a)
+if any_neq(b[0,:], [numpy.exp(-t/1.) for t in range(0,10)]): raise TestFailure()
+if any_neq(r.T.dense(), r.dense().T): raise TestFailure()

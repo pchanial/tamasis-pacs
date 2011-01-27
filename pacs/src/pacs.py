@@ -19,6 +19,8 @@ __all__ = [ 'PacsObservation',
             'pacs_plot_scan',
             'pacs_preprocess' ]
 
+CALIBFILE_BTC = var.path + '/pacs/PCalPhotometer_PhotTimeConstant_FM_v2.fits'
+
 class PacsBase(Observation):
 
     ACCELERATION = 4.
@@ -28,8 +30,14 @@ class PacsBase(Observation):
                       ('dec', var.FLOAT_DTYPE), ('pa', var.FLOAT_DTYPE),
                       ('chop', var.FLOAT_DTYPE), ('info', numpy.int64),
                       ('masked', numpy.bool8), ('removed', numpy.bool8)]
-    SAMPLING = 0.024996
+    SAMPLING = Quantity(0.024996, 's')
 
+
+    def get_bolometer_time(self):
+        """
+        Return the bolometer time constants of the non masked bolometers.
+        """
+        return self.instrument.bolometer_time[~self.instrument.detector_mask]
 
     def get_derived_units(self):
         volt = Quantity(1./self.instrument.responsivity, 'Jy')
@@ -454,6 +462,7 @@ class PacsObservation(PacsBase):
         self.instrument.distortion_yz = distortion_yz.T.view(dtype=[('y',var.FLOAT_DTYPE), ('z',var.FLOAT_DTYPE)]).view(numpy.recarray)
         self.instrument.flatfield = FlatField(oflat, dflat)
         self.instrument.responsivity = Quantity(responsivity, 'V/Jy')
+        self.instrument.bolometer_time = Map(pyfits.open(CALIBFILE_BTC)[{'red':1, 'green':2, 'blue':3}[band]].data, unit='ms', origin='upper')
 
         # store slice information
         nmasks_max = numpy.max(nmasks)
@@ -714,6 +723,7 @@ class PacsSimulation(PacsBase):
         self.instrument.distortion_yz = distortion_yz.T.view(dtype=[('y',var.FLOAT_DTYPE), ('z',var.FLOAT_DTYPE)]).view(numpy.recarray)
         self.instrument.flatfield = FlatField(oflat, dflat)
         self.instrument.responsivity = Quantity(responsivity, 'V/Jy')
+        self.instrument.bolometer_time = Map(pyfits.open(CALIBFILE_BTC)[{'red':1, 'green':2, 'blue':3}[band]].data, unit='ms', origin='upper')
 
         self.slice = numpy.recarray(1, dtype=[
                 ('filename', 'S256'),

@@ -6,7 +6,7 @@ subroutine test_broken_locale(ok)
 
     implicit none
 
-    !f2py intent(out) :: ok
+    !f2py intent(out)      :: ok
 
     logical*1, intent(out) :: ok
     character(len=70)      :: svalue
@@ -27,7 +27,7 @@ subroutine info_version(version)
     use module_tamasis, only : tamasis_version
     implicit none
 
-    !f2py intent(out) :: version
+    !f2py intent(out)              :: version
 
     character(len=80), intent(out) :: version
 
@@ -80,12 +80,12 @@ subroutine pointing_matrix_direct(pmatrix, map1d, signal, npixels_per_sample, ns
 
     !f2py threadsafe
     !f2py integer*8, dimension(npixels_per_sample*nsamples*ndetectors), intent(inout) :: pmatrix
-    !f2py intent(in)      :: map1d
-    !f2py intent(inout)   :: signal
-    !f2py intent(in)      :: npixels_per_sample
-    !f2py intent(hide)    :: nsamples = shape(signal,0)
-    !f2py intent(hide)    :: ndetectors = shape(signal,1)
-    !f2py intent(hide)    :: npixels = size(map1d)
+    !f2py intent(in)       :: map1d
+    !f2py intent(inout)    :: signal
+    !f2py intent(in)       :: npixels_per_sample
+    !f2py intent(hide)     :: nsamples = shape(signal,0)
+    !f2py intent(hide)     :: ndetectors = shape(signal,1)
+    !f2py intent(hide)     :: npixels = size(map1d)
 
     type(PointingElement), intent(inout) :: pmatrix(npixels_per_sample, nsamples, ndetectors)
     real(p), intent(in)    :: map1d(npixels)
@@ -111,12 +111,12 @@ subroutine pointing_matrix_transpose(pmatrix, signal, map1d, npixels_per_sample,
 
     !f2py threadsafe
     !f2py integer*8, dimension(npixels_per_sample*nsamples*ndetectors), intent(inout) :: pmatrix
-    !f2py intent(in)    :: signal
-    !f2py intent(inout) :: map1d
-    !f2py intent(in)    :: npixels_per_sample
-    !f2py intent(hide)  :: nsamples = shape(signal,0)
-    !f2py intent(hide)  :: ndetectors = shape(signal,1)
-    !f2py intent(hide)  :: npixels = size(map1d)
+    !f2py intent(in)       :: signal
+    !f2py intent(inout)    :: map1d
+    !f2py intent(in)       :: npixels_per_sample
+    !f2py intent(hide)     :: nsamples = shape(signal,0)
+    !f2py intent(hide)     :: ndetectors = shape(signal,1)
+    !f2py intent(hide)     :: npixels = size(map1d)
 
     type(PointingElement), intent(inout) :: pmatrix(npixels_per_sample, nsamples, ndetectors)
     real(p), intent(in)    :: signal(nsamples, ndetectors)
@@ -142,11 +142,11 @@ subroutine pointing_matrix_ptp(pmatrix, ptp, npixels_per_sample, nsamples, ndete
 
     !f2py threadsafe
     !f2py integer*8, dimension(npixels_per_sample*nsamples*ndetectors), intent(inout) :: pmatrix
-    !f2py intent(out) :: ptp
-    !f2py intent(in)  :: npixels_per_sample
-    !f2py intent(in)  :: nsamples
-    !f2py intent(in)  :: ndetectors
-    !f2py intent(in)  :: npixels
+    !f2py intent(out)                    :: ptp
+    !f2py intent(in)                     :: npixels_per_sample
+    !f2py intent(in)                     :: nsamples
+    !f2py intent(in)                     :: ndetectors
+    !f2py intent(in)                     :: npixels
 
     type(PointingElement), intent(inout) :: pmatrix(npixels_per_sample, nsamples, ndetectors)
     real(p), intent(out)                 :: ptp(npixels, npixels)
@@ -170,15 +170,15 @@ subroutine compression_average_direct(data, compressed, factor, nsamples, ndetec
     implicit none
 
     !f2py threadsafe
-    !f2py intent(in)      :: data
-    !f2py intent(inout)   :: compressed
-    !f2py intent(in)      :: factor
-    !f2py intent(hide)    :: nsamples = shape(data,0)
-    !f2py intent(hide)    :: ndetectors = shape(data,1)
+    !f2py intent(in)     :: data
+    !f2py intent(inout)  :: compressed
+    !f2py intent(in)     :: factor
+    !f2py intent(hide)   :: nsamples = shape(data,0)
+    !f2py intent(hide)   :: ndetectors = shape(data,1)
 
-    integer, intent(in)   :: factor, nsamples, ndetectors
-    real(p), intent(in)   :: data(nsamples,ndetectors)
-    real(p), intent(out)  :: compressed(nsamples/factor,ndetectors)
+    integer, intent(in)  :: factor, nsamples, ndetectors
+    real(p), intent(in)  :: data(nsamples,ndetectors)
+    real(p), intent(out) :: compressed(nsamples/factor,ndetectors)
 
     call direct(data, compressed, factor)
 
@@ -195,15 +195,15 @@ subroutine compression_average_transpose(compressed, data, factor, nsamples, nde
     implicit none
 
     !f2py threadsafe
-    !f2py intent(in)      :: compressed
-    !f2py intent(inout)   :: data
-    !f2py intent(in)      :: factor
-    !f2py intent(hide)    :: nsamples = shape(compressed,0)
-    !f2py intent(hide)    :: ndetectors = shape(compressed,1)
+    !f2py intent(in)     :: compressed
+    !f2py intent(inout)  :: data
+    !f2py intent(in)     :: factor
+    !f2py intent(hide)   :: nsamples = shape(compressed,0)
+    !f2py intent(hide)   :: ndetectors = shape(compressed,1)
 
-    integer, intent(in)   :: factor, nsamples, ndetectors
-    real(p), intent(in)   :: compressed(nsamples,ndetectors)
-    real(p), intent(out)  :: data(nsamples*factor,ndetectors)
+    integer, intent(in)  :: factor, nsamples, ndetectors
+    real(p), intent(in)  :: compressed(nsamples,ndetectors)
+    real(p), intent(out) :: data(nsamples*factor,ndetectors)
 
     call transpos(compressed, data, factor)
 
@@ -220,15 +220,15 @@ subroutine downsampling_direct(data, compressed, factor, nsamples, ndetectors)
     implicit none
 
     !f2py threadsafe
-    !f2py intent(in)      :: data
-    !f2py intent(inout)   :: compressed
-    !f2py intent(in)      :: factor
-    !f2py intent(hide)    :: nsamples = shape(data,0)/factor
-    !f2py intent(hide)    :: ndetectors = shape(data,1)
+    !f2py intent(in)     :: data
+    !f2py intent(inout)  :: compressed
+    !f2py intent(in)     :: factor
+    !f2py intent(hide)   :: nsamples = shape(data,0)/factor
+    !f2py intent(hide)   :: ndetectors = shape(data,1)
 
-    integer, intent(in)   :: factor, nsamples, ndetectors
-    real(p), intent(in)   :: data(nsamples*factor,ndetectors)
-    real(p), intent(out)  :: compressed(nsamples,ndetectors)
+    integer, intent(in)  :: factor, nsamples, ndetectors
+    real(p), intent(in)  :: data(nsamples*factor,ndetectors)
+    real(p), intent(out) :: compressed(nsamples,ndetectors)
 
     call direct(data, compressed, factor)
 
@@ -245,15 +245,15 @@ subroutine downsampling_transpose(compressed, data, factor, nsamples, ndetectors
     implicit none
 
     !f2py threadsafe
-    !f2py intent(inout)   :: compressed
-    !f2py intent(in)      :: data
-    !f2py intent(in)      :: factor
-    !f2py intent(hide)    :: nsamples = shape(data,0)/factor
-    !f2py intent(hide)    :: ndetectors = shape(data,1)
+    !f2py intent(inout)  :: compressed
+    !f2py intent(in)     :: data
+    !f2py intent(in)     :: factor
+    !f2py intent(hide)   :: nsamples = shape(data,0)/factor
+    !f2py intent(hide)   :: ndetectors = shape(data,1)
 
-    integer, intent(in)   :: factor, nsamples, ndetectors
-    real(p), intent(in)   :: compressed(nsamples,ndetectors)
-    real(p), intent(out)  :: data(nsamples*factor,ndetectors)
+    integer, intent(in)  :: factor, nsamples, ndetectors
+    real(p), intent(in)  :: compressed(nsamples,ndetectors)
+    real(p), intent(out) :: data(nsamples*factor,ndetectors)
 
     call transpos(compressed, data, factor)
 
@@ -270,15 +270,15 @@ subroutine backprojection_weighted(pmatrix, data, mask, map1d, weight1d, npixels
     implicit none
 
     !f2py threadsafe
-    !f2py integer*8,intent(in) :: pmatrix(npixels_per_sample*nsamples*ndetectors)
-    !f2py intent(in)           :: data
-    !f2py intent(in)           :: mask
-    !f2py intent(inout)        :: map1d
-    !f2py intent(inout)        :: weight1d
-    !f2py intent(in)           :: npixels_per_sample
-    !f2py intent(hide)         :: nsamples = shape(data,0)
-    !f2py intent(hide)         :: ndetectors = shape(data,1)
-    !f2py intent(hide)         :: npixels = size(map1d)
+    !f2py integer*8,intent(in)        :: pmatrix(npixels_per_sample*nsamples*ndetectors)
+    !f2py intent(in)                  :: data
+    !f2py intent(in)                  :: mask
+    !f2py intent(inout)               :: map1d
+    !f2py intent(inout)               :: weight1d
+    !f2py intent(in)                  :: npixels_per_sample
+    !f2py intent(hide)                :: nsamples = shape(data,0)
+    !f2py intent(hide)                :: ndetectors = shape(data,1)
+    !f2py intent(hide)                :: npixels = size(map1d)
 
     type(PointingElement), intent(in) :: pmatrix(npixels_per_sample,nsamples,ndetectors)
     real(p), intent(in)               :: data(nsamples,ndetectors)
@@ -306,14 +306,14 @@ subroutine deglitch_l2b_std(pmatrix, nx, ny, data, mask, nsigma, npixels_per_sam
     implicit none
 
     !f2py threadsafe
-    !f2py integer*8, intent(in) :: pmatrix(npixels_per_sample*nsamples*ndetectors)
-    !f2py intent(in)    :: nx, ny
-    !f2py intent(in)    :: data
-    !f2py intent(inout) :: mask
-    !f2py intent(in)    :: nsigma
-    !f2py intent(in)    :: npixels_per_sample
-    !f2py intent(hide)  :: nsamples = shape(data,0)
-    !f2py intent(hide)  :: ndetectors = shape(data,1)
+    !f2py integer*8, intent(in)       :: pmatrix(npixels_per_sample*nsamples*ndetectors)
+    !f2py intent(in)                  :: nx, ny
+    !f2py intent(in)                  :: data
+    !f2py intent(inout)               :: mask
+    !f2py intent(in)                  :: nsigma
+    !f2py intent(in)                  :: npixels_per_sample
+    !f2py intent(hide)                :: nsamples = shape(data,0)
+    !f2py intent(hide)                :: ndetectors = shape(data,1)
 
     type(PointingElement), intent(in) :: pmatrix(npixels_per_sample,nsamples,ndetectors)
     integer, intent(in)               :: nx, ny
@@ -340,14 +340,14 @@ subroutine deglitch_l2b_mad(pmatrix, nx, ny, data, mask, nsigma, npixels_per_sam
     implicit none
 
     !f2py threadsafe
-    !f2py integer*8, intent(in) :: pmatrix(npixels_per_sample*nsamples*ndetectors)
-    !f2py intent(in)    :: nx, ny
-    !f2py intent(in)    :: data
-    !f2py intent(inout) :: mask
-    !f2py intent(in)    :: nsigma
-    !f2py intent(in)    :: npixels_per_sample
-    !f2py intent(hide)  :: nsamples = shape(data,0)
-    !f2py intent(hide)  :: ndetectors = shape(data,1)
+    !f2py integer*8, intent(in)       :: pmatrix(npixels_per_sample*nsamples*ndetectors)
+    !f2py intent(in)                  :: nx, ny
+    !f2py intent(in)                  :: data
+    !f2py intent(inout)               :: mask
+    !f2py intent(in)                  :: nsigma
+    !f2py intent(in)                  :: npixels_per_sample
+    !f2py intent(hide)                :: nsamples = shape(data,0)
+    !f2py intent(hide)                :: ndetectors = shape(data,1)
 
     type(PointingElement), intent(in) :: pmatrix(npixels_per_sample,nsamples,ndetectors)
     integer, intent(in)               :: nx, ny
@@ -375,14 +375,14 @@ subroutine filter_median(data, mask, length, nsamples, nsamples_tot, nslices, nd
     implicit none
 
     !f2py threadsafe
-    !f2py intent(in)   :: data
-    !f2py intent(in)   :: mask
-    !f2py intent(in)   :: length
-    !f2py intent(in)   :: nsamples
-    !f2py intent(hide) :: nsamples_tot=shape(data,0)
-    !f2py intent(hide) :: nslices=size(nsamples)
-    !f2py intent(hide) :: ndetectors=shape(data,1)
-    !f2py intent(out)  :: status
+    !f2py intent(in)       :: data
+    !f2py intent(in)       :: mask
+    !f2py intent(in)       :: length
+    !f2py intent(in)       :: nsamples
+    !f2py intent(hide)     :: nsamples_tot=shape(data,0)
+    !f2py intent(hide)     :: nslices=size(nsamples)
+    !f2py intent(hide)     :: ndetectors=shape(data,1)
+    !f2py intent(out)      :: status
 
     real(p), intent(inout) :: data(nsamples_tot,ndetectors)
     logical*1, intent(in)  :: mask(nsamples_tot,ndetectors)
@@ -432,14 +432,14 @@ subroutine fft_filter_uncorrelated(data, nsamples, nsamples_tot, ncorrelations, 
     implicit none
 
     !f2py threadsafe
-    !f2py intent(in)   :: data
-    !f2py intent(in)   :: nsamples
-    !f2py intent(in)   :: nsamples_tot
-    !f2py intent(hide) :: ncorrelations = size(data,0) - 1
-    !f2py intent(hide) :: ndetectors = size(data,1)
-    !f2py intent(hide) :: nslices = size(data,2)
-    !f2py intent(out)  :: tod_filter
-    !f2py intent(out)  :: status
+    !f2py intent(in)     :: data
+    !f2py intent(in)     :: nsamples
+    !f2py intent(in)     :: nsamples_tot
+    !f2py intent(hide)   :: ncorrelations = size(data,0) - 1
+    !f2py intent(hide)   :: ndetectors = size(data,1)
+    !f2py intent(hide)   :: nslices = size(data,2)
+    !f2py intent(out)    :: tod_filter
+    !f2py intent(out)    :: status
 
     integer, intent(in)  :: nsamples_tot
     integer, intent(in)  :: ncorrelations
@@ -478,12 +478,12 @@ subroutine fft_plan(data, nsamples, nslices, plan, nsamples_tot, ndetectors)
     implicit none
 
     !f2py threadsafe
-    !f2py intent(inout) :: data
-    !f2py intent(in)    :: nsamples
-    !f2py intent(hide)  :: nslices = size(nsamples)
-    !f2py intent(in)    :: plan
-    !f2py intent(hide)  :: nsamples_tot = size(data,2)
-    !f2py intent(hide)  :: ndetectors = size(data,1)
+    !f2py intent(inout)    :: data
+    !f2py intent(in)       :: nsamples
+    !f2py intent(hide)     :: nslices = size(nsamples)
+    !f2py intent(in)       :: plan
+    !f2py intent(hide)     :: nsamples_tot = size(data,2)
+    !f2py intent(hide)     :: ndetectors = size(data,1)
 
     real(p), intent(inout) :: data(nsamples_tot,ndetectors)
     integer*8, intent(in)  :: nsamples(nslices)
@@ -515,13 +515,13 @@ subroutine unpack_direct(input, nvalids, mask, nx, ny, output, field)
     implicit none
 
     !f2py threadsafe
-    !f2py intent(in)    :: input
-    !f2py intent(hide)  :: nvalids = size(input)
-    !f2py intent(in)    :: mask
-    !f2py intent(hide)  :: nx=shape(mask,0)
-    !f2py intent(hide)  :: ny=shape(mask,1)
-    !f2py intent(inout) :: output(nx,ny)
-    !f2py intent(in)    :: field
+    !f2py intent(in)       :: input
+    !f2py intent(hide)     :: nvalids = size(input)
+    !f2py intent(in)       :: mask
+    !f2py intent(hide)     :: nx=shape(mask,0)
+    !f2py intent(hide)     :: ny=shape(mask,1)
+    !f2py intent(inout)    :: output(nx,ny)
+    !f2py intent(in)       :: field
 
     real(p), intent(in)    :: input(nvalids)
     integer, intent(in)    :: nvalids
@@ -549,12 +549,12 @@ subroutine unpack_transpose(input, mask, nx, ny, nvalids, output)
     implicit none
 
     !f2py threadsafe
-    !f2py intent(in)    :: input
-    !f2py intent(in)    :: mask(nx,ny)
-    !f2py intent(hide)  :: nx=shape(input,0)
-    !f2py intent(hide)  :: ny=shape(input,1)
-    !f2py intent(hide)  :: nvalids = size(output)
-    !f2py intent(inout) :: output(nvalids)
+    !f2py intent(in)      :: input
+    !f2py intent(in)      :: mask(nx,ny)
+    !f2py intent(hide)    :: nx=shape(input,0)
+    !f2py intent(hide)    :: ny=shape(input,1)
+    !f2py intent(hide)    :: nvalids = size(output)
+    !f2py intent(inout)   :: output(nvalids)
 
     real(p), intent(in)   :: input(nx,ny)
     logical*1, intent(in) :: mask(nx,ny)
@@ -581,9 +581,9 @@ subroutine add_inplace(a, b, n)
     implicit none
 
     !f2py threadsafe
-    !f2py intent(inout) :: a
-    !f2py intent(hide)  :: n = size(a)
-    !f2py intent(in)    :: b
+    !f2py intent(inout)    :: a
+    !f2py intent(hide)     :: n = size(a)
+    !f2py intent(in)       :: b
 
     real(p), intent(inout) :: a(n)
     real(p), intent(in)    :: b(n)
@@ -603,9 +603,9 @@ subroutine subtract_inplace(a, b, n)
     implicit none
 
     !f2py threadsafe
-    !f2py intent(inout) :: a
-    !f2py intent(hide)  :: n = size(a)
-    !f2py intent(in)    :: b
+    !f2py intent(inout)    :: a
+    !f2py intent(hide)     :: n = size(a)
+    !f2py intent(in)       :: b
 
     real(p), intent(inout) :: a(n)
     real(p), intent(in)    :: b(n)
@@ -630,9 +630,9 @@ subroutine multiply_inplace(a, b, n)
     implicit none
 
     !f2py threadsafe
-    !f2py intent(inout) :: a
-    !f2py intent(hide)  :: n = size(a)
-    !f2py intent(in)    :: b
+    !f2py intent(inout)    :: a
+    !f2py intent(hide)     :: n = size(a)
+    !f2py intent(in)       :: b
 
     real(p), intent(inout) :: a(n)
     real(p), intent(in)    :: b(n)
@@ -657,9 +657,9 @@ subroutine divide_inplace(a, b, n)
     implicit none
 
     !f2py threadsafe
-    !f2py intent(inout) :: a
-    !f2py intent(hide)  :: n = size(a)
-    !f2py intent(in)    :: b
+    !f2py intent(inout)    :: a
+    !f2py intent(hide)     :: n = size(a)
+    !f2py intent(in)       :: b
 
     real(p), intent(inout) :: a(n)
     real(p), intent(in)    :: b(n)
@@ -684,9 +684,9 @@ subroutine add_inplace_blas(a, b, n)
     implicit none
 
     !f2py threadsafe
-    !f2py intent(inout) :: a
-    !f2py intent(hide)  :: n = size(a)
-    !f2py intent(in)    :: b
+    !f2py intent(inout)    :: a
+    !f2py intent(hide)     :: n = size(a)
+    !f2py intent(in)       :: b
 
     real(p), intent(inout) :: a(n)
     real(p), intent(in)    :: b(n)
@@ -706,9 +706,9 @@ subroutine subtract_inplace_blas(a, b, n)
     implicit none
 
     !f2py threadsafe
-    !f2py intent(inout) :: a
-    !f2py intent(hide)  :: n = size(a)
-    !f2py intent(in)    :: b
+    !f2py intent(inout)    :: a
+    !f2py intent(hide)     :: n = size(a)
+    !f2py intent(in)       :: b
 
     real(p), intent(inout) :: a(n)
     real(p), intent(in)    :: b(n)
@@ -855,11 +855,11 @@ subroutine masking(input, ninputs, mask, nmasks, status)
     implicit none
 
     !f2py threadsafe
-    !f2py intent(inout) :: input
-    !f2py intent(hide)  :: ninputs=size(input)
-    !f2py intent(in)    :: mask(nx)
-    !f2py intent(hide)  :: nmasks=size(mask)
-    !f2py intent(out)   :: status
+    !f2py intent(inout)    :: input
+    !f2py intent(hide)     :: ninputs=size(input)
+    !f2py intent(in)       :: mask(nx)
+    !f2py intent(hide)     :: nmasks=size(mask)
+    !f2py intent(out)      :: status
 
     real(p), intent(inout) :: input(ninputs)
     logical*1, intent(in)  :: mask(nmasks)
@@ -919,9 +919,9 @@ subroutine mean_degrees(array, n, mean)
     implicit none
 
     !f2py threadsafe
-    !f2py intent(in)   :: array
-    !f2py intent(hide) :: n = size(array)
-    !f2py intent(out)  :: mean
+    !f2py intent(in)     :: array
+    !f2py intent(hide)   :: n = size(array)
+    !f2py intent(out)    :: mean
 
     real(p), intent(in)  :: array(n)
     integer, intent(in)  :: n
@@ -942,9 +942,9 @@ subroutine minmax_degrees(array, n, min, max)
     implicit none
 
     !f2py threadsafe
-    !f2py intent(in)   :: array
-    !f2py intent(hide) :: n = size(array)
-    !f2py intent(out)  :: min, max
+    !f2py intent(in)     :: array
+    !f2py intent(hide)   :: n = size(array)
+    !f2py intent(out)    :: min, max
 
     real(p), intent(in)  :: array(n)
     integer, intent(in)  :: n
@@ -965,10 +965,10 @@ subroutine distance_1d(nx, origin, resolution, array)
     implicit none
 
     !f2py threadsafe
-    !f2py intent(in)  :: nx = size(array,0)
-    !f2py intent(in)  :: origin
-    !f2py intent(in)  :: resolution
-    !f2py intent(out) :: array(nx)
+    !f2py intent(in)     :: nx = size(array,0)
+    !f2py intent(in)     :: origin
+    !f2py intent(in)     :: resolution
+    !f2py intent(out)    :: array(nx)
 
     integer, intent(in)  :: nx
     real(p), intent(in)  :: origin
@@ -990,11 +990,11 @@ subroutine distance_2d(nx, ny, origin, resolution, array)
     implicit none
 
     !f2py threadsafe
-    !f2py intent(in)  :: nx = size(array,0)
-    !f2py intent(in)  :: ny = size(array,1)
-    !f2py intent(in)  :: origin(2)
-    !f2py intent(in)  :: resolution(2)
-    !f2py intent(out) :: array(nx,ny)
+    !f2py intent(in)     :: nx = size(array,0)
+    !f2py intent(in)     :: ny = size(array,1)
+    !f2py intent(in)     :: origin(2)
+    !f2py intent(in)     :: resolution(2)
+    !f2py intent(out)    :: array(nx,ny)
 
     integer, intent(in)  :: nx, ny
     real(p), intent(in)  :: origin(2)
@@ -1016,12 +1016,12 @@ subroutine distance_3d(nx, ny, nz, origin, resolution, array)
     implicit none
 
     !f2py threadsafe
-    !f2py intent(in)  :: nx = size(array,0)
-    !f2py intent(in)  :: ny = size(array,1)
-    !f2py intent(in)  :: nz = size(array,2)
-    !f2py intent(in)  :: origin(3)
-    !f2py intent(in)  :: resolution(3)
-    !f2py intent(out) :: array(nx,ny,nz)
+    !f2py intent(in)     :: nx = size(array,0)
+    !f2py intent(in)     :: ny = size(array,1)
+    !f2py intent(in)     :: nz = size(array,2)
+    !f2py intent(in)     :: origin(3)
+    !f2py intent(in)     :: resolution(3)
+    !f2py intent(out)    :: array(nx,ny,nz)
 
     integer, intent(in)  :: nx, ny, nz
     real(p), intent(in)  :: origin(3)
@@ -1062,3 +1062,77 @@ subroutine projection_scale(header, nx, ny, array, status)
     if (status /= 0) return
 
 end subroutine projection_scale
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine convolution_trexp_direct(data, nsamples, nslices, tau, nsamples_tot, ndetectors)
+
+    use module_filtering, only : trexp_direct => convolution_trexp_direct
+    use module_tamasis,   only : p
+    implicit none
+
+    !f2py threadsafe
+    !f2py intent(inout)    :: data
+    !f2py intent(in)       :: nsamples
+    !f2py intent(hide)     :: nslices = size(nsamples)
+    !f2py intent(in)       :: tau
+    !f2py intent(hide)     :: nsamples_tot = size(data,2)
+    !f2py intent(hide)     :: ndetectors = size(data,1)
+
+    real(p), intent(inout) :: data(nsamples_tot,ndetectors)
+    integer*8, intent(in)  :: nsamples(nslices)
+    integer, intent(in)    :: nslices
+    real(p), intent(in)    :: tau(ndetectors)
+    integer, intent(in)    :: nsamples_tot
+    integer, intent(in)    :: ndetectors
+
+    integer                :: islice, dest
+
+    dest = 1
+    do islice = 1, nslices
+
+        call trexp_direct(data(dest:dest+nsamples(islice)-1,:), tau)
+        dest = dest + nsamples(islice)
+
+    end do
+
+end subroutine convolution_trexp_direct
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine convolution_trexp_transpose(data, nsamples, nslices, tau, nsamples_tot, ndetectors)
+
+    use module_filtering, only : trexp_transpose => convolution_trexp_transpose
+    use module_tamasis,   only : p
+    implicit none
+
+    !f2py threadsafe
+    !f2py intent(inout)    :: data
+    !f2py intent(in)       :: nsamples
+    !f2py intent(hide)     :: nslices = size(nsamples)
+    !f2py intent(in)       :: tau
+    !f2py intent(hide)     :: nsamples_tot = size(data,2)
+    !f2py intent(hide)     :: ndetectors = size(data,1)
+
+    real(p), intent(inout) :: data(nsamples_tot,ndetectors)
+    integer*8, intent(in)  :: nsamples(nslices)
+    integer, intent(in)    :: nslices
+    real(p), intent(in)    :: tau(ndetectors)
+    integer, intent(in)    :: nsamples_tot
+    integer, intent(in)    :: ndetectors
+
+    integer                :: islice, dest
+
+    dest = 1
+    do islice = 1, nslices
+
+        call trexp_transpose(data(dest:dest+nsamples(islice)-1,:), tau)
+        dest = dest + nsamples(islice)
+
+    end do
+
+end subroutine convolution_trexp_transpose

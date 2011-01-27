@@ -8,6 +8,8 @@ module module_filtering
     public :: FilterUncorrelated
     public :: create_filter_uncorrelated
     public :: fft_tod
+    public :: convolution_trexp_direct
+    public :: convolution_trexp_transpose
 
     include 'fftw3.f'
 
@@ -127,4 +129,60 @@ contains
     end subroutine fft_tod
 
 
+    !-------------------------------------------------------------------------------------------------------------------------------
+    
+    
+    subroutine convolution_trexp_direct(data, tau)
+
+        real(p), intent(inout) :: data(:,:)
+        real(p), intent(in)    :: tau(size(data,2))
+
+        integer :: i, j
+        real(p) :: v, w
+
+        !$omp parallel do private(i,j,v,w)
+        do j = 1, size(data,2)
+            if (tau(j) <= 0) cycle
+            w = exp(-1/tau(j))
+            v = 1._p - w
+            do i = 2, size(data,1)
+                data(i,j) = w * data(i-1,j) + v * data(i,j)
+            end do
+        end do
+        !$omp end parallel do
+        
+    end subroutine convolution_trexp_direct
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+    
+    
+    subroutine convolution_trexp_transpose(data, tau)
+
+        real(p), intent(inout) :: data(:,:)
+        real(p), intent(in)    :: tau(size(data,2))
+
+        integer :: m, n, i, j
+        real(p) :: v, w
+
+        m = size(data,1)
+        n = size(data,2)
+        !$omp parallel do private(i,j,v,w)
+        do j = 1, n
+            if (tau(j) <= 0) cycle
+            w = exp(-1/tau(j))
+            v = 1._p - w
+            data(m,j) = v * data(m,j)
+            do i = m-1, 1, -1
+                data(i,j) = w * data(i+1,j) + v * data(i,j)
+            end do
+            data(1,j) = data(1,j) / v
+        end do
+        !$omp end parallel do
+        
+    end subroutine convolution_trexp_transpose
+
+
 end module module_filtering
+
+

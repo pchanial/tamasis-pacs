@@ -38,6 +38,7 @@ __all__ = [
     'Padding',
     'Projection',
     'Reshaping',
+    'ResponseTruncatedExponential',
     'Scalar',
     'Unpacking',
     'asacquisitionmodel',
@@ -1111,6 +1112,39 @@ class Reshaping(SquareBase):
         output = _smart_reshape(output, self.shapein)
         if type(self.shapein[-1]) is tuple:
             output = Tod(output, nsamples=self.shapein[-1], copy=False)
+        return output
+
+
+#-------------------------------------------------------------------------------
+
+
+class ResponseTruncatedExponential(Square):
+    """
+    ResponseTruncatedExponential(tau)
+
+    Apply a truncated exponential response to the signal
+
+    Parameters
+    ==========
+    
+    tau: number
+        Time constant divided by the signal sampling time
+    """
+    
+    def __init__(self, tau, shape=None, description=None):
+        """
+        """
+        AcquisitionModelLinear.__init__(self, shape, types=Tod, description=description)
+        self.tau = numpy.array(tau, dtype=var.FLOAT_DTYPE, ndmin=1)
+
+    def direct(self, input, reusein=False, reuseout=False):
+        output = self.validate_input(input, reusein and reuseout)
+        tmf.convolution_trexp_direct(output.T, numpy.array(output.nsamples), self.tau)
+        return output
+
+    def transpose(self, input, reusein=False, reuseout=False):
+        output = self.validate_input(input, reusein and reuseout)
+        tmf.convolution_trexp_transpose(output.T, numpy.array(output.nsamples), self.tau)
         return output
 
 
