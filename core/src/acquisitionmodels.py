@@ -776,15 +776,8 @@ class Compression(AcquisitionModelLinear):
     """
 
     def __init__(self, compression_factor, shapein=None, description=None):
-        if shapein is not None:
-            shapeout = self.validate_shapein(shapein)
-        else:
-            shapeout = None
+        shapeout = self.validate_shapein(shapein)
         AcquisitionModelLinear.__init__(self, shapein=shapein, shapeout=shapeout, types=Tod, description=description)
-        if hasattr(compression_factor, 'compression_factor'):
-            compression_factor = compression_factor.compression_factor
-        elif hasattr(compression_factor, 'slice'):
-            compression_factor = compression_factor.slice.compression_factor
         if _my_isscalar(compression_factor):
             self.factor = int(compression_factor)
         else:
@@ -823,7 +816,7 @@ class Compression(AcquisitionModelLinear):
 
     def validate_shapeout(self, shapeout):
         if shapeout is None:
-            return
+            return None
         return combine_sliced_shape(shapeout[0:-1], numpy.array(shapeout[-1]) * self.factor)
 
     def __str__(self):

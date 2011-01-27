@@ -60,7 +60,7 @@ telescope    = Identity(description='Telescope PSF')
 projection   = Projection(obs, resolution=3.2, oversampling=False, npixels_per_sample=6)
 multiplexing = CompressionAverage(obs.instrument.fine_sampling_factor, description='Multiplexing')
 crosstalk    = Identity(description='Crosstalk')
-compression  = CompressionAverage(obs)
+compression  = CompressionAverage(obs.slice.compression_factor)
 masking      = Masking(tod.mask)
 
 model = masking * crosstalk * multiplexing * projection * telescope
