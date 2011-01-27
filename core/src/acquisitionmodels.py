@@ -1025,6 +1025,10 @@ class ResponseTruncatedExponential(Square):
         """
         """
         Square.__init__(self, shapein=shapein, types=Tod, description=description)
+        if hasattr(tau, 'SI'):
+            tau = tau.SI
+            if tau.unit != '':
+                raise ValueError('The time constant must be dimensionless.')
         self.tau = numpy.array(tau, dtype=var.FLOAT_DTYPE, ndmin=1)
 
     def direct(self, input, reusein=False, reuseout=False):
