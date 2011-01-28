@@ -248,17 +248,34 @@ class PacsBase(Observation):
         info = [ self.instrument.band.capitalize() + ' band' ]
 
         # observing mode
-        mode = self.slice[0].mode
-        print_each_mode = numpy.any(self.slice.mode != mode)
+        print_each_mode = not same(self.slice.mode)
         if not print_each_mode:
-            info.append(mode + ' mode')
+            info.append(self.slice[0].mode + ' mode')
 
         # compression factor
-        compression = self.slice[0].compression_factor
-        print_each_compression = numpy.any(self.slice.compression_factor != compression)
+        print_each_compression = not same(self.slice.compression_factor)
         if not print_each_compression:
-            info.append('compression factor x' + str(compression))
+            info.append('compression factor x' + str(self.slice[0].compression_factor))
 
+        # scan speed
+        scan_speed = []
+        scan_speed_reliable = []
+        isample = 0
+        for slice in self.slice:
+            p = self.pointing[isample:isample+slice.nsamples_all]
+            isample += slice.nsamples_all
+            nsamples = numpy.sum(~p.removed)
+            inscan = numpy.logical_and(p.info == self.pointing.INSCAN, ~p.removed)
+            ninscans = numpy.sum(inscan)
+            if ninscans == 0:
+                inscan[:] = True
+            scan_speed_reliable.append('' if ninscans >= 0.25 * nsamples and nsamples > 10 else '~')
+            scan_speed.append(numpy.round(numpy.median(p.velocity[inscan]),1))
+        print_each_scan_speed = not same(scan_speed)
+        if not print_each_scan_speed:
+            info.append('scan speed ' + scan_speed_reliable[0] + str(scan_speed[0]))
+        
+        # unit
         if self.__class__.__name__ == 'PacsObservation':
             info.append('unit is ' + unit)
 
@@ -276,10 +293,11 @@ class PacsBase(Observation):
                 result += sp + 'The masks of the observations are heterogeneous\n'
 
         # print slice-specific information
-        dest = 0
+        isample = 0
         for islice, slice in enumerate(self.slice):
 
-            p = self.pointing[dest:dest+slice.nsamples_all]
+            p = self.pointing[isample:isample+slice.nsamples_all]
+            isample += slice.nsamples_all
 
             def _str_policy(array):
                 if array.size != p.size:
@@ -319,6 +337,8 @@ class PacsBase(Observation):
                 result += sp + '     Mode:        ' + slice.mode + '\n'
             if print_each_compression:
                 result += sp + '     Compression: x' + str(slice.compression_factor) + '\n'
+            if print_each_scan_speed:
+                result += sp + '     Scan speed:  ' + scan_speed_reliable[islice] + str(scan_speed[islice]) + '\n'
             result += sp + '     In-scan:     ' + _str_policy(p.info == Pointing.INSCAN) + '\n'
             result += sp + '     Turnaround:  ' + _str_policy(p.info == Pointing.TURNAROUND) + '\n'
             result += sp + '     Other:       ' + _str_policy(p.info == Pointing.OTHER)
