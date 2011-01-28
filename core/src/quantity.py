@@ -335,11 +335,10 @@ ities of different units may have changed operands to common unit '" + \
                        numpy.logical_not, numpy.logical_or, numpy.logical_xor):
             array._unit = {}
 
-        elif ufunc not in (numpy.abs, numpy.negative ):
-            array._unit = {}
-
-        else:
+        elif ufunc in (numpy.abs, numpy.negative ):
             array._unit = self._unit
+        else:
+            array._unit = {}
 
         return array
 
@@ -560,28 +559,36 @@ ities of different units may have changed operands to common unit '" + \
             return result
         return result + ' ' + _strunit(self._unit)
 
-    def min(self, axis=None, out=None):
-        return _wrap_func(numpy.min, self, self._unit, axis, out)
+    def min(self, *args, **kw):
+        return _wrap_func(numpy.min, self, self._unit, *args, **kw)
     min.__doc__ = numpy.ndarray.min.__doc__
 
-    def max(self, axis=None, out=None):
-        return _wrap_func(numpy.max, self, self._unit, axis, out)
+    def max(self, *args, **kw):
+        return _wrap_func(numpy.max, self, self._unit, *args, **kw)
     max.__doc__ = numpy.ndarray.max.__doc__
 
-    def sum(self, axis=None, dtype=None, out=None):
-        return _wrap_func(numpy.sum, self, self._unit, axis, dtype, out)
+    def sum(self, *args, **kw):
+        return _wrap_func(numpy.sum, self, self._unit, *args, **kw)
     sum.__doc__ = numpy.ndarray.sum.__doc__
 
-    def mean(self, axis=None, dtype=None, out=None):
-        return _wrap_func(numpy.mean, self, self._unit, axis, dtype, out)
+    def mean(self, *args, **kw):
+        return _wrap_func(numpy.mean, self, self._unit, *args, **kw)
     mean.__doc__ = numpy.ndarray.mean.__doc__
 
-    def std(self, axis=None, dtype=None, out=None, ddof=0):
-        return _wrap_func(numpy.std, self, self._unit, axis, dtype, out)
+    def ptp(self, *args, **kw):
+        return _wrap_func(numpy.ptp, self, self._unit, *args, **kw)
+    ptp.__doc__ = numpy.ndarray.ptp.__doc__
+
+    def round(self, *args, **kw):
+        return _wrap_func(numpy.round, self, self._unit, *args, **kw)
+    round.__doc__ = numpy.ndarray.round.__doc__
+
+    def std(self, *args, **kw):
+        return _wrap_func(numpy.std, self, self._unit, *args, **kw)
     std.__doc__ = numpy.ndarray.std.__doc__
 
-    def var(self, axis=None, dtype=None, out=None, ddof=0):
-        return _wrap_func(numpy.var, self, _power_unit(self._unit,2), axis, dtype, out)
+    def var(self, *args, **kw):
+        return _wrap_func(numpy.var, self, _power_unit(self._unit,2), *args, **kw)
     var.__doc__ = numpy.ndarray.var.__doc__
 
 
@@ -747,8 +754,8 @@ class Unit(dict):
 
 units = Unit()
 
-def _wrap_func(func, array, unit, *args):
-    result = func(array.magnitude, *args)
+def _wrap_func(func, array, unit, *args, **kw):
+    result = func(array.magnitude, *args, **kw)
     result = Quantity(result, unit, array.derived_units, copy=False)
     return result
 

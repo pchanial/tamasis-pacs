@@ -193,13 +193,15 @@ b = Quantity(a, subok=True, copy=False)
 if id(a) != id(b): raise TestFailure()
 
 # test mean/sum/std/var
-a=Quantity([1,2,3], unit='Jy')
-for func in (numpy.min, numpy.max, numpy.mean, numpy.sum, numpy.std):
+a=Quantity([1.3,2,3], unit='Jy')
+for func in (numpy.min, numpy.max, numpy.mean, numpy.ptp, numpy.round, numpy.sum, numpy.std):
     b = func(a)
-    if b != func(a.view(numpy.ndarray)): raise TestFailure(func)
+    if any_neq(b, func(a.view(numpy.ndarray))): raise TestFailure(func)
     if b.unit != 'Jy': raise TestFailure()
+    if func in (numpy.round,):
+        continue
     b = func(a, axis=0)
-    if b != func(a.view(numpy.ndarray), axis=0): raise TestFailure(func)
+    if any_neq(b, func(a.view(numpy.ndarray), axis=0)): raise TestFailure(func)
     if b.unit != 'Jy': raise TestFailure()
 
 b = numpy.var(a)
