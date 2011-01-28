@@ -62,16 +62,15 @@ class AcquisitionModel(object):
     Author: P. Chanial
     """
 
-    def __init__(self, shapein=None, shapeout=None, direct=None, dtype=None, types=None, units=None, derived_units=None, description=None):
+    def __init__(self, shapein=None, shapeout=None, typein=None, typeout=None, unitin=None, unitout=None, derived_units=None, direct=None, dtype=None, description=None):
 
         # store input and output shape
-        self._shapein  = validate_sliced_shape(shapein)
-        self._shapeout = validate_sliced_shape(shapeout)
+        self.shapein  = validate_sliced_shape(shapein)
+        self.shapeout = validate_sliced_shape(shapeout or shapein)
         
         # store type information
-        if type(types) not in (list,tuple):
-            types = (types,types)
-        self.types = types
+        self.typein  = typein
+        self.typeout = typeout or typein
 
         if direct is not None:
             if not hasattr(direct, '__call__'):
@@ -82,9 +81,8 @@ class AcquisitionModel(object):
         self._dtype = dtype
 
         # store unit information
-        if type(units) not in (list,tuple):
-            units = (units,units)
-        self.units = (Quantity(1., units[0])._unit, Quantity(1., units[1])._unit)
+        self.unitin  = Quantity(1., unitin )._unit
+        self.unitout = Quantity(1., unitout or unitin)._unit
 
         # store derived units information
         if type(derived_units) not in (list,tuple):
@@ -115,14 +113,6 @@ class AcquisitionModel(object):
     def shape(self):
         return (numpy.product(flatten_sliced_shape(self.shapeout)),
                 numpy.product(flatten_sliced_shape(self.shapein)))
-
-    @property
-    def shapein(self):
-        return self._shapein
-
-    @property
-    def shapeout(self):
-        return self._shapeout
 
     @property
     def dtype(self):
@@ -167,9 +157,9 @@ class AcquisitionModel(object):
         if not _is_scientific_dtype(input.dtype):
             raise TypeError("The input of '" + type(self).__name__ + "' has a non-numeric type '" + str(input.dtype) + "'.")
         input = numpy.asanyarray(input, _get_dtype(self.dtype, input.dtype))
-        if self.types[1] is not None and not isinstance(input, self.types[1]):
-            input = input.view(self.types[1])
-        _validate_input_unit(input, self.units[1])
+        if self.typein is not None and not isinstance(input, self.typein):
+            input = input.view(self.typein)
+        _validate_input_unit(input, self.unitin)
 
         # store input for the transpose's output
         if reusein:
@@ -180,7 +170,7 @@ class AcquisitionModel(object):
         if shape is None:
             raise ValidationError('The shape of the output of ' + type(self).__name__+' is not known.')
         shape_flat = flatten_sliced_shape(shape)
-        typeout = self.types[0] or input.__class__
+        typeout = self.typeout or input.__class__
         if self._cacheout is None or shape_flat != self._cacheout.shape or \
            self._cacheout.dtype != input.dtype or typeout != type(self._cachein):
             self._cacheout = None
@@ -196,7 +186,7 @@ class AcquisitionModel(object):
             if not reuseout:
                 self._cacheout = None
         _propagate_attributes(input, output)
-        _validate_output_unit(input, output, self.units[1], self.units[0], self.derived_units[0])
+        _validate_output_unit(input, output, self.unitin, self.unitout, self.derived_units[0])
 
         return input, output
 
@@ -207,9 +197,9 @@ class AcquisitionModel(object):
         if not _is_scientific_dtype(input.dtype):
             raise TypeError("The input of '" + type(self).__name__ + ".T' has a non-numeric type '" + str(input.dtype) + "'.")
         input = numpy.asanyarray(input, _get_dtype(self.dtype, input.dtype))
-        if self.types[0] is not None and not isinstance(input, self.types[0]):
-            input = input.view(self.types[0])
-        _validate_input_unit(input, self.units[0])
+        if self.typeout is not None and not isinstance(input, self.typeout):
+            input = input.view(self.typeout)
+        _validate_input_unit(input, self.unitout)
 
         # store input for the direct's output
         if reusein:
@@ -220,7 +210,7 @@ class AcquisitionModel(object):
         if shape is None:
             raise ValidationError('The shape of the output of ' + type(self).__name__+' is not known.')
         shape_flat = flatten_sliced_shape(shape)
-        typeout = self.types[1] or input.__class__
+        typeout = self.typein or input.__class__
         if self._cachein is None or shape_flat != self._cachein.shape or \
            self._cachein.dtype != input.dtype or typeout != type(self._cachein):
             self._cachein = None
@@ -236,7 +226,7 @@ class AcquisitionModel(object):
             if not reuseout:
                 self._cachein = None
         _propagate_attributes(input, output)
-        _validate_output_unit(input, output, self.units[0], self.units[1], self.derived_units[1])
+        _validate_output_unit(input, output, self.unitout, self.unitin, self.derived_units[1])
 
         return input, output
 
@@ -347,19 +337,15 @@ class AcquisitionModelTranspose(AcquisitionModelLinear):
         AcquisitionModelLinear.__init__(self,
                                         direct=model.transpose,
                                         transpose=model.direct,
+                                        shapein=model.shapeout,
+                                        shapeout=model.shapein,
+                                        unitin=model.unitout,
+                                        unitout=model.unitin,
                                         description=model.description + '.T')
 
     @property
     def T(self):
         return self.model
-
-    @property
-    def shapein(self):
-        return self.model.shapeout
-
-    @property
-    def shapeout(self):
-        return self.model.shapein
 
     def validate_shapein(self, shapein):
         return self.model.validate_shapeout(shapein)
@@ -411,6 +397,50 @@ class Composite(AcquisitionModel):
         raise RuntimeError('The dtype of a composite AcquisitionModel cannot be set.')
 
     @property
+    def typein(self):
+        for model in reversed(self.blocks):
+            if model.typein is not None:
+                return model.typein
+        return numpy.ndarray
+
+    @typein.setter
+    def typein(self, value):
+        pass
+
+    @property
+    def typeout(self):
+        for model in reversed(self.blocks):
+            if model.typeout is not None:
+                return model.typeout
+        return numpy.ndarray
+
+    @typeout.setter
+    def typeout(self, value):
+        pass
+
+    @property
+    def unitin(self):
+        for model in reversed(self.blocks):
+            if len(model.unitin) > 0:
+                return model.unitin
+        return {}
+
+    @unitin.setter
+    def unitin(self, value):
+        pass
+
+    @property
+    def unitout(self):
+        for model in self.blocks:
+            if len(model.unitout) > 0:
+                return model.unitout
+        return {}
+
+    @unitout.setter
+    def unitout(self, value):
+        pass
+
+    @property
     def T(self):
         return AcquisitionModelTranspose(self)
 
@@ -451,6 +481,10 @@ class Addition(Composite):
                 raise ValidationError("Incompatible shape in operands: '" + str(shapein) +"' and '" + str(shapein_) + "'.")
         return shapein
 
+    @shapein.setter
+    def shapein(self, value):
+        pass
+
     @property
     def shapeout(self):
         shapeout = None
@@ -464,6 +498,10 @@ class Addition(Composite):
             if flatten_sliced_shape(shapeout) != flatten_sliced_shape(shapeout_):
                 raise ValidationError("Incompatible shape in operands: '" + str(shapeout) +"' and '" + str(shapeout_) + "'.")
         return shapeout
+
+    @shapeout.setter
+    def shapeout(self, value):
+        pass
 
     def __iadd__(self, other):
         oldblocks = self.blocks
@@ -515,12 +553,20 @@ class Composition(Composite):
             shapeout = model.validate_shapeout(shapeout)
         return shapeout
 
+    @shapein.setter
+    def shapein(self, value):
+        pass
+
     @property
     def shapeout(self):
         shapein = None
         for model in reversed(self.blocks):
             shapein = model.validate_shapein(shapein)
         return shapein
+
+    @shapeout.setter
+    def shapeout(self, value):
+        pass
 
     def __imul__(self, other):
         oldblocks = self.blocks
@@ -559,8 +605,8 @@ class SquareBase(AcquisitionModelLinear):
         if not _is_scientific_dtype(input.dtype):
             raise TypeError("The input of '" + type(self).__name__ + "' has a non-numeric type '" + str(input.dtype) + "'.")
         input = numpy.asanyarray(input, _get_dtype(self.dtype, input.dtype))
-        if self.types[1] is not None and not isinstance(input, self.types[1]):
-            input = input.view(self.types[1])
+        if self.typein is not None and not isinstance(input, self.typein):
+            input = input.view(self.typein)
 
         shape = self.validate_shapein(validate_sliced_shape(input.shape, getattr(input, 'nsamples', None)))
         if shape is None:
@@ -579,8 +625,8 @@ class SquareBase(AcquisitionModelLinear):
         if not _is_scientific_dtype(input.dtype):
             raise TypeError("The input of '" + type(self).__name__ + ".T' has a non-numeric type '" + str(input.dtype) + "'.")
         input = numpy.asanyarray(input, _get_dtype(self.dtype, input.dtype))
-        if self.types[0] is not None and not isinstance(input, self.types[0]):
-            input = input.view(self.types[0])
+        if self.typeout is not None and not isinstance(input, self.typeout):
+            input = input.view(self.typeout)
 
         shape = self.validate_shapeout(validate_sliced_shape(input.shape, getattr(input, 'nsamples', None)))
         if shape is None:
@@ -724,7 +770,7 @@ class Projection(AcquisitionModelLinear):
     def __init__(self, observation, method=None, header=None, resolution=None, npixels_per_sample=0, oversampling=True, description=None):
 
         self._pmatrix, self.header, ndetectors, nsamples, \
-        self.npixels_per_sample, units, derived_units =   \
+        self.npixels_per_sample, unitin, unitout, derived_units =   \
             observation.get_pointing_matrix(header,
                                             resolution,
                                             npixels_per_sample,
@@ -737,8 +783,10 @@ class Projection(AcquisitionModelLinear):
         AcquisitionModelLinear.__init__(self,
                                         shapein=shapein,
                                         shapeout=shapeout,
-                                        types=(Tod,Map),
-                                        units=units,
+                                        typein=Map,
+                                        typeout=Tod,
+                                        unitin=unitin,
+                                        unitout=unitout,
                                         derived_units=derived_units,
                                         description=description)
 
@@ -777,7 +825,7 @@ class Compression(AcquisitionModelLinear):
 
     def __init__(self, compression_factor, shapein=None, description=None):
         shapeout = self.validate_shapein(shapein)
-        AcquisitionModelLinear.__init__(self, shapein=shapein, shapeout=shapeout, types=Tod, description=description)
+        AcquisitionModelLinear.__init__(self, shapein=shapein, shapeout=shapeout, typein=Tod, description=description)
         if _my_isscalar(compression_factor):
             self.factor = int(compression_factor)
         else:
@@ -982,13 +1030,12 @@ class Reshaping(SquareBase):
     """
 
     def __init__(self, shapein, shapeout, description=None):
-        AcquisitionModelLinear.__init__(self, shapein=shapein, shapeout=shapeout, description=description)
         if shapein is None or shapeout is None:
             raise ValueError('The shapes are not defined.')
-        self._shapein  = validate_sliced_shape(shapein)
-        self._shapeout = validate_sliced_shape(shapeout)
-        if numpy.product(flatten_sliced_shape(self.shapein)) != numpy.product(flatten_sliced_shape(self.shapeout)):
+        if numpy.product(flatten_sliced_shape(shapein)) != \
+           numpy.product(flatten_sliced_shape(shapeout)):
             raise ValueError('The number of elements of the input and output of the Reshaping operator are incompatible.')
+        AcquisitionModelLinear.__init__(self, shapein=shapein, shapeout=shapeout, description=description)
 
     def direct(self, input, reusein=False, reuseout=False):
         output = self.validate_input_direct(input, reusein and reuseout)
@@ -1024,7 +1071,7 @@ class ResponseTruncatedExponential(Square):
     def __init__(self, tau, shapein=None, description=None):
         """
         """
-        Square.__init__(self, shapein=shapein, types=Tod, description=description)
+        Square.__init__(self, shapein=shapein, typein=Tod, description=description)
         if hasattr(tau, 'SI'):
             tau = tau.SI
             if tau.unit != '':
@@ -1053,7 +1100,7 @@ class Padding(AcquisitionModelLinear):
             shapeout = self.validate_shapein(shapein)
         else:
             shapeout = None
-        AcquisitionModelLinear.__init__(self, shapein=shapein, shapeout=shapeout, types=Tod, description=description)
+        AcquisitionModelLinear.__init__(self, shapein=shapein, shapeout=shapeout, typein=Tod, description=description)
         left = numpy.array(left, ndmin=1, dtype=int)
         right = numpy.array(right, ndmin=1, dtype=int)
         if numpy.any(left < 0):
@@ -1187,7 +1234,7 @@ class FftHalfComplex(Square):
     """
 
     def __init__(self, nsamples, shapein=None, description=None):
-        Square.__init__(self, shapein=shapein, types=Tod, description=description)
+        Square.__init__(self, shapein=shapein, typein=Tod, description=description)
         self.nsamples_array = numpy.array(nsamples, ndmin=1, dtype='int64')
         self.nsamples = tuple(self.nsamples_array)
         self.nsamples_tot = numpy.sum(self.nsamples_array)

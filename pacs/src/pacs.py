@@ -133,7 +133,7 @@ class PacsBase(Observation):
         if npixels_per_sample == 0:
             return self.get_pointing_matrix(header, resolution, new_npixels_per_sample, method, oversampling)
 
-        return pmatrix, header, ndetectors, nsamples, npixels_per_sample, ('/detector', '/pixel'), self.get_derived_units()
+        return pmatrix, header, ndetectors, nsamples, npixels_per_sample, '/pixel', '/detector', self.get_derived_units()
 
     def get_filter_uncorrelated(self):
         """
@@ -801,7 +801,7 @@ class PacsMultiplexing(AcquisitionModelLinear):
         AcquisitionModelLinear.__init__(self,
                                         shapein=shapein,
                                         shapeout=shapeout,
-                                        types=Tod,
+                                        typein=Tod,
                                         description=description)
         self.fine_sampling_factor = obs.instrument.fine_sampling_factor
         self.ij = obs.instrument.ij

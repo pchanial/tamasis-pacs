@@ -86,7 +86,7 @@ class MadMap1Observation(Observation):
         pmatrix = numpy.zeros(sizeofpmatrix, dtype=numpy.int64)
         status = tmf.madmap1_read_tod(self.info.todfile, self.info.invnttfile, self.info.convert, self.info.npixels_per_sample, tod.T, pmatrix)
         if status != 0: raise RuntimeError()
-        return pmatrix, header, ndetectors, nsamples, self.info.npixels_per_sample, None, None
+        return pmatrix, header, ndetectors, nsamples, self.info.npixels_per_sample, None, None, None
 
     def get_tod(self, unit=None):
         """

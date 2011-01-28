@@ -52,7 +52,25 @@ def mapper_naive(tod, model, unit=None):
    
     if unit is not None:
         mymap.inunit(unit)
+        return mymap
+
+    # make sure that the map unit is compatible with the input unit of the model
+    if all([u in mymap._unit and mymap._unit[u] == v for u,v in model.unitin.items()]):
+        return mymap
+
+    for u, v in zip(['sr', 'rad', 'deg', 'arcmin', "'", 'arcsec', '"', 'pixel_reference'], 
+                    [1,2,2,2,2,2,2,1]):
+        if u in mymap._unit and mymap._unit[u] == -v:
+            newunit = mymap.unit + ' ' + u + '^' + str(v) + ' ' + Quantity(1,model.unitin).unit
+            try:
+                mymap.inunit(newunit)
+            except:
+                pass
+            return mymap
     
+    print "Warning: cannot set naive map to a unit compatible with that of the model '" + \
+          Quantity(1,model.unitin).unit + "'."
+
     return mymap
 
 
@@ -67,6 +85,16 @@ def mapper_ls(tod, model, weight=None, unpacking=None, x0=None, tol=1.e-5, maxit
 
 
 def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None, tol=1.e-5, maxiter=300, M=None, solver=None, verbose=True, callback=None):
+
+    
+    # make sure that the tod unit is compatible with the model's output unit
+    if tod.unit == '':
+        tod = tod.view()
+        tod.unit = model.unitout
+    else:
+        if any([u not in tod._unit or tod._unit[u] != v for u,v in model.unitout.items()]):
+            return UnitError("The input tod has a unit '" + tod.unit + "' incompatible with "+\
+                             "that of the model '" + Quantity(1, model.unitout).unit + "'.")
 
     if weight is None:
         weight = Identity(description='Weight')
@@ -137,6 +165,8 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None, tol=
             print('Warning: mapper_rls: maxiter != niter...')
 
     output = Map(unpacking(solution, reusein=True, reuseout=True), copy=False)
+    output.unit = tod.unit + ' ' + (1/Quantity(1, model.unitout)).unit + ' ' + \
+                  Quantity(1, model.unitin).unit
     map_naive = mapper_naive(tod, model)
 
     output.header = map_naive.header
