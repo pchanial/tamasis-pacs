@@ -366,7 +366,7 @@ end subroutine deglitch_l2b_mad
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine filter_median(data, mask, length, nsamples, nsamples_tot, nslices, ndetectors, status)
+subroutine filter_median(data, mask, length, nsamples, nsamples_tot, ndetectors, nslices, status)
 
     use iso_fortran_env,     only : ERROR_UNIT, OUTPUT_UNIT
     use module_preprocessor, only : median_filtering
@@ -380,8 +380,8 @@ subroutine filter_median(data, mask, length, nsamples, nsamples_tot, nslices, nd
     !f2py intent(in)       :: length
     !f2py intent(in)       :: nsamples
     !f2py intent(hide)     :: nsamples_tot=shape(data,0)
-    !f2py intent(hide)     :: nslices=size(nsamples)
     !f2py intent(hide)     :: ndetectors=shape(data,1)
+    !f2py intent(hide)     :: nslices=size(nsamples)
     !f2py intent(out)      :: status
 
     real(p), intent(inout) :: data(nsamples_tot,ndetectors)

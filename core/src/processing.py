@@ -47,14 +47,16 @@ def filter_median(tod, length=10, mask=None):
     """
     Median filtering, O(1) in window length
     """
-    filtered = tod.copy()
+    filtered = numpy.asarray(tod).copy()
     if mask is None:
         mask = tod.mask
-        if mask is None:
-            mask = numpy.zeros(tod.shape, numpy.bool8)
+    if mask is None:
+        mask = numpy.zeros(tod.shape, numpy.int8)
     else:
-        mask = numpy.ascontiguousarray(mask, numpy.bool8)
-    status = tmf.filter_median(filtered.T, mask.view(numpy.int8).T, length, numpy.array(tod.nsamples, dtype='int32'))
+        mask = numpy.ascontiguousarray(mask, numpy.int8)
+
+    n = tod.shape[-1]
+    status = tmf.filter_median(filtered.reshape((-1,n)).T, mask.reshape((-1,n)).T, length, numpy.array(tod.nsamples, dtype='int32'))
     if status != 0:
         raise RuntimeError()
     return filtered
