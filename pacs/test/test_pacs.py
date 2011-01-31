@@ -84,7 +84,7 @@ projection2 = Projection(obs, header=header2, oversampling=False)
 map_naive2 = mapper_naive(tod, projection2)
 map_naive2.inunit('Jy/arcsec^2')
 map_naive3 = map_naive2[:,250:header['NAXIS1']+250]
-if any_neq(map_naive, map_naive3, 1.e-7): raise TestFailure('mapper_naive, with custom header')
+if any_neq(map_naive, map_naive3, 2.e-7): raise TestFailure('mapper_naive, with custom header')
 
 # test compatibility with photproject
 tod = obs.get_tod('Jy/arcsec^2', flatfielding=False, subtraction_mean=False)
