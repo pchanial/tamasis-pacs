@@ -209,16 +209,41 @@ def plot_scan(input, map=None, title=None, new_figure=True, color='magenta', lin
 #-------------------------------------------------------------------------------
 
 
-def profile(input, origin=None, resolution=1., bin=5):
-    input = numpy.asanyarray(input)
-    d = distance(input.shape, origin=origin, resolution=resolution)
-    d /= bin
-    d = d.astype(int)
-    m = numpy.max(d)
-    p = numpy.ndarray(int(m+1))
-    for i in range(m+1):
-        p[i] = numpy.mean(input[d == i])
-    return p
+def profile(input, origin=None, bin=1., nbins=None, histogram=False):
+    """
+    Returns axisymmetric profile of a 2d image.
+    x, y[, n] = profile(image, [origin, bin, nbins, histogram])
+
+    Parameters
+    ----------
+    input: array
+        2d input array
+    origin: (x0,y0)
+        center of the profile. (Fits convention). Default is the image center
+    bin: number
+        width of the profile bins (in unit of pixels)
+    nbins: integer
+        number of profile bins
+    histogram: boolean
+        if set to True, return the histogram
+    """
+    input = numpy.ascontiguousarray(input, var.FLOAT_DTYPE)
+    if origin is None:
+        origin = (numpy.array(input.shape[::-1], var.FLOAT_DTYPE) + 1) / 2
+    else:
+        origin = numpy.ascontiguousarray(origin, var.FLOAT_DTYPE)
+    
+    print type(input.shape[0]-origin[1])
+    print type(origin[1])
+    if nbins is None:
+        nbins = int(max(input.shape[0]-origin[1], origin[1],
+                        input.shape[1]-origin[0], origin[0]) / bin)
+
+    x, y, n = tmf.profile_axisymmetric_2d(input.T, origin, bin, nbins)
+    if histogram:
+        return x, y, n
+    else:
+        return x, y
 
 
 #-------------------------------------------------------------------------------
@@ -355,9 +380,9 @@ def distance(shape, origin=None, resolution=1.):
     rank = len(shape)
 
     if origin is None:
-        origin = (numpy.asanyarray(list(reversed(shape)), dtype=var.FLOAT_DTYPE) + 1) / 2
+        origin = (numpy.array(shape[::-1], dtype=var.FLOAT_DTYPE) + 1) / 2
     else:
-        origin = numpy.asanyarray(origin, dtype=var.FLOAT_DTYPE)
+        origin = numpy.ascontiguousarray(origin, dtype=var.FLOAT_DTYPE)
 
     unit = getattr(resolution, '_unit', None)
 
@@ -428,5 +453,3 @@ def phasemask_fourquadrant(shape, phase=-1):
     array[0:shape[0]//2,shape[1]//2:] = phase
     array[shape[0]//2:,0:shape[1]//2] = phase
     return array
-
-

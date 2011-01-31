@@ -14,6 +14,7 @@ module module_math
     public :: NaN
 
     public :: distance
+    public :: profile
     public :: linspace
     public :: logspace
     public :: mad
@@ -42,6 +43,10 @@ module module_math
 
     interface distance
         module procedure distance_1d, distance_2d, distance_3d
+    end interface
+
+    interface profile
+        module procedure profile_axisymmetric_2d
     end interface
 
     interface sum_kahan
@@ -439,6 +444,54 @@ contains
         !$omp end parallel do
 
     end subroutine distance_3d
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine profile_axisymmetric_2d(array, origin, bin, nbins, x, y, n)
+
+        real(p), intent(in)  :: array(:,:)
+        real(p), intent(in)  :: origin(2)
+        real(p), intent(in)  :: bin
+        integer, intent(in)  :: nbins
+        real(p), intent(out) :: x(nbins)
+        real(p), intent(out) :: y(nbins)
+        integer, intent(out) :: n(nbins)
+
+        integer :: i, j, ibin
+        real(p) :: distance, value, tmpj
+
+        x = 0
+        y = 0
+        n = 0
+        !$omp parallel do private(distance, ibin, tmpj, value) reduction(+:x,y,n)
+        do j = 1, size(array,2)
+            tmpj = (j - origin(2))**2
+            do i = 1, size(array,1)
+                value = array(i,j)
+                if (value /= value) cycle
+                distance = sqrt((i - origin(1))**2 + tmpj)
+                ibin = int(distance / bin) + 1
+                if (ibin > nbins) cycle
+                x(ibin) = x(ibin) + distance
+                y(ibin) = y(ibin) + value
+                n(ibin) = n(ibin) + 1
+            end do
+        end do
+        !$omp end parallel do
+
+        do i = 1, nbins
+            if (n(i) /= 0) then
+                x(i) = x(i) / n(i)
+                y(i) = y(i) / n(i)
+            else
+                x(i) = bin * (i - 0.5_p)
+                y(i) = NaN
+            end if
+        end do
+
+    end subroutine profile_axisymmetric_2d
 
 
     !-------------------------------------------------------------------------------------------------------------------------------

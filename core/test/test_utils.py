@@ -72,3 +72,23 @@ for axis in range(4):
     dX = DiscreteDifference(axis=axis, shapein=(3,4,5,6))
     dtd = DdTdd(axis=axis, shapein=(3,4,5,6))
     if any_neq(numpy.matrix(dX.T.dense()) * numpy.matrix(dX.dense()), dtd.dense()): raise TestFailure()
+
+# profile
+
+def profile_slow(input, origin=None, bin=1.):
+    d = distance(input.shape, origin=origin)
+    d /= bin
+    d = d.astype(int)
+    m = numpy.max(d)
+    p = numpy.ndarray(int(m+1))
+    n = numpy.zeros(m+1, int)
+    for i in range(m+1):
+        p[i] = numpy.mean(input[d == i])
+        n[i] = numpy.sum(d==i)
+    return p, n
+
+d = distance((10,20))
+x, y, n = profile(d, origin=(4,5), bin=2., histogram=True)
+y2, n2 = profile_slow(d, origin=(4,5), bin=2.)
+if any_neq(y, y2[0:y.size]): raise TestFailure()
+if any_neq(n, n2[0:n.size]): raise TestFailure()

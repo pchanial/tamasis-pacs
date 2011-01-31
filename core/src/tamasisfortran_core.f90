@@ -435,9 +435,9 @@ subroutine fft_filter_uncorrelated(data, nsamples, nsamples_tot, ncorrelations, 
     !f2py intent(in)     :: data
     !f2py intent(in)     :: nsamples
     !f2py intent(in)     :: nsamples_tot
-    !f2py intent(hide)   :: ncorrelations = size(data,0) - 1
-    !f2py intent(hide)   :: ndetectors = size(data,1)
-    !f2py intent(hide)   :: nslices = size(data,2)
+    !f2py intent(hide)   :: ncorrelations = shape(data,0) - 1
+    !f2py intent(hide)   :: ndetectors = shape(data,1)
+    !f2py intent(hide)   :: nslices = shape(data,2)
     !f2py intent(out)    :: tod_filter
     !f2py intent(out)    :: status
 
@@ -482,8 +482,8 @@ subroutine fft_plan(data, nsamples, nslices, plan, nsamples_tot, ndetectors)
     !f2py intent(in)       :: nsamples
     !f2py intent(hide)     :: nslices = size(nsamples)
     !f2py intent(in)       :: plan
-    !f2py intent(hide)     :: nsamples_tot = size(data,2)
-    !f2py intent(hide)     :: ndetectors = size(data,1)
+    !f2py intent(hide)     :: nsamples_tot = shape(data,0)
+    !f2py intent(hide)     :: ndetectors = shape(data,1)
 
     real(p), intent(inout) :: data(nsamples_tot,ndetectors)
     integer*8, intent(in)  :: nsamples(nslices)
@@ -965,7 +965,7 @@ subroutine distance_1d(nx, origin, resolution, array)
     implicit none
 
     !f2py threadsafe
-    !f2py intent(in)     :: nx = size(array,0)
+    !f2py intent(in)     :: nx
     !f2py intent(in)     :: origin
     !f2py intent(in)     :: resolution
     !f2py intent(out)    :: array(nx)
@@ -990,8 +990,8 @@ subroutine distance_2d(nx, ny, origin, resolution, array)
     implicit none
 
     !f2py threadsafe
-    !f2py intent(in)     :: nx = size(array,0)
-    !f2py intent(in)     :: ny = size(array,1)
+    !f2py intent(in)     :: nx
+    !f2py intent(in)     :: ny
     !f2py intent(in)     :: origin(2)
     !f2py intent(in)     :: resolution(2)
     !f2py intent(out)    :: array(nx,ny)
@@ -1016,9 +1016,9 @@ subroutine distance_3d(nx, ny, nz, origin, resolution, array)
     implicit none
 
     !f2py threadsafe
-    !f2py intent(in)     :: nx = size(array,0)
-    !f2py intent(in)     :: ny = size(array,1)
-    !f2py intent(in)     :: nz = size(array,2)
+    !f2py intent(in)     :: nx
+    !f2py intent(in)     :: ny
+    !f2py intent(in)     :: nz
     !f2py intent(in)     :: origin(3)
     !f2py intent(in)     :: resolution(3)
     !f2py intent(out)    :: array(nx,ny,nz)
@@ -1032,6 +1032,37 @@ subroutine distance_3d(nx, ny, nz, origin, resolution, array)
 
 end subroutine distance_3d
 
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine profile_axisymmetric_2d(array, nx, ny, origin, bin, nbins, x, y, n)
+
+    use module_math,    only : profile
+    use module_tamasis, only : p
+    implicit none
+
+    !f2py threadsafe
+    !f2py intent(in)     :: array
+    !f2py intent(hide)   :: nx = shape(array,0)
+    !f2py intent(hide)   :: ny = shape(array,1)
+    !f2py intent(in)     :: origin(2)
+    !f2py intent(in)     :: bin
+    !f2py intent(in)     :: nbins
+    !f2py intent(out)    :: x, y, n
+
+    real(p), intent(in)  :: array(nx,ny)
+    integer, intent(in)  :: nx, ny
+    real(p), intent(in)  :: origin(2)
+    real(p), intent(in)  :: bin
+    integer, intent(in)  :: nbins
+    real(p), intent(out) :: x(nbins)
+    real(p), intent(out) :: y(nbins)
+    integer, intent(out) :: n(nbins)
+
+    call profile(array, origin, bin, nbins, x, y, n)
+
+end subroutine profile_axisymmetric_2d
 
 !-----------------------------------------------------------------------------------------------------------------------------------
 
@@ -1078,8 +1109,8 @@ subroutine convolution_trexp_direct(data, nsamples, nslices, tau, nsamples_tot, 
     !f2py intent(in)       :: nsamples
     !f2py intent(hide)     :: nslices = size(nsamples)
     !f2py intent(in)       :: tau
-    !f2py intent(hide)     :: nsamples_tot = size(data,2)
-    !f2py intent(hide)     :: ndetectors = size(data,1)
+    !f2py intent(hide)     :: nsamples_tot = shape(data,0)
+    !f2py intent(hide)     :: ndetectors = shape(data,1)
 
     real(p), intent(inout) :: data(nsamples_tot,ndetectors)
     integer*8, intent(in)  :: nsamples(nslices)
@@ -1115,8 +1146,8 @@ subroutine convolution_trexp_transpose(data, nsamples, nslices, tau, nsamples_to
     !f2py intent(in)       :: nsamples
     !f2py intent(hide)     :: nslices = size(nsamples)
     !f2py intent(in)       :: tau
-    !f2py intent(hide)     :: nsamples_tot = size(data,2)
-    !f2py intent(hide)     :: ndetectors = size(data,1)
+    !f2py intent(hide)     :: nsamples_tot = shape(data,0)
+    !f2py intent(hide)     :: ndetectors = shape(data,1)
 
     real(p), intent(inout) :: data(nsamples_tot,ndetectors)
     integer*8, intent(in)  :: nsamples(nslices)
