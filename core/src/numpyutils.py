@@ -94,12 +94,17 @@ def any_neq(a, b, rtol=None, atol=0.):
         return True
     if numpy.all(mask):
         return False
+
     result = abs(a-b) > rtol * numpy.maximum(abs(a), abs(b)) + atol
-    if var.verbose: print('Argument data differ.')
-    if numpy.isscalar(mask):
+    if numpy.isscalar(result):
+        if result and var.verbose:
+            print('Argument scalar data differ.')
         return result
-    else:
-        return numpy.any(result[~mask])
+    
+    result = numpy.any(result[~mask])
+    if result and var.verbose:
+        print('Argument data differ by factor ' + str(numpy.nanmax(abs(a-b)/(rtol * numpy.maximum(abs(a), abs(b)) + atol))) + '.')
+    return result
 
 
 #-------------------------------------------------------------------------------
