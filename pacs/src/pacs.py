@@ -579,19 +579,23 @@ class PacsObservation(PacsBase):
         if isinstance(masks, str):
             masks = masks.split(',')
 
+        masks = [m.strip().lower() for m in masks]
         sel_masks = set()
-        for m in masks:
-            m = m.strip().lower()
-            if m == 'all':
-                sel_masks |= all_masks
-            elif m == 'activated':
-                sel_masks |= act_masks
-            elif m == 'deactivated':
-                sel_masks |= dea_masks
-            elif m not in all_masks:
-                print("Warning: mask '" + m + "' is not found.")
-            else:
-                sel_masks.add(m)
+
+        if 'none' not in masks:
+            for m in masks:
+                if m == 'all':
+                    sel_masks |= all_masks
+                elif m == 'activated':
+                    sel_masks |= act_masks
+                elif m == 'deactivated':
+                    sel_masks |= dea_masks
+                elif m == '':
+                    continue
+                elif m not in all_masks:
+                    print("Warning: mask '" + m + "' is not found.")
+                else:
+                    sel_masks.add(m)
 
         # use 'master' if all activated masks are selected
         if all(['master' in slice.mask_name for slice in self.slice]) and act_masks <= sel_masks:
