@@ -95,7 +95,8 @@ class PacsBase(Observation):
         if status != 0: raise RuntimeError()
         header = _str2fitsheader(header)
         return header
-   
+    get_map_header.__doc__ = Observation.get_map_header.__doc__
+    
     def get_pointing_matrix(self, header, resolution, npixels_per_sample=0, method=None, oversampling=True):
         if method is None:
             method = 'sharp'
@@ -152,6 +153,7 @@ class PacsBase(Observation):
             return self.get_pointing_matrix(header, resolution, new_npixels_per_sample, method, oversampling)
 
         return pmatrix, header, ndetectors, nsamples, npixels_per_sample, '/pixel', '/detector', self.get_derived_units()
+    get_pointing_matrix.__doc__ = Observation.get_pointing_matrix.__doc__
 
     def get_random(self):
         """
@@ -192,12 +194,14 @@ class PacsBase(Observation):
         if 'detector' in tod.derived_units:
             tod.derived_units['detector'] = self.get_detector_area()
         return tod
+    pack.__doc__ = Observation.pack.__doc__
     
     def unpack(self, tod):
         tod = Observation.unpack(self, tod)
         if 'detector' in tod.derived_units:
             tod.derived_units['detector'] = self.instrument.detector_area
         return tod
+    unpack.__doc__ = Observation.unpack.__doc__
     
     def save(self, filename, tod):
         
@@ -223,6 +227,7 @@ class PacsBase(Observation):
 
         if tod.mask is not None:
             _write_mask(self, tod.mask, filename)
+    save.__doc__ = Observation.save.__doc__
         
     def __str__(self):
 
@@ -836,7 +841,6 @@ class PacsMultiplexing(AcquisitionModelLinear):
     """
     Performs the multiplexing of the PACS subarrays. The subarray columns are read one after the
     other, in a 0.025s cycle (40Hz).
-    Author: P. Chanial
     """
     def __init__(self, obs, shapein=None, description=None):
         shapeout = self.validate_shapein(shapein)

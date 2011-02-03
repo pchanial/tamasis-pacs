@@ -17,34 +17,31 @@ class Observation(object):
 
     def get_ndetectors(self):
         """
-        Method to get the number of detectors, accordingly to the detector mask.
+        Return the number of detectors, according to the detector mask.
         """
         return int(numpy.sum(self.instrument.detector_mask == 0))
 
     def get_filter_uncorrelated(self):
         """
-        Method to get the invNtt for uncorrelated detectors.
-        Not implemented.
+        Return the invNtt for uncorrelated detectors.
         """
         raise NotImplementedError()
 
     def get_map_header(self, resolution=None, oversampling=True):
         """
-        Method to get the map FITS header which encompasses this observation.
-        Not implemented.
+        Return the map FITS header which encompasses this observation.
         """
         raise NotImplementedError()
 
     def get_pointing_matrix(self, header, resolution, npixels_per_sample, method=None, oversampling=True):
         """
-        Method to get the pointing matrix.
-        Not implemented.
+        Return the pointing matrix.
         """
         raise NotImplementedError()
 
     def get_nsamples(self):
         """
-        Method to get the number of valid pointings for each slice
+        Return the number of valid pointings for each slice
         They are those for which self.pointing.removed is False
         """
         result = []
@@ -56,7 +53,7 @@ class Observation(object):
 
     def get_nfinesamples(self):
         """
-        Method to get the number of valid samplings for each slice, by taking
+        Return the number of valid samplings for each slice, by taking
         into account compression factor and fine sampling.
         They are those whose self.pointing is not removed.
         """
@@ -64,15 +61,13 @@ class Observation(object):
 
     def get_tod(self, unit=None, flatfielding=True, subtraction_mean=True):
         """
-        Method to get the Tod from this observation
-        Not implemented.
+        Return the Tod from this observation
         """
         raise NotImplementedError()
 
     def save(self, filename, tod):
         """
-        Method to save this observation.
-        Not implemented.
+        Save this observation and tod as a FITS file.
         """
         raise NotImplementedError()
 
