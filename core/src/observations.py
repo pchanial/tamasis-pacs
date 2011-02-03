@@ -115,8 +115,9 @@ class Observation(object):
 
         # otherwise copy the detector timelines one by one
         mask = self.instrument.detector_mask.ravel()
-        utod = Tod.zeros(newshape, nsamples=tod.nsamples, unit=tod.unit, dtype=tod.dtype, 
-                         mask=numpy.ones(newshape, dtype='int8'))
+        utod = Tod.empty(newshape, nsamples=tod.nsamples, unit=tod.unit,
+                         derived_units=tod.derived_units, dtype=tod.dtype, 
+                         mask=numpy.empty(newshape, dtype='int8'))
         rtod = utod.reshape((ndetectors, nsamples))
         
         i = 0
@@ -172,7 +173,8 @@ class Observation(object):
 
         # otherwise copy the detector timelines one by one
         mask = self.instrument.detector_mask.ravel()
-        ptod = Tod.empty(newshape, nsamples=tod.nsamples, unit=tod.unit, dtype=tod.dtype, 
+        ptod = Tod.empty(newshape, nsamples=tod.nsamples, unit=tod.unit,
+                         derived_units=tod.derived_units, dtype=tod.dtype, 
                          mask=numpy.empty(newshape, dtype='int8'))
         rtod = tod.reshape((ndetectors, nsamples))
         
