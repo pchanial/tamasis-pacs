@@ -2,6 +2,7 @@ import numpy
 import pyfits
 import scipy
 import tamasisfortran as tmf
+from .datatypes import Tod
 
 __all__ = [ 'deglitch_l2std', 'deglitch_l2mad', 'filter_median', 'filter_polynomial', 'interpolate_linear', 'remove_nan' ]
 
@@ -47,13 +48,16 @@ def filter_median(tod, length=10, mask=None):
     """
     Median filtering, O(1) in window length
     """
-    filtered = numpy.asarray(tod).copy()
-    if mask is None:
-        mask = tod.mask
-    if mask is None:
+    filtered = Tod(tod)
+    if mask is None and tod.mask is not None:
+        mask = tod.mask.view(numpy.int8)
+    elif mask is None:
         mask = numpy.zeros(tod.shape, numpy.int8)
     else:
-        mask = numpy.ascontiguousarray(mask, numpy.int8)
+        if not mask.flags.c_contiguous:
+            mask = numpy.ascontiguousarray(mask, numpy.int8)
+        else:
+            mask = numpy.asarray(mask, numpy.int8)
 
     n = tod.shape[-1]
     status = tmf.filter_median(filtered.reshape((-1,n)).T, mask.reshape((-1,n)).T, length, numpy.array(tod.nsamples, dtype='int32'))
