@@ -19,7 +19,7 @@ __all__ = [ 'PacsObservation',
             'pacs_plot_scan',
             'pacs_preprocess' ]
 
-CALIBFILE_BTC = var.path + '/pacs/PCalPhotometer_PhotTimeConstant_FM_v2.fits'
+CALIBFILE_DTC = var.path + '/pacs/PCalPhotometer_PhotTimeConstant_FM_v2.fits'
 
 class PacsBase(Observation):
 
@@ -33,11 +33,11 @@ class PacsBase(Observation):
     SAMPLING_PERIOD = Quantity(0.024996, 's')
 
 
-    def get_bolometer_time(self):
+    def get_detector_time_constant(self):
         """
-        Return the bolometer time constants of the non masked bolometers.
+        Return the time constants of the non masked detectors.
         """
-        return self.instrument.bolometer_time[~self.instrument.detector_mask]
+        return self.instrument.detector_time_constant[~self.instrument.detector_mask]
 
     def get_derived_units(self):
         volt = Quantity(1./self.instrument.responsivity, 'Jy')
@@ -482,7 +482,7 @@ class PacsObservation(PacsBase):
         self.instrument.distortion_yz = distortion_yz.T.view(dtype=[('y',var.FLOAT_DTYPE), ('z',var.FLOAT_DTYPE)]).view(numpy.recarray)
         self.instrument.flatfield = FlatField(oflat, dflat)
         self.instrument.responsivity = Quantity(responsivity, 'V/Jy')
-        self.instrument.bolometer_time = Map(pyfits.open(CALIBFILE_BTC)[{'red':1, 'green':2, 'blue':3}[band]].data, unit='ms', origin='upper')
+        self.instrument.detector_time_constant = Map(pyfits.open(CALIBFILE_DTC)[{'red':1, 'green':2, 'blue':3}[band]].data, unit='ms', origin='upper')
 
         # store slice information
         nmasks_max = numpy.max(nmasks)
@@ -747,7 +747,7 @@ class PacsSimulation(PacsBase):
         self.instrument.distortion_yz = distortion_yz.T.view(dtype=[('y',var.FLOAT_DTYPE), ('z',var.FLOAT_DTYPE)]).view(numpy.recarray)
         self.instrument.flatfield = FlatField(oflat, dflat)
         self.instrument.responsivity = Quantity(responsivity, 'V/Jy')
-        self.instrument.bolometer_time = Map(pyfits.open(CALIBFILE_BTC)[{'red':1, 'green':2, 'blue':3}[band]].data, unit='ms', origin='upper')
+        self.instrument.detector_time_constant = Map(pyfits.open(CALIBFILE_DTC)[{'red':1, 'green':2, 'blue':3}[band]].data, unit='ms', origin='upper')
 
         self.slice = numpy.recarray(1, dtype=[
                 ('filename', 'S256'),
