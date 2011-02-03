@@ -33,23 +33,41 @@ class PacsBase(Observation):
     SAMPLING_PERIOD = Quantity(0.024996, 's')
 
 
+    def get_derived_units(self):
+        volt = Quantity(1./self.instrument.responsivity, 'Jy')
+        return (
+            {
+                'detector_reference': Quantity(1./self.instrument.active_fraction, 'detector'),
+                'detector' : self.get_detector_area(),
+                'V' : volt,
+            },{
+                'V' : volt
+            }
+            )
+
+    def get_detector_area(self):
+        """
+        Return the area of the non masked detectors.
+        """
+        return self.instrument.detector_area[~self.instrument.detector_mask]
+
     def get_detector_time_constant(self):
         """
         Return the time constants of the non masked detectors.
         """
         return self.instrument.detector_time_constant[~self.instrument.detector_mask]
 
-    def get_derived_units(self):
-        volt = Quantity(1./self.instrument.responsivity, 'Jy')
-        return (
-            {
-                'detector_reference': Quantity(1./self.instrument.active_fraction, 'detector'),
-                'detector' : Quantity(self.instrument.detector_area[~self.instrument.detector_mask], 'arcsec^2'),
-                'V' : volt,
-            },{
-                'V' : volt
-            }
-            )
+    def get_filter_uncorrelated(self):
+        """
+        Read an inverse noise time-time correlation matrix from a calibration file, in PACS-DP format.
+        """
+        ncorrelations, status = tmf.pacs_read_filter_calibration_ncorrelations(self.instrument.band)
+        if status != 0: raise RuntimeError()
+
+        data, status = tmf.pacs_read_filter_calibration(self.instrument.band, ncorrelations, self.get_ndetectors(), numpy.asfortranarray(self.instrument.detector_mask, numpy.int8))
+        if status != 0: raise RuntimeError()
+
+        return data.T
 
     def get_map_header(self, resolution=None, oversampling=True):
         if var.mpi_comm.Get_size() > 1:
@@ -135,18 +153,6 @@ class PacsBase(Observation):
 
         return pmatrix, header, ndetectors, nsamples, npixels_per_sample, '/pixel', '/detector', self.get_derived_units()
 
-    def get_filter_uncorrelated(self):
-        """
-        Read an inverse noise time-time correlation matrix from a calibration file, in PACS-DP format.
-        """
-        ncorrelations, status = tmf.pacs_read_filter_calibration_ncorrelations(self.instrument.band)
-        if status != 0: raise RuntimeError()
-
-        data, status = tmf.pacs_read_filter_calibration(self.instrument.band, ncorrelations, self.get_ndetectors(), numpy.asfortranarray(self.instrument.detector_mask, numpy.int8))
-        if status != 0: raise RuntimeError()
-
-        return data.T
-
     def get_random(self):
         """
         Return noise data from a random slice of a real pointed observation.
@@ -181,6 +187,18 @@ class PacsBase(Observation):
         result = compression(result)
         return result
 
+    def pack(self, tod):
+        tod = Observation.pack(self, tod)
+        if 'detector' in tod.derived_units:
+            tod.derived_units['detector'] = self.get_detector_area()
+        return tod
+    
+    def unpack(self, tod):
+        tod = Observation.unpack(self, tod)
+        if 'detector' in tod.derived_units:
+            tod.derived_units['detector'] = self.instrument.detector_area
+        return tod
+    
     def save(self, filename, tod):
         
         if numpy.rank(tod) != 3:
