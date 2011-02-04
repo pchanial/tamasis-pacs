@@ -64,7 +64,7 @@ class MadMap1Observation(Observation):
         """
         Method to get the pointing matrix.
         """
-        if npixels_per_sample != 0 and npixels_per_sample != self.info.npixels_per_sample:
+        if npixels_per_sample not in (0, self.info.npixels_per_sample):
             raise ValueError('The npixels_per_sample value is incompatible with the MADMAP1 file.')
         if header is not None:
             raise ValueError('The map header cannot be specified for MADmap1 observations.')
@@ -86,7 +86,8 @@ class MadMap1Observation(Observation):
         pmatrix = numpy.zeros(sizeofpmatrix, dtype=numpy.int64)
         status = tmf.madmap1_read_tod(self.info.todfile, self.info.invnttfile, self.info.convert, self.info.npixels_per_sample, tod.T, pmatrix)
         if status != 0: raise RuntimeError()
-        return pmatrix, header, ndetectors, nsamples, self.info.npixels_per_sample, None, None, None
+        return pmatrix, header, ndetectors, nsamples, \
+               self.info.npixels_per_sample, (None, None), (None, None)
 
     def get_tod(self, unit=None):
         """

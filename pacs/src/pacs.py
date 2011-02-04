@@ -152,7 +152,8 @@ class PacsBase(Observation):
         if npixels_per_sample == 0:
             return self.get_pointing_matrix(header, resolution, new_npixels_per_sample, method, oversampling)
 
-        return pmatrix, header, ndetectors, nsamples, npixels_per_sample, '/pixel', '/detector', self.get_derived_units()
+        return pmatrix, header, ndetectors, nsamples, npixels_per_sample, \
+               ('/detector', '/pixel'), self.get_derived_units()
     get_pointing_matrix.__doc__ = Observation.get_pointing_matrix.__doc__
 
     def get_random(self):

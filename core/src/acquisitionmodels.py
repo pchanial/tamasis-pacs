@@ -52,25 +52,15 @@ class AcquisitionModel(object):
 
     The acquisition model M is such as
          y = M.x,
-    where x is the map and y is the instrumental response. An acquisition model can be the
-    combination of several submodels describing various parts of the instrumental chain:
+    where x is the map and y is the instrumental response. An acquisition model
+    can be the combination of several submodels describing various parts of the
+    instrumental chain:
          M = M3 * M2 * M1 ...
-    Two methods are provided to the user:
-         y = M.direct(x)
-         x = M.transpose(y)
-    they return M.x (submodels are applied in right-to-left order) and transpose(M).y.
-    Author: P. Chanial
+    One methods are provided to the user:
+         y = M.direct(x) or y = M(x)
     """
 
-    def __init__(self, shapein=None, shapeout=None, typein=None, typeout=None, unitin=None, unitout=None, derived_units=None, direct=None, dtype=None, description=None):
-
-        # store input and output shape
-        self.shapein  = validate_sliced_shape(shapein)
-        self.shapeout = validate_sliced_shape(shapeout or shapein)
-        
-        # store type information
-        self.typein  = typein
-        self.typeout = typeout or typein
+    def __init__(self, direct=None, dtype=None, description=None, attrin=None, attrout=None, shapein=None, shapeout=None, typein=None, typeout=None, unitin=None, unitout=None):
 
         if direct is not None:
             if not hasattr(direct, '__call__'):
@@ -80,20 +70,26 @@ class AcquisitionModel(object):
         # dtype
         self._dtype = dtype
 
-        # store unit information
-        self.unitin  = Quantity(1., unitin )._unit
-        self.unitout = Quantity(1., unitout or unitin)._unit
-
-        # store derived units information
-        if type(derived_units) not in (list,tuple):
-            self.derived_units = (derived_units, derived_units)
-        else:
-            self.derived_units = tuple(derived_units)
-
         # description
         if description is None:
             description = self.__class__.__name__
         self.description = description
+
+        # store attribute information
+        self.attrin = {} if attrin is None else attrin
+        self.attrout = attrout or self.attrin
+
+        # store input and output shape
+        self.shapein  = validate_sliced_shape(shapein)
+        self.shapeout = validate_sliced_shape(shapeout or shapein)
+        
+        # store type information
+        self.typein  = typein
+        self.typeout = typeout or typein
+
+        # store unit information
+        self.unitin  = Quantity(1., unitin )._unit
+        self.unitout = Quantity(1., unitout or unitin)._unit
 
         # store the input of the transpose model.
         # Its memory allocation is re-used as the output of the direct model
@@ -188,11 +184,13 @@ class AcquisitionModel(object):
             output = self._cacheout
             if not reuseout:
                 self._cacheout = None
-        #XXX it would be better to make sure that the cached value does not need the following lines
-        if self.shapeout is not None and type(self.shapeout[-1]) is tuple:
-            output = Tod(output, nsamples=self.shapeout[-1], copy=False)
+        #XXX the cached value should not need the following lines
+        if type(shape[-1]) is tuple:
+            output = Tod(output, nsamples=shape[-1], copy=False)
         _propagate_attributes(input, output)
-        _validate_output_unit(input, output, self.unitin, self.unitout, self.derived_units[0])
+        _validate_output_unit(input, output, self.unitin, self.unitout)
+        for k,v in self.attrout.items():
+            setattr(output, k, v)
 
         return input, output
 
@@ -231,27 +229,25 @@ class AcquisitionModel(object):
             output = self._cachein
             if not reuseout:
                 self._cachein = None
-        #XXX it would be better to make sure that the cached value does not need the following lines
-        if self.shapein is not None and type(self.shapein[-1]) is tuple:
-            output = Tod(output, nsamples=self.shapein[-1], copy=False)
+        #XXX the cached value should not need the following lines
+        if type(shape[-1]) is tuple:
+            output = Tod(output, nsamples=shape[-1], copy=False)
         _propagate_attributes(input, output)
-        _validate_output_unit(input, output, self.unitout, self.unitin, self.derived_units[1])
+        _validate_output_unit(input, output, self.unitout, self.unitin)
+        for k,v in self.attrin.items():
+            setattr(output, k, v)
 
         return input, output
 
     def __mul__(self, other):
-        """
-        Returns the composition of two Acquisition models.
-        If the operands already are the result of composition, by associativity, a flattened list is created
-        to make use of the AcquisitionModel's caching system.
-        """
         if isinstance(other, numpy.ndarray):
             return self.matvec(other)
         return Composition([self, other])
 
     def __rmul__(self, other):
         if not _my_isscalar(other):
-            raise NotImplementedError("It is not possible to compose '"+str(type(other))+"' with an AcquisitionModel.")
+            raise NotImplementedError("It is not possible to multiply '" + \
+                str(type(other)) + "' with an AcquisitionModel.")
         return Composition([other, self])
 
     def __imul__(self, other):
@@ -301,7 +297,14 @@ class AcquisitionModel(object):
 
 
 class AcquisitionModelLinear(AcquisitionModel, LinearOperator):
-
+    """
+    This class subclasses AcquisitionModel and LinearOperator
+    Two methods are provided to the user:
+         y = M.direct(x) or y = M(x)
+         x = M.transpose(y) or y = M.T(x)
+    in addition to the LinearOperator's matvec and rmatvec which operate
+    on 1d ndarray.
+    """
     def __init__(self, transpose=None, **kw):
         AcquisitionModel.__init__(self, **kw)
         if transpose is not None:
@@ -346,11 +349,16 @@ class AcquisitionModelTranspose(AcquisitionModelLinear):
         AcquisitionModelLinear.__init__(self,
                                         direct=model.transpose,
                                         transpose=model.direct,
+                                        dtype=model.dtype,
+                                        description=model.description + '.T',
+                                        attrin=model.attrout,
+                                        attrout=model.attrin,
                                         shapein=model.shapeout,
                                         shapeout=model.shapein,
+                                        typein=model.typeout,
+                                        typeout=model.typein,
                                         unitin=model.unitout,
-                                        unitout=model.unitin,
-                                        description=model.description + '.T')
+                                        unitout=model.unitin)
 
     @property
     def T(self):
@@ -469,6 +477,10 @@ class Composite(AcquisitionModel):
 class Addition(Composite):
     """
     Class for acquisition models addition
+
+    If at least one of the input already is the result of an addition,
+    a flattened list of operators is created by associativity, in order to
+    benefit from the AcquisitionModel's caching mechanism.
     """
 
     def direct(self, input, reusein=False, reuseout=False):
@@ -552,7 +564,13 @@ class Addition(Composite):
 
 
 class Composition(Composite):
-    """Class for acquisition models composition"""
+    """
+    Class for acquisition models composition
+
+    If at least one of the input already is the result of a composition,
+    a flattened list of operators is created by associativity, in order to
+    benefit from the AcquisitionModel's caching mechanism.
+    """
 
     def direct(self, input, reusein=False, reuseout=False):
         input = self.validate_input(input, self.shapein, reusein)
@@ -644,14 +662,17 @@ class SquareBase(AcquisitionModelLinear):
         if type(shape[-1]) is tuple:
             input.nsamples = shape[-1]
 
-        if inplace:
-            return input
+        if not inplace:
+            if var.verbose:
+                print('Info: Allocating ' + str(input.dtype.itemsize * \
+                      numpy.product(input.shape)/2.**20) + ' MiB in ' + \
+                      self.description + '.')
+            input = input.copy()
 
-        if var.verbose:
-            print('Info: Allocating ' + str(input.dtype.itemsize * numpy.product(input.shape)/2.**20) + ' MiB in ' + \
-                  type(self).__name__ + '.')
+        for k,v in self.attrout:
+            setattr(input, k, v)
 
-        return input.copy()
+        return input
 
     def validate_input_transpose(self, input, inplace):
         input = numpy.asanyarray(input)
@@ -673,13 +694,17 @@ class SquareBase(AcquisitionModelLinear):
         if type(shape[-1]) is tuple:
             input.nsamples = shape[-1]
 
-        if inplace:
-            return input
+        if not inplace:
+            if var.verbose:
+                print('Info: Allocating ' + str(input.dtype.itemsize * \
+                      numpy.product(input.shape)/2.**20) + ' MiB in ' + \
+                      self.description + '.T.')
+            input = input.copy()
 
-        if var.verbose:
-            print('Info: Allocating ' + str(input.dtype.itemsize * numpy.product(input.shape)/2.**20) + ' MiB in ' + \
-                  type(self).__name__ + '.T.')
-        return input.copy()
+        for k,v in self.attrin:
+            setattr(input, k, v)
+
+        return input
 
 
 #-------------------------------------------------------------------------------
@@ -811,41 +836,45 @@ class Projection(AcquisitionModelLinear):
     def __init__(self, observation, method=None, header=None, resolution=None, npixels_per_sample=0, oversampling=True, description=None):
 
         self._pmatrix, self.header, ndetectors, nsamples, \
-        self.npixels_per_sample, unitin, unitout, derived_units =   \
+        self.npixels_per_sample, (unitout, unitin), (duout, duin) = \
             observation.get_pointing_matrix(header,
                                             resolution,
                                             npixels_per_sample,
                                             method=method,
                                             oversampling=oversampling)
 
+        attrin = {'header' : self.header}
+        if duin is not None:
+            attrin['derived_units'] = duin
+        attrout = {}
+        if duout is not None:
+            attrout['derived_units'] = duout
         shapein = tuple([self.header['naxis'+str(i+1)] \
                          for i in reversed(list(range(self.header['naxis'])))])
         shapeout = combine_sliced_shape(ndetectors, nsamples)
         AcquisitionModelLinear.__init__(self,
+                                        attrin=attrin,
+                                        attrout=attrout,
                                         shapein=shapein,
                                         shapeout=shapeout,
                                         typein=Map,
                                         typeout=Tod,
                                         unitin=unitin,
                                         unitout=unitout,
-                                        derived_units=derived_units,
                                         description=description)
 
         self.pmatrix = self._pmatrix.view([('weight', 'f4'), ('pixel', 'i4')]) \
                            .view(numpy.recarray)
-        self.pmatrix.resize((ndetectors, numpy.sum(nsamples), self.npixels_per_sample))
+        self.pmatrix.resize((ndetectors, numpy.sum(nsamples),
+                             self.npixels_per_sample))
 
     def direct(self, input, reusein=False, reuseout=False):
         input, output = self.validate_input_direct(input, reusein, reuseout)
-        output.nsamples = self.shapeout[-1]
-        output.derived_units = self.derived_units[0]
         tmf.pointing_matrix_direct(self._pmatrix, input.T, output.T, self.npixels_per_sample)
         return output
 
     def transpose(self, input, reusein=False, reuseout=False):
         input, output = self.validate_input_transpose(input, reusein, reuseout)
-        output.header = self.header
-        output.derived_units = self.derived_units[1]
         tmf.pointing_matrix_transpose(self._pmatrix, input.T, output.T,  self.npixels_per_sample)
         return output
 
@@ -883,7 +912,6 @@ class Compression(AcquisitionModelLinear):
             if not reusein: return input.copy('a')
             return input
         input, output = self.validate_input_direct(input, reusein, reuseout)
-        output.nsamples = tuple(numpy.divide(input.nsamples, self.factor))
         self.compression_direct(input, output, self.factor)
         return output
 
@@ -892,7 +920,6 @@ class Compression(AcquisitionModelLinear):
             if not reusein: return input.copy('a')
             return input
         input, output = self.validate_input_transpose(input, reusein, reuseout)
-        output.nsamples = tuple(numpy.multiply(input.nsamples, self.factor))
         self.compression_transpose(input, output, self.factor)
         return output
 
@@ -1152,7 +1179,6 @@ class Padding(AcquisitionModelLinear):
    
     def direct(self, input, reusein=False, reuseout=False):
         input, output = self.validate_input_direct(input, reusein, reuseout)
-        output.nsamples = tuple(numpy.array(input.nsamples) + self.left + self.right)
         dest = 0
         dest_padded = 0
         for islice in range(len(input.nsamples)):
@@ -1167,7 +1193,6 @@ class Padding(AcquisitionModelLinear):
    
     def transpose(self, input, reusein=False, reuseout=False):
         input, output = self.validate_input_transpose(input, reusein, reuseout)
-        output.nsamples = tuple(numpy.array(input.nsamples) - self.left - self.right)
         dest = 0
         dest_padded = 0
         for islice in range(len(input.nsamples)):
@@ -1348,11 +1373,14 @@ class InvNtt(Diagonal):
 class InterpolationLinear(Square):
 
     def __init__(self, mask, shapein=None, description=None):
-        Square.__init__(self, shapein=shapein, description=description)
+        Square.__init__(self, attrin={'mask' : mask}, shapein=shapein,
+                        description=description)
         self.mask = mask
+
     def direct(self, input, reusein=False, reuseout=False):
-        input.mask = self.mask
-        return interpolate_linear(input)
+        output = self.validate_input(input, reusein and reuseout)
+        return interpolate_linear(output)
+
     def transpose(self, input, reusein=False, reuseout=False):
         raise NotImplementedError()
 
@@ -1433,7 +1461,8 @@ def _is_scientific_dtype(dtype):
 
 
 def _propagate_attributes(input, output):
-    """Copy over attributes"""
+    """Copy over attributes form input to output"""
+
     # get common base class
     cls = input.__class__
     while not issubclass(type(output), cls):
@@ -1443,7 +1472,7 @@ def _propagate_attributes(input, output):
         if cls == numpy.ndarray:
             return
         output._unit = input._unit
-        output._derived_units = output._derived_units
+        output._derived_units = input._derived_units
         return
     # copy over slots
     while cls != numpy.ndarray:            
@@ -1482,13 +1511,9 @@ def _validate_input_unit(input, expected):
 #-------------------------------------------------------------------------------
 
 
-def _validate_output_unit(input, output, unitin, unitout, duout):
+def _validate_output_unit(input, output, unitin, unitout):
     if not hasattr(output, '_unit'):
         return
-    if hasattr(input, '_unit'):
-        output._unit = input._unit or unitin
-        duout = duout or input.derived_units
-    output.derived_units = duout
     if len(unitout) == 0:
         return
     if len(output._unit) == 0:
