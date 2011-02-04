@@ -315,11 +315,9 @@ class AcquisitionModelLinear(AcquisitionModel, LinearOperator):
         return self.transpose(v).ravel()
 
     def dense(self):
-        m = numpy.product(self.shape[0])
-        n = numpy.product(self.shape[1])
-        d = numpy.ndarray((m,n), dtype=self.dtype)
-        v = numpy.zeros(n, dtype=var.FLOAT_DTYPE)
-        for i in range(n):
+        d = numpy.ndarray(self.shape, dtype=self.dtype)
+        v = numpy.zeros(self.shape[1], dtype=var.FLOAT_DTYPE)
+        for i in range(self.shape[1]):
             v[:] = 0
             v[i] = 1
             d[:,i] = self.matvec(v)
