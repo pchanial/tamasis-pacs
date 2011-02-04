@@ -111,8 +111,11 @@ class AcquisitionModel(object):
 
     @property
     def shape(self):
-        return (numpy.product(flatten_sliced_shape(self.shapeout)),
-                numpy.product(flatten_sliced_shape(self.shapein)))
+        shape = (numpy.product(flatten_sliced_shape(self.shapeout)),
+                 numpy.product(flatten_sliced_shape(self.shapein)))
+        if shape[0] is None or shape[1] is None:
+            return None
+        return shape
 
     @property
     def dtype(self):
