@@ -767,7 +767,7 @@ class PacsSimulation(PacsBase):
         self.instrument.fine_sampling_factor = fine_sampling_factor
         self.instrument.detector_center = detector_center.T.swapaxes(0,1).copy().view(dtype=[('u',var.FLOAT_DTYPE),('v',var.FLOAT_DTYPE)]).view(numpy.recarray)
         self.instrument.detector_corner = detector_corner.T.swapaxes(0,1).copy().view(dtype=[('u',var.FLOAT_DTYPE),('v',var.FLOAT_DTYPE)]).view(numpy.recarray)
-        self.instrument.detector_area = Map(numpy.ascontiguousarray(detector_area), unit='arcsec^2/detector', origin='upper')
+        self.instrument.detector_area = Map(numpy.ascontiguousarray(detector_area), unit='arcsec^2', origin='upper')
         self.instrument.distortion_yz = distortion_yz.T.view(dtype=[('y',var.FLOAT_DTYPE), ('z',var.FLOAT_DTYPE)]).view(numpy.recarray)
         self.instrument.flatfield = FlatField(oflat, dflat)
         self.instrument.responsivity = Quantity(responsivity, 'V/Jy')
