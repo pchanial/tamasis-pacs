@@ -50,14 +50,12 @@ class ValidationError(Exception): pass
 class AcquisitionModel(object):
     """Abstract class representing an instrument acquisition model.
 
-    The acquisition model M is such as
-         y = M.x,
-    where x is the map and y is the instrumental response. An acquisition model
-    can be the combination of several submodels describing various parts of the
-    instrumental chain:
-         M = M3 * M2 * M1 ...
-    One methods are provided to the user:
+    The response y from an input signal x by an acquisition model M is given by
          y = M.direct(x) or y = M(x)
+    where x and y can be multidimensional numpy.ndarray.
+    An acquisition model can be the combination of several submodels
+    describing various parts of the instrumental chain:
+         M = M3 * M2 * M1 ...
     """
 
     def __init__(self, direct=None, dtype=None, description=None, attrin=None, attrout=None, shapein=None, shapeout=None, typein=None, typeout=None, unitin=None, unitout=None):
@@ -66,35 +64,22 @@ class AcquisitionModel(object):
             if not hasattr(direct, '__call__'):
                 raise TypeError('The input direct method is not callable.')
             self.direct = direct
-
-        # dtype
-        self._dtype = dtype
-
-        # description
+        self.dtype = dtype
         if description is None:
             description = self.__class__.__name__
         self.description = description
-
-        # store attribute information
         self.attrin = {} if attrin is None else attrin
         self.attrout = attrout or self.attrin
-
-        # store input and output shape
         self.shapein  = validate_sliced_shape(shapein)
         self.shapeout = validate_sliced_shape(shapeout or shapein)
-        
-        # store type information
         self.typein  = typein
         self.typeout = typeout or typein
-
-        # store unit information
         self.unitin  = Quantity(1., unitin )._unit
         self.unitout = Quantity(1., unitout or unitin)._unit
 
         # store the input of the transpose model.
         # Its memory allocation is re-used as the output of the direct model
         self._cacheout = None
-
         # store the input of the direct model. 
         # Its memory allocation is re-used as the output of the transpose model
         self._cachein = None
@@ -297,13 +282,19 @@ class AcquisitionModel(object):
 
 
 class AcquisitionModelLinear(AcquisitionModel, LinearOperator):
-    """
-    This class subclasses AcquisitionModel and LinearOperator
-    Two methods are provided to the user:
+    """Abstract class representing a linear instrument acquisition model.
+
+    The response y from an input signal x by an acquisition model M is given by
          y = M.direct(x) or y = M(x)
-         x = M.transpose(y) or y = M.T(x)
-    in addition to the LinearOperator's matvec and rmatvec which operate
-    on 1d ndarray.
+    where x and y can be multidimensional numpy.ndarray.
+    The transpose of the acquisition model is
+        x = M.transpose(y) or M.T(y)
+    This class subclasses the LinearOperator class, so it also provides the
+    methods matvec and rmatvec which operate on 1d ndarray.
+
+    An acquisition model can be the combination of several submodels
+    describing various parts of the instrumental chain:
+         M = M3 * M2 * M1 ...
     """
     def __init__(self, transpose=None, **kw):
         AcquisitionModel.__init__(self, **kw)
@@ -411,7 +402,7 @@ class Composite(AcquisitionModel):
 
     @dtype.setter
     def dtype(self, dtype):
-        raise RuntimeError('The dtype of a composite AcquisitionModel cannot be set.')
+        pass
 
     @property
     def T(self):
@@ -750,8 +741,10 @@ class Diagonal(Symmetric):
     """Diagonal operator"""
 
     def __init__(self, diagonal, shapein=None, description=None):
-        self.diagonal = numpy.asarray(diagonal, dtype=var.get_default_dtype(diagonal))
-        Symmetric.__init__(self, shapein=shapein, description=description)
+        diagonal = numpy.asarray(diagonal, dtype=var.get_default_dtype(diagonal))
+        Symmetric.__init__(self, dtype=diagonal.dtype, description=description, 
+                           shapein=shapein)
+        self.diagonal = diagonal
 
     def direct(self, input, reusein=False, reuseout=False):
         output = self.validate_input(input, reusein and reuseout)
@@ -760,19 +753,10 @@ class Diagonal(Symmetric):
         output.T[:] *= self.diagonal.T
         return output
 
-    @property
-    def dtype(self):
-        return self.diagonal.dtype
-
-    @dtype.setter
-    def dtype(self, value):
-        pass
-
     def validate_shapein(self, shapein):
         if shapein is None:
             return self.shapein
         if flatten_sliced_shape(shapein[0:self.diagonal.ndim]) != self.diagonal.shape:
-            print 'diag', self.diagonal.shape
             raise ValueError('The input has an incompatible shape ' + str(shapein) + '.')
         return shapein
 
@@ -1019,13 +1003,21 @@ class Masking(Symmetric):
     """
 
     def __init__(self, mask, shapein=None, description=None):
-        Symmetric.__init__(self, shapein=shapein, description=description)
         if mask is None:
-            self.mask = None
             print('Warning: input mask is None.')
         else:
-            self.mask = mask
-        # shapein is not set, since it would fail for Tod with more than one slice
+            mask = numpy.asanyarray(mask)
+            if not _is_scientific_dtype(mask.dtype):
+                raise TypeError("Invalid mask type: '" + str(mask.dtype) + "'.")
+            if numpy.rank(mask) == 0:
+                raise TypeError('The input mask should not be scalar.')
+        if mask is not None and numpy.iscomplexobj(mask):
+            dtype = mask.dtype
+        else:
+            dtype = var.FLOAT_DTYPE
+
+        Symmetric.__init__(self, description=description, dtype=dtype, shapein=shapein)
+        self.mask = mask
 
     def direct(self, input, reusein=False, reuseout=False):
         output = self.validate_input(input, reusein and reuseout)
@@ -1037,28 +1029,6 @@ class Masking(Symmetric):
         else:
             output *= self.mask
         return output
-
-    @property
-    def mask(self):
-        return self._mask
-
-    @mask.setter
-    def mask(self, mask):
-        if mask is None:
-            self._mask = None
-            return
-        mask = numpy.asanyarray(mask)
-        if not _is_scientific_dtype(mask.dtype):
-            raise TypeError("Invalid type for the mask: '" + str(mask.dtype) + "'.")
-        if numpy.rank(mask) == 0:
-            raise TypeError('The input mask should not be scalar.')
-        self._mask = mask
-
-    @property
-    def dtype(self):
-        if self.mask is not None and numpy.iscomplexobj(self.mask):
-            return self.mask.dtype
-        return var.FLOAT_DTYPE
 
 
 #-------------------------------------------------------------------------------
