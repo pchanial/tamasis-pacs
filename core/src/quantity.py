@@ -219,9 +219,7 @@ class Quantity(numpy.ndarray):
 
         # set derived_units attribute
         if derived_units is not None:
-            result.derived_units = derived_units
-        elif copy:
-            result.derived_units = result.derived_units.copy()
+            result.derived_units = derived_units.copy()
 
         return result
 
