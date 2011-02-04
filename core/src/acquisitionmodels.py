@@ -246,7 +246,7 @@ class AcquisitionModel(object):
         to make use of the AcquisitionModel's caching system.
         """
         if isinstance(other, numpy.ndarray):
-            return self(other)
+            return self.matvec(other)
         return Composition([self, other])
 
     def __rmul__(self, other):
