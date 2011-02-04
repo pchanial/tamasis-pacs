@@ -185,6 +185,9 @@ class AcquisitionModel(object):
             output = self._cacheout
             if not reuseout:
                 self._cacheout = None
+        #XXX it would be better to make sure that the cached value does not need the following lines
+        if self.shapeout is not None and type(self.shapeout[-1]) is tuple:
+            output = Tod(output, nsamples=self.shapeout[-1], copy=False)
         _propagate_attributes(input, output)
         _validate_output_unit(input, output, self.unitin, self.unitout, self.derived_units[0])
 
@@ -225,6 +228,9 @@ class AcquisitionModel(object):
             output = self._cachein
             if not reuseout:
                 self._cachein = None
+        #XXX it would be better to make sure that the cached value does not need the following lines
+        if self.shapein is not None and type(self.shapein[-1]) is tuple:
+            output = Tod(output, nsamples=self.shapein[-1], copy=False)
         _propagate_attributes(input, output)
         _validate_output_unit(input, output, self.unitout, self.unitin, self.derived_units[1])
 
@@ -304,11 +310,11 @@ class AcquisitionModelLinear(AcquisitionModel, LinearOperator):
         raise NotImplementedError()
 
     def matvec(self, v):
-        v = v.reshape(self.shapein)
+        v = v.reshape(flatten_sliced_shape(self.shapein))
         return self.direct(v).ravel()
 
     def rmatvec(self, v):
-        v = v.reshape(self.shapeout)
+        v = v.reshape(flatten_sliced_shape(self.shapeout))
         return self.transpose(v).ravel()
 
     def dense(self):
@@ -381,9 +387,9 @@ class Composite(AcquisitionModel):
         AcquisitionModel.__init__(self, description=description)
 
         if all([hasattr(m, 'matvec') for m in self.blocks]):
-            self.matvec = lambda v: self.direct(v.reshape(self.shapein)).ravel()
+            self.matvec = lambda v: self.direct(v.reshape(flatten_sliced_shape(self.shapein))).ravel()
         if all([hasattr(m, 'rmatvec') for m in self.blocks]):
-            self.rmatvec = lambda v: self.transpose(v.reshape(self.shapeout)).ravel()
+            self.rmatvec = lambda v: self.transpose(v.reshape(flatten_sliced_shape(self.shapeout))).ravel()
 
     @property
     def dtype(self):
@@ -395,6 +401,10 @@ class Composite(AcquisitionModel):
     @dtype.setter
     def dtype(self, dtype):
         raise RuntimeError('The dtype of a composite AcquisitionModel cannot be set.')
+
+    @property
+    def T(self):
+        return AcquisitionModelTranspose(self)
 
     @property
     def typein(self):
@@ -440,9 +450,14 @@ class Composite(AcquisitionModel):
     def unitout(self, value):
         pass
 
-    @property
-    def T(self):
-        return AcquisitionModelTranspose(self)
+    def validate_input(self, input, shape, inplace):
+        input = numpy.asanyarray(input)
+        if shape is not None and type(shape[-1]) is tuple:
+            input = Tod(input, nsamples=shape[-1], copy=False)
+        if not inplace:
+            if var.verbose: print('Info: Allocating '+str(input.dtype.itemsize * numpy.product(flatten_sliced_shape(shape))/2.**20)+' MiB for the output of Addition.')
+            input = input.copy()
+        return input
 
 
 #-------------------------------------------------------------------------------
@@ -454,6 +469,7 @@ class Addition(Composite):
     """
 
     def direct(self, input, reusein=False, reuseout=False):
+        input = self.validate_input(input, self.shapein, False)
         output = self.blocks[0].direct(input, reusein=False, reuseout=False)
         for i, model in enumerate(self.blocks[1:]):
             reusein_ = reusein and i == len(self.blocks)-1
@@ -461,6 +477,7 @@ class Addition(Composite):
         return output
 
     def transpose(self, input, reusein=False, reuseout=False):
+        input = self.validate_input(input, self.shapeout, False)
         output = self.blocks[0].transpose(input, reusein=False, reuseout=False)
         for i, model in enumerate(self.blocks[1:]):
             reusein_ = reusein and i == len(self.blocks)-1
@@ -470,15 +487,16 @@ class Addition(Composite):
     @property
     def shapein(self):
         shapein = None
-        for model in reversed(self.blocks):
+        for model in self.blocks:
             shapein_ = model.validate_shapeout(None)
             if shapein_ is None:
                 continue
-            if shapein is None:
+            if shapein is None or type(shapein_[-1]) is tuple:
                 shapein = shapein_
                 continue
             if flatten_sliced_shape(shapein) != flatten_sliced_shape(shapein_):
-                raise ValidationError("Incompatible shape in operands: '" + str(shapein) +"' and '" + str(shapein_) + "'.")
+                raise ValidationError("Incompatible shape in operands: '" + \
+                          str(shapein) +"' and '" + str(shapein_) + "'.")
         return shapein
 
     @shapein.setter
@@ -488,15 +506,16 @@ class Addition(Composite):
     @property
     def shapeout(self):
         shapeout = None
-        for model in reversed(self.blocks):
+        for model in self.blocks:
             shapeout_ = model.validate_shapein(None)
             if shapeout_ is None:
                 continue
-            if shapeout is None:
+            if shapeout is None or type(shapeout_[-1]) is tuple:
                 shapeout = shapeout_
                 continue
             if flatten_sliced_shape(shapeout) != flatten_sliced_shape(shapeout_):
-                raise ValidationError("Incompatible shape in operands: '" + str(shapeout) +"' and '" + str(shapeout_) + "'.")
+                raise ValidationError("Incompatible shape in operands: '" + \
+                          str(shapeout) +"' and '" + str(shapeout_) + "'.")
         return shapeout
 
     @shapeout.setter
@@ -533,17 +552,15 @@ class Composition(Composite):
     """Class for acquisition models composition"""
 
     def direct(self, input, reusein=False, reuseout=False):
+        input = self.validate_input(input, self.shapein, reusein)
         for i, model in enumerate(reversed(self.blocks)):
-            reusein_  = reusein  or i != 0
-            reuseout_ = reuseout or i != len(self.blocks)-1
-            input = model.direct(input, reusein=reusein_, reuseout=reuseout_)
+            input = model.direct(input, True, reuseout or i != len(self.blocks)-1)
         return input
 
     def transpose(self, input, reusein=False, reuseout=False):
+        input = self.validate_input(input, self.shapeout, reusein)
         for i, model in enumerate(self.blocks):
-            reusein_  = reusein  or i != 0
-            reuseout_ = reuseout or i != len(self.blocks)-1
-            input = model.transpose(input, reusein=reusein_, reuseout=reuseout_)
+            input = model.transpose(input, True, reuseout or i != len(self.blocks)-1)
         return input
 
     @property
@@ -595,7 +612,8 @@ class SquareBase(AcquisitionModelLinear):
     """
     Square operator
     
-    The input and output must have the same number of elements.
+    The input and output must have the same number of elements but not
+    necessarily the same shape.
     This operator does not implement the cache mechanism, but operation on
     the input can be done inplace or on a copy.
     """
@@ -603,14 +621,25 @@ class SquareBase(AcquisitionModelLinear):
     def validate_input_direct(self, input, inplace):
         input = numpy.asanyarray(input)
         if not _is_scientific_dtype(input.dtype):
-            raise TypeError("The input of '" + type(self).__name__ + "' has a non-numeric type '" + str(input.dtype) + "'.")
+            raise TypeError("The input of '" + type(self).__name__ + \
+                "' has a non-numeric type '" + str(input.dtype) + "'.")
         input = numpy.asanyarray(input, _get_dtype(self.dtype, input.dtype))
-        if self.typein is not None and not isinstance(input, self.typein):
-            input = input.view(self.typein)
 
-        shape = self.validate_shapein(validate_sliced_shape(input.shape, getattr(input, 'nsamples', None)))
+        shape = self.validate_shapein(validate_sliced_shape(input.shape, 
+                    getattr(input, 'nsamples', None)))
         if shape is None:
-            raise ValidationError('The shape of the output of ' + type(self).__name__+' is not known.')
+            raise ValidationError('The shape of the output of ' + \
+                      type(self).__name__+' is not known.')
+
+        typein = self.typein
+        if type(shape[-1]) is tuple and (typein is None or \
+           not issubclass(typein, Tod)):
+            typein = Tod
+        if typein is not None and not isinstance(input, typein):
+            input = input.view(typein)
+
+        if type(shape[-1]) is tuple:
+            input.nsamples = shape[-1]
 
         if inplace:
             return input
@@ -618,19 +647,28 @@ class SquareBase(AcquisitionModelLinear):
         if var.verbose:
             print('Info: Allocating ' + str(input.dtype.itemsize * numpy.product(input.shape)/2.**20) + ' MiB in ' + \
                   type(self).__name__ + '.')
-        return input.copy('a')
+
+        return input.copy()
 
     def validate_input_transpose(self, input, inplace):
         input = numpy.asanyarray(input)
         if not _is_scientific_dtype(input.dtype):
             raise TypeError("The input of '" + type(self).__name__ + ".T' has a non-numeric type '" + str(input.dtype) + "'.")
         input = numpy.asanyarray(input, _get_dtype(self.dtype, input.dtype))
-        if self.typeout is not None and not isinstance(input, self.typeout):
-            input = input.view(self.typeout)
 
         shape = self.validate_shapeout(validate_sliced_shape(input.shape, getattr(input, 'nsamples', None)))
         if shape is None:
             raise ValidationError('The shape of the output of ' + type(self).__name__+' is not known.')
+
+        typeout = self.typeout
+        if type(shape[-1]) is tuple and (typeout is None or \
+           not issubclass(typeout, Tod)):
+            typeout = Tod
+        if typeout is not None and not isinstance(input, typeout):
+            input = input.view(typeout)
+
+        if type(shape[-1]) is tuple:
+            input.nsamples = shape[-1]
 
         if inplace:
             return input
@@ -638,7 +676,7 @@ class SquareBase(AcquisitionModelLinear):
         if var.verbose:
             print('Info: Allocating ' + str(input.dtype.itemsize * numpy.product(input.shape)/2.**20) + ' MiB in ' + \
                   type(self).__name__ + '.T.')
-        return input.copy('a')
+        return input.copy()
 
 
 #-------------------------------------------------------------------------------
@@ -1040,15 +1078,11 @@ class Reshaping(SquareBase):
     def direct(self, input, reusein=False, reuseout=False):
         output = self.validate_input_direct(input, reusein and reuseout)
         output = _smart_reshape(output, self.shapeout)
-        if type(self.shapeout[-1]) is tuple:
-            output = Tod(output, nsamples=self.shapeout[-1], copy=False)
         return output
 
     def transpose(self, input, reusein=False, reuseout=False):
         output = self.validate_input_transpose(input, reusein and reuseout)
         output = _smart_reshape(output, self.shapein)
-        if type(self.shapein[-1]) is tuple:
-            output = Tod(output, nsamples=self.shapein[-1], copy=False)
         return output
 
 
