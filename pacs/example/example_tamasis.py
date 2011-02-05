@@ -2,7 +2,7 @@
 # Creation of a map using the regularised least square method
 #-------------------------------------------------------------
 import os
-import numpy
+import numpy as np
 from tamasis import *
 
 # Specify the Frames observations as FITS files
@@ -65,7 +65,7 @@ tod = masking(tod)
 # The naive map is given by
 map_naive = mapper_naive(tod, model)
 
-length = numpy.asarray(2**numpy.ceil(numpy.log2(numpy.array(tod.nsamples) + 200)), dtype='int')
+length = np.asarray(2**np.ceil(np.log2(np.array(tod.nsamples) + 200)), dtype='int')
 invNtt = InvNtt(length, obs.get_filter_uncorrelated())
 fft = FftHalfComplex(length)
 padding = Padding(left=invNtt.ncorrelations, right=length-tod.nsamples-invNtt.ncorrelations)

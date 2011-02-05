@@ -9,7 +9,7 @@
 #
 # Author: P. Chanial
 
-import numpy
+import numpy as np
 from   optparse import OptionParser
 import sys
 from   tamasis import *
@@ -95,7 +95,7 @@ if options.deglitching != 'none' or options.do_outputmap:
 
 # Deglitch
 if options.deglitching != 'none':
-    nbads = numpy.sum(tod.mask % 2)
+    nbads = np.sum(tod.mask % 2)
     if options.deglitching == 'l2std':
         tod.mask = deglitch_l2std(tod, projection, nsigma=options.nsigma)
     else:

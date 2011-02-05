@@ -1,7 +1,7 @@
 #---------------------------------------------------
 # Creation of a map using the photproject algorithm
 #---------------------------------------------------
-import numpy
+import numpy as np
 import os
 from tamasis import *
 
@@ -67,6 +67,6 @@ map_naive.imshow()
 ds9(map_naive)
 
 # inspect the glitch spatial distribution on the map:
-map_mask = projection.T(numpy.asarray(tod.mask, float))
+map_mask = projection.T(np.asarray(tod.mask, float))
 map_mask.imshow()
 

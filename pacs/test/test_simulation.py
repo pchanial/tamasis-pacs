@@ -1,4 +1,4 @@
-import numpy
+import numpy as np
 import os
 import tamasis
 
@@ -13,7 +13,7 @@ tamasis.var.verbose = False
 # creation of the sky map
 msize = 50
 mymap = gaussian(2*(msize*2+1,), 10, unit='Jy/pixel')
-cd = numpy.array([[-1., 0.],[0., 1.]]) / 3600.
+cd = np.array([[-1., 0.],[0., 1.]]) / 3600.
 header = create_fitsheader(mymap, crval=[53.,27.], cd=cd)
 mymap.header = header
 
@@ -43,9 +43,9 @@ finally:
 
 for field in simul.status.dtype.names:
     if field == 'BAND': continue
-    if not numpy.allclose(simul.status[field], status2[field]): raise TestFailure('Status problem with: '+field)
+    if not np.allclose(simul.status[field], status2[field]): raise TestFailure('Status problem with: '+field)
 
-if not numpy.allclose(tod, tod2): raise TestFailure()
+if not np.allclose(tod, tod2): raise TestFailure()
 fields = [x for x in simul.slice.dtype.names if x not in ('filename','unit')]
 for field in fields:
     if getattr(simul.slice[0], field) != getattr(simul2.slice[0], field):

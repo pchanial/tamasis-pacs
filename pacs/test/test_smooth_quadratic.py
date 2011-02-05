@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-import numpy
+import numpy as np
 import os
 import tamasis
 
@@ -55,7 +55,7 @@ tod40Hz.mask = deglitch_l2mad(tod40Hz, projection)
 if do_plot:
     figure()
     plot(tod40Hz[idetector,:])
-    index=numpy.where(tod40Hz.mask[idetector,:])
+    index=np.where(tod40Hz.mask[idetector,:])
     plot(index,tod40Hz[idetector,index],'ro')
     show()
 

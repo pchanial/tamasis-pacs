@@ -1,4 +1,4 @@
-import numpy
+import numpy as np
 import pyfits
 import re
 from tamasis.core import *
@@ -8,12 +8,14 @@ __all__ = [ 'MadMap1Observation' ]
 
 class MadMap1Observation(Observation):
     """Class for the handling of an observation in the MADMAP1 format"""
-    def __init__(self, todfile, invnttfile, mapmaskfile, convert, ndetectors, missing_value=None):
+    def __init__(self, todfile, invnttfile, mapmaskfile, convert, ndetectors,
+                 missing_value=None):
 
         # Get information from files
         nslices, status = tmf.madmap1_nslices(invnttfile, ndetectors)
         if status != 0: raise RuntimeError()
-        npixels_per_sample, nsamples, ncorrelations, status = tmf.madmap1_info(todfile, invnttfile, convert, ndetectors, nslices)
+        npixels_per_sample, nsamples, ncorrelations, status = tmf.madmap1_info(\
+            todfile, invnttfile, convert, ndetectors, nslices)
         if status != 0: raise RuntimeError()
 
         m=re.search(r'(?P<filename>.*)\[(?P<extname>\w+)\]$', mapmaskfile)
@@ -25,18 +27,18 @@ class MadMap1Observation(Observation):
             mask = pyfits.fitsopen(filename)[extname].data
         if mask is None:
             raise IOError('HDU '+mapmaskfile+' has no data.')
-        mapmask = numpy.zeros(mask.shape, dtype='int8')
+        mapmask = np.zeros(mask.shape, dtype='int8')
         if missing_value is None:
             mapmask[mask != 0] = 1
-        elif numpy.isnan(missing_value):
-            mapmask[numpy.isnan(mask)] = 1
-        elif numpy.isinf(missing_value):
-            mapmask[numpy.isinf(mask)] = 1
+        elif np.isnan(missing_value):
+            mapmask[np.isnan(mask)] = 1
+        elif np.isinf(missing_value):
+            mapmask[np.isinf(mask)] = 1
         else:
             mapmask[mask == missing_value] = 1
 
         # Store instrument information
-        self.instrument = Instrument('Unknown', numpy.zeros((ndetectors,)))
+        self.instrument = Instrument('Unknown', np.zeros((ndetectors,)))
 
         # Store observation information
         class MadMap1ObservationInfo(object):
@@ -52,30 +54,36 @@ class MadMap1Observation(Observation):
         self.info.mapmask = mapmask
 
         # Store slice information
-        self.slice = numpy.recarray(nslices, dtype=[('nsamples_all', int), ('invnttfile', 'S256')])
+        self.slice = np.recarray(nslices, dtype=[('nsamples_all', int),
+                                                 ('invnttfile', 'S256')])
         self.slice.nsamples_all = nsamples
         self.slice.nfinesamples = nsamples
-        self.slice.invnttfile = [invnttfile+'.'+str(i) for i in range(nslices)]        
+        self.slice.invnttfile = [invnttfile+'.'+str(i) for i in range(nslices)]
+
         # Store pointing information
-        self.pointing = numpy.recarray(numpy.sum(nsamples), [('removed', numpy.bool_)])
+        self.pointing = np.recarray(np.sum(nsamples), [('removed', np.bool_)])
         self.pointing.removed = False
 
-    def get_pointing_matrix(self, header, resolution, npixels_per_sample, method=None, oversampling=False):
+    def get_pointing_matrix(self, header, resolution, npixels_per_sample,
+                            method=None, oversampling=False):
         """
         Method to get the pointing matrix.
         """
         if npixels_per_sample not in (0, self.info.npixels_per_sample):
-            raise ValueError('The npixels_per_sample value is incompatible with the MADMAP1 file.')
+            raise ValueError('The npixels_per_sample value is incompatible wi' \
+                             'th the MADMAP1 file.')
         if header is not None:
-            raise ValueError('The map header cannot be specified for MADmap1 observations.')
+            raise ValueError('The map header cannot be specified for MADmap1 ' \
+                             'observations.')
         if resolution is not None:
-            raise ValueError('The map resolution cannot be specified for MADmap1 observations.')
+            raise ValueError('The map resolution cannot be specified for MADm' \
+                             'ap1 observations.')
         header = pyfits.Header()
         header.update('simple', True)
         header.update('bitpix', -64)
         header.update('extend', True)
         header.update('naxis', 1)
-        header.update('naxis1', numpy.sum(self.info.mapmask == 0))
+        header.update('naxis1', np.sum(self.info.mapmask == 0))
 
         ndetectors = self.get_ndetectors()
         nsamples   = self.get_nsamples()
@@ -83,7 +91,7 @@ class MadMap1Observation(Observation):
 
         sizeofpmatrix = self.info.npixels_per_sample * tod.size
         print('Info: Allocating '+str(sizeofpmatrix/2.**17)+' MiB for the pointing matrix.')
-        pmatrix = numpy.zeros(sizeofpmatrix, dtype=numpy.int64)
+        pmatrix = np.zeros(sizeofpmatrix, dtype=np.int64)
         status = tmf.madmap1_read_tod(self.info.todfile, self.info.invnttfile, self.info.convert, self.info.npixels_per_sample, tod.T, pmatrix)
         if status != 0: raise RuntimeError()
         return pmatrix, header, ndetectors, nsamples, \
@@ -95,8 +103,9 @@ class MadMap1Observation(Observation):
         """
         tod = Tod.zeros((self.get_ndetectors(), self.get_nsamples()))
         sizeofpmatrix = self.info.npixels_per_sample * tod.size
-        pmatrix = numpy.zeros(sizeofpmatrix, dtype=int)
-        status = tmf.madmap1_read_tod(self.info.todfile, self.info.invnttfile, self.info.convert, self.info.npixels_per_sample, tod.T, pmatrix)
+        pmatrix = np.zeros(sizeofpmatrix, dtype=int)
+        status = tmf.madmap1_read_tod(self.info.todfile, self.info.invnttfile,
+            self.info.convert, self.info.npixels_per_sample, tod.T, pmatrix)
         if status != 0: raise RuntimeError()
         if unit is not None:
             tod.unit = unit
@@ -106,12 +115,15 @@ class MadMap1Observation(Observation):
         """
         Method to get the invNtt for uncorrelated detectors.
         """
-        data, nsamples, status = tmf.madmap1_read_filter(self.info.invnttfile, self.info.convert, self.info.ncorrelations, self.get_ndetectors(), self.slice.size)
+        data, nsamples, status = tmf.madmap1_read_filter(self.info.invnttfile,
+            self.info.convert, self.info.ncorrelations, self.get_ndetectors(),
+            self.slice.size)
         if status != 0: raise RuntimeError()
         return data.T
 
     def get_nsamples(self):
-        nsamples = numpy.sum(~self.pointing.removed)
-        if nsamples != numpy.sum(self.pointing.size):
-            raise ValueError("The pointing attribute 'removed' cannot be set to True.")
+        nsamples = np.sum(~self.pointing.removed)
+        if nsamples != np.sum(self.pointing.size):
+            raise ValueError("The pointing attribute 'removed' cannot be set " \
+                             'to True.')
         return self.slice.nsamples_all

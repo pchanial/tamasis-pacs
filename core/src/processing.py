@@ -1,24 +1,34 @@
-import numpy
+import numpy as np
 import pyfits
 import scipy
 import tamasisfortran as tmf
 from .datatypes import Tod
 
-__all__ = [ 'deglitch_l2std', 'deglitch_l2mad', 'filter_median', 'filter_polynomial', 'interpolate_linear', 'remove_nan' ]
+__all__ = [ 'deglitch_l2std',
+            'deglitch_l2mad',
+            'filter_median',
+            'filter_polynomial',
+            'interpolate_linear',
+            'remove_nan' ]
 
 def deglitch_l2std(tod, projection, nsigma=5.):
     """
-    Second level deglitching. Each frame is projected onto the sky. The values associated
-    to a sky map pixel are then sigma clipped, using the standard deviation to the mean.
+    Second level deglitching (standard deviation).
+
+    Each detector frame is back-projected onto the sky. The values associated
+    with a sky map pixel are sigma clipped, using the standard deviation to the
+    mean. In case of rejection (i. e. at a given time), each detector sample
+    which contributes to the sky pixel value in the frame is masked.
     """
     nx = projection.header['naxis1']
     ny = projection.header['naxis2']
     npixels_per_sample = projection.npixels_per_sample
     if tod.mask is None:
-        mask = numpy.zeros(tod.shape, numpy.bool8)
+        mask = np.zeros(tod.shape, np.bool8)
     else:
         mask = tod.mask.copy()
-    tmf.deglitch_l2b_std(projection._pmatrix, nx, ny, tod.T, mask.view(numpy.int8).T, nsigma, npixels_per_sample)
+    tmf.deglitch_l2b_std(projection._pmatrix, nx, ny, tod.T,
+                         mask.view(np.int8).T, nsigma, npixels_per_sample)
     return mask
 
 
@@ -27,17 +37,23 @@ def deglitch_l2std(tod, projection, nsigma=5.):
 
 def deglitch_l2mad(tod, projection, nsigma=5.):
     """
-    Second level deglitching. Each frame is projected onto the sky. The values associated
-    to a sky map pixel are then sigma clipped, using the MAD (median absolute deviation to the median)
+    Second level deglitching (MAD).
+
+    Each detector frame is back-projected onto the sky. The values associated
+    with a sky map pixel are sigma clipped, using the MAD (median absolute
+    deviation to the median). In case of rejection (i. e. at a given time),
+    each detector sample which contributes to the sky pixel value in the frame
+    is masked.
     """
     nx = projection.header['naxis1']
     ny = projection.header['naxis2']
     npixels_per_sample = projection.npixels_per_sample
     if tod.mask is None:
-        mask = numpy.zeros(tod.shape, numpy.bool8)
+        mask = np.zeros(tod.shape, np.bool8)
     else:
         mask = tod.mask.copy()
-    tmf.deglitch_l2b_mad(projection._pmatrix, nx, ny, tod.T, mask.view(numpy.int8).T, nsigma, npixels_per_sample)
+    tmf.deglitch_l2b_mad(projection._pmatrix, nx, ny, tod.T,
+                         mask.view(np.int8).T, nsigma, npixels_per_sample)
     return mask
 
 
@@ -50,17 +66,18 @@ def filter_median(tod, length=10, mask=None):
     """
     filtered = Tod(tod)
     if mask is None and tod.mask is not None:
-        mask = tod.mask.view(numpy.int8)
+        mask = tod.mask.view(np.int8)
     elif mask is None:
-        mask = numpy.zeros(tod.shape, numpy.int8)
+        mask = np.zeros(tod.shape, np.int8)
     else:
         if not mask.flags.c_contiguous:
-            mask = numpy.ascontiguousarray(mask, numpy.int8)
+            mask = np.ascontiguousarray(mask, np.int8)
         else:
-            mask = numpy.asarray(mask, numpy.int8)
+            mask = np.asarray(mask, np.int8)
 
     n = tod.shape[-1]
-    status = tmf.filter_median(filtered.reshape((-1,n)).T, mask.reshape((-1,n)).T, length, numpy.array(tod.nsamples, dtype='int32'))
+    status = tmf.filter_median(filtered.reshape((-1,n)).T,
+        mask.reshape((-1,n)).T, length, np.array(tod.nsamples, np.int32))
     if status != 0:
         raise RuntimeError()
     return filtered
@@ -77,11 +94,12 @@ def filter_polynomial(tod, degree):
     dest = 0
     for islice in range(len(tod.nsamples)):
         nsamples = tod.nsamples[islice]
-        x = numpy.arange(nsamples)
+        x = np.arange(nsamples)
         slope = scipy.polyfit(x, tod[:,dest:dest+nsamples].T, deg=degree)
 
         for idetector in range(tod.shape[0]):
-            filtered[idetector,dest:dest+nsamples] -= scipy.polyval(slope[:,idetector], x)
+            filtered[idetector,dest:dest+nsamples] -= \
+                scipy.polyval(slope[:,idetector], x)
        
         dest = dest + nsamples
 
@@ -101,11 +119,11 @@ def interpolate_linear(tod):
     dest = 0
     for islice in range(len(tod.nsamples)):
         nsamples = tod.nsamples[islice]
-        x = numpy.arange(nsamples)
+        x = np.arange(nsamples)
         for idetector in range(tod.shape[0]):
             tod_ = tod[idetector,dest:dest+nsamples]
             invalid = tod.mask[idetector,dest:dest+nsamples]
-            tod_[invalid] = numpy.interp(x[invalid], x[~invalid], tod_[~invalid])
+            tod_[invalid] = np.interp(x[invalid], x[~invalid], tod_[~invalid])
         dest = dest + nsamples
     
     return
@@ -119,5 +137,5 @@ def remove_nan(tod):
     Replace NaN values in a Tod with zeros and update the mask.
     """
     if tod.mask is None:
-        tod.mask = numpy.zeros(tod.shape, numpy.bool8)
-    tmf.remove_nan(tod.T, tod.mask.view(numpy.int8).T)
+        tod.mask = np.zeros(tod.shape, np.bool8)
+    tmf.remove_nan(tod.T, tod.mask.view(np.int8).T)

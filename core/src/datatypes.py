@@ -1,7 +1,7 @@
 import kapteyn.maputils
 import matplotlib
 import matplotlib.pyplot as pyplot
-import numpy
+import numpy as np
 import pickle
 import pyfits
 import StringIO
@@ -24,7 +24,8 @@ __all__ = [ 'FitsArray', 'Map', 'Tod', 'create_fitsheader' ]
 class FitsArray(Quantity):
 
     __slots__ = ('_header',)
-    def __new__(cls, data, header=None, unit=None, derived_units=None, dtype=None, copy=True, order='C', subok=False, ndmin=0):
+    def __new__(cls, data, header=None, unit=None, derived_units=None,
+                dtype=None, copy=True, order='C', subok=False, ndmin=0):
 
         if type(data) is str:
             ihdu = 0
@@ -55,19 +56,21 @@ class FitsArray(Quantity):
                 pass
 
         # get a new FitsArray instance (or a subclass if subok is True)
-        result = Quantity.__new__(cls, data, unit, derived_units, dtype, copy, order, True, ndmin)
+        result = Quantity.__new__(cls, data, unit, derived_units, dtype, copy,
+                                  order, True, ndmin)
         if not subok and result.__class__ is not cls:
             result = result.view(cls)
 
         # copy header attribute
         if header is not None:
             result.header = header
-        elif hasattr(data, '_header') and data._header.__class__ is pyfits.Header:
+        elif hasattr(data, '_header') and \
+             data._header.__class__ is pyfits.Header:
             if copy:
                 result._header = data._header.copy()
             else:
                 result._header = data._header
-        elif not numpy.iscomplexobj(result):
+        elif not np.iscomplexobj(result):
             result._header = create_fitsheader(result)
         else:
             result._header = None
@@ -79,16 +82,22 @@ class FitsArray(Quantity):
         self._header = getattr(array, '_header', None)
 
     @staticmethod
-    def empty(shape, header=None, unit=None, derived_units=None, dtype=None, order=None):
-        return FitsArray(numpy.empty(shape, dtype, order), header, unit, derived_units, dtype, copy=False)
+    def empty(shape, header=None, unit=None, derived_units=None, dtype=None,
+              order=None):
+        return FitsArray(np.empty(shape, dtype, order), header, unit,
+                         derived_units, dtype, copy=False)
 
     @staticmethod
-    def ones(shape, header=None, unit=None, derived_units=None, dtype=None, order=None):
-        return FitsArray(numpy.ones(shape, dtype, order), header, unit, derived_units, dtype, copy=False)
+    def ones(shape, header=None, unit=None, derived_units=None, dtype=None,
+             order=None):
+        return FitsArray(np.ones(shape, dtype, order), header, unit,
+                         derived_units, dtype, copy=False)
 
     @staticmethod
-    def zeros(shape, header=None, unit=None, derived_units=None, dtype=None, order=None):
-        return FitsArray(numpy.zeros(shape, dtype, order), header, unit, derived_units, dtype, copy=False)
+    def zeros(shape, header=None, unit=None, derived_units=None, dtype=None,
+              order=None):
+        return FitsArray(np.zeros(shape, dtype, order), header, unit,
+                         derived_units, dtype, copy=False)
 
     def has_wcs(self):
         """
@@ -99,7 +108,7 @@ class FitsArray(Quantity):
             return False
 
         required = 'CRPIX,CRVAL,CTYPE'.split(',')
-        keywords = numpy.concatenate(
+        keywords = np.concatenate(
             [(lambda i: [r+str(i+1) for r in required])(i) 
              for i in range(self.header['NAXIS'])])
 
@@ -112,7 +121,8 @@ class FitsArray(Quantity):
     @header.setter
     def header(self, header):
         if header is not None and not isinstance(header, pyfits.Header):
-            raise TypeError('Incorrect type for the input header ('+str(type(header))+').')
+            raise TypeError('Incorrect type for the input header (' + \
+                            str(type(header))+').')
         self._header = header
 
     def tofile(self, fid, sep='', format='%s'):
@@ -136,21 +146,20 @@ class FitsArray(Quantity):
             if hasattr(self, k):
                 header.update(v, str(getattr(self, k)))
 
-        if numpy.rank(self) == 0:
+        if np.rank(self) == 0:
             value = self.reshape((1,))
         else:
-            value = self.T if numpy.isfortran(self) else self
+            value = self.T if np.isfortran(self) else self
         hdu = pyfits.PrimaryHDU(value, header)
         hdu.writeto(filename, clobber=True)
         if not isinstance(self, Map) and not isinstance(self, Tod):
             _save_derived_units(filename, self.derived_units)
 
     def imsave(self, filename, colorbar=True, **kw):
-        from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
         is_interactive = matplotlib.is_interactive()
         matplotlib.interactive(False)
         dpi = 80.
-        figsize = numpy.clip(numpy.max(numpy.array(self.shape[::-1])/dpi), 8, 50)
+        figsize = np.clip(np.max(np.array(self.shape[::-1])/dpi), 8, 50)
         figsize = (figsize + (2 if colorbar else 0), figsize)
         fig = pyplot.figure(figsize=figsize, dpi=dpi)
         self.imshow(colorbar=colorbar, new_figure=False, **kw)
@@ -158,7 +167,9 @@ class FitsArray(Quantity):
         fig.savefig(filename)
         matplotlib.interactive(is_interactive)
 
-    def imshow(self, mask=None, title=None, colorbar=True, aspect=None, interpolation='nearest', origin=None, xlabel='', ylabel='', new_figure=True, **kw):
+    def imshow(self, mask=None, title=None, colorbar=True, aspect=None,
+               interpolation='nearest', origin=None, xlabel='', ylabel='',
+               new_figure=True, **kw):
         """
         A simple graphical display function for the Tod class
 
@@ -166,20 +177,20 @@ class FitsArray(Quantity):
             True means masked.
         """
 
-        unfinite = ~numpy.isfinite(numpy.asarray(self))
+        unfinite = ~np.isfinite(np.asarray(self))
         if mask is None:
             mask = unfinite
         else:
-            mask = numpy.logical_or(mask, unfinite)
+            mask = np.logical_or(mask, unfinite)
 
-        data = numpy.ma.MaskedArray(numpy.asarray(self), mask=mask, copy=False)
-        if numpy.iscomplexobj(data):
+        data = np.ma.MaskedArray(np.asarray(self), mask=mask, copy=False)
+        if np.iscomplexobj(data):
             data = abs(data)
-        mean   = numpy.mean(data)
-        stddev = numpy.std(data)
+        mean   = np.mean(data)
+        stddev = np.std(data)
         # casting to float because of a bug numpy1.4 + matplotlib
-        minval = float(max(mean - 2*stddev, numpy.min(data)))
-        maxval = float(min(mean + 5*stddev, numpy.max(data)))
+        minval = float(max(mean - 2*stddev, np.min(data)))
+        maxval = float(min(mean + 5*stddev, np.max(data)))
 
         if new_figure:
             fig = pyplot.figure()
@@ -187,7 +198,8 @@ class FitsArray(Quantity):
             fig = pyplot.gcf()
         fontsize = 12. * fig.get_figheight() / 6.125
 
-        image = pyplot.imshow(data, aspect=aspect, interpolation=interpolation, origin=origin, **kw)
+        image = pyplot.imshow(data, aspect=aspect, interpolation=interpolation,
+                              origin=origin, **kw)
         image.set_clim(minval, maxval)
 
         ax = pyplot.gca()
@@ -270,7 +282,8 @@ class FitsArray(Quantity):
             if 'scale' not in keywords:
                 keywords['scale'] = ('scope local', 'mode 99.5')
 
-            if origin == 'upper' or 'orient' not in keywords and self.origin == 'upper':
+            if origin == 'upper' or \
+               'orient' not in keywords and self.origin == 'upper':
                 keywords['orient'] = 'y'
 
             wait = 10
@@ -283,7 +296,8 @@ class FitsArray(Quantity):
                 k = str(k)
                 if type(v) is not tuple:
                     v = (v,)
-                command += reduce(lambda x,y: str(x) + ' -' + k + ' ' + str(y),v,'')
+                command += reduce(lambda x,y: \
+                                  str(x) + ' -' + k + ' ' + str(y),v,'')
 
             os.system(command + '&')
 
@@ -307,7 +321,7 @@ class FitsArray(Quantity):
 
         # get ds9 instance with given id
         d = ds9.ds9(id)
-        d.set_np2arr(self.view(numpy.ndarray).T)
+        d.set_np2arr(self.view(np.ndarray).T)
 
         if self.has_wcs():
             d.set('wcs append', str(self.header))
@@ -328,10 +342,13 @@ class Map(FitsArray):
     """
     Represent a map, complemented with unit and FITS header.
     """
-    def __new__(cls, data,  header=None, unit=None, derived_units=None, coverage=None, error=None, origin=None, dtype=None, copy=True, order='C', subok=False, ndmin=0):
+    def __new__(cls, data,  header=None, unit=None, derived_units=None,
+                coverage=None, error=None, origin=None, dtype=None, copy=True,
+                order='C', subok=False, ndmin=0):
 
         # get a new Map instance (or a subclass if subok is True)
-        result = FitsArray.__new__(cls, data, header, unit, derived_units, dtype, copy, order, True, ndmin)
+        result = FitsArray.__new__(cls, data, header, unit, derived_units,
+                                   dtype, copy, order, True, ndmin)
         if not subok and result.__class__ is not cls:
             result = result.view(cls)
 
@@ -352,7 +369,8 @@ class Map(FitsArray):
         if origin is not None:
             origin = origin.strip().lower()
             if origin not in ('upper', 'lower', 'none'):
-                raise ValueError("Invalid origin '"+origin+"'. Valid values are None, 'upper' or 'lower'.")
+                raise ValueError("Invalid origin '" + origin + "'. Expected v" \
+                                 "alues are None, 'upper' or 'lower'.")
             if origin != 'none':
                 result.origin = origin
 
@@ -389,20 +407,27 @@ class Map(FitsArray):
     @header.setter
     def header(self, header):
         if header is not None and not isinstance(header, pyfits.Header):
-            raise TypeError('Incorrect type for the input header ('+str(type(header))+').')
+            raise TypeError('Incorrect type for the input header (' + \
+                            str(type(header))+').')
         self._header = header
 
     @staticmethod
-    def empty(shape, coverage=None, error=None, origin='lower', header=None, unit=None, derived_units=None, dtype=None, order=None):
-        return Map(numpy.empty(shape, dtype, order), header, unit, derived_units, coverage, error, origin, dtype, copy=False)
+    def empty(shape, coverage=None, error=None, origin='lower', header=None,
+              unit=None, derived_units=None, dtype=None, order=None):
+        return Map(np.empty(shape, dtype, order), header, unit, derived_units,
+                   coverage, error, origin, dtype, copy=False)
 
     @staticmethod
-    def ones(shape, coverage=None, error=None, origin='lower', header=None, unit=None, derived_units=None, dtype=None, order=None):
-        return Map(numpy.ones(shape, dtype, order), header, unit, derived_units, coverage, error, origin, dtype, copy=False)
+    def ones(shape, coverage=None, error=None, origin='lower', header=None,
+             unit=None, derived_units=None, dtype=None, order=None):
+        return Map(np.ones(shape, dtype, order), header, unit, derived_units,
+                   coverage, error, origin, dtype, copy=False)
 
     @staticmethod
-    def zeros(shape, coverage=None, error=None, origin='lower', header=None, unit=None, derived_units=None, dtype=None, order=None):
-        return Map(numpy.zeros(shape, dtype, order), header, unit, derived_units, coverage, error, origin, dtype, copy=False)
+    def zeros(shape, coverage=None, error=None, origin='lower', header=None,
+              unit=None, derived_units=None, dtype=None, order=None):
+        return Map(np.zeros(shape, dtype, order), header, unit, derived_units,
+                   coverage, error, origin, dtype, copy=False)
 
     def imshow(self, mask=None, title=None, new_figure=True, origin=None, **kw):
         """A simple graphical display function for the Map class"""
@@ -410,10 +435,10 @@ class Map(FitsArray):
         if mask is None and self.coverage is not None:
             mask = self.coverage <= 0
         if mask is not None:
-            data = numpy.array(self, copy=True)
-            data[mask] = numpy.nan
+            data = np.array(self, copy=True)
+            data[mask] = np.nan
         else:
-            data = numpy.asarray(self)
+            data = np.asarray(self)
 
         if origin is None:
             origin = self.origin
@@ -424,10 +449,12 @@ class Map(FitsArray):
                 kw['xlabel'] = 'X'
             if 'ylabel' not in kw:
                 kw['ylabel'] = 'Y'
-            image = super(Map, self).imshow(title=title, new_figure=new_figure, origin=origin, **kw)
+            image = super(Map, self).imshow(title=title, new_figure=new_figure,
+                                            origin=origin, **kw)
             return image
 
-        fitsobj = kapteyn.maputils.FITSimage(externaldata=data, externalheader=self.header)
+        fitsobj = kapteyn.maputils.FITSimage(externaldata=data,
+                                             externalheader=self.header)
         if new_figure:
             fig = pyplot.figure()
             frame = fig.add_axes((0.1, 0.1, 0.8, 0.8))
@@ -464,36 +491,41 @@ class Tod(FitsArray):
 
     __slots__ = ('_mask', 'nsamples')
 
-    def __new__(cls, data, mask=None, nsamples=None, header=None, unit=None, derived_units=None, dtype=None, copy=True, order='C', subok=False, ndmin=0):
+    def __new__(cls, data, mask=None, nsamples=None, header=None, unit=None,
+                derived_units=None, dtype=None, copy=True, order='C',
+                subok=False, ndmin=0):
 
         # get a new Tod instance (or a subclass if subok is True)
-        result = FitsArray.__new__(cls, data, header, unit, derived_units, dtype, copy, order, True, ndmin)
+        result = FitsArray.__new__(cls, data, header, unit, derived_units,
+                                   dtype, copy, order, True, ndmin)
         if not subok and result.__class__ is not cls:
             result = result.view(cls)
         
         # mask attribute
-        if mask is numpy.ma.nomask:
+        if mask is np.ma.nomask:
             mask = None
 
         if mask is None and isinstance(data, str):
             try:
-                mask = pyfits.open(data)['Mask'].data.view(numpy.bool8)
+                mask = pyfits.open(data)['Mask'].data.view(np.bool8)
                 copy = False
             except:
                 pass
 
-        if mask is None and hasattr(data, 'mask') and data.mask is not numpy.ma.nomask:
+        if mask is None and hasattr(data, 'mask') and \
+           data.mask is not np.ma.nomask:
             mask = data.mask
 
         if mask is not None:
-            result._mask = numpy.array(mask, numpy.bool8, copy=copy)
+            result._mask = np.array(mask, np.bool8, copy=copy)
         
         # nsamples attribute
         if type(data) is str and nsamples is None:
             if 'nsamples' in result.header:
                 nsamples = result.header['nsamples'][1:-1].replace(' ', '')
                 if len(nsamples) > 0:
-                    nsamples = [int(float(x)) for x in nsamples.split(',') if x.strip() != '']
+                    nsamples = [int(float(x))
+                                for x in nsamples.split(',') if x.strip() != '']
                 del result.header['NSAMPLES']
         if nsamples is None:
             return result
@@ -510,39 +542,40 @@ class Tod(FitsArray):
 
     @mask.setter
     def mask(self, mask):
-        if mask is None or mask is numpy.ma.nomask:
+        if mask is None or mask is np.ma.nomask:
             self._mask = None
             return
 
         # enforce bool8 dtype
-        if not isinstance(mask, numpy.ndarray):
-            mask = numpy.array(mask, numpy.bool8)
-        elif mask.dtype.type != numpy.bool8:
+        if not isinstance(mask, np.ndarray):
+            mask = np.array(mask, np.bool8)
+        elif mask.dtype.type != np.bool8:
             if mask.dtype.itemsize == 1:
-                mask = mask.view(numpy.bool8)
+                mask = mask.view(np.bool8)
             else:
-                mask = numpy.asarray(mask, numpy.bool8)
+                mask = np.asarray(mask, np.bool8)
 
         # handle the scalar case
-        if numpy.rank(mask) == 0:
+        if np.rank(mask) == 0:
             if self._mask is None:
-                func = numpy.zeros if mask == 0 else numpy.ones
-                self._mask = func(self.shape, dtype=numpy.bool8)
+                func = np.zeros if mask == 0 else np.ones
+                self._mask = func(self.shape, dtype=np.bool8)
             else:
                 self._mask[:] = mask
             return
 
         # check shape compatibility
         if self.shape != mask.shape:
-            raise ValueError("The input mask has a shape '" + str(mask.shape) + \
-                             "' incompatible with that of the Tod '" + str(self.shape) + "'.")
+            raise ValueError("The input mask has a shape '" + str(mask.shape) +\
+                "' incompatible with that of the Tod '" + str(self.shape) +"'.")
         
         self._mask = mask
 
     def __array_finalize__(self, array):
         FitsArray.__array_finalize__(self, array)
         self._mask = getattr(array, 'mask', None)
-        self.nsamples = getattr(array, 'nsamples', () if numpy.rank(self) == 0 else (self.shape[-1],))
+        self.nsamples = getattr(array, 'nsamples', () if np.rank(self) == 0 \
+                        else (self.shape[-1],))
 
     def __getitem__(self, key):
         item = super(Quantity, self).__getitem__(key)
@@ -556,33 +589,40 @@ class Tod(FitsArray):
             if not isinstance(key[-1], slice):
                 return item
             else:
-                if key[-1].start is not None or key[-1].stop is not None or key[-1].step is not None:
+                if key[-1].start is not None or key[-1].stop is not None or \
+                   key[-1].step is not None:
                     item.nsamples = (item.shape[-1],)
         return item
 
     def reshape(self, newdims, order='C'):
-        result = numpy.ndarray.reshape(self, newdims, order=order)
+        result = np.ndarray.reshape(self, newdims, order=order)
         if self.mask is not None:
             result.mask = self.mask.reshape(newdims, order=order)
         return result
 
     @staticmethod
-    def empty(shape, mask=None, nsamples=None, header=None, unit=None, derived_units=None, dtype=None, order=None):
+    def empty(shape, mask=None, nsamples=None, header=None, unit=None,
+              derived_units=None, dtype=None, order=None):
         shape = validate_sliced_shape(shape, nsamples)
         shape_flat = flatten_sliced_shape(shape)
-        return Tod(numpy.empty(shape_flat, dtype, order), mask, shape[-1], header, unit, derived_units, dtype, copy=False)
+        return Tod(np.empty(shape_flat, dtype, order), mask, shape[-1], header,
+                   unit, derived_units, dtype, copy=False)
 
     @staticmethod
-    def ones(shape, mask=None, nsamples=None, header=None, unit=None, derived_units=None, dtype=None, order=None):
+    def ones(shape, mask=None, nsamples=None, header=None, unit=None,
+             derived_units=None, dtype=None, order=None):
         shape = validate_sliced_shape(shape, nsamples)
         shape_flat = flatten_sliced_shape(shape)
-        return Tod(numpy.ones(shape_flat, dtype, order), mask, shape[-1], header, unit, derived_units, dtype, copy=False)
+        return Tod(np.ones(shape_flat, dtype, order), mask, shape[-1], header,
+                   unit, derived_units, dtype, copy=False)
 
     @staticmethod
-    def zeros(shape, mask=None, nsamples=None, header=None, unit=None, derived_units=None, dtype=None, order=None):
+    def zeros(shape, mask=None, nsamples=None, header=None, unit=None,
+              derived_units=None, dtype=None, order=None):
         shape = validate_sliced_shape(shape, nsamples)
         shape_flat = flatten_sliced_shape(shape)
-        return Tod(numpy.zeros(shape_flat, dtype, order), mask, shape[-1], header, unit, derived_units, dtype, copy=False)
+        return Tod(np.zeros(shape_flat, dtype, order), mask, shape[-1], header,
+                   unit, derived_units, dtype, copy=False)
    
     def flatten(self, order='C'):
         """
@@ -607,17 +647,19 @@ class Tod(FitsArray):
 
         xlabel = 'Sample'
         ylabel = 'Detector number'
-        image = super(Tod, self).imshow(mask=self.mask, title=title, origin='upper', xlabel=xlabel, ylabel=ylabel, aspect=aspect, **kw)
+        image = super(Tod, self).imshow(mask=self.mask, title=title,
+                                        origin='upper', xlabel=xlabel,
+                                        ylabel=ylabel, aspect=aspect, **kw)
         return image
 
     def __str__(self):
-        if numpy.rank(self) == 0:
-            if numpy.iscomplexobj(self):
+        if np.rank(self) == 0:
+            if np.iscomplexobj(self):
                 return 'Tod ' + str(complex(self))
             else:
                 return 'Tod ' + str(float(self))
         output = 'Tod ['
-        if numpy.rank(self) > 1:
+        if np.rank(self) > 1:
             output += str(self.shape[-2])+' detector'
             if self.shape[-2] > 1:
                 output += 's'
@@ -627,7 +669,8 @@ class Tod(FitsArray):
             output += 's'
         nslices = len(self.nsamples)
         if nslices > 1:
-            strsamples = ','.join((str(self.nsamples[i]) for i in range(nslices)))
+            strsamples = ','.join((str(self.nsamples[i])
+                                   for i in range(nslices)))
             output += ' in ' + str(nslices) + ' slices ('+strsamples+')'
         return output + ']'
 
@@ -636,14 +679,16 @@ class Tod(FitsArray):
         if self.mask is None:
             return
         header = create_fitsheader(self.mask, extname='Mask')
-        pyfits.append(filename, self.mask.view(numpy.uint8), header)
+        pyfits.append(filename, self.mask.view(np.uint8), header)
         _save_derived_units(filename, self.derived_units)
 
 
 #-------------------------------------------------------------------------------
 
 
-def create_fitsheader(array, extname=None, crval=(0.,0.), crpix=None, ctype=('RA---TAN','DEC--TAN'), cunit='deg', cd=None, cdelt=None, naxis=None):
+def create_fitsheader(array, extname=None, crval=(0.,0.), crpix=None,
+                      ctype=('RA---TAN','DEC--TAN'), cunit='deg', cd=None,
+                      cdelt=None, naxis=None):
     """
     Return a FITS header
 
@@ -682,10 +727,11 @@ def create_fitsheader(array, extname=None, crval=(0.,0.), crpix=None, ctype=('RA
 
     if array is None:
         if naxis is None:
-            raise ValueError('An array argument or naxis keyword should be specified.')
+            raise ValueError('An array argument or naxis keyword should be sp' \
+                             'ecified.')
         typename = 'float64'
     else:
-        if not isinstance(array, numpy.ndarray):
+        if not isinstance(array, np.ndarray):
             raise TypeError('The input is not an ndarray.')
         naxis = tuple(reversed(array.shape))
         if array.dtype.itemsize == 1:
@@ -705,7 +751,8 @@ def create_fitsheader(array, extname=None, crval=(0.,0.), crpix=None, ctype=('RA
         card = pyfits.createCard('xtension', 'IMAGE', 'Image extension')
     header = pyfits.Header([card])
     if typename is not None:
-        header.update('bitpix', pyfits.PrimaryHDU.ImgCode[typename], 'array data type')
+        header.update('bitpix', pyfits.PrimaryHDU.ImgCode[typename],
+                      'array data type')
     header.update('naxis', numaxis, 'number of array dimensions')
     for dim in range(numaxis):
         header.update('naxis'+str(dim+1), naxis[dim])
@@ -717,7 +764,7 @@ def create_fitsheader(array, extname=None, crval=(0.,0.), crpix=None, ctype=('RA
         header.update('extname', extname)
 
     if cd is not None:
-        cd = numpy.asarray(cd, dtype=numpy.float64)
+        cd = np.asarray(cd, dtype=np.float64)
         if cd.shape != (2,2):
             raise ValueError('The CD matrix is not a 2x2 matrix.')
     else:
@@ -725,26 +772,26 @@ def create_fitsheader(array, extname=None, crval=(0.,0.), crpix=None, ctype=('RA
             return header
         if _my_isscalar(cdelt):
             cdelt = (-cdelt, cdelt)
-        cd = numpy.array(((cdelt[0], 0), (0,cdelt[1])))
+        cd = np.array(((cdelt[0], 0), (0,cdelt[1])))
 
-    crval = numpy.asarray(crval, dtype=numpy.float64)
+    crval = np.asarray(crval, dtype=np.float64)
     if crval.size != 2:
         raise ValueError('CRVAL does not have two elements.')
 
     if crpix is None:
-        crpix = (numpy.array(naxis) + 1) / 2.
+        crpix = (np.array(naxis) + 1) / 2.
     else:
-        crpix = numpy.asarray(crpix, dtype=numpy.float64)
+        crpix = np.asarray(crpix, dtype=np.float64)
     if crpix.size != 2:
         raise ValueError('CRPIX does not have two elements.')
 
-    ctype = numpy.asarray(ctype, dtype=numpy.string_)
+    ctype = np.asarray(ctype, dtype=np.string_)
     if ctype.size != 2:
         raise ValueError('CTYPE does not have two elements.')
 
     if _my_isscalar(cunit):
         cunit = (cunit, cunit)
-    cunit = numpy.asarray(cunit, dtype=numpy.string_)
+    cunit = np.asarray(cunit, dtype=np.string_)
     if cunit.size != 2:
         raise ValueError('CUNIT does not have two elements.')
 
@@ -771,7 +818,7 @@ def flatten_sliced_shape(shape):
     if shape is None: return shape
     if _my_isscalar(shape):
         return (int(shape),)
-    return tuple(map(numpy.sum, shape))
+    return tuple(map(np.sum, shape))
 
    
 #-------------------------------------------------------------------------------
@@ -811,7 +858,8 @@ def validate_sliced_shape(shape, nsamples=None):
     
     if len(shape) == 0:
         if nsamples is not None and len(nsamples) != 0:
-            raise ValueError("The input is scalar, but nsamples is equal to '"+str(nsamples)+"'.")
+            raise ValueError("The input is scalar, but nsamples is equal to '" \
+                             + str(nsamples) + "'.")
         return (shape,)
     
     if nsamples is None:
@@ -821,11 +869,14 @@ def validate_sliced_shape(shape, nsamples=None):
             nsamples = tuple(map(int, shape[-1]))
     else:
         if len(nsamples) == 0:
-            raise ValueError("The input is not scalar and is incompatible with nsamples.")
-        if numpy.any(numpy.array(nsamples) < 0):
+            raise ValueError('The input is not scalar and is incompatible wit' \
+                             'h nsamples.')
+        if np.any(np.array(nsamples) < 0):
             raise ValueError('The input nsamples has negative values.')
-        elif numpy.sum(nsamples) != numpy.sum(shape[-1]):
-            raise ValueError("The sliced input has an incompatible number of samples '" + str(nsamples) + "' instead of '" + str(shape[-1]) + "'.")
+        elif np.sum(nsamples) != np.sum(shape[-1]):
+            raise ValueError('The sliced input has an incompatible number of ' \
+                "samples '" + str(nsamples) + "' instead of '" + str(shape[-1])\
+                + "'.")
         if len(nsamples) == 1:
             nsamples = nsamples[0]
     
@@ -838,6 +889,6 @@ def _save_derived_units(filename, du):
         return
     buffer = StringIO.StringIO()
     pickle.dump(du, buffer, pickle.HIGHEST_PROTOCOL)
-    data = numpy.frombuffer(buffer.getvalue(), numpy.uint8)
+    data = np.frombuffer(buffer.getvalue(), np.uint8)
     header = create_fitsheader(data, extname='derived_units')
     pyfits.append(filename, data, header)

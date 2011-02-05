@@ -1,10 +1,10 @@
-import numpy
+import numpy as np
 from tamasis import *
 
 class TestFailure(Exception):
     pass
 
-a = numpy.ones((10,10))
+a = np.ones((10,10))
 b = a.copy()
 
 tmf.add_inplace(a.ravel(), b.ravel())

@@ -4,7 +4,7 @@ except:
     print('Warning: Library PyFFTW3 is not installed.')
 
 import multiprocessing
-import numpy
+import numpy as np
 import scipy.signal
 import scipy.sparse.linalg
 import tamasisfortran as tmf
@@ -94,8 +94,8 @@ class AcquisitionModel(object):
 
     @property
     def shape(self):
-        shape = (numpy.product(flatten_sliced_shape(self.shapeout)),
-                 numpy.product(flatten_sliced_shape(self.shapein)))
+        shape = (np.product(flatten_sliced_shape(self.shapeout)),
+                 np.product(flatten_sliced_shape(self.shapein)))
         if shape[0] is None or shape[1] is None:
             return None
         return shape
@@ -108,7 +108,7 @@ class AcquisitionModel(object):
 
     @dtype.setter
     def dtype(self, dtype):
-        self._dtype = numpy.dtype(dtype)
+        self._dtype = np.dtype(dtype)
     
     def validate_shapein(self, shapein):
         """
@@ -143,11 +143,11 @@ class AcquisitionModel(object):
     def validate_input_direct(self, input, reusein, reuseout, **options):
 
         # validate input
-        input = numpy.asanyarray(input)
+        input = np.asanyarray(input)
         if not _is_scientific_dtype(input.dtype):
             raise TypeError("The input of '" + type(self).__name__ + \
                 "' has a non-numeric type '" + str(input.dtype) + "'.")
-        input = numpy.asanyarray(input, _get_dtype(self.dtype, input.dtype))
+        input = np.asanyarray(input, _get_dtype(self.dtype, input.dtype))
         if self.typein is not None and not isinstance(input, self.typein):
             input = input.view(self.typein)
         _validate_input_unit(input, self.unitin)
@@ -167,9 +167,9 @@ class AcquisitionModel(object):
         if self._cacheout is None or shape_flat != self._cacheout.shape or \
            self._cacheout.dtype != input.dtype or typeout != type(self._cachein):
             self._cacheout = None
-            if var.verbose: print('Info: Allocating '+str(input.dtype.itemsize*numpy.product(shape_flat)/2.**20)+' MiB for the output of ' + type(self).__name__+'.')
-            if typeout == numpy.ndarray:
-                output = numpy.empty(shape, input.dtype, **options)
+            if var.verbose: print('Info: Allocating '+str(input.dtype.itemsize*np.product(shape_flat)/2.**20)+' MiB for the output of ' + type(self).__name__+'.')
+            if typeout == np.ndarray:
+                output = np.empty(shape, input.dtype, **options)
             else:
                 output = typeout.empty(shape, dtype=input.dtype, **options)
             if reuseout:
@@ -191,11 +191,11 @@ class AcquisitionModel(object):
     def validate_input_transpose(self, input, reusein, reuseout, **options):
 
         # validate input
-        input = numpy.asanyarray(input)
+        input = np.asanyarray(input)
         if not _is_scientific_dtype(input.dtype):
             raise TypeError("The input of '" + type(self).__name__ + \
                 ".T' has a non-numeric type '" + str(input.dtype) + "'.")
-        input = numpy.asanyarray(input, _get_dtype(self.dtype, input.dtype))
+        input = np.asanyarray(input, _get_dtype(self.dtype, input.dtype))
         if self.typeout is not None and not isinstance(input, self.typeout):
             input = input.view(self.typeout)
         _validate_input_unit(input, self.unitout)
@@ -215,9 +215,9 @@ class AcquisitionModel(object):
         if self._cachein is None or shape_flat != self._cachein.shape or \
            self._cachein.dtype != input.dtype or typeout != type(self._cachein):
             self._cachein = None
-            if var.verbose: print('Info: Allocating '+str(input.dtype.itemsize*numpy.product(shape_flat)/2.**20)+' MiB for the output of ' + type(self).__name__+'.T.')
-            if typeout == numpy.ndarray:
-                output = numpy.empty(shape_flat, input.dtype, **options)
+            if var.verbose: print('Info: Allocating '+str(input.dtype.itemsize*np.product(shape_flat)/2.**20)+' MiB for the output of ' + type(self).__name__+'.T.')
+            if typeout == np.ndarray:
+                output = np.empty(shape_flat, input.dtype, **options)
             else:
                 output = typeout.empty(shape_flat, dtype=input.dtype, **options)
             if reuseout:
@@ -237,7 +237,7 @@ class AcquisitionModel(object):
         return input, output
 
     def __mul__(self, other):
-        if isinstance(other, numpy.ndarray):
+        if isinstance(other, np.ndarray):
             return self.matvec(other)
         return Composition([self, other])
 
@@ -333,8 +333,8 @@ class AcquisitionModelLinear(AcquisitionModel, LinearOperator):
         return self.transpose(v).ravel()
 
     def dense(self):
-        d = numpy.ndarray(self.shape, dtype=self.dtype)
-        v = numpy.zeros(self.shape[1], dtype=var.FLOAT_DTYPE)
+        d = np.ndarray(self.shape, dtype=self.dtype)
+        v = np.zeros(self.shape[1], dtype=var.FLOAT_DTYPE)
         for i in range(self.shape[1]):
             v[:] = 0
             v[i] = 1
@@ -416,7 +416,7 @@ class Composite(AcquisitionModel):
     @property
     def dtype(self):
         for block in self.blocks:
-            if block.dtype.type in (numpy.complex64, numpy.complex128, numpy.complex256):
+            if block.dtype.type in (np.complex64, np.complex128, np.complex256):
                 return block.dtype
         return var.FLOAT_DTYPE
 
@@ -433,7 +433,7 @@ class Composite(AcquisitionModel):
         for model in reversed(self.blocks):
             if model.typein is not None:
                 return model.typein
-        return numpy.ndarray
+        return np.ndarray
 
     @typein.setter
     def typein(self, value):
@@ -444,7 +444,7 @@ class Composite(AcquisitionModel):
         for model in reversed(self.blocks):
             if model.typeout is not None:
                 return model.typeout
-        return numpy.ndarray
+        return np.ndarray
 
     @typeout.setter
     def typeout(self, value):
@@ -473,11 +473,11 @@ class Composite(AcquisitionModel):
         pass
 
     def validate_input(self, input, shape, inplace):
-        input = numpy.asanyarray(input)
+        input = np.asanyarray(input)
         if shape is not None and type(shape[-1]) is tuple:
             input = Tod(input, nsamples=shape[-1], copy=False)
         if not inplace:
-            if var.verbose: print('Info: Allocating '+str(input.dtype.itemsize * numpy.product(flatten_sliced_shape(shape))/2.**20)+' MiB for the output of Addition.')
+            if var.verbose: print('Info: Allocating '+str(input.dtype.itemsize * np.product(flatten_sliced_shape(shape))/2.**20)+' MiB for the output of Addition.')
             input = input.copy()
         return input
 
@@ -651,11 +651,11 @@ class SquareBase(AcquisitionModelLinear):
     """
 
     def validate_input_direct(self, input, inplace):
-        input = numpy.asanyarray(input)
+        input = np.asanyarray(input)
         if not _is_scientific_dtype(input.dtype):
             raise TypeError("The input of '" + type(self).__name__ + \
                 "' has a non-numeric type '" + str(input.dtype) + "'.")
-        input = numpy.asanyarray(input, _get_dtype(self.dtype, input.dtype))
+        input = np.asanyarray(input, _get_dtype(self.dtype, input.dtype))
 
         shape = self.validate_shapein(validate_sliced_shape(input.shape, 
                     getattr(input, 'nsamples', None)))
@@ -676,7 +676,7 @@ class SquareBase(AcquisitionModelLinear):
         if not inplace:
             if var.verbose:
                 print('Info: Allocating ' + str(input.dtype.itemsize * \
-                      numpy.product(input.shape)/2.**20) + ' MiB in ' + \
+                      np.product(input.shape)/2.**20) + ' MiB in ' + \
                       self.description + '.')
             input = input.copy()
 
@@ -686,10 +686,10 @@ class SquareBase(AcquisitionModelLinear):
         return input
 
     def validate_input_transpose(self, input, inplace):
-        input = numpy.asanyarray(input)
+        input = np.asanyarray(input)
         if not _is_scientific_dtype(input.dtype):
             raise TypeError("The input of '" + type(self).__name__ + ".T' has a non-numeric type '" + str(input.dtype) + "'.")
-        input = numpy.asanyarray(input, _get_dtype(self.dtype, input.dtype))
+        input = np.asanyarray(input, _get_dtype(self.dtype, input.dtype))
 
         shape = self.validate_shapeout(validate_sliced_shape(input.shape, getattr(input, 'nsamples', None)))
         if shape is None:
@@ -708,7 +708,7 @@ class SquareBase(AcquisitionModelLinear):
         if not inplace:
             if var.verbose:
                 print('Info: Allocating ' + str(input.dtype.itemsize * \
-                      numpy.product(input.shape)/2.**20) + ' MiB in ' + \
+                      np.product(input.shape)/2.**20) + ' MiB in ' + \
                       self.description + '.T.')
             input = input.copy()
 
@@ -761,7 +761,7 @@ class Diagonal(Symmetric):
     """Diagonal operator"""
 
     def __init__(self, diagonal, shapein=None, description=None):
-        diagonal = numpy.asarray(diagonal, dtype=var.get_default_dtype(diagonal))
+        diagonal = np.asarray(diagonal, dtype=var.get_default_dtype(diagonal))
         Symmetric.__init__(self, dtype=diagonal.dtype, description=description, 
                            shapein=shapein)
         self.diagonal = diagonal
@@ -868,8 +868,8 @@ class Projection(AcquisitionModelLinear):
                                         description=description)
 
         self.pmatrix = self._pmatrix.view([('weight', 'f4'), ('pixel', 'i4')]) \
-                           .view(numpy.recarray)
-        self.pmatrix.resize((ndetectors, numpy.sum(nsamples),
+                           .view(np.recarray)
+        self.pmatrix.resize((ndetectors, np.sum(nsamples),
                              self.npixels_per_sample))
 
     def direct(self, input, reusein=False, reuseout=False):
@@ -886,8 +886,8 @@ class Projection(AcquisitionModelLinear):
 
     def get_ptp(self):
         ndetectors = self.shapeout[0]
-        nsamples = numpy.sum(self.shapeout[1])
-        npixels = numpy.product(self.shapein)
+        nsamples = np.sum(self.shapeout[1])
+        npixels = np.product(self.shapein)
         return tmf.pointing_matrix_ptp(self._pmatrix, self.npixels_per_sample,
                                        nsamples, ndetectors, npixels).T
 
@@ -917,7 +917,7 @@ class Compression(AcquisitionModelLinear):
         raise NotImplementedError()
 
     def direct(self, input, reusein=False, reuseout=False):
-        if numpy.all(numpy.array(self.factor) == 1):
+        if np.all(np.array(self.factor) == 1):
             if not reusein: return input.copy('a')
             return input
         input, output = self.validate_input_direct(input, reusein, reuseout)
@@ -925,7 +925,7 @@ class Compression(AcquisitionModelLinear):
         return output
 
     def transpose(self, input, reusein=False, reuseout=False):
-        if numpy.all(numpy.array(self.factor) == 1):
+        if np.all(np.array(self.factor) == 1):
             if not reusein: return input.copy('a')
             return input
         input, output = self.validate_input_transpose(input, reusein, reuseout)
@@ -935,18 +935,18 @@ class Compression(AcquisitionModelLinear):
     def validate_shapein(self, shapein):
         if shapein is None:
             return None
-        if numpy.any(numpy.array(shapein[-1]) % self.factor != 0):
+        if np.any(np.array(shapein[-1]) % self.factor != 0):
             raise ValidationError('The input timeline size ('+str(shapein[-1])+\
                 ') is not an integer times the compression factor (' + \
                 str(self.factor)+').')
         return combine_sliced_shape(shapein[0:-1],
-                                    numpy.array(shapein[-1]) / self.factor)
+                                    np.array(shapein[-1]) / self.factor)
 
     def validate_shapeout(self, shapeout):
         if shapeout is None:
             return None
         return combine_sliced_shape(shapeout[0:-1],
-                                    numpy.array(shapeout[-1]) * self.factor)
+                                    np.array(shapeout[-1]) * self.factor)
 
     def __str__(self):
         return super(Compression, self).__str__()+' (x'+str(self.factor)+')'
@@ -966,11 +966,11 @@ class CompressionAverage(Compression):
 
     def compression_direct(self, input, output, compression_factor):
         tmf.compression_average_direct(input.T, output.T,
-            numpy.resize(compression_factor, [len(input.nsamples)]))
+            np.resize(compression_factor, [len(input.nsamples)]))
         
     def compression_transpose(self, input, output, compression_factor):
         tmf.compression_average_transpose(input.T, output.T,
-            numpy.resize(compression_factor, [len(input.nsamples)]))
+            np.resize(compression_factor, [len(input.nsamples)]))
         
         
 
@@ -989,11 +989,11 @@ class DownSampling(Compression):
 
     def compression_direct(self, input, output, compression_factor):
         tmf.downsampling_direct(input.T, output.T,
-            numpy.resize(compression_factor, [len(input.nsamples)]))
+            np.resize(compression_factor, [len(input.nsamples)]))
         
     def compression_transpose(self, input, output, compression_factor):
         tmf.downsampling_transpose(input.T, output.T,
-            numpy.resize(compression_factor, [len(input.nsamples)]))
+            np.resize(compression_factor, [len(input.nsamples)]))
       
 
 #-------------------------------------------------------------------------------
@@ -1020,8 +1020,8 @@ class Scalar(Diagonal):
     """
 
     def __init__(self, value, shapein=None, description=None):
-        if not numpy.iscomplex(value):
-            value = numpy.real(value)
+        if not np.iscomplex(value):
+            value = np.real(value)
         Diagonal.__init__(self, value, shapein=shapein, description=description)
        
     def __str__(self):
@@ -1043,12 +1043,12 @@ class Masking(Symmetric):
         if mask is None:
             print('Warning: input mask is None.')
         else:
-            mask = numpy.asanyarray(mask)
+            mask = np.asanyarray(mask)
             if not _is_scientific_dtype(mask.dtype):
                 raise TypeError("Invalid mask type: '" + str(mask.dtype) + "'.")
-            if numpy.rank(mask) == 0:
+            if np.rank(mask) == 0:
                 raise TypeError('The input mask should not be scalar.')
-        if mask is not None and numpy.iscomplexobj(mask):
+        if mask is not None and np.iscomplexobj(mask):
             dtype = mask.dtype
         else:
             dtype = var.FLOAT_DTYPE
@@ -1062,7 +1062,7 @@ class Masking(Symmetric):
         if self.mask is None:
             return output
         if self.mask.dtype.itemsize == 1:
-            status = tmf.masking(output.T, self.mask.view(numpy.int8).T)
+            status = tmf.masking(output.T, self.mask.view(np.int8).T)
             if status != 0: raise RuntimeError()
         else:
             output *= self.mask
@@ -1079,9 +1079,9 @@ class Unpacking(AcquisitionModelLinear):
     """
 
     def __init__(self, mask, field=0., description=None):
-        mask = numpy.array(mask, numpy.bool8, copy=False)
+        mask = np.array(mask, np.bool8, copy=False)
         AcquisitionModelLinear.__init__(self,
-                                        shapein=numpy.sum(mask == 0),
+                                        shapein=np.sum(mask == 0),
                                         shapeout=mask.shape,
                                         description=description)
         self.mask = mask
@@ -1089,13 +1089,13 @@ class Unpacking(AcquisitionModelLinear):
 
     def direct(self, input, reusein=False, reuseout=False):
         input, output = self.validate_input_direct(input, reusein, reuseout)
-        tmf.unpack_direct(input.T, self.mask.view(numpy.int8).T, output.T,
+        tmf.unpack_direct(input.T, self.mask.view(np.int8).T, output.T,
                           self.field)
         return output
 
     def transpose(self, input, reusein=False, reuseout=False):
         input, output = self.validate_input_transpose(input, reusein, reuseout)
-        tmf.unpack_transpose(input.T, self.mask.view(numpy.int8).T, output.T)
+        tmf.unpack_transpose(input.T, self.mask.view(np.int8).T, output.T)
         return output
 
 
@@ -1110,8 +1110,8 @@ class Reshaping(SquareBase):
     def __init__(self, shapein, shapeout, description=None):
         if shapein is None or shapeout is None:
             raise ValueError('The shapes are not defined.')
-        if numpy.product(flatten_sliced_shape(shapein)) != \
-           numpy.product(flatten_sliced_shape(shapeout)):
+        if np.product(flatten_sliced_shape(shapein)) != \
+           np.product(flatten_sliced_shape(shapeout)):
             raise ValueError('The number of elements of the input and output o'\
                              'f the Reshaping operator are incompatible.')
         AcquisitionModelLinear.__init__(self, description=description,
@@ -1153,17 +1153,17 @@ class ResponseTruncatedExponential(Square):
             tau = tau.SI
             if tau.unit != '':
                 raise ValueError('The time constant must be dimensionless.')
-        self.tau = numpy.array(tau, dtype=var.FLOAT_DTYPE, ndmin=1)
+        self.tau = np.array(tau, dtype=var.FLOAT_DTYPE, ndmin=1)
 
     def direct(self, input, reusein=False, reuseout=False):
         output = self.validate_input(input, reusein and reuseout)
-        tmf.convolution_trexp_direct(output.T, numpy.array(output.nsamples),
+        tmf.convolution_trexp_direct(output.T, np.array(output.nsamples),
                                      self.tau)
         return output
 
     def transpose(self, input, reusein=False, reuseout=False):
         output = self.validate_input(input, reusein and reuseout)
-        tmf.convolution_trexp_transpose(output.T, numpy.array(output.nsamples),
+        tmf.convolution_trexp_transpose(output.T, np.array(output.nsamples),
                                         self.tau)
         return output
 
@@ -1183,13 +1183,13 @@ class Padding(AcquisitionModelLinear):
         AcquisitionModelLinear.__init__(self, description=description,
                                         shapein=shapein, shapeout=shapeout,
                                         typein=Tod)
-        left = numpy.array(left, ndmin=1, dtype=int)
-        right = numpy.array(right, ndmin=1, dtype=int)
-        if numpy.any(left < 0):
+        left = np.array(left, ndmin=1, dtype=int)
+        right = np.array(right, ndmin=1, dtype=int)
+        if np.any(left < 0):
             raise ValueError('Left padding is not positive.')
-        if numpy.any(right < 0):
+        if np.any(right < 0):
             raise ValueError('Right padding is not positive.')
-        if numpy.rank(left) != 1 or numpy.rank(right) != 1:
+        if np.rank(left) != 1 or np.rank(right) != 1:
             raise ValueError('Padding must be scalar or a vector.')
         self.left  = tuple(left)
         self.right = tuple(right)
@@ -1242,13 +1242,13 @@ class Padding(AcquisitionModelLinear):
     def validate_shapein(self, shapein):
         if shapein is None:
             return None
-        return combine_sliced_shape(shapein[0:-1], numpy.array(shapein[-1]) + \
+        return combine_sliced_shape(shapein[0:-1], np.array(shapein[-1]) + \
                                     self.left + self.right)
        
     def validate_shapeout(self, shapeout):
         if shapeout is None:
             return None
-        return combine_sliced_shape(shapeout[0:-1], numpy.array(shapeout[-1]) -\
+        return combine_sliced_shape(shapeout[0:-1], np.array(shapeout[-1]) -\
                                     self.left - self.right)
        
 
@@ -1262,7 +1262,7 @@ class CircularShift(Square):
         if _my_isscalar(n):
             n = (n,)
         if axes is None:
-            axes = tuple(numpy.arange(-len(n), 0))
+            axes = tuple(np.arange(-len(n), 0))
         elif _my_isscalar(axes):
             axes = (axes,)
         self.n = tuple(map(int, n))
@@ -1270,12 +1270,12 @@ class CircularShift(Square):
 
     def direct(self, input, reusein=False, reuseout=False):
         for axis, n in zip(self.axes, self.n):
-            input = numpy.roll(input, -n, axis=axis)
+            input = np.roll(input, -n, axis=axis)
         return input
 
     def transpose(self, input, reusein=False, reuseout=False):
         for axis, n in zip(self.axes, self.n):
-            input = numpy.roll(input, n, axis=axis)
+            input = np.roll(input, n, axis=axis)
         return input
 
 
@@ -1294,10 +1294,10 @@ class Fft(Square):
             nthreads = 1
         else:
             nthreads = tmf.info_nthreads()
-        self.n = numpy.product(shape)
+        self.n = np.product(shape)
         self.axes = axes
-        self._in  = numpy.zeros(shape, dtype=var.COMPLEX_DTYPE)
-        self._out = numpy.zeros(shape, dtype=var.COMPLEX_DTYPE)
+        self._in  = np.zeros(shape, dtype=var.COMPLEX_DTYPE)
+        self._out = np.zeros(shape, dtype=var.COMPLEX_DTYPE)
         self.forward_plan = fftw3.Plan(self._in, self._out, direction='forward',
                                        flags=flags, nthreads=nthreads)
         self.backward_plan= fftw3.Plan(self._in, self._out,direction='backward',
@@ -1325,14 +1325,14 @@ class FftHalfComplex(Square):
     def __init__(self, nsamples, shapein=None, description=None):
         Square.__init__(self, description=description, shapein=shapein,
                         typein=Tod)
-        self.nsamples_array = numpy.array(nsamples, ndmin=1, dtype='int64')
+        self.nsamples_array = np.array(nsamples, ndmin=1, dtype='int64')
         self.nsamples = tuple(self.nsamples_array)
-        self.nsamples_tot = numpy.sum(self.nsamples_array)
-        self.forward_plan = numpy.empty(self.nsamples_array.size, dtype='int64')
-        self.backward_plan = numpy.empty(self.nsamples_array.size,dtype='int64')
+        self.nsamples_tot = np.sum(self.nsamples_array)
+        self.forward_plan = np.empty(self.nsamples_array.size, dtype='int64')
+        self.backward_plan = np.empty(self.nsamples_array.size,dtype='int64')
         for i, n in enumerate(self.nsamples):
-            tarray = numpy.empty(n, dtype=var.FLOAT_DTYPE)
-            farray = numpy.empty(n, dtype=var.FLOAT_DTYPE)
+            tarray = np.empty(n, dtype=var.FLOAT_DTYPE)
+            farray = np.empty(n, dtype=var.FLOAT_DTYPE)
             self.forward_plan[i] = \
                 fftw3.Plan(tarray, farray, direction='forward',
                            flags=['measure'], realtypes=['halfcomplex r2c'],
@@ -1344,14 +1344,14 @@ class FftHalfComplex(Square):
 
     def direct(self, input, reusein=False, reuseout=False):
         output = self.validate_input(input, reusein and reuseout)
-        output_ = _smart_reshape(output, (numpy.product(input.shape[:-1]),
+        output_ = _smart_reshape(output, (np.product(input.shape[:-1]),
                                  input.shape[-1]))
         tmf.fft_plan(output_.T, self.nsamples_array, self.forward_plan)
         return output
 
     def transpose(self, input, reusein=False, reuseout=False):
         output = self.validate_input(input, reusein and reuseout)
-        output_ = _smart_reshape(output, (numpy.product(input.shape[:-1]), 
+        output_ = _smart_reshape(output, (np.product(input.shape[:-1]), 
                                  input.shape[-1]))
         tmf.fft_plan(output_.T, self.nsamples_array, self.backward_plan)
         dest = 0
@@ -1377,7 +1377,7 @@ class Convolution(Symmetric):
 
     def __init__(self, kernel, shapein=None, description=None):
         Symmetric.__init__(self, shapein=shapein, description=description)
-        self.kernel = numpy.asanyarray(kernel)
+        self.kernel = np.asanyarray(kernel)
 
     def direct(self, input, reusein=False, reuseout=False):
         output = self.validate_input(input, reusein and reuseout)
@@ -1391,21 +1391,20 @@ class Convolution(Symmetric):
 class InvNtt(Diagonal):
 
     def __init__(self, nsamples, filter, description=None):
-        nsamples = numpy.asarray(nsamples)
+        nsamples = np.asarray(nsamples)
         ndetectors = filter.shape[-2]
         ncorrelations = filter.shape[-1] - 1
         nslices = nsamples.size
-        if numpy.rank(filter) == 2:
-            filter = numpy.resize(filter,(nslices, ndetectors, ncorrelations+1))
+        if np.rank(filter) == 2:
+            filter = np.resize(filter,(nslices, ndetectors, ncorrelations+1))
         tod_filter, status = \
-            tmf.fft_filter_uncorrelated(filter.T, numpy.asarray(nsamples, 
-                                        dtype='int32'), numpy.sum(nsamples))
+            tmf.fft_filter_uncorrelated(filter.T, np.asarray(nsamples, 
+                                        dtype='int32'), np.sum(nsamples))
         if status != 0: raise RuntimeError()
         Diagonal.__init__(self, tod_filter.T, description=description,
                           shapein=tod_filter.T.shape)
         self.ncorrelations = ncorrelations
-        self.diagonal /= var.mpi_comm.allreduce(numpy.max(self.diagonal),
-                                                op=MPI.MAX)
+        self.diagonal /= var.mpi_comm.allreduce(np.max(self.diagonal),op=MPI.MAX)
 
 
 #-------------------------------------------------------------------------------
@@ -1497,7 +1496,7 @@ def _get_dtype(type1, type2):
 
 def _is_scientific_dtype(dtype):
     """Return true if the data type is """
-    return issubclass(dtype.type, numpy.number) or dtype.type == numpy.bool8
+    return issubclass(dtype.type, np.number) or dtype.type == np.bool8
 
 
 #-------------------------------------------------------------------------------
@@ -1512,13 +1511,13 @@ def _propagate_attributes(input, output):
         cls = cls.__base__
     # if the arguments do not have the same shape, only copy the units
     if input.shape != output.shape:
-        if cls == numpy.ndarray:
+        if cls == np.ndarray:
             return
         output._unit = input._unit
         output._derived_units = input._derived_units
         return
     # copy over slots
-    while cls != numpy.ndarray:            
+    while cls != np.ndarray:            
         for a in input.view(cls).__slots__:
             setattr(output, a, getattr(input, a))
         cls = cls.__base__

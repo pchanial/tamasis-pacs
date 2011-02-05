@@ -1,7 +1,7 @@
 #----------------------------------------------
 # Creation of a map using the MADmap algorithm
 #----------------------------------------------
-import numpy
+import numpy as np
 import os
 from tamasis import *
 
@@ -63,7 +63,7 @@ tod = masking(tod)
 map_naive = mapper_naive(tod, model)
 
 # Get the filter operator N^-1
-length = numpy.asarray(2**numpy.ceil(numpy.log2(numpy.array(tod.nsamples) + 200)), dtype='int')
+length = np.asarray(2**np.ceil(np.log2(np.array(tod.nsamples) + 200)), dtype='int')
 invNtt = InvNtt(length, obs.get_filter_uncorrelated())
 fft = FftHalfComplex(length)
 padding = Padding(left=invNtt.ncorrelations, right=length-tod.nsamples-invNtt.ncorrelations)

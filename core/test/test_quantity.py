@@ -1,11 +1,11 @@
-import numpy
+import numpy as np
 import tamasis
 from tamasis import *
 
 class TestFailure(Exception): pass
 
 def testFailure():
-    if numpy.__version__ >= '1.4': raise TestFailure()
+    if np.__version__ >= '1.4': raise TestFailure()
 
 q = Quantity(1, 'km')
 if any_neq(q.SI, Quantity(1000, 'm')): raise TestFailure()
@@ -32,7 +32,7 @@ def test_unit_add(x, y, v, u):
 
 q = Quantity(1.)
 q2 = Quantity(1.)
-a = numpy.array(1.)
+a = np.array(1.)
 i = 1
 test_unit_add(q, q2, 2, {})
 test_unit_add(q, a, 2, {})
@@ -43,7 +43,7 @@ test_unit_add(q, q2, 2, {'m':1.0})
 test_unit_add(q, a, 2, {'m':1.0})
 test_unit_add(q, i, 2, {'m':1.0})
 
-if numpy.__version__ >= '1.4':
+if np.__version__ >= '1.4':
     q = Quantity(1.)
     q2 = Quantity(1., 'km')
     test_unit_add(q, q2, 2, {'km':1.0})
@@ -57,7 +57,7 @@ if numpy.__version__ >= '1.4':
     test_unit_add(q, q2, 1.001, {'km':1.0})
 
 q = Quantity(1.)
-a = numpy.array(1.)
+a = np.array(1.)
 i = 1
 test_unit_add(a, q, 2, {})
 test_unit_add(i, q, 2, {})
@@ -76,7 +76,7 @@ except UnitError:
 # SUB
 
 def test_unit_sub(x, y, v, u):
-    if numpy.__version__ < '1.4':
+    if np.__version__ < '1.4':
         if getattr(x, '_unit', {}) is not {} and getattr(y, '_unit', {}) is not {}:
             if x._unit != y._unit:
                 print('Disabling operation on Quantities for Numpy < 1.4')
@@ -88,7 +88,7 @@ def test_unit_sub(x, y, v, u):
 
 q = Quantity(1.)
 q2 = Quantity(1.)
-a = numpy.array(1.)
+a = np.array(1.)
 i = 1
 test_unit_sub(q, q2, 0, {})
 test_unit_sub(q, a, 0, {})
@@ -112,7 +112,7 @@ q2 = Quantity(1., 'm')
 test_unit_sub(q, q2, 0.999, {'km':1.0})
 
 q = Quantity(1.)
-a = numpy.array(1.)
+a = np.array(1.)
 i = 1
 test_unit_sub(a, q, 0, {})
 test_unit_sub(i, q, 0, {})
@@ -142,10 +142,10 @@ except UnitError:
     pass
 
 a = Quantity(1, 'MJy/sr').tounit('uJy/arcsec^2')
-if not numpy.allclose(a, 23.5044305391): raise TestFailure()
+if not np.allclose(a, 23.5044305391): raise TestFailure()
 if a.unit != 'uJy / arcsec^2': raise TestFailure()
 a = (Quantity(1, 'MJy/sr')/Quantity(1, 'uJy/arcsec^2')).SI
-if not numpy.allclose(a, 23.5044305391): raise TestFailure()
+if not np.allclose(a, 23.5044305391): raise TestFailure()
 if a.unit != '': raise TestFailure()
 
 # test __array_prepare__
@@ -155,11 +155,11 @@ if Quantity(1, 'km') <  Quantity(10,'m')  : testFailure()
 if Quantity(1, 'km') <= Quantity(10,'m')  : testFailure()
 if Quantity(1, 'km') == Quantity(1,'m')   : testFailure()
 if Quantity(1, 'km') != Quantity(1000,'m'): testFailure()
-if numpy.maximum(Quantity(10,'m'),Quantity(1,'km')) != 1000: testFailure()
-if numpy.minimum(Quantity(10,'m'),Quantity(1,'km')) != 10  : testFailure()
+if np.maximum(Quantity(10,'m'),Quantity(1,'km')) != 1000: testFailure()
+if np.minimum(Quantity(10,'m'),Quantity(1,'km')) != 10  : testFailure()
 
 # test constructor
-a = numpy.array([10,20])
+a = np.array([10,20])
 b = Quantity(a)
 if a.dtype == b.dtype: raise TestFailure()
 
@@ -194,42 +194,42 @@ if id(a) != id(b): raise TestFailure()
 
 # test mean/sum/std/var
 a=Quantity([1.3,2,3], unit='Jy')
-for func in (numpy.min, numpy.max, numpy.mean, numpy.ptp, numpy.round, numpy.sum, numpy.std):
+for func in (np.min, np.max, np.mean, np.ptp, np.round, np.sum, np.std):
     b = func(a)
-    if any_neq(b, func(a.view(numpy.ndarray))): raise TestFailure(func)
+    if any_neq(b, func(a.view(np.ndarray))): raise TestFailure(func)
     if b.unit != 'Jy': raise TestFailure()
-    if func in (numpy.round,):
+    if func in (np.round,):
         continue
     b = func(a, axis=0)
-    if any_neq(b, func(a.view(numpy.ndarray), axis=0)): raise TestFailure(func)
+    if any_neq(b, func(a.view(np.ndarray), axis=0)): raise TestFailure(func)
     if b.unit != 'Jy': raise TestFailure()
 
-b = numpy.var(a)
-if b != numpy.var(a.view(numpy.ndarray)): raise TestFailure(numpy.var)
+b = np.var(a)
+if b != np.var(a.view(np.ndarray)): raise TestFailure(np.var)
 if b.unit != 'Jy^2': raise TestFailure()
-b = numpy.var(a, axis=0)
-if b != numpy.var(a.view(numpy.ndarray), axis=0): raise TestFailure()
+b = np.var(a, axis=0)
+if b != np.var(a.view(np.ndarray), axis=0): raise TestFailure()
 if b.unit != 'Jy^2': raise TestFailure()
 
 # test upcasting
 if Quantity(1).dtype is not tamasis.var.FLOAT_DTYPE: raise TestFailure()
-if Quantity(1, dtype='float32').dtype.type is not numpy.float32: raise TestFailure()
+if Quantity(1, dtype='float32').dtype.type is not np.float32: raise TestFailure()
 if Quantity(1.).dtype is not tamasis.var.FLOAT_DTYPE: raise TestFailure()
-if Quantity(complex(1,0)).dtype.type is not numpy.complex128: raise TestFailure()
-if Quantity(1., dtype=numpy.complex64).dtype.type is not numpy.complex64: raise TestFailure()
-if Quantity(1., dtype=numpy.complex128).dtype.type is not numpy.complex128: raise TestFailure()
-if Quantity(1., dtype=numpy.complex256).dtype.type is not numpy.complex256: raise TestFailure()
-if Quantity(numpy.array(complex(1,0))).dtype is not tamasis.var.COMPLEX_DTYPE: raise TestFailure()
-if Quantity(numpy.array(numpy.complex64(1.))).dtype is not tamasis.var.COMPLEX_DTYPE: raise TestFailure()
-if Quantity(numpy.array(numpy.complex128(1.))).dtype is not tamasis.var.COMPLEX_DTYPE: raise TestFailure()
+if Quantity(complex(1,0)).dtype.type is not np.complex128: raise TestFailure()
+if Quantity(1., dtype=np.complex64).dtype.type is not np.complex64: raise TestFailure()
+if Quantity(1., dtype=np.complex128).dtype.type is not np.complex128: raise TestFailure()
+if Quantity(1., dtype=np.complex256).dtype.type is not np.complex256: raise TestFailure()
+if Quantity(np.array(complex(1,0))).dtype is not tamasis.var.COMPLEX_DTYPE: raise TestFailure()
+if Quantity(np.array(np.complex64(1.))).dtype is not tamasis.var.COMPLEX_DTYPE: raise TestFailure()
+if Quantity(np.array(np.complex128(1.))).dtype is not tamasis.var.COMPLEX_DTYPE: raise TestFailure()
 
 # test custom derived units:
 derived_units = {'detector':Quantity([1, 1/10.], 'm^2')}
 a = Quantity([[1,2,3,4],[10,20,30,40]], 'detector', derived_units=derived_units)
-if not numpy.allclose(a.SI, [[1,2,3,4],[1,2,3,4]]): raise TestFailure()
+if not np.allclose(a.SI, [[1,2,3,4],[1,2,3,4]]): raise TestFailure()
 a = Quantity(1, 'detector C', derived_units)
 if a.SI.shape != (2,): raise TestFailure()
-a = Quantity(numpy.ones((1,10)), 'detector', derived_units=derived_units)
+a = Quantity(np.ones((1,10)), 'detector', derived_units=derived_units)
 if a.SI.shape != (2,10): raise TestFailure()
 
 a = Quantity(4., 'Jy/detector', {'detector':Quantity(2,'arcsec^2')})

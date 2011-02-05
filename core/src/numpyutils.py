@@ -1,7 +1,7 @@
-import numpy
+import numpy as np
 from . import var
 
-numpy.seterr(all='ignore')
+np.seterr(all='ignore')
 
 __all__ = [ 'any_neq', 'minmax' ]
 
@@ -17,19 +17,22 @@ def any_neq(a, b, rtol=None, atol=0.):
     # for dictionaries, look up the items
     if isinstance(a, dict):
         if not isinstance(b, dict):
-            if var.verbose: print('First argument is a dict and the second one is not.')
+            if var.verbose:
+                print('First argument is a dict and the second one is not.')
             return True
         if set([k for k in a]) != set([k for k in b]):
-            if var.verbose: print('Input argument are dictionaries of different items.')
+            if var.verbose:
+                print('Arguments are dictionaries of different items.')
             return True
         for k in a:
             if any_neq(a[k], b[k]):
-                if var.verbose: print('Input arguments are dictionaries of different values')
+                if var.verbose:
+                    print('Arguments are dictionaries of different values')
                 return True
         return False
 
-    a = numpy.asanyarray(a)
-    b = numpy.asanyarray(b)
+    a = np.asanyarray(a)
+    b = np.asanyarray(b)
 
     # get common base class to give some slack
     cls = type(b)
@@ -66,14 +69,14 @@ def any_neq(a, b, rtol=None, atol=0.):
             if var.verbose: print('The argument data types are incompatible.')
             return True
         if akind == 'S':
-            result = numpy.any(a != b)
+            result = np.any(a != b)
             if result and var.verbose: print('String arguments differ.')
             return result
         else:
             raise NotImplemented('Kind ' + akind + ' is not implemented.')
     
     if akind in 'bi' and bkind in 'bi':
-        result = numpy.any(a != b)
+        result = np.any(a != b)
         if result and var.verbose: print('Integer arguments differ.')
         return result
     
@@ -86,24 +89,24 @@ def any_neq(a, b, rtol=None, atol=0.):
         elif precision == 4:
             rtol = 1.e-7
         else:
-            raise NotImplementedError('The inputs are not in single or double precision.')
+            raise NotImplementedError('The inputs are not in single or double' \
+                                      ' precision.')
 
-    mask = numpy.isnan(a)
-    if numpy.any(mask != numpy.isnan(b)):
+    mask = np.isnan(a)
+    if np.any(mask != np.isnan(b)):
         if var.verbose: print('Argument NaNs differ.')
         return True
-    if numpy.all(mask):
+    if np.all(mask):
         return False
 
-    result = abs(a-b) > rtol * numpy.maximum(abs(a), abs(b)) + atol
-    if numpy.isscalar(result):
-        if result and var.verbose:
-            print('Argument scalar data differ.')
-        return result
-    
-    result = numpy.any(result[~mask])
-    if result and var.verbose:
-        print('Argument data differ by factor ' + str(numpy.nanmax(abs(a-b)/(rtol * numpy.maximum(abs(a), abs(b)) + atol))) + '.')
+    result = abs(a-b) > rtol * np.maximum(abs(a), abs(b)) + atol
+    if not np.isscalar(result):
+        result = np.any(result[~mask])
+
+    if var.verbose and result:
+        factor = np.nanmax(abs(a-b) / (rtol * np.maximum(abs(a),abs(b)) + atol))
+        print('Argument data differ by factor ' + str(factor) + '.')
+
     return result
 
 
@@ -112,8 +115,8 @@ def any_neq(a, b, rtol=None, atol=0.):
 
 def minmax(v):
     """Returns min and max values of an array, discarding NaN values."""
-    v = numpy.asanyarray(v)
-    return numpy.array((numpy.nanmin(v), numpy.nanmax(v)))
+    v = np.asanyarray(v)
+    return np.array((np.nanmin(v), np.nanmax(v)))
 
 
 #-------------------------------------------------------------------------------
@@ -137,7 +140,7 @@ def get_attributes(obj):
 
 def get_type(data):
     """Returns input's data type."""
-    data_ = numpy.asarray(data)
+    data_ = np.asarray(data)
     type_ = data_.dtype.type.__name__
     if type_[-1] == '_':
         type_ = type_[0:-1]
@@ -150,13 +153,13 @@ def get_type(data):
 
 
 def _my_issctype(dtype):
-    """Hack around numpy.issctype bug"""
-    return numpy.issctype(dtype) and str(dtype)[0:2] != '|S'
+    """Hack around np.issctype bug"""
+    return np.issctype(dtype) and str(dtype)[0:2] != '|S'
    
    
 #-------------------------------------------------------------------------------
 
 
 def _my_isscalar(data):
-    """Hack around numpy.isscalar bug"""
-    return numpy.rank(data) == 0 if isinstance(data, numpy.ndarray) else numpy.isscalar(data)
+    """Hack around np.isscalar bug"""
+    return data.ndim == 0 if isinstance(data, np.ndarray) else np.isscalar(data)

@@ -1,7 +1,6 @@
 #-------------------------------------------------------------
 # Creation of a map using the regularised least square method
 #-------------------------------------------------------------
-import numpy
 import os
 from tamasis import *
 

@@ -1,4 +1,4 @@
-import numpy
+import numpy as np
 import pyfits
 import os
 import tamasis
@@ -30,10 +30,10 @@ finally:
 for field in obs.status.dtype.names:
     status = obs.status[10:20]
     if isinstance(status[field][0], str):
-        if numpy.any(status[field] != status2[field]): raise TestFailure('Status problem with: '+field)
-    elif not numpy.allclose(status[field], status2[field]): raise TestFailure('Status problem with: '+field)
-if not numpy.allclose(tod, tod2): raise TestFailure()
-if not numpy.all(tod.mask == tod2.mask): raise TestFailure()
+        if np.any(status[field] != status2[field]): raise TestFailure('Status problem with: '+field)
+    elif not np.allclose(status[field], status2[field]): raise TestFailure('Status problem with: '+field)
+if not np.allclose(tod, tod2): raise TestFailure()
+if not np.all(tod.mask == tod2.mask): raise TestFailure()
 
 # all observation
 obs = PacsObservation(data_dir+'frames_blue.fits')
@@ -51,10 +51,10 @@ finally:
         pass
 for field in obs.status.dtype.names:
     if isinstance(obs.status[field][0], str):
-        if numpy.any(obs.status[field] != status2[field]): raise TestFailure('Status problem with: '+field)
-    elif not numpy.allclose(obs.status[field], status2[field]): raise TestFailure('Status problem with: '+field)
-if not numpy.allclose(tod, tod2): raise TestFailure()
-if not numpy.all(tod.mask == tod2.mask): raise TestFailure()
+        if np.any(obs.status[field] != status2[field]): raise TestFailure('Status problem with: '+field)
+    elif not np.allclose(obs.status[field], status2[field]): raise TestFailure('Status problem with: '+field)
+if not np.allclose(tod, tod2): raise TestFailure()
+if not np.all(tod.mask == tod2.mask): raise TestFailure()
 
 telescope    = Identity(description='Telescope PSF')
 projection   = Projection(obs, resolution=3.2, oversampling=False, npixels_per_sample=6)
@@ -91,7 +91,7 @@ tod = obs.get_tod('Jy/arcsec^2', flatfielding=False, subtraction_mean=False)
 map_naive4 = mapper_naive(tod, projection)
 hdu_ref = pyfits.open(data_dir + 'frames_blue_map_hcss_photproject.fits')[1]
 map_ref = Map(hdu_ref.data, hdu_ref.header, unit=hdu_ref.header['qtty____']+'/pixel')
-std_naive = numpy.std(map_naive4[40:60,40:60])
-std_ref = numpy.std(map_ref[40:60,40:60])
+std_naive = np.std(map_naive4[40:60,40:60])
+std_ref = np.std(map_ref[40:60,40:60])
 relerror = abs(std_naive-std_ref) / std_ref
 if relerror > 0.025: raise TestFailure('Tncompatibility with HCSS photproject: ' + str(relerror*100)+'%.')

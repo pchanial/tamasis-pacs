@@ -1,4 +1,3 @@
-import numpy
 import os
 import scipy
 import tamasis

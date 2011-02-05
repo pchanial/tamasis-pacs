@@ -1,5 +1,5 @@
 import kapteyn
-import numpy
+import numpy as np
 import os
 import pyfits
 import re
@@ -43,7 +43,7 @@ class Ds9(object):
     """
     def __call__(self, array, origin=None, **keywords):
         if not isinstance(array, str):
-            array = numpy.asanyarray(array)
+            array = np.asanyarray(array)
             dtype = array.dtype
         else:
             dtype = None
@@ -91,19 +91,20 @@ def hs(arg):
     in one line.
     """
     import inspect
-    if isinstance(arg, numpy.ndarray):
+    if isinstance(arg, np.ndarray):
         names = arg.dtype.names
         if names is None:
             print(arg)
             return
         print(str(arg.size) + ' element' + ('s' if arg.size > 1 else ''))
     else:
-        members = inspect.getmembers(arg, lambda x: not inspect.ismethod(x) and not inspect.isbuiltin(x))
+        members = inspect.getmembers(arg, lambda x: not inspect.ismethod(x) \
+                                     and not inspect.isbuiltin(x))
         members = [x for x in members if x[0][0] != '_']
         names = [x[0] for x in members]
 
-    length = numpy.max(list(map(len, names)))
-    lnames = numpy.array([names[i].ljust(length)+': ' for i in range(len(names))])
+    length = np.max(list(map(len, names)))
+    lnames = np.array([names[i].ljust(length)+': ' for i in range(len(names))])
     for name, lname in zip(names, lnames):
         value = str(getattr(arg, name))[0:72-length-2]
         if len(value) == 72-length-2:
@@ -113,9 +114,9 @@ def hs(arg):
 def mean_degrees(array):
     """
     Returns the mean value of an array of values in degrees, by taking into 
-    account the discrepancy at 0 degrees
+    account the discrepancy at 0 degree
     """
-    return tmf.mean_degrees(numpy.asarray(array, dtype=var.FLOAT_DTYPE).ravel())
+    return tmf.mean_degrees(np.asarray(array, dtype=var.FLOAT_DTYPE).ravel())
 
 
 #-------------------------------------------------------------------------------
@@ -124,15 +125,16 @@ def mean_degrees(array):
 def minmax_degrees(array):
     """
     Returns the minimum and maximum value of an array of values in degrees, 
-    by taking into account the discrepancy at 0 degrees
+    by taking into account the discrepancy at 0 degree.
     """
-    return tmf.minmax_degrees(numpy.asarray(array, dtype=var.FLOAT_DTYPE).ravel())
+    return tmf.minmax_degrees(np.asarray(array, dtype=var.FLOAT_DTYPE).ravel())
 
 
 #-------------------------------------------------------------------------------
 
 
-def plot_scan(input, map=None, title=None, new_figure=True, color='magenta', linewidth=2):
+def plot_scan(input, map=None, title=None, new_figure=True, color='magenta',
+              linewidth=2):
     if hasattr(input, 'pointing'):
         input = input.pointing
     if hasattr(input, 'ra') and hasattr(input, 'dec'):
@@ -141,19 +143,18 @@ def plot_scan(input, map=None, title=None, new_figure=True, color='magenta', lin
         if hasattr(input, 'removed'):
             ra = ra.copy()
             dec = dec.copy()
-            ra [input.removed] = numpy.nan
-            dec[input.removed] = numpy.nan
+            ra [input.removed] = np.nan
+            dec[input.removed] = np.nan
     elif type(input) in (list,tuple):
         ra  = input[0]
         dec = input[1]
     else:
         ra = None
 
-    if not isinstance(ra, numpy.ndarray) or \
-       not isinstance(dec, numpy.ndarray):
+    if not isinstance(ra, np.ndarray) or not isinstance(dec, np.ndarray):
         raise TypeError("Invalid input type '" + type(input) + "'.")
 
-    nvalids = numpy.sum(numpy.isfinite(ra*dec))
+    nvalids = np.sum(np.isfinite(ra*dec))
     if nvalids == 0:
         raise ValueError('There is no valid pointing.')
 
@@ -164,28 +165,30 @@ def plot_scan(input, map=None, title=None, new_figure=True, color='magenta', lin
         pyplot.plot(x[0], y[0], 'o', color=p[0]._color)
         return image
 
-    crval = [mean_degrees(ra), numpy.nansum(dec)/nvalids]
+    crval = [mean_degrees(ra), np.nansum(dec)/nvalids]
     ra_min,  ra_max  = minmax_degrees(ra)
-    dec_min, dec_max = numpy.nanmin(dec), numpy.nanmax(dec)
-    cdelt = numpy.max((ra_max-ra_min)/1000., (dec_max-dec_min)/1000.)
-    header = create_fitsheader(None, naxis=[1,1], cdelt=cdelt, crval=crval, crpix=[1,1])
+    dec_min, dec_max = np.nanmin(dec), np.nanmax(dec)
+    cdelt = np.max((ra_max-ra_min)/1000., (dec_max-dec_min)/1000.)
+    header = create_fitsheader(None, naxis=[1,1], cdelt=cdelt, crval=crval,
+                               crpix=[1,1])
 
     proj = kapteyn.wcs.Projection(header)
-    coords = numpy.array([ra, dec]).T
+    coords = np.array([ra, dec]).T
     xy = proj.topixel(coords)
-    xmin = int(numpy.round(numpy.nanmin(xy[:,0])))
-    xmax = int(numpy.round(numpy.nanmax(xy[:,0])))
-    ymin = int(numpy.round(numpy.nanmin(xy[:,1])))
-    ymax = int(numpy.round(numpy.nanmax(xy[:,1])))
-    xmargin = int(numpy.ceil((xmax - xmin + 1) / 10.))
-    ymargin = int(numpy.ceil((ymax - ymin + 1) / 10.))
+    xmin = int(np.round(np.nanmin(xy[:,0])))
+    xmax = int(np.round(np.nanmax(xy[:,0])))
+    ymin = int(np.round(np.nanmin(xy[:,1])))
+    ymax = int(np.round(np.nanmax(xy[:,1])))
+    xmargin = int(np.ceil((xmax - xmin + 1) / 10.))
+    ymargin = int(np.ceil((ymax - ymin + 1) / 10.))
     xmin -= xmargin
     xmax += xmargin
     ymin -= ymargin
     ymax += ymargin
     naxis = (xmax - xmin + 1, ymax - ymin + 1)
     crpix = (-xmin+2, -ymin+2)
-    header = create_fitsheader(None, naxis=naxis, cdelt=cdelt, crval=crval, crpix=crpix)
+    header = create_fitsheader(None, naxis=naxis, cdelt=cdelt, crval=crval,
+                               crpix=crpix)
     fitsobj = kapteyn.maputils.FITSimage(externalheader=header)
     if new_figure:
         fig = pyplot.figure()
@@ -227,11 +230,11 @@ def profile(input, origin=None, bin=1., nbins=None, histogram=False):
     histogram: boolean
         if set to True, return the histogram
     """
-    input = numpy.ascontiguousarray(input, var.FLOAT_DTYPE)
+    input = np.ascontiguousarray(input, var.FLOAT_DTYPE)
     if origin is None:
-        origin = (numpy.array(input.shape[::-1], var.FLOAT_DTYPE) + 1) / 2
+        origin = (np.array(input.shape[::-1], var.FLOAT_DTYPE) + 1) / 2
     else:
-        origin = numpy.ascontiguousarray(origin, var.FLOAT_DTYPE)
+        origin = np.ascontiguousarray(origin, var.FLOAT_DTYPE)
     
     print type(input.shape[0]-origin[1])
     print type(origin[1])
@@ -250,10 +253,10 @@ def profile(input, origin=None, bin=1., nbins=None, histogram=False):
 
 
 def psd2(input):
-    input = numpy.asanyarray(input)
-    s = numpy.abs(scipy.signal.fft2(input))
+    input = np.asanyarray(input)
+    s = np.abs(scipy.signal.fft2(input))
     for axis, n in zip((-2,-1), s.shape[-2:]):
-        s = numpy.roll(s, n // 2, axis=axis)
+        s = np.roll(s, n // 2, axis=axis)
     return Map(s)
 
 
@@ -262,11 +265,11 @@ def psd2(input):
 
 def airy_disk(shape, fwhm, origin=None, resolution=1.):
     d  = distance(shape, origin=origin, resolution=resolution)
-    index = numpy.where(d == 0)
+    index = np.where(d == 0)
     d[index] = 1.e-30
     d *= 1.61633 / (fwhm/2.)
     d  = (2 * scipy.special.jn(1,d)/d)**2
-    d /= numpy.sum(d)
+    d /= np.sum(d)
     return d
 
 
@@ -288,17 +291,17 @@ def diff(array, axis=0):
     """
     Inplace discrete difference
     """
-    array = numpy.asanyarray(array)
+    array = np.asanyarray(array)
     rank = array.ndim
 
-    size = int(numpy.product(array.shape))
+    size = int(np.product(array.shape))
     
     if rank == 0:
         array.shape = (1,)
         array[:] = 0
         array.shape = ()
     else:
-        tmf.diff(array.ravel(), rank-axis, numpy.asarray(array.T.shape))
+        tmf.diff(array.ravel(), rank-axis, np.asarray(array.T.shape))
     return array
 
     
@@ -309,17 +312,17 @@ def diffT(array, axis=0):
     """
     Inplace discrete difference transpose
     """
-    array = numpy.asanyarray(array)
+    array = np.asanyarray(array)
     rank = array.ndim
 
-    size = int(numpy.product(array.shape))
+    size = int(np.product(array.shape))
     
     if rank == 0:
         array.shape = (1,)
         array[:] = 0
         array.shape = ()
     else:
-        tmf.difft(array.ravel(), rank-axis, numpy.asarray(array.T.shape))
+        tmf.difft(array.ravel(), rank-axis, np.asarray(array.T.shape))
     return array
 
     
@@ -330,17 +333,17 @@ def diffTdiff(array, axis=0):
     """
     Inplace discrete difference transpose times discrete difference
     """
-    array = numpy.asanyarray(array)
+    array = np.asanyarray(array)
     rank = array.ndim
 
-    size = int(numpy.product(array.shape))
+    size = int(np.product(array.shape))
     
     if rank == 0:
         array.shape = (1,)
         array[:] = 0
         array.shape = ()
     else:
-        tmf.difftdiff(array.ravel(), rank-axis, numpy.asarray(array.T.shape))
+        tmf.difftdiff(array.ravel(), rank-axis, np.asarray(array.T.shape))
     return array
 
     
@@ -376,19 +379,19 @@ def distance(shape, origin=None, resolution=1.):
         shape = (shape,)
     else:
         shape = tuple(shape)
-    shape = tuple(int(numpy.round(s)) for s in shape)
+    shape = tuple(int(np.round(s)) for s in shape)
     rank = len(shape)
 
     if origin is None:
-        origin = (numpy.array(shape[::-1], dtype=var.FLOAT_DTYPE) + 1) / 2
+        origin = (np.array(shape[::-1], dtype=var.FLOAT_DTYPE) + 1) / 2
     else:
-        origin = numpy.ascontiguousarray(origin, dtype=var.FLOAT_DTYPE)
+        origin = np.ascontiguousarray(origin, dtype=var.FLOAT_DTYPE)
 
     unit = getattr(resolution, '_unit', None)
 
     if _my_isscalar(resolution):
-        resolution = numpy.resize(resolution, rank)
-    resolution = numpy.asanyarray(resolution, dtype=var.FLOAT_DTYPE)
+        resolution = np.resize(resolution, rank)
+    resolution = np.asanyarray(resolution, dtype=var.FLOAT_DTYPE)
 
     if rank == 1:
         d = tmf.distance_1d(shape[0], origin[0], resolution[0])
@@ -409,7 +412,7 @@ def _distance_slow(shape, origin, resolution, dtype):
     """
     Returns an array whose values are the distances to a given origin.
 
-    This routine is written using numpy.meshgrid routine. It is slower
+    This routine is written using np.meshgrid routine. It is slower
     than the Fortran-based `distance` routine, but can handle any number
     of dimensions.
 
@@ -420,11 +423,11 @@ def _distance_slow(shape, origin, resolution, dtype):
     index = []
     for n, o, r in zip(reversed(shape), origin, resolution):
         index.append(slice(0,n))
-    d = numpy.asarray(numpy.mgrid[index], dtype=var.FLOAT_DTYPE).T
-    d -= numpy.asanyarray(origin) - 1.
+    d = np.asarray(np.mgrid[index], dtype=var.FLOAT_DTYPE).T
+    d -= np.asanyarray(origin) - 1.
     d *= resolution
-    numpy.square(d, d)
-    d = Map(numpy.sqrt(numpy.sum(d, axis=d.shape[-1])), dtype=dtype, copy=False)
+    np.square(d, d)
+    d = Map(np.sqrt(np.sum(d, axis=d.shape[-1])), dtype=dtype, copy=False)
     return d
     
 
@@ -433,13 +436,13 @@ def _distance_slow(shape, origin, resolution, dtype):
 
 def gaussian(shape, fwhm, origin=None, resolution=1., unit=None):
     if len(shape) == 2:
-        sigma = fwhm / numpy.sqrt(8*numpy.log(2))
+        sigma = fwhm / np.sqrt(8*np.log(2))
     else:
         raise NotImplementedError()
     d = distance(shape, origin=origin, resolution=resolution)
     d.unit = ''
-    d = numpy.exp(-d**2/(2*sigma**2))
-    d /= numpy.sum(d)
+    d = np.exp(-d**2/(2*sigma**2))
+    d /= np.sum(d)
     if unit:
         d.unit = unit
     return d

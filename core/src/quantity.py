@@ -1,4 +1,4 @@
-import numpy
+import numpy as np
 import re
 import tamasisfortran as tmf
 
@@ -7,7 +7,8 @@ from numpyutils import get_attributes
 
 __all__ = ['Quantity', 'UnitError', 'units']
 
-_re_unit = re.compile(r' *([/*])? *([a-zA-Z_"\']+|\?+)(\^-?[0-9]+(\.[0-9]*)?)? *')
+_re_unit = re.compile(
+               r' *([/*])? *([a-zA-Z_"\']+|\?+)(\^-?[0-9]+(\.[0-9]*)?)? *')
 
 class UnitError(Exception): pass
 
@@ -23,7 +24,8 @@ def _extract_unit(string):
         return string
 
     if not isinstance(string, str):
-        raise TypeError('Invalid unit type. Valid types are string or dictionary.')
+        raise TypeError("Invalid unit type '" + string.__class__.__name__ + \
+                        "'. Expected types are string or dictionary.")
 
     string = string.strip()
     result = {}
@@ -147,7 +149,7 @@ def _strunit(unit):
     return result[1:]
 
 
-class Quantity(numpy.ndarray):
+class Quantity(np.ndarray):
     """
     Represent a quantity, i.e. a scalar or array associated with a unit.
     if dtype is not specified, the quantity is upcasted to float64 if its dtype
@@ -209,7 +211,8 @@ class Quantity(numpy.ndarray):
             dtype = var.get_default_dtype(data)
 
         # get a new Quantity instance (or a subclass if subok is True)
-        result = numpy.array(data, dtype, copy=copy, order=order, subok=True, ndmin=ndmin)
+        result = np.array(data, dtype, copy=copy, order=order, subok=True,
+                          ndmin=ndmin)
         if not subok and type(result) is not cls or not isinstance(result, cls):
             result = result.view(cls)
 
@@ -250,9 +253,9 @@ class Quantity(numpy.ndarray):
             return array
        
         ufunc = context[0]
-        if ufunc in (numpy.add, numpy.subtract, numpy.maximum, numpy.minimum,
-                     numpy.greater, numpy.greater_equal, numpy.less,
-                     numpy.less_equal, numpy.equal, numpy.not_equal):
+        if ufunc in (np.add, np.subtract, np.maximum, np.minimum, np.greater,
+                     np.greater_equal, np.less, np.less_equal, np.equal,
+                     np.not_equal):
             for arg in context[1]:
                 u = getattr(arg, '_unit', None)
                 if u is None or u == self._unit:
@@ -276,7 +279,7 @@ ities of different units may have changed operands to common unit '" + \
         ufuncs, see http://docs.scipy.org/doc/numpy/reference/ufuncs.html
         """
 
-        if numpy.__version__ < '1.4.1' and self is not array:
+        if np.__version__ < '1.4.1' and self is not array:
             array = array.view(type(self))
 
         if context is None:
@@ -285,7 +288,7 @@ ities of different units may have changed operands to common unit '" + \
         ufunc = context[0]
         args = context[1]
 
-        if ufunc in (numpy.add, numpy.subtract, numpy.maximum, numpy.minimum):
+        if ufunc in (np.add, np.subtract, np.maximum, np.minimum):
             if self is not array:
                 # self has highest __array_priority__
                 array._unit = self._unit
@@ -294,46 +297,44 @@ ities of different units may have changed operands to common unit '" + \
                 if len(self._unit) == 0:
                     self._unit = getattr(args[1], '_unit', {})
 
-        elif ufunc is numpy.reciprocal:
+        elif ufunc is np.reciprocal:
             array._unit = _power_unit(args[0]._unit, -1)
 
-        elif ufunc is numpy.sqrt:
+        elif ufunc is np.sqrt:
             array._unit = _power_unit(args[0]._unit, 0.5)
 
-        elif ufunc in [numpy.square, numpy.var]:
+        elif ufunc in (np.square, np.var):
             array._unit = _power_unit(args[0]._unit, 2)
 
-        elif ufunc is numpy.power:
+        elif ufunc is np.power:
             array._unit = _power_unit(args[0]._unit, args[1])
 
-        elif ufunc in [numpy.multiply, numpy.vdot]:
+        elif ufunc in (np.multiply, np.vdot):
             units = _get_units(args)
             array._unit = _multiply_unit(units[0], units[1])
 
-        elif ufunc is numpy.divide:
+        elif ufunc is np.divide:
             units = _get_units(args)
             array._unit = _divide_unit(units[0], units[1])
 
-        elif ufunc in (numpy.greater, numpy.greater_equal, numpy.less,
-                       numpy.less_equal, numpy.equal, numpy.not_equal,
-                       numpy.iscomplex, numpy.isfinite, numpy.isinf, 
-                       numpy.isnan, numpy.isreal):
-            if numpy.rank(array) == 0:
+        elif ufunc in (np.greater, np.greater_equal, np.less, np.less_equal,
+                       np.equal, np.not_equal, np.iscomplex, np.isfinite,
+                       np.isinf, np.isnan, np.isreal):
+            if np.rank(array) == 0:
                 return bool(array)
             array = array.magnitude
 
-        elif ufunc in (numpy.arccos, numpy.arccosh, numpy.arcsin, numpy.arcsinh,
-                       numpy.arctan, numpy.arctanh, numpy.arctan2, numpy.cosh,
-                       numpy.sinh, numpy.tanh, numpy.cos, numpy.sin, numpy.tan,
-                       numpy.log, numpy.log2, numpy.log10, numpy.exp, 
-                       numpy.exp2):
+        elif ufunc in (np.arccos, np.arccosh, np.arcsin, np.arcsinh, np.arctan,
+                       np.arctanh, np.arctan2, np.cos, np.cosh, np.exp, np.exp2,
+                       np.log, np.log2, np.log10, np.sin, np.sinh, np.tan,
+                       np.tanh):
             array._unit = {}
 
-        elif ufunc in (numpy.bitwise_or, numpy.invert, numpy.logical_and,
-                       numpy.logical_not, numpy.logical_or, numpy.logical_xor):
+        elif ufunc in (np.bitwise_or, np.invert, np.logical_and, np.logical_not,
+                       np.logical_or, np.logical_xor):
             array._unit = {}
 
-        elif ufunc in (numpy.abs, numpy.negative ):
+        elif ufunc in (np.abs, np.negative):
             array._unit = self._unit
         else:
             array._unit = {}
@@ -341,7 +342,7 @@ ities of different units may have changed operands to common unit '" + \
         return array
 
     def __getitem__(self, key):
-        item = numpy.ndarray.__getitem__(self, key)
+        item = np.ndarray.__getitem__(self, key)
         if isinstance(item, Quantity):
             return item
         return Quantity(item, self._unit, self._derived_units, copy=False)
@@ -351,23 +352,23 @@ ities of different units may have changed operands to common unit '" + \
         """
         Return the magnitude of the quantity
         """
-        return self.view(numpy.ndarray)
+        return self.view(np.ndarray)
 
     @magnitude.setter
     def magnitude(self, value):
         """
         Set the magnitude of the quantity
         """
-        if numpy.rank(self) == 0:
+        if np.rank(self) == 0:
             self.shape = (1,)
             try:
-                self.view(numpy.ndarray)[:] = value
+                self.view(np.ndarray)[:] = value
             except ValueError as error:
                 raise error
             finally:
                 self.shape = ()
         else:
-            self.view(numpy.ndarray)[:] = value
+            self.view(np.ndarray)[:] = value
 
     @property
     def unit(self):
@@ -400,7 +401,8 @@ ities of different units may have changed operands to common unit '" + \
             for key in derived_units.keys():
                 if not isinstance(derived_units[key], Quantity) and \
                         not hasattr(derived_units[key], '__call__'):
-                    raise UnitError("The user derived unit '" + key + "' is not a Quantity.")
+                    raise UnitError("The user derived unit '" + key + \
+                                    "' is not a Quantity.")
         self._derived_units = derived_units
 
     def tounit(self, unit):
@@ -455,8 +457,10 @@ ities of different units may have changed operands to common unit '" + \
 
         # the header may contain information used to do unit conversions
         if hasattr(self, '_header'):
-            q1 = self.__class__(1, unit=self._unit, derived_units=self.derived_units, header=self._header).SI
-            q2 = self.__class__(1, unit=newunit, derived_units=self.derived_units, header=self._header).SI
+            q1 = self.__class__(1, header=self._header, unit=self._unit,
+                                derived_units=self.derived_units).SI
+            q2 = self.__class__(1, header=self._header, unit=newunit,
+                                derived_units=self.derived_units).SI
         else:
             q1 = Quantity(1., self._unit, self.derived_units).SI
             q2 = Quantity(1., newunit, self.derived_units).SI
@@ -465,7 +469,7 @@ ities of different units may have changed operands to common unit '" + \
             raise UnitError("Units '" + self.unit + "' and '" + \
                             _strunit(newunit) + "' are incompatible.")
         factor = q1.magnitude / q2.magnitude
-        if numpy.rank(self) == 0:
+        if np.rank(self) == 0:
             self.magnitude *= factor
         else:
             self.magnitude.T[:] *= factor.T
@@ -504,22 +508,26 @@ ities of different units may have changed operands to common unit '" + \
             # factor may be broadcast
             factor = factor * newfactor
 
-        if numpy.rank(self) == 0 or numpy.rank(factor) == 0:
+        if np.rank(self) == 0 or np.rank(factor) == 0:
             result = self * factor.magnitude
             result._unit = factor._unit
             return result
 
         # make sure that the unit factor can be broadcast
-        if any([d1 not in (1,d2) for (d1,d2) in zip(self.shape[0:factor.ndim], factor.shape)]):
-            raise ValueError("The derived unit '" + key + "' has a shape '" + str(newfactor.shape) + "' which is incompatible with the dimension(s) along the first axes '" + str(self.shape) + "'.")
+        if any([d1 not in (1,d2)
+                for (d1,d2) in zip(self.shape[0:factor.ndim], factor.shape)]):
+            raise ValueError("The derived unit '" + key + "' has a shape '" + \
+                str(newfactor.shape) + "' which is incompatible with the dime" \
+                "nsion(s) along the first axes '" + str(self.shape) + "'.")
 
         # Python's broadcast operates by adding slow dimensions. Since we
         # need to use a unique conversion factor along the fast dimensions
         # (ex: second axis in an array tod[detector,time]), we need to perform
         # our own broadcast by adding fast dimensions
-        if numpy.any(self.shape[0:factor.ndim] != factor.shape):
-            broadcast = numpy.hstack([factor.shape, numpy.ones(self.ndim-factor.ndim,int)])
-            result = self * numpy.ones(broadcast)
+        if np.any(self.shape[0:factor.ndim] != factor.shape):
+            broadcast = np.hstack([factor.shape,
+                                  np.ones(self.ndim-factor.ndim,int)])
+            result = self * np.ones(broadcast)
         else:
             result = self.copy()
         result.T[:] *= factor.magnitude.T
@@ -528,7 +536,7 @@ ities of different units may have changed operands to common unit '" + \
         return result
 
     def __reduce__(self):
-        state = list(numpy.ndarray.__reduce__(self))
+        state = list(np.ndarray.__reduce__(self))
         try:
             subclass_state = self.__dict__.copy()
         except AttributeError:
@@ -544,50 +552,51 @@ ities of different units may have changed operands to common unit '" + \
     
     def __setstate__(self,state):
         ndarray_state, subclass_state = state
-        numpy.ndarray.__setstate__(self,ndarray_state)        
+        np.ndarray.__setstate__(self,ndarray_state)        
         for k, v in subclass_state.items():
             setattr(self, k, v)
 
     def __repr__(self):
-        return type(self).__name__+'(' + str(numpy.asarray(self)) + ", '" + _strunit(self._unit) + "')"
+        return type(self).__name__+'(' + str(np.asarray(self)) + ", '" + \
+               _strunit(self._unit) + "')"
 
     def __str__(self):
-        result = str(numpy.asarray(self))
+        result = str(np.asarray(self))
         if len(self._unit) == 0:
             return result
         return result + ' ' + _strunit(self._unit)
 
     def min(self, *args, **kw):
-        return _wrap_func(numpy.min, self, self._unit, *args, **kw)
-    min.__doc__ = numpy.ndarray.min.__doc__
+        return _wrap_func(np.min, self, self._unit, *args, **kw)
+    min.__doc__ = np.ndarray.min.__doc__
 
     def max(self, *args, **kw):
-        return _wrap_func(numpy.max, self, self._unit, *args, **kw)
-    max.__doc__ = numpy.ndarray.max.__doc__
+        return _wrap_func(np.max, self, self._unit, *args, **kw)
+    max.__doc__ = np.ndarray.max.__doc__
 
     def sum(self, *args, **kw):
-        return _wrap_func(numpy.sum, self, self._unit, *args, **kw)
-    sum.__doc__ = numpy.ndarray.sum.__doc__
+        return _wrap_func(np.sum, self, self._unit, *args, **kw)
+    sum.__doc__ = np.ndarray.sum.__doc__
 
     def mean(self, *args, **kw):
-        return _wrap_func(numpy.mean, self, self._unit, *args, **kw)
-    mean.__doc__ = numpy.ndarray.mean.__doc__
+        return _wrap_func(np.mean, self, self._unit, *args, **kw)
+    mean.__doc__ = np.ndarray.mean.__doc__
 
     def ptp(self, *args, **kw):
-        return _wrap_func(numpy.ptp, self, self._unit, *args, **kw)
-    ptp.__doc__ = numpy.ndarray.ptp.__doc__
+        return _wrap_func(np.ptp, self, self._unit, *args, **kw)
+    ptp.__doc__ = np.ndarray.ptp.__doc__
 
     def round(self, *args, **kw):
-        return _wrap_func(numpy.round, self, self._unit, *args, **kw)
-    round.__doc__ = numpy.ndarray.round.__doc__
+        return _wrap_func(np.round, self, self._unit, *args, **kw)
+    round.__doc__ = np.ndarray.round.__doc__
 
     def std(self, *args, **kw):
-        return _wrap_func(numpy.std, self, self._unit, *args, **kw)
-    std.__doc__ = numpy.ndarray.std.__doc__
+        return _wrap_func(np.std, self, self._unit, *args, **kw)
+    std.__doc__ = np.ndarray.std.__doc__
 
     def var(self, *args, **kw):
-        return _wrap_func(numpy.var, self, _power_unit(self._unit,2), *args, **kw)
-    var.__doc__ = numpy.ndarray.var.__doc__
+        return _wrap_func(np.var, self, _power_unit(self._unit, 2), *args, **kw)
+    var.__doc__ = np.ndarray.var.__doc__
 
 
 def _get_du(input, key, d):
@@ -634,13 +643,14 @@ def pixel_to_pixel_reference(input):
     if not hasattr(input, 'header'):
         return Quantity(1, 'pixel_reference')
     required = 'CRPIX,CRVAL,CTYPE'.split(',')
-    keywords = numpy.concatenate(
+    keywords = np.concatenate(
         [(lambda i: [r+str(i+1) for r in required])(i) 
          for i in range(input.header['NAXIS'])])    
     if not all([k in input.header for k in keywords]):
         return Quantity(1, 'pixel_reference')
 
-    scale, status = tmf.projection_scale(str(input.header).replace('\n',''), input.header['NAXIS1'], input.header['NAXIS2'])
+    scale, status = tmf.projection_scale(str(input.header).replace('\n',''),
+         input.header['NAXIS1'], input.header['NAXIS2'])
     if status != 0:
         raise RuntimeError()
 
@@ -659,9 +669,9 @@ def pixel_reference_to_solid_angle(input):
 
     header = input.header
     if all([key in header for key in ('CD1_1', 'CD2_1', 'CD1_2', 'CD2_2')]):
-        cd = numpy.array([ [header['cd1_1'],header['cd1_2']],
-                           [header['cd2_1'],header['cd2_2']] ])
-        area = abs(numpy.linalg.det(cd))
+        cd = np.array([ [header['cd1_1'],header['cd1_2']],
+                        [header['cd2_1'],header['cd2_2']] ])
+        area = abs(np.linalg.det(cd))
     elif 'CDELT1' in header and 'CDELT2' in header:
         area = abs(header['CDELT1'] * header['CDELT2'])
     else:
@@ -693,7 +703,7 @@ units_table = {
     '"'      : Quantity(1., 'arcsec'),
     'arcmin' : Quantity(1./60., 'deg'), 
     'arcsec' : Quantity(1./3600., 'deg'),
-    'deg'    : Quantity(numpy.pi/180., 'rad'),
+    'deg'    : Quantity(np.pi/180., 'rad'),
 
     # flux_densities
     'uJy'    : Quantity(1.e-6, 'Jy'),
@@ -759,22 +769,23 @@ def _wrap_func(func, array, unit, *args, **kw):
 
 def _grab_doc(doc, func):
     doc = doc.replace(func + '(shape, ', func + '(shape, unit=None, ')
-    doc = doc.replace('\n    dtype : ','\n    unit : string\n        Unit of the new array, e.g. ``W``. Default is None for scalar.\n    dtype : ''')
+    doc = doc.replace('\n    dtype : ', '\n    unit : string\n        Unit of' \
+      ' the new array, e.g. ``W``. Default is None for scalar.\n    dtype : ''')
     doc = doc.replace('np.'+func, 'unit.'+func)
     doc = doc.replace('\n    out : ndarray', '\n    out : Quantity')
     return doc
 
 def empty(shape, unit=None, dtype=None, order=None):
-    return Quantity(numpy.empty(shape, dtype, order), unit, copy=False)
-empty.__doc__ = _grab_doc(numpy.empty.__doc__, 'empty')
+    return Quantity(np.empty(shape, dtype, order), unit, copy=False)
+empty.__doc__ = _grab_doc(np.empty.__doc__, 'empty')
 
 def ones(shape, unit=None, dtype=None, order=None):
-    return Quantity(numpy.ones(shape, dtype, order), unit, copy=False)
-ones.__doc__ = _grab_doc(numpy.ones.__doc__, 'ones')
+    return Quantity(np.ones(shape, dtype, order), unit, copy=False)
+ones.__doc__ = _grab_doc(np.ones.__doc__, 'ones')
 
 def zeros(shape, unit=None, dtype=None, order=None):
-    return Quantity(numpy.zeros(shape, dtype, order), unit, copy=False)
-zeros.__doc__ = _grab_doc(numpy.zeros.__doc__, 'zeros')
+    return Quantity(np.zeros(shape, dtype, order), unit, copy=False)
+zeros.__doc__ = _grab_doc(np.zeros.__doc__, 'zeros')
 
 
 
