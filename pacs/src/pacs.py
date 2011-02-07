@@ -845,19 +845,19 @@ class PacsSimulation(PacsBase):
         if not hasattr(pointing, 'chop'):
             pointing.chop = np.zeros(pointing.size, var.FLOAT_DTYPE)
         pointing.masked  = \
-            policy_inscan     == 'mask'   and \
-                pointing.info == Pointing.INSCAN or \
-            policy_turnaround == 'mask'   and \
-                pointing.info == Pointing.TURNAROUND or \
-            policy_other      == 'mask'   and \
-                pointing.info == Pointing.OTHER
+            (policy_inscan     == 'mask')   * \
+                (pointing.info == Pointing.INSCAN) + \
+            (policy_turnaround == 'mask')   * \
+                (pointing.info == Pointing.TURNAROUND) + \
+            (policy_other      == 'mask')   * \
+                (pointing.info == Pointing.OTHER)
         pointing.removed = \
-            policy_inscan     == 'remove' and \
-                pointing.info == Pointing.INSCAN or \
-            policy_turnaround == 'remove' and \
-                pointing.info == Pointing.TURNAROUND or \
-            policy_other      == 'remove' and \
-                pointing.info == Pointing.OTHER
+            (policy_inscan     == 'remove') * \
+                (pointing.info == Pointing.INSCAN) + \
+            (policy_turnaround == 'remove') * \
+                (pointing.info == Pointing.TURNAROUND) + \
+            (policy_other      == 'remove') * \
+                (pointing.info == Pointing.OTHER)
         self.pointing = pointing
 
         # store instrument information
