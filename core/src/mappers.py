@@ -118,7 +118,8 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None,
     C = model.T * weight * model
 
     if hyper != 0:
-        ntods = var.mpi_comm.allreduce(np.sum(tod.mask == 0), op=MPI.SUM)
+        ntods = tod.size if tod.mask is None else np.sum(tod.mask == 0)
+        ntods = var.mpi_comm.allreduce(ntods, op=MPI.SUM)
         nmaps = unpacking.shape[1]
         if var.mpi_comm.Get_rank() == 0:
             hyper = np.array(hyper * ntods / nmaps, dtype=var.FLOAT_DTYPE)
