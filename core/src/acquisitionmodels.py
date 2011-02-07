@@ -565,7 +565,7 @@ class Addition(Composite):
     def __str__(self):
         result = super(self.__class__, self).__str__() + ':'
         components = []
-        for block in self:
+        for block in self.blocks:
             components.extend(str(block).split('\n'))
         result += '\n    '+'\n    '.join(components)
         return result
