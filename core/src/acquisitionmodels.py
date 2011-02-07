@@ -479,7 +479,7 @@ class Composite(AcquisitionModel):
         if shape is not None and type(shape[-1]) is tuple:
             input = Tod(input, nsamples=shape[-1], copy=False)
         if not inplace:
-            if var.verbose: print('Info: Allocating '+str(input.dtype.itemsize * np.product(flatten_sliced_shape(shape))/2.**20)+' MiB for the output of Addition.')
+            if var.verbose: print('Info: Allocating '+str(input.dtype.itemsize * input.size/2.**20)+' MiB for the output of Addition.')
             input = input.copy()
         return input
 
