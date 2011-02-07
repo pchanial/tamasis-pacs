@@ -121,7 +121,7 @@ class AcquisitionModel(object):
                return shapein
         if flatten_sliced_shape(shapein) != flatten_sliced_shape(self.shapein):
             raise ValidationError('The input of ' + self.description + \
-                ' has an incompatible shape ' + str(shapein) + ' instead of ' + \
+                ' has an incompatible shape ' + str(shapein) + ' instead of ' +\
                 str(self.shapein) + '.')
         return self.shapeout
 
@@ -134,7 +134,8 @@ class AcquisitionModel(object):
                 return self.shapein
             else:
                 return shapeout
-        if flatten_sliced_shape(shapeout) != flatten_sliced_shape(self.shapeout):
+        if flatten_sliced_shape(shapeout) != \
+           flatten_sliced_shape(self.shapeout):
             raise ValidationError("The input of '" + self.description + \
                 ".T' has an incompatible shape " + str(shapeout) + \
                 ' instead of ' + str(self.shapeout) + '.')
@@ -157,15 +158,16 @@ class AcquisitionModel(object):
             self._cachein = input
 
         # validate output
-        shape = self.validate_shapein(
-            validate_sliced_shape(input.shape, getattr(input, 'nsamples', None)))
+        shape = self.validate_shapein(validate_sliced_shape(
+            input.shape, getattr(input, 'nsamples', None)))
         if shape is None:
             raise ValidationError('The shape of the output of ' + \
                 type(self).__name__+' is not known.')
         shape_flat = flatten_sliced_shape(shape)
         typeout = self.typeout or input.__class__
         if self._cacheout is None or shape_flat != self._cacheout.shape or \
-           self._cacheout.dtype != input.dtype or typeout != type(self._cachein):
+           self._cacheout.dtype != input.dtype or \
+           typeout != type(self._cachein):
             self._cacheout = None
             if var.verbose: print('Info: Allocating '+str(input.dtype.itemsize*np.product(shape_flat)/2.**20)+' MiB for the output of ' + type(self).__name__+'.')
             if typeout == np.ndarray:
@@ -205,8 +207,8 @@ class AcquisitionModel(object):
             self._cacheout = input
 
         # validate output
-        shape = self.validate_shapeout(
-            validate_sliced_shape(input.shape, getattr(input, 'nsamples', None)))
+        shape = self.validate_shapeout(validate_sliced_shape(
+            input.shape, getattr(input, 'nsamples', None)))
         if shape is None:
             raise ValidationError('The shape of the output of ' + \
                 self.description + ' is not known.')
@@ -539,7 +541,8 @@ class Addition(Composite):
             if shapeout is None or type(shapeout_[-1]) is tuple:
                 shapeout = shapeout_
                 continue
-            if flatten_sliced_shape(shapeout) != flatten_sliced_shape(shapeout_):
+            if flatten_sliced_shape(shapeout) != \
+               flatten_sliced_shape(shapeout_):
                 raise ValidationError("Incompatible shape in operands: '" + \
                           str(shapeout) +"' and '" + str(shapeout_) + "'.")
         return shapeout
@@ -586,13 +589,15 @@ class Composition(Composite):
     def direct(self, input, reusein=False, reuseout=False):
         input = self.validate_input(input, self.shapein, reusein)
         for i, model in enumerate(reversed(self.blocks)):
-            input = model.direct(input, True, reuseout or i != len(self.blocks)-1)
+            input = model.direct(input, True, reuseout or \
+                                 i != len(self.blocks)-1)
         return input
 
     def transpose(self, input, reusein=False, reuseout=False):
         input = self.validate_input(input, self.shapeout, reusein)
         for i, model in enumerate(self.blocks):
-            input = model.transpose(input, True, reuseout or i != len(self.blocks)-1)
+            input = model.transpose(input, True, reuseout or \
+                                    i != len(self.blocks)-1)
         return input
 
     @property
@@ -731,7 +736,8 @@ class Square(SquareBase):
     """
 
     def __init__(self, shapein=None, **kw):
-        AcquisitionModelLinear.__init__(self, shapein=shapein, shapeout=shapein, **kw)
+        AcquisitionModelLinear.__init__(self, shapein=shapein,
+                                        shapeout=shapein, **kw)
 
     def validate_shapeout(self, shapeout):
         return self.validate_shapein(shapeout)
@@ -776,8 +782,10 @@ class Diagonal(Symmetric):
     def validate_shapein(self, shapein):
         if shapein is None:
             return self.shapein
-        if flatten_sliced_shape(shapein[0:self.diagonal.ndim]) != self.diagonal.shape:
-            raise ValueError('The input has an incompatible shape ' + str(shapein) + '.')
+        if flatten_sliced_shape(shapein[0:self.diagonal.ndim]) != \
+           self.diagonal.shape:
+            raise ValueError('The input has an incompatible shape ' + \
+                             str(shapein) + '.')
         return shapein
 
 
@@ -823,7 +831,8 @@ class DdTdd(Symmetric):
 
 class Projection(AcquisitionModelLinear):
     """
-    This class handles the direct and transpose operations by the pointing matrix
+    This class handles  operations by the pointing matrix
+
     The input observation has the following required attributes/methods:
         - nfinesamples
         - nsamples
@@ -834,10 +843,12 @@ class Projection(AcquisitionModelLinear):
         - header: the FITS header of the map
         - pmatrix: transparent view of the pointing matrix
         - _pmatrix: opaque representation of the pointing matrix
-        - npixels_per_sample: maximum number of sky map pixels that can be intercepted by a detector
+        - npixels_per_sample: maximum number of sky map pixels that can be
+          intercepted by a detector
     """
 
-    def __init__(self, observation, method=None, header=None, resolution=None, npixels_per_sample=0, oversampling=True, description=None):
+    def __init__(self, observation, method=None, header=None, resolution=None,
+                 npixels_per_sample=0, oversampling=True, description=None):
 
         self._pmatrix, self.header, ndetectors, nsamples, \
         self.npixels_per_sample, (unitout, unitin), (duout, duin) = \
@@ -1205,7 +1216,8 @@ class Padding(AcquisitionModelLinear):
             output[...,dest_padded:dest_padded+left] = self.value
             output[...,dest_padded+left:dest_padded+left+nsamples] = \
                 input[...,dest:dest+nsamples]
-            output[...,dest_padded+left+nsamples:dest_padded+output.nsamples[islice]] = self.value
+            output[...,dest_padded+left+nsamples:dest_padded+ \
+                output.nsamples[islice]] = self.value
             dest += nsamples
             dest_padded += output.nsamples[islice]
         return output
@@ -1224,7 +1236,8 @@ class Padding(AcquisitionModelLinear):
         return output
 
     def validate_input_direct(self, input, reusein, reuseout):
-        input, output = super(Padding, self).validate_input_direct(input, reusein, reuseout)
+        input, output = super(Padding, self).validate_input_direct(input,
+            reusein, reuseout)
         if len(self.left) != 1 and len(self.left) != len(input.nsamples):
             raise ValueError("The input Tod has a number of slices '" + \
                              str(len(input.nsamples)) + \
@@ -1232,7 +1245,8 @@ class Padding(AcquisitionModelLinear):
         return input, output
        
     def validate_input_transpose(self, input, reusein, reuseout):
-        input, output = super(Padding, self).validate_input_transpose(input, reusein, reuseout)
+        input, output = super(Padding, self).validate_input_transpose(input,
+            reusein, reuseout)
         if len(self.left) != 1 and len(self.left) != len(input.nsamples):
             raise ValueError("The input Tod has a number of slices '" + \
                              str(len(input.nsamples)) +
@@ -1404,7 +1418,8 @@ class InvNtt(Diagonal):
         Diagonal.__init__(self, tod_filter.T, description=description,
                           shapein=tod_filter.T.shape)
         self.ncorrelations = ncorrelations
-        self.diagonal /= var.mpi_comm.allreduce(np.max(self.diagonal),op=MPI.MAX)
+        self.diagonal /= var.mpi_comm.allreduce(np.max(self.diagonal),
+                                                op=MPI.MAX)
 
 
 #-------------------------------------------------------------------------------
