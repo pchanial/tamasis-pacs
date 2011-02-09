@@ -116,6 +116,8 @@ def any_neq(a, b, rtol=None, atol=0.):
 def minmax(v):
     """Returns min and max values of an array, discarding NaN values."""
     v = np.asanyarray(v)
+    if np.all(np.isnan(v)):
+        return np.array([np.nan, np.nan])
     return np.array((np.nanmin(v), np.nanmax(v)))
 
 

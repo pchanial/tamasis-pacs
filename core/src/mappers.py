@@ -1,4 +1,6 @@
+import cProfile
 import numpy as np
+import os
 import scipy
 import time
 
@@ -14,11 +16,25 @@ __all__ = [ 'mapper_naive', 'mapper_ls', 'mapper_rls' ]
 
 def mapper_naive(tod, model, unit=None):
     """
-    Returns a naive map, i.e.: model.T(tod) / model.T(1)
+    Returns a naive map, i.e.: map = model.T(tod) / model.T(1)
 
-    The unit of the input Time Ordered Data (TOD) is not restricted, but because
-    by construction, the unit of the output map is the same, it is advisable to 
-    have the TOD in unit of surface brightness.
+    This equation is valid for a map and a Time Ordered Data (TOD) expressed as
+    surface brightness. When the input Time Ordered Data (TOD) does not meet
+    this requirement, this method performs a unit conversion if the input is
+    a quantity per detector.
+
+    Parameters
+    ----------
+
+    tod : Tod
+        The input Time Ordered Data
+
+    model : AcquisitionModel
+        The instrument model such as tod = model(map)
+
+    unit : string
+        Output map unit. By default, the output map unit is chosen to be
+        compatible with the model's input unit model.unitin (usually pixel^-1)
     """
 
     # make sure the input is a surface brightness
@@ -39,11 +55,12 @@ def mapper_naive(tod, model, unit=None):
     # prevent a unit validation exception
     tod_ = tod.view()
     tod_.unit = ''
+
     mymap = model.T(tod_)
 
     unity = Tod(tod_, copy=copy)
     unity[:] = 1.
-    map_weights = model.T(unity, reusein=True)
+    map_weights = model.T(unity, True, True, True)
     old_settings = np.seterr(divide='ignore', invalid='ignore')
     mymap /= map_weights
     mymap.unit = tod.unit
@@ -67,9 +84,9 @@ def mapper_naive(tod, model, unit=None):
                       Quantity(1,model.unitin).unit
             try:
                 mymap.inunit(newunit)
+                return mymap
             except:
                 pass
-            return mymap
     
     print("Warning: cannot set naive map to a unit compatible with that of th" \
           "e model '" + Quantity(1,model.unitin).unit + "'.")
@@ -81,10 +98,11 @@ def mapper_naive(tod, model, unit=None):
 
 
 def mapper_ls(tod, model, weight=None, unpacking=None, x0=None, tol=1.e-5,
-              maxiter=300, M=None, solver=None, verbose=True, callback=None):
+              maxiter=300, M=None, solver=None, verbose=True, callback=None,
+              profile=None):
     return mapper_rls(tod, model, weight=weight, unpacking=unpacking, hyper=0,
                       x0=x0, tol=tol, maxiter=maxiter, M=M, solver=solver,
-                      verbose=verbose, callback=callback)
+                      verbose=verbose, callback=callback, profile=profile)
 
 
 #-------------------------------------------------------------------------------
@@ -92,7 +110,7 @@ def mapper_ls(tod, model, weight=None, unpacking=None, x0=None, tol=1.e-5,
 
 def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None,
                tol=1.e-5, maxiter=300, M=None, solver=None, verbose=True,
-               callback=None):
+               callback=None, profile=None):
 
     
     # make sure that the tod unit is compatible with the model's output unit
@@ -140,7 +158,7 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None,
         if isinstance(M, np.ndarray):
             M = M.copy()
             M[~np.isfinite(M)] = np.max(M[np.isfinite(M)])
-            M = Diagonal(M, description='preconditioner')
+            M = Diagonal(M, description='Preconditioner')
         M = unpacking.T * M
 
     if x0 is not None:
@@ -168,9 +186,30 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None,
     if callback is None:
         callback = PcgCallback()
 
+    if var.verbose:
+        print('')
+        print('Model:')
+        print(C)
+        if M is not None:
+            print('Preconditioner:')
+            print(M)
+
     time0 = time.time()
-    solution, info = solver(C, rhs, x0=x0, tol=tol, maxiter=maxiter,
-                            callback=callback, M=M)
+    if profile is not None:
+        def run():
+            solution,info = solver(C, rhs, x0=x0, tol=tol, maxiter=maxiter, M=M)
+            if info != 0:
+                print('Solver failure: info='+str(info))
+        cProfile.runctx('run()', globals(), locals(), profile+'.prof')
+        print('Profile time: '+str(time.time()-time0))
+        os.system('python -m gprof2dot -f pstats -o ' + profile +'.dot ' + profile + '.prof')
+        os.system('dot -Tpng ' + profile + '.dot > ' + profile)
+        os.system('rm -f ' + profile + '.prof' + ' ' + profile + '.dot')
+        return None
+    else:
+        solution, info = solver(C, rhs, x0=x0, tol=tol, maxiter=maxiter,
+                                callback=callback, M=M)
+
     if info < 0:
         raise RuntimeError('Solver failure (code=' + str(info) + ' after ' + \
                            str(callback.niterations) + ' iterations).')
@@ -180,7 +219,7 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None,
         if callback.niterations != maxiter:
             print('Warning: mapper_rls: maxiter != niter...')
 
-    output = Map(unpacking(solution, reusein=True, reuseout=True), copy=False)
+    output = Map(unpacking(solution, True, True, True), copy=False)
     output.unit = tod.unit + ' ' + (1/Quantity(1, model.unitout)).unit + ' ' + \
                   Quantity(1, model.unitin).unit
     map_naive = mapper_naive(tod, model)

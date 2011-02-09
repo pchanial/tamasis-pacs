@@ -967,6 +967,7 @@ class PacsMultiplexing(AcquisitionModelLinear):
     """
     def __init__(self, obs, shapein=None, description=None):
         AcquisitionModelLinear.__init__(self,
+                                        cache=True,
                                         shapein=shapein,
                                         shapeout=shapeout,
                                         typein=Tod,
@@ -974,14 +975,14 @@ class PacsMultiplexing(AcquisitionModelLinear):
         self.fine_sampling_factor = obs.instrument.fine_sampling_factor
         self.ij = obs.instrument.ij
 
-    def direct(self, input, reusein=False, reuseout=False):
-        input, output = self.validate_input_direct(input, reusein, reuseout)
+    def direct(self, input, inplace, cachein, cacheout):
+        input, output = self.validate_input_direct(input, cachein, cacheout)
         tmf.pacs_multiplexing_direct(input.T, output.T,
                                      self.fine_sampling_factor, self.ij)
         return output
 
-    def transpose(self, input, reusein=False, reuseout=False):
-        input, output = self.validate_input_transpose(input, reusein, reuseout)
+    def transpose(self, input, inplace, cachein, cacheout):
+        input, output = self.validate_input_transpose(input, cachein, cacheout)
         tmf.pacs_multiplexing_transpose(input.T, output.T,
                                         self.fine_sampling_factor, self.ij)
         return output

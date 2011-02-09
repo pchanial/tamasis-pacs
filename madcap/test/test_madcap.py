@@ -2,10 +2,11 @@ import numpy as np
 import pyfits
 import os
 import tamasis
-
 from tamasis import *
 
-tamasis.var.verbose = False
+class TestFailure(Exception): pass
+
+tamasis.var.verbose = True
 path = os.path.abspath(os.path.dirname(__file__)) + '/data/madmap1/'
 obs = MadMap1Observation(path+'todSpirePsw_be', path+'invnttSpirePsw_be', 
                          path+'madmapSpirePsw.fits[coverage]', 'big_endian',
@@ -19,13 +20,14 @@ padding = Padding(left=invNtt.ncorrelations, right=1024-np.array(tod.nsamples)-i
 projection = Projection(obs)
 packing = Unpacking(obs.info.mapmask, field=np.nan).T
 
+map_naive = mapper_naive(tod, projection)
 map_naive = mapper_naive(tod, projection*packing)
 map_ref = pyfits.fitsopen(path+'naivemapSpirePsw.fits')['image'].data
-if any_neq(map_naive,map_ref): print('FAILED: mapper_naive madcap 1')
+if any_neq(map_naive,map_ref): raise TestFailure('mapper_naive madcap 1')
 
 map_naive_1d = mapper_naive(tod, projection)
-map_naive_2d = packing.transpose(map_naive_1d)
-if any_neq(map_naive_2d,map_ref): print('FAILED: mapper_naive madcap 2')
+map_naive_2d = packing.T(map_naive_1d)
+if any_neq(map_naive_2d,map_ref): raise TestFailure('mapper_naive madcap 2')
 
 packing = Unpacking(obs.info.mapmask).T
 
@@ -36,7 +38,7 @@ packing = Unpacking(obs.info.mapmask).T
 
 M = packing(1/map_naive.coverage)
 if np.any(~np.isfinite(M)):
-    raise ValueError()
+    raise TestFailure()
 
 def callback(x):
     pass

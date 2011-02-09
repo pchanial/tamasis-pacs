@@ -111,7 +111,7 @@ if np.any(mask(b) != c): raise TestFailure('mask 3d direct')
 mask = Masking(np.array([[[False, False], [True, True]], [[False, True], [True, True]]]))
 if np.any(mask(b) != c): raise TestFailure('mask 3d direct')
 
-c = mask(b, reusein=True, reuseout=True)
+c = mask(b, inplace=True)
 if id(b) != id(c):
     raise TestFailure('mask no copy')
 
@@ -123,26 +123,26 @@ if id(b) != id(c):
 padding = Padding(left=1,right=20)
 tod = Tod(np.ndarray((10,15)))
 tod2 = padding(tod)
-if tod2.shape != (10,36):          raise TestFailure('padding shapea')
+if tod2.shape != (10,36):      raise TestFailure('padding shapea')
 if any_neq(tod2[:,0:1], 0):    raise TestFailure('padding left')
 if any_neq(tod2[:,1:16], tod): raise TestFailure('padding middle')
 if any_neq(tod2[:,16:], 0):    raise TestFailure('padding right')
-tod3 = padding.transpose(tod2)
+tod3 = padding.T(tod2)
 if tod3.shape != tod.shape: raise TestFailure('padding shapeb')
 if any_neq(tod3,tod): raise TestFailure('padding end')
 
 padding = Padding(left=1,right=(4,20))
 tod = Tod.ones((10,(12,3)))
 tod2 = padding(tod)
-if tod2.shape != (10,41):          raise TestFailure('padding shapea')
-if tod2.nsamples != (17,24):       raise TestFailure('padding nsamples')
+if tod2.shape != (10,41):      raise TestFailure('padding shapea')
+if tod2.nsamples != (17,24):   raise TestFailure('padding nsamples')
 if any_neq(tod2[:,0:1], 0):    raise TestFailure('padding left2')
 if any_neq(tod2[:,1:13], tod[:,0:12]): raise TestFailure('padding middle2')
 if any_neq(tod2[:,13:17], 0):  raise TestFailure('padding right2')
 if any_neq(tod2[:,17:18], 0):  raise TestFailure('padding left2')
 if any_neq(tod2[:,18:21], tod[:,12:]): raise TestFailure('padding middle2')
 if any_neq(tod2[:,21:], 0):    raise TestFailure('padding right2')
-tod3 = padding.transpose(tod2)
+tod3 = padding.T(tod2)
 if tod3.shape != tod.shape: raise TestFailure('padding shapeb')
 if any_neq(tod3,tod): raise TestFailure('padding end')
 
@@ -154,21 +154,21 @@ if any_neq(tod3,tod): raise TestFailure('padding end')
 n = 100
 fft = FftHalfComplex(n)
 a = np.random.random(n)+1
-b = fft.transpose(fft.direct(a))
+b = fft.T(fft(a))
 if any_neq(a, b): raise TestFailure('fft1')
 
 a = np.random.random((3,n))+1
-b = fft.transpose(fft.direct(a))
+b = fft.T(fft(a))
 if any_neq(a, b): raise TestFailure('fft2')
 
 tod = Tod(np.random.random((10,1000))+1)
 fft = FftHalfComplex(tod.nsamples)
-tod2 = fft.transpose(fft.direct(tod))
+tod2 = fft.T(fft(tod))
 if any_neq(tod, tod2): raise TestFailure('fft3')
 
 tod = Tod(np.random.random((10,1000))+1, nsamples=(100,300,5,1000-100-300-5))
 fft = FftHalfComplex(tod.nsamples)
-tod2 = fft.transpose(fft.direct(tod))
+tod2 = fft.T(fft(tod))
 if any_neq(tod, tod2): raise TestFailure('fft4')
 
 
@@ -202,7 +202,6 @@ if model((3,)) != [-3] or model(3) != -3: raise TestFailure('-=')
 
 model *= 2
 if model((3,)) != [-6] or model(3) != -6: raise TestFailure('*=')
-
 
 #------------------------------------
 # Linearoperator -> AcquisitionModel
@@ -262,6 +261,41 @@ if a.dtype is not FTYPE: raise TestFailure()
 a = Masking(np.array([0,1,0], dtype='int8'))
 if a.dtype is not FTYPE: raise TestFailure()
 
+
+#-------
+# Cache
+#-------
+class A(AcquisitionModelLinear):
+    def __init__(self, **kw):
+        AcquisitionModelLinear.__init__(self, cache=True, **kw)
+    def direct(self, input, inplace, cachein, cacheout):
+        input, output = self.validate_input_direct(input, cachein, cacheout)
+        output[:] = 2
+        return output
+    def transpose(self, input, inplace, cachein, cacheout):
+        input, output = self.validate_input_transpose(input, cachein, cacheout)
+        output[:] = 2
+        return output
+
+inputs = [np.ones((10,10)), FitsArray(np.ones((10,10))), Map.ones((10,10)),
+          Tod.ones((10,10))]
+otypes = [type(i) for i in inputs]
+
+for i, t in zip(inputs, otypes):
+    a = A(shapein=(10,10),shapeout=(10,10))
+    aT = a.T
+    aTa = aT * a
+    o = a(i, cachein=True, cacheout=True)
+    if type(o) != t: raise TestFailure()
+    if id(a.cachein) != id(i) or id(a.cacheout) != id(o): raise TestFailure()
+    if id(o) == id(i): raise TestFailure()
+    if id(aT.cachein) != id(o) or id(aT.cacheout) != id(i): raise TestFailure()
+    o = aTa(i, cachein=True, cacheout=True)
+    if id(i) != id(o): raise TestFailure()
+    if id(a.cacheout) != id(aT.cachein): raise TestFailure()
+    if id(a.cachein) != id(aT.cacheout): raise TestFailure()
+
+m = Identity() * a * Identity()
 
 #------------------------------
 # ResponseTruncatedExponential
