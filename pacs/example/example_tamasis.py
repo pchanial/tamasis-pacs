@@ -44,7 +44,7 @@ tod = filter_median(tod, hpf_length)
 # the mean). We highpass filter the Tod using a short filtering 
 # window, to remove the low-frequency offsets
 tod_glitch = filter_median(tod, 100)
-tod.mask = deglitch_l2mad(tod_glitch, projection, nsigma=5.)
+tod.mask = deglitch_l2mad(tod_glitch, projection, nsigma=25.)
 
 # save the Tod as a FITS file
 tod.save('tod_preprocessed.fits')
@@ -56,10 +56,13 @@ tod.save('tod_preprocessed.fits')
 projection = Projection(obs,
                         method='sharp',
                         npixels_per_sample=5)
-
+response = ResponseTruncatedExponential(
+    obs.get_detector_time_constant() / obs.SAMPLING_PERIOD)
 compression = CompressionAverage(obs.slice.compression_factor)
 masking = Masking(tod.mask)
-model = masking * compression * projection
+model = masking * compression * response * projection
+
+# Set tod's masked values to zero
 tod = masking(tod)
 
 # The naive map is given by
@@ -75,11 +78,11 @@ weight = padding.T * fft.T * invNtt * fft * padding
 # J(x) = ||y-Hx||^2 + hyper ||Dx||^2, the first ||.||^2 being the N^-1 norm
 # it is equivalent to solving the equation (H^T H + hyper D^T D ) x = H^T y
 hyper = 1
-map_rlsw = mapper_rls(tod, model,
-                      weight=weight,
-                      unpacking=Unpacking(map_naive.coverage==0),
-                      tol=1.e-5,
-                      hyper=hyper)
+map_tamasis = mapper_rls(tod, model,
+                         weight=weight,
+                         unpacking=Unpacking(map_naive.coverage==0),
+                         tol=1.e-5,
+                         hyper=hyper)
 
 # save the map a as fits file
-map_tamasis.save('map_rlsw_h'+str(hyper)+'_hpf'+str(hpf_length)+'.fits')
+map_tamasis.save('map_tamasis_h'+str(hyper)+'_hpf'+str(hpf_length)+'.fits')
