@@ -22,32 +22,56 @@ class TestFailure(Exception):
 
 
 # validate scalars
-if validate_sliced_shape((),None) != ((),): raise TestFailure()
-if validate_sliced_shape([],None) != ((),): raise TestFailure()
-if validate_sliced_shape(np.array(()),None) != ((),): raise TestFailure()
-if validate_sliced_shape((),()) != ((),): raise TestFailure()
-if validate_sliced_shape([],()) != ((),): raise TestFailure()
-if validate_sliced_shape(np.array(()),()) != ((),): raise TestFailure()
+if validate_sliced_shape((),None) != (): raise TestFailure()
+if validate_sliced_shape([],None) != (): raise TestFailure()
+if validate_sliced_shape(np.array(()),None) != (): raise TestFailure()
+if validate_sliced_shape((),()) != (): raise TestFailure()
+if validate_sliced_shape([],()) != (): raise TestFailure()
+if validate_sliced_shape(np.array(()),()) != (): raise TestFailure()
 
 # validate arrays of size 0
 if validate_sliced_shape((0,),None) != (0,): raise TestFailure()
-if validate_sliced_shape((0,),(0,)) != (0,): raise TestFailure()
 if validate_sliced_shape([0],None) != (0,): raise TestFailure()
-if validate_sliced_shape([0],(0,)) != (0,): raise TestFailure()
+# ticket #1740
+#if validate_sliced_shape(np.array([0]),None) != (0,): raise TestFailure()
+if validate_sliced_shape((0,),(0,)) != ((0,),): raise TestFailure()
+if validate_sliced_shape([0],(0,)) != ((0,),): raise TestFailure()
+# ticket #1740
+#if validate_sliced_shape(np.array([0]),(0,)) != ((0,),): raise TestFailure()
 
 # validate arrays with slices of size 0
 a = np.ones((1,0,1))
 if validate_sliced_shape(a.shape, None) != (1,0,1): raise TestFailure()
-if validate_sliced_shape(a.shape, 1) != (1,0,1): raise TestFailure()
-if validate_sliced_shape(a.shape, (1,)) != (1,0,1): raise TestFailure()
+if validate_sliced_shape(a.shape, 1) != (1,0,(1,)): raise TestFailure()
+if validate_sliced_shape(a.shape, (1,)) != (1,0,(1,)): raise TestFailure()
 a = np.ones((1,1,0))
 if validate_sliced_shape(a.shape, None) != (1,1,0): raise TestFailure()
-if validate_sliced_shape(a.shape, 0) != (1,1,0): raise TestFailure()
-if validate_sliced_shape(a.shape, (0,)) != (1,1,0): raise TestFailure()
+if validate_sliced_shape(a.shape, 0) != (1,1,(0,)): raise TestFailure()
+if validate_sliced_shape(a.shape, (0,)) != (1,1,(0,)): raise TestFailure()
 a = np.ones((1,1,3))
 
 if validate_sliced_shape((10,(10,3)), None) != (10, (10,3)): raise TestFailure()
 if validate_sliced_shape((10,13), None) != (10, 13): raise TestFailure()
+if validate_sliced_shape((10,13), 13) != (10,(13,)): raise TestFailure()
+if validate_sliced_shape((10,13), (13,)) != (10,(13,)): raise TestFailure()
+if validate_sliced_shape((10,13), (7,6)) != (10,(7,6)): raise TestFailure()
+
+# check errors
+try:
+    junk = validate_sliced_shape((0,), ())
+    raise TestFailure()
+except ValueError:
+    pass
+try:
+    junk = validate_sliced_shape((1,), ())
+    raise TestFailure()
+except ValueError:
+    pass
+try:
+    junk = validate_sliced_shape((2,), (3,4))
+    raise TestFailure()
+except ValueError:
+    pass
 
 # check copies
 d = np.array([1,2])
@@ -68,12 +92,12 @@ d = Tod(b, nsamples=n, mask=m)
 objs = [a, b, c, d]
 for obj in objs:
     obj2 = obj.__class__(obj, copy=False)
-    if id(obj) != id(obj2): raise TestFailure
+    if id(obj) != id(obj2): raise TestFailure()
 
 for obj in objs:
     obj2 = obj.__class__(obj, copy=True)
     for k in get_attributes(obj):
-        if (k in ['_unit', 'origin', 'nsamples']) is not \
+        if (k in ['_unit', '_derived_units', 'origin', 'nsamples']) is not \
            (id(getattr(obj, k)) == id(getattr(obj2, k))):
             print k, id(getattr(obj, k)), id(getattr(obj2, k))
 
@@ -84,42 +108,14 @@ d = Tod(a, unit=u, derived_units=du, header=h, nsamples=n, mask=m)
 objs = [b, c, d]
 for obj in objs:
     obj2 = obj.__class__(obj, copy=False)
-    if id(obj) != id(obj2): raise TestFailure
+    if id(obj) != id(obj2): raise TestFailure()
 
 for obj in objs:
     obj2 = obj.__class__(obj, copy=True)
     for k in get_attributes(obj):
-        if (k in ['_unit', 'origin', 'nsamples']) is not \
+        if (k in ['_unit', '_derived_units', 'origin', 'nsamples']) is not \
            (id(getattr(obj, k)) == id(getattr(obj2, k))):
             print k, id(getattr(obj, k)), id(getattr(obj2, k))
-
-# check errors
-try:
-    junk = validate_sliced_shape((), 0)
-    raise TestFailure()
-except ValueError:
-    pass
-try:
-    junk = validate_sliced_shape((0,), ())
-    raise TestFailure()
-except ValueError:
-    pass
-try:
-    junk = validate_sliced_shape((1,), ())
-    raise TestFailure()
-except ValueError:
-    pass
-try:
-    junk = validate_sliced_shape((1,), (-1,0,2))
-    raise TestFailure()
-except ValueError:
-    pass
-try:
-    junk = validate_sliced_shape((2,), (3,4))
-    raise TestFailure()
-except ValueError:
-    pass
-
 
 tod = Tod((2,))
 tod = Tod([2])
@@ -248,12 +244,6 @@ m.flat = np.random.random(m.size)*2
 a = Tod(np.random.random_sample((10,2,10)), mask=m, nsamples=(2,8), unit='Jy')
 a.save(filename+'_tod.fits')
 b = Tod(filename+'_tod.fits')
-tamasis.var.verbose = False
-print 'start'
-tamasis.var.verbose = False
-a!=b
-print 'stop'
-tamasis.var.verbose = False
 if np.any(a != b): raise TestFailure()
 # or np.any(a.mask != b.mask) or a.nsamples != b.nsamples: raise TestFailure()
 

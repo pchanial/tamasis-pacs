@@ -144,32 +144,31 @@ class AcquisitionModel(object):
         """
         Validate input shape and return the output shape of the direct model
         """
-        if shapein is None or self.shapein is None:
-            if self.shapeout is not None:
-               return self.shapeout
-            else:
-               return shapein
-        if flatten_sliced_shape(shapein) != flatten_sliced_shape(self.shapein):
-            raise ValidationError('The input of ' + self.description + \
-                ' has an incompatible shape ' + str(shapein) + \
-                '. Expected shape is ' + str(self.shapein) + '.')
-        return self.shapeout
+        selfshapein = self.shapein
+        if shapein is None or shapein == selfshapein:
+            return self.shapeout
+        if selfshapein is None:
+            return shapein
+        if flatten_sliced_shape(shapein) == flatten_sliced_shape(selfshapein):
+            return self.shapeout
+        raise ValidationError('The input of ' + self.description + ' has an i' \
+            'ncompatible shape ' + str(shapein) + '. Expected shape is ' + \
+            str(self.shapein) + '.')
 
     def validate_shapeout(self, shapeout):
         """
         Validate input shape and return the output shape of the transpose model
         """
-        if shapeout is None or self.shapeout is None:
-            if self.shapein is not None:
-                return self.shapein
-            else:
-                return shapeout
-        if flatten_sliced_shape(shapeout) != \
-           flatten_sliced_shape(self.shapeout):
-            raise ValidationError("The input of '" + self.description + \
-                ".T' has an incompatible shape " + str(shapeout) + \
-                '. Expected shape is ' + str(self.shapeout) + '.')
-        return self.shapein
+        selfshapeout = self.shapeout
+        if shapeout is None or shapeout == selfshapeout:
+            return self.shapein
+        if selfshapeout is None:
+            return shapeout
+        if flatten_sliced_shape(shapeout) == flatten_sliced_shape(selfshapeout):
+            return self.shapein
+        raise ValidationError("The input of '" + self.description + ".T' has " \
+            'an incompatible shape ' + str(shapeout) + '. Expected shape is ' +\
+            str(self.shapeout) + '.')
 
     def validate_input_direct(self, input, cachein, cacheout):
 
@@ -220,13 +219,13 @@ class AcquisitionModel(object):
                                   self.description+' is not known.')
 
         typein = self.typein
-        if type(shape[-1]) is tuple and (typein is None or \
+        if shape and type(shape[-1]) is tuple and (typein is None or \
            not issubclass(typein, Tod)):
             typein = Tod
         if typein is not None and not isinstance(input, typein):
             input = input.view(typein)
 
-        if type(shape[-1]) is tuple:
+        if shape and type(shape[-1]) is tuple:
             input.nsamples = shape[-1]
 
         if not inplace:
@@ -952,17 +951,29 @@ class Compression(AcquisitionModelLinear):
     """
 
     def __init__(self, compression_factor, shapein=None, description=None):
-        shapeout = self.validate_shapein(shapein)
-        AcquisitionModelLinear.__init__(self,
-                                        description=description,
-                                        cache=True,
-                                        shapein=shapein,
-                                        shapeout=shapeout,
-                                        typein=Tod)
         if _my_isscalar(compression_factor):
             self.factor = int(compression_factor)
         else:
             self.factor = tuple(compression_factor)
+
+        if np.all(np.array(self.factor) == 1):
+            def direct(input, inplace, cachein, cacheout):
+                return self.validate_input_inplace(input, inplace)
+            transpose = direct
+            cache = False
+        else:
+            direct = None
+            transpose = None
+            cache = True
+        shapeout = self.validate_shapein(shapein)
+        AcquisitionModelLinear.__init__(self,
+                                        direct=direct,
+                                        transpose=transpose,
+                                        cache=cache,
+                                        description=description,
+                                        shapein=shapein,
+                                        shapeout=shapeout,
+                                        typein=Tod)
 
     def compression_direct(input, output, compression_factor):
         raise NotImplementedError()
@@ -972,14 +983,14 @@ class Compression(AcquisitionModelLinear):
 
     def direct(self, input, inplace, cachein, cacheout):
         input, output = self.validate_input_direct(input, cachein, cacheout)
-#        if np.any(np.array(self.factor) != 1):
-        self.compression_direct(input, output, self.factor)
+        self.compression_direct(input, output,
+                                np.resize(self.factor, len(input.nsamples)))
         return output
 
     def transpose(self, input, inplace, cachein, cacheout):
         input, output = self.validate_input_transpose(input, cachein, cacheout)
-#        if np.any(np.array(self.factor) != 1):
-        self.compression_transpose(input, output, self.factor)
+        self.compression_transpose(input, output,
+                                   np.resize(self.factor, len(input.nsamples)))
         return output
 
     def validate_shapein(self, shapein):
@@ -1015,12 +1026,10 @@ class CompressionAverage(Compression):
                              description=description)
 
     def compression_direct(self, input, output, compression_factor):
-        tmf.compression_average_direct(input.T, output.T,
-            np.resize(compression_factor, [len(input.nsamples)]))
+        tmf.compression_average_direct(input.T, output.T, compression_factor)
         
     def compression_transpose(self, input, output, compression_factor):
-        tmf.compression_average_transpose(input.T, output.T,
-            np.resize(compression_factor, [len(input.nsamples)]))
+        tmf.compression_average_transpose(input.T, output.T, compression_factor)
         
         
 
@@ -1038,12 +1047,10 @@ class DownSampling(Compression):
                              description=description)
 
     def compression_direct(self, input, output, compression_factor):
-        tmf.downsampling_direct(input.T, output.T,
-            np.resize(compression_factor, [len(input.nsamples)]))
+        tmf.downsampling_direct(input.T, output.T, compression_factor)
         
     def compression_transpose(self, input, output, compression_factor):
-        tmf.downsampling_transpose(input.T, output.T,
-            np.resize(compression_factor, [len(input.nsamples)]))
+        tmf.downsampling_transpose(input.T, output.T, compression_factor)
       
 
 #-------------------------------------------------------------------------------
@@ -1502,7 +1509,8 @@ class AllReduce(Square):
 
     def direct(self, input, inplace, cachein, cacheout):
         output = self.validate_input_inplace(input, inplace)
-        output[:] = var.mpi_comm.allreduce(output, op=self.operator)
+        if MPI.COMM_WORLD.Get_size() > 1:
+            output[:] = var.mpi_comm.allreduce(output, op=self.operator)
         return output
 
     def transpose(self, input, inplace, cachein, cacheout):

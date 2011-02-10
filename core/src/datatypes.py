@@ -70,8 +70,6 @@ class FitsArray(Quantity):
                 result._header = data._header.copy()
             else:
                 result._header = data._header
-        elif not np.iscomplexobj(result):
-            result._header = create_fitsheader(result)
         else:
             result._header = None
 
@@ -116,6 +114,8 @@ class FitsArray(Quantity):
 
     @property
     def header(self):
+        if self._header is None and not np.iscomplexobj(self):
+            self._header = create_fitsheader(self)
         return self._header
 
     @header.setter
@@ -527,7 +527,7 @@ class Tod(FitsArray):
                     nsamples = [int(float(x))
                                 for x in nsamples.split(',') if x.strip() != '']
                 del result.header['NSAMPLES']
-        if nsamples is None:
+        if not nsamples:
             return result
         shape = validate_sliced_shape(result.shape, nsamples)
         result.nsamples = shape[-1]
@@ -815,21 +815,29 @@ def create_fitsheader(array, extname=None, crval=(0.,0.), crpix=None,
 
 
 def flatten_sliced_shape(shape):
-    if shape is None: return shape
-    if _my_isscalar(shape):
+    if shape is None:
+        return shape
+    if not shape:
+        return ()
+    if not isinstance(shape, (list, tuple, np.ndarray)):
         return (int(shape),)
-    return tuple(map(np.sum, shape))
+    shape_1 = shape[-1]
+    if not isinstance(shape_1, (list, tuple, np.ndarray)):
+        return tuple(shape)
+    shape = list(shape)
+    shape[-1] = sum(tuple(shape_1))
+    return tuple(shape)
 
    
 #-------------------------------------------------------------------------------
 
 
 def combine_sliced_shape(shape, nsamples):
-    if _my_isscalar(shape):
+    if not isinstance(shape, (list, tuple, np.ndarray)):
         shape = [ shape ]
     else:
         shape = list(shape) # list makes a shallow copy
-    if _my_isscalar(nsamples):
+    if not isinstance(nsamples, (list, tuple, np.ndarray)):
         nsamples = (int(nsamples),)
     else:
         nsamples = tuple(nsamples)
@@ -839,50 +847,59 @@ def combine_sliced_shape(shape, nsamples):
    
 #-------------------------------------------------------------------------------
 
-    
+
 def validate_sliced_shape(shape, nsamples=None):
-    # convert shape and nsamples to tuple
-    if shape is None:
-        if nsamples is None:
-            return None
-        shape = ()
-    elif _my_isscalar(shape):
-        shape = (int(shape),)
-    else:
+
+    if isinstance(shape, np.ndarray):
         shape = tuple(shape)
-    if nsamples is not None:
-        if _my_isscalar(nsamples):
-            nsamples = (int(nsamples),)
-        else:
-            nsamples = tuple(nsamples)
-    
-    if len(shape) == 0:
-        if nsamples is not None and len(nsamples) != 0:
-            raise ValueError("The input is scalar, but nsamples is equal to '" \
-                             + str(nsamples) + "'.")
-        return (shape,)
-    
+
+    if not shape:
+        if nsamples:
+            raise ValueError("The input is scalar or None, but nsamples is eq" \
+                             "ual to '" + str(nsamples) + "'.")
+        return None if shape is None else ()
+
+    if not isinstance(shape, (list, tuple, np.ndarray)):
+        shape = (int(shape),)
+
+    shape_1 = shape[-1]
     if nsamples is None:
-        if _my_isscalar(shape[-1]):
-            nsamples = int(shape[-1])
-        else:
-            nsamples = tuple(map(int, shape[-1]))
-    else:
-        if len(nsamples) == 0:
-            raise ValueError('The input is not scalar and is incompatible wit' \
-                             'h nsamples.')
-        if np.any(np.array(nsamples) < 0):
-            raise ValueError('The input nsamples has negative values.')
-        elif np.sum(nsamples) != np.sum(shape[-1]):
-            raise ValueError('The sliced input has an incompatible number of ' \
-                "samples '" + str(nsamples) + "' instead of '" + str(shape[-1])\
-                + "'.")
-        if len(nsamples) == 1:
-            nsamples = nsamples[0]
+        if isinstance(shape_1, (list, np.ndarray)):
+            shape = list(shape)
+            shape[-1] = tuple(shape_1)
+        return tuple(shape)
     
-    l = list(shape[0:-1])
-    l.append(nsamples)
-    return tuple(l)
+    if not isinstance(nsamples, (list, tuple, np.ndarray)):
+        nsamples = (nsamples,)
+    else:
+        nsamples = tuple(nsamples)
+
+    if len(nsamples) == 0:
+        raise ValueError('The input is not scalar and is incompatible with ns' \
+            'amples.')
+
+    if isinstance(shape_1, (list, tuple, np.ndarray)):
+        shape_1 = tuple(shape_1)
+        if shape_1 != nsamples:
+            raise ValueError('The input has an incompatible slicing of samples'\
+                " '" + str(nsamples) + "' instead of '" + str(shape_1) + "'.")
+
+    sum_shape_1 = sum(shape_1) if isinstance(shape_1, tuple) else shape_1
+    if sum_shape_1 != sum(nsamples):
+        raise ValueError('The sliced input has an incompatible number of samp' \
+            "les '" + str(nsamples) + "' instead of '" + str(shape_1) + "'.")
+    
+    if isinstance(shape_1, tuple):
+        return tuple(shape)
+
+    shape = list(shape)
+    shape[-1] = nsamples
+
+    return tuple(shape)
+
+
+#-------------------------------------------------------------------------------
+
 
 def _save_derived_units(filename, du):
     if not du:
