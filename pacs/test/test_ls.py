@@ -50,7 +50,7 @@ class Callback():
         self.niterations = 0
     def __call__(self, x):
         self.niterations += 1
-map_iter2 = mapper_ls(tod, model * unpacking, tol=1.e-4, maxiter=200, M=M, callback=Callback(), profile=profile)
+map_iter2 = mapper_ls(tod, model * unpacking, tol=1.e-4, maxiter=10 if profile else None, M=M, callback=Callback(), profile=profile)
 if profile is None:
     print(map_iter2.header['time'])
     if map_iter2.header['NITER'] > 11:

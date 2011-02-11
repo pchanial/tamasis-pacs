@@ -38,7 +38,7 @@ class Callback():
         self.niterations += 1
 
 map_iter = mapper_rls(tod, model, hyper=1., tol=1.e-4, callback=Callback(),
-                      profile=profile)
+                      profile=profile, maxiter=10 if profile else None)
 if profile is None:
     print 'Elapsed time: '+str(map_iter.header['TIME'])
     if map_iter.header['NITER'] > 63:

@@ -197,7 +197,7 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None,
     time0 = time.time()
     if profile is not None:
         def run():
-            solution,info = solver(C, rhs, x0=x0, tol=tol, maxiter=1, M=M)
+            solution,info = solver(C, rhs, x0=x0, tol=tol, maxiter=maxiter, M=M)
             if info < 0:
                 print('Solver failure: info='+str(info))
         cProfile.runctx('run()', globals(), locals(), profile+'.prof')
