@@ -476,12 +476,6 @@ class AcquisitionModelTranspose(AcquisitionModelLinear):
     def validate_shapeout(self, shapeout):
         return self.model.validate_shapein(shapeout)
 
-    def __str__(self):
-        if hasattr(self.model, 'blocks'):
-            return Composite.__dict__['__str__'](self)
-        else:
-            return AcquisitionModel.__str__(self)
-
 
 #-------------------------------------------------------------------------------
 
@@ -577,15 +571,10 @@ class Composite(AcquisitionModel):
     def unitout(self, value):
         pass
 
-    def validate_input_inplace(self, input, inplace, shape):
+    def validate_input(self, input, shape):
         input = np.asanyarray(input)
         if shape is not None and type(shape[-1]) is tuple:
             input = Tod(input, nsamples=shape[-1], copy=False)
-        if not inplace:
-            if var.verbose:
-                print('Info: Allocating ' + str(input.dtype.itemsize * \
-                      input.size/2.**20)+' MiB in ' + self.description + '.')
-            input = input.copy()
         return input
 
     def __str__(self):
@@ -610,7 +599,7 @@ class Addition(Composite):
     """
 
     def direct(self, input, inplace, cachein, cacheout):
-        input = self.validate_input_inplace(input, False, self.shapein)
+        input = self.validate_input(input, self.shapein)
         output = self.blocks[0].direct(input, False, False, False)
         for i, model in enumerate(self.blocks[1:]):
             cachein_ = cachein and i == len(self.blocks)-1
@@ -618,7 +607,7 @@ class Addition(Composite):
         return output
 
     def transpose(self, input, inplace, cachein, cacheout):
-        input = self.validate_input_inplace(input, False, self.shapeout)
+        input = self.validate_input(input, self.shapeout)
         output = self.blocks[0].transpose(input, False, False, False)
         for i, model in enumerate(self.blocks[1:]):
             cachein_ = cachein and i == len(self.blocks)-1
@@ -629,7 +618,7 @@ class Addition(Composite):
     def shapein(self):
         shapein = None
         for model in self.blocks:
-            shapein_ = model.validate_shapeout(None)
+            shapein_ = model.shapein
             if shapein_ is None:
                 continue
             if shapein is None or type(shapein_[-1]) is tuple:
@@ -648,7 +637,7 @@ class Addition(Composite):
     def shapeout(self):
         shapeout = None
         for model in self.blocks:
-            shapeout_ = model.validate_shapein(None)
+            shapeout_ = model.shapeout
             if shapeout_ is None:
                 continue
             if shapeout is None or type(shapeout_[-1]) is tuple:
@@ -696,7 +685,7 @@ class Composition(Composite):
     """
 
     def direct(self, input, inplace, cachein, cacheout):
-        input = self.validate_input_inplace(input, True, self.shapein)
+        input = self.validate_input(input, self.shapein)
         caches = [m.cache for m in self.blocks]
         if any(caches):
             first_cache = caches.index(True)
@@ -705,19 +694,17 @@ class Composition(Composite):
             first_cache = len(self.blocks)
             last_cache = -1
         for i, model in enumerate(reversed(self.blocks)):
-#            print 'i', i, model, inplace or i != 0, cachein or i > first_cache, cacheout or i < last_cache
             input = model.direct(input, inplace or i != 0,
                                  cachein or i > first_cache,
                                  cacheout or i < last_cache)
         return input
 
     def transpose(self, input, inplace, cachein, cacheout):
-        input = self.validate_input_inplace(input, True, self.shapeout)
+        input = self.validate_input(input, self.shapeout)
         caches = [m.cache for m in self.blocks]
         first_cache = len(self.blocks) - caches.index(True) - 1
         last_cache = caches.index(True)
         for i, model in enumerate(self.blocks):
-            print 'i', i, model, inplace or i != 0, cachein or i > first_cache, cacheout or i < last_cache
             input = model.transpose(input, inplace or i != 0,
                                     cachein or i > first_cache,
                                     cacheout or i < last_cache)
@@ -854,13 +841,14 @@ class DiscreteDifference(Square):
 class DdTdd(Symmetric):
     """Calculate operator dX.T dX along a given axis."""
 
-    def __init__(self, shapein=None, axis=0, description=None):
+    def __init__(self, axis=0, scalar=1., shapein=None, description=None):
         Symmetric.__init__(self, shapein=shapein, description=description)
         self.axis = axis
+        self.scalar = scalar
 
     def direct(self, input, inplace, cachein, cacheout):
         output = self.validate_input_inplace(input, inplace)
-        diffTdiff(output, self.axis)
+        diffTdiff(output, self.axis, self.scalar)
         return output
 
    
@@ -1208,7 +1196,7 @@ class ResponseTruncatedExponential(Square):
     ==========
     
     tau: number
-        Time constant divided by the signal sampling time
+        Time constant divided by the signal sampling period
     """
     
     def __init__(self, tau, shapein=None, description=None):

@@ -806,7 +806,7 @@ end subroutine diffT
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine diffTdiff(array, asize, dim, ashape, arank)
+subroutine diffTdiff(array, asize, dim, ashape, arank, scalar)
 
     use module_math,    only : diffTdiff_fast, diffTdiff_slow
     use module_tamasis, only : p
@@ -817,12 +817,14 @@ subroutine diffTdiff(array, asize, dim, ashape, arank)
     !f2py intent(in)       :: dim
     !f2py intent(in)       :: ashape
     !f2py intent(hide)     :: arank=size(ashape)
+    !f2py intent(in)       :: scalar
 
     integer*8, intent(in)  :: asize
     real(p), intent(inout) :: array(asize)
     integer, intent(in)    :: dim
     integer, intent(in)    :: arank
     integer*8, intent(in)  :: ashape(arank)
+    real(p), intent(in)    :: scalar
 
     integer :: idim, nfast, ndiff, nslow
 
@@ -837,9 +839,9 @@ subroutine diffTdiff(array, asize, dim, ashape, arank)
     end do
 
     if (dim == 1) then
-        call diffTdiff_fast(array(1), ndiff, nslow)
+        call diffTdiff_fast(array(1), ndiff, nslow, scalar)
     else
-        call diffTdiff_slow(array(1), nfast, ndiff, nslow)
+        call diffTdiff_slow(array(1), nfast, ndiff, nslow, scalar)
     end if
 
 end subroutine diffTdiff

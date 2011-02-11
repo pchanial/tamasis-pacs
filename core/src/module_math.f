@@ -924,32 +924,39 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine diffTdiff_fast(array, m, n)
+    subroutine diffTdiff_fast(array, m, n, scalar)
 
         use module_tamasis,  only : p
         implicit none
 
-        real(p), intent(inout) :: array(m,n)
-        integer, intent(in)    :: m, n
+        real(p), intent(inout)        :: array(m,n)
+        integer, intent(in)           :: m, n
+        real(p), intent(in), optional :: scalar
 
         integer :: i, j
-        real(p) :: v, w
+        real(p) :: v, w, s
 
         if (m == 1) then
             array = 0
             return
         end if
 
+        if (present(scalar)) then
+            s = scalar
+        else
+            s = 1._p
+        end if
+
         !$omp parallel do private(i,j,v,w)
         do j = 1, n
             v = array(1,j)
-            array(1,j) = array(1,j) - array(2,j)
+            array(1,j) = s * (array(1,j) - array(2,j))
             do i = 2, m-1
                 w = array(i,j)
-                array(i,j) = 2 * w - v - array(i+1,j)
+                array(i,j) = s * (2 * w - v - array(i+1,j))
                 v = w
             end do
-            array(m,j) = array(m,j) - v
+            array(m,j) = s * (array(m,j) - v)
         end do
         !$omp end parallel do
 
@@ -959,21 +966,28 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine diffTdiff_slow(array, m, n, o)
+    subroutine diffTdiff_slow(array, m, n, o, scalar)
 
         use module_tamasis,  only : p
         implicit none
 
-        integer, intent(in)    :: m, n, o
-        real(p), intent(inout) :: array(m,n,o)
+        integer, intent(in)           :: m, n, o
+        real(p), intent(inout)        :: array(m,n,o)
+        real(p), intent(in), optional :: scalar
 
         integer, parameter :: block = 4096
         integer :: h, i, j, k, a, z
-        real(p) :: w, v(block)
+        real(p) :: w, v(block), s
         
         if (n == 1) then
             array = 0
             return
+        end if
+
+        if (present(scalar)) then
+            s = scalar
+        else
+            s = 1._p
         end if
 
         !$omp parallel do private(i,j,k,a,z,v,w)
@@ -982,15 +996,15 @@ contains
                 a = (i-1) * block + 1
                 z = min(i * block, m)
                 v(1:z-a+1) = array(a:z,1,k)
-                array(a:z,1,k) = v(1:z-a+1) - array(a:z,2,k)
+                array(a:z,1,k) = s * (v(1:z-a+1) - array(a:z,2,k))
                 do j = 2, n-1
                     do h = a, z
                         w = array(h,j,k)
-                        array(h,j,k) = 2 * w - v(h-a+1) - array(h,j+1,k)
+                        array(h,j,k) = s * (2 * w - v(h-a+1) - array(h,j+1,k))
                         v(h-a+1) = w
                     end  do
                 end do
-                array(a:z,n,k) = array(a:z,n,k) - v(1:z-a+1)
+                array(a:z,n,k) = s * (array(a:z,n,k) - v(1:z-a+1))
             end do
         end do
         !$omp end parallel do

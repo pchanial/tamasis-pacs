@@ -6,7 +6,7 @@ import time
 
 from mpi4py import MPI
 from . import var
-from .acquisitionmodels import Diagonal, DiscreteDifference, Identity, Masking,\
+from .acquisitionmodels import Diagonal, DdTdd, Identity, Masking,\
      AllReduce, Reshaping
 from .datatypes import Map, Tod, create_fitsheader
 from .quantity import Quantity, UnitError
@@ -128,7 +128,7 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None,
         weight = Identity(description='Weight')
 
     if unpacking is None:
-        unpacking = Reshaping(shapein=model.shape[1], shapeout=model.shapein)
+        unpacking = Identity()
 
     if solver is None:
         solver = scipy.sparse.linalg.cgs
@@ -138,12 +138,12 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None,
     if hyper != 0:
         ntods = tod.size if tod.mask is None else np.sum(tod.mask == 0)
         ntods = var.mpi_comm.allreduce(ntods, op=MPI.SUM)
-        nmaps = unpacking.shape[1]
+        nmaps = model.shape[1]
         if var.mpi_comm.Get_rank() == 0:
             hyper = np.array(hyper * ntods / nmaps, dtype=var.FLOAT_DTYPE)
-            dX = DiscreteDifference(axis=1)
-            dY = DiscreteDifference(axis=0)
-            C += hyper * ( dX.T * dX + dY.T * dY )
+            dxTdx = DdTdd(axis=1, scalar=hyper)
+            dyTdy = DdTdd(axis=0, scalar=hyper)
+            C += dxTdx + dyTdy
 
     C   = AllReduce() * unpacking.T * C * unpacking
     rhs = AllReduce() * unpacking.T * model.T * weight * tod
@@ -186,7 +186,7 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None,
     if callback is None:
         callback = PcgCallback()
 
-    if var.verbose:
+    if var.verbose or profile:
         print('')
         print('Model:')
         print(C)
@@ -197,8 +197,8 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None,
     time0 = time.time()
     if profile is not None:
         def run():
-            solution,info = solver(C, rhs, x0=x0, tol=tol, maxiter=maxiter, M=M)
-            if info != 0:
+            solution,info = solver(C, rhs, x0=x0, tol=tol, maxiter=1, M=M)
+            if info < 0:
                 print('Solver failure: info='+str(info))
         cProfile.runctx('run()', globals(), locals(), profile+'.prof')
         print('Profile time: '+str(time.time()-time0))

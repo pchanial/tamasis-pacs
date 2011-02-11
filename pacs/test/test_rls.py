@@ -8,7 +8,8 @@ from tamasis import *
 
 class TestFailure(Exception): pass
 
-tamasis.var.verbose = True
+tamasis.var.verbose = False
+profile = None#'test_rls.png'
 data_dir = os.path.dirname(__file__) + '/data/'
 obs = PacsObservation(filename=data_dir+'frames_blue.fits', fine_sampling_factor=1)
 
@@ -29,14 +30,16 @@ map_naive = mapper_naive(tod, model)
 weights = map_naive.coverage
 map_mask = weights == 0
 
-
 # iterative map, taking all map pixels
 class Callback():
     def __init__(self):
         self.niterations = 0
     def __call__(self, x):
         self.niterations += 1
-map_iter = mapper_rls(tod, model, hyper=1., tol=1.e-4, callback=Callback())
-print 'Elapsed time: '+str(map_iter.header['TIME'])
-if map_iter.header['NITER'] > 63:
-    raise TestFailure()
+
+map_iter = mapper_rls(tod, model, hyper=1., tol=1.e-4, callback=Callback(),
+                      profile=profile)
+if profile is None:
+    print 'Elapsed time: '+str(map_iter.header['TIME'])
+    if map_iter.header['NITER'] > 63:
+        raise TestFailure()

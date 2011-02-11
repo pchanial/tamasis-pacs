@@ -325,7 +325,7 @@ def diffT(array, axis=0):
 #-------------------------------------------------------------------------------
 
 
-def diffTdiff(array, axis=0):
+def diffTdiff(array, axis=0, scalar=1.):
     """
     Inplace discrete difference transpose times discrete difference
     """
@@ -339,7 +339,8 @@ def diffTdiff(array, axis=0):
         array[:] = 0
         array.shape = ()
     else:
-        tmf.difftdiff(array.ravel(), rank-axis, np.asarray(array.T.shape))
+        tmf.difftdiff(array.ravel(), rank-axis, np.asarray(array.T.shape),
+                      scalar)
     return array
 
     
