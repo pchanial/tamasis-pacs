@@ -494,10 +494,8 @@ class Composite(AcquisitionModel):
         models = [ asacquisitionmodel(m) for m in models ]
 
         for model in models:
-            model = asacquisitionmodel(model)
             if isinstance(model, self.__class__):
-                for block in model.blocks:
-                    self.blocks.append(block)
+                self.blocks.extend(model.blocks)
             else:
                 self.blocks.append(model)
 
@@ -602,16 +600,17 @@ class Addition(Composite):
         input = self.validate_input(input, self.shapein)
         output = self.blocks[0].direct(input, False, False, False)
         for i, model in enumerate(self.blocks[1:]):
-            cachein_ = cachein and i == len(self.blocks)-1
-            output += model.direct(input, False, False, False)
+            last = i == len(self.blocks) - 1
+            output += model.direct(input, inplace and last, cachein, cacheout)
         return output
 
     def transpose(self, input, inplace, cachein, cacheout):
         input = self.validate_input(input, self.shapeout)
         output = self.blocks[0].transpose(input, False, False, False)
         for i, model in enumerate(self.blocks[1:]):
-            cachein_ = cachein and i == len(self.blocks)-1
-            output += model.transpose(input, False, False, False)
+            last = i == len(self.blocks) - 1
+            output += model.transpose(input, inplace and last, cachein,
+                                      cacheout)
         return output
 
     @property
@@ -659,7 +658,10 @@ class Addition(Composite):
 
     def __iadd__(self, other):
         oldblocks = self.blocks
-        self.blocks.append(asacquisitionmodel(other))
+        if isinstance(other, Addition):
+            self.blocks.extend(other.blocks)
+        else:
+            self.blocks.append(asacquisitionmodel(other))
         try:
             shapein = self.shapein
             shapeout = self.shapeout
@@ -842,6 +844,8 @@ class DdTdd(Symmetric):
     """Calculate operator dX.T dX along a given axis."""
 
     def __init__(self, axis=0, scalar=1., shapein=None, description=None):
+        if description is None and scalar != 1.:
+            description = str(scalar) + ' DdTdd'
         Symmetric.__init__(self, shapein=shapein, description=description)
         self.axis = axis
         self.scalar = scalar
