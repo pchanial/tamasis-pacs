@@ -293,8 +293,6 @@ def diff(array, axis=0):
     """
     array = np.asanyarray(array)
     rank = array.ndim
-
-    size = int(np.product(array.shape))
     
     if rank == 0:
         array.shape = (1,)
@@ -315,8 +313,6 @@ def diffT(array, axis=0):
     array = np.asanyarray(array)
     rank = array.ndim
 
-    size = int(np.product(array.shape))
-    
     if rank == 0:
         array.shape = (1,)
         array[:] = 0
