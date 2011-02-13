@@ -1010,11 +1010,13 @@ class PacsMultiplexing(AcquisitionModelLinear):
 #-------------------------------------------------------------------------------
 
 
-def pacs_plot_scan(patterns, title=None, new_figure=True):
+def pacs_plot_scan(patterns, title=None, new_figure=True, **kw):
+
     if type(patterns) not in (tuple, list):
         patterns = (patterns,)
 
     files = []
+    scans = []
     for pattern in patterns:
         files.extend(glob.glob(pattern))
 
@@ -1033,13 +1035,9 @@ def pacs_plot_scan(patterns, title=None, new_figure=True):
             except IndexError:
                 pass
 
-        if ifile == 0:
-            image = plot_scan((status.RaArray, status.DecArray), title=title,
-                              new_figure=new_figure)
-        else:
-            x, y = image.topixel(status.RaArray, status.DecArray)
-            p = P.plot(x, y, linewidth=2)
-            P.plot(x[0], y[0], 'o', color = p[0]._color)
+        scans.append((status.RaArray, status.DecArray))
+    
+    plot_scan(scans, **kw)
 
 
 #-------------------------------------------------------------------------------

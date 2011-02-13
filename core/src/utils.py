@@ -133,37 +133,67 @@ def minmax_degrees(array):
 #-------------------------------------------------------------------------------
 
 
-def plot_scan(input, map=None, title=None, new_figure=True, color='magenta',
-              linewidth=2):
-    if hasattr(input, 'pointing'):
-        input = input.pointing
-    if hasattr(input, 'ra') and hasattr(input, 'dec'):
-        ra  = input.ra
-        dec = input.dec
-        if hasattr(input, 'removed'):
-            ra = ra.copy()
-            dec = dec.copy()
-            ra [input.removed] = np.nan
-            dec[input.removed] = np.nan
-    elif type(input) in (list,tuple):
-        ra  = input[0]
-        dec = input[1]
+def plot_scan(input, map=None, title=None, new_figure=True, linewidth=2, **kw):
+
+    def plot_scan_(input, image, linewidth=linewidth, **kw):
+        for slice in input:
+            x, y = image.topixel(slice[0], slice[1])
+            dest = 0
+            for n in slice[2]:
+                p = pyplot.plot(x[dest:dest+n], y[dest:dest+n],
+                                linewidth=linewidth, **kw)
+                pyplot.plot(x[dest], y[dest], 'o', color=p[0]._color)
+                dest += n
+
+    if type(input) not in (list, tuple):
+        input = [input]
     else:
-        ra = None
+        input = list(input)
 
-    if not isinstance(ra, np.ndarray) or not isinstance(dec, np.ndarray):
-        raise TypeError("Invalid input type '" + type(input) + "'.")
-
-    nvalids = np.sum(np.isfinite(ra*dec))
-    if nvalids == 0:
-        raise ValueError('There is no valid pointing.')
+    # format the input as a list of (ra, dec, nsamples)
+    for islice, slice in enumerate(input):
+        if hasattr(slice, 'pointing'):
+            slice = slice.pointing
+        if hasattr(slice, 'ra') and hasattr(slice, 'dec'):
+            ra = slice.ra
+            dec = slice.dec
+            if hasattr(slice, 'removed'):
+                ra = ra.copy()
+                dec = dec.copy()
+                ra [slice.removed] = np.nan
+                dec[slice.removed] = np.nan
+            nsamples = getattr(slice, 'nsamples', (ra.size,))
+            input[islice] = (ra, dec, nsamples)
+        elif type(slice) not in (list,tuple) or len(slice) != 2:
+            raise TypeError('Invalid input.')
+        else:
+            ra = np.asarray(slice[0])
+            dec = np.asarray(slice[1])
+            if ra.shape != dec.shape:
+                raise ValueError('Input R.A. and Dec do not have the same len' \
+                                 'gth.')
+            input[islice] = (ra, dec, (ra.size,))
 
     if isinstance(map, Map) and map.has_wcs():
         image = map.imshow(title=title)
         x, y = image.topixel(ra, dec)
-        p = pyplot.plot(x, y, color=color, linewidth=linewidth)
-        pyplot.plot(x[0], y[0], 'o', color=p[0]._color)
+        plot_scan_(input, image, linewidth=linewidth, **kw)
         return image
+
+    npointings = sum([s[0].size for s in input])
+    ra = np.empty(npointings)
+    dec = np.empty(npointings)
+
+    dest = 0
+    for slice in input:
+        n = slice[0].size
+        ra [dest:dest+n] = slice[0]
+        dec[dest:dest+n] = slice[1]
+        dest += n
+
+    nvalids = np.sum(np.isfinite(ra*dec))
+    if nvalids == 0:
+        raise ValueError('There is no valid pointing.')
 
     crval = [mean_degrees(ra), np.nansum(dec)/nvalids]
     ra_min,  ra_max  = minmax_degrees(ra)
@@ -203,9 +233,7 @@ def plot_scan(input, map=None, title=None, new_figure=True, color='magenta',
     image.interact_toolbarinfo()
     image.interact_writepos()
     pyplot.show()
-    x, y = image.topixel(ra, dec)
-    p = pyplot.plot(x, y, color=color, linewidth=linewidth)
-    pyplot.plot(x[0], y[0], 'o', color = p[0]._color)
+    plot_scan_(input, image, linewidth=linewidth, **kw)
     return image
 
 
