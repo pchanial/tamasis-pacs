@@ -233,13 +233,12 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None,
     output = Map(unpacking(solution, True, True, True), copy=False)
     output.unit = tod.unit + ' ' + (1/Quantity(1, model.unitout)).unit + ' ' + \
                   Quantity(1, model.unitin).unit
-    map_naive = mapper_naive(tod, model)
 
-    output.header = map_naive.header
-    output.coverage = map_naive.coverage
+    coverage = model.T(numpy.ones(tod.shape), True, True, True)
+    output.header = coverage.header
+    output.coverage = coverage
 
     output.header.update('time', time.time() - time0)
-
     if hasattr(callback, 'niterations'):
         output.header.update('niter', callback.niterations)
     output.header.update('maxiter', maxiter)
