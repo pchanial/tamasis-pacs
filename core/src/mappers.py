@@ -8,7 +8,7 @@ from mpi4py import MPI
 from . import var
 from .acquisitionmodels import Diagonal, DdTdd, Identity, Masking,\
      AllReduce, Reshaping
-from .datatypes import Map, Tod, create_fitsheader
+from .datatypes import Map, Tod, create_fitsheader, flatten_sliced_shape
 from .quantity import Quantity, UnitError
 
 
@@ -100,6 +100,7 @@ def mapper_naive(tod, model, unit=None):
 def mapper_ls(tod, model, weight=None, unpacking=None, x0=None, tol=1.e-5,
               maxiter=300, M=None, solver=None, verbose=True, callback=None,
               profile=None):
+
     return mapper_rls(tod, model, weight=weight, unpacking=unpacking, hyper=0,
                       x0=x0, tol=tol, maxiter=maxiter, M=M, solver=solver,
                       verbose=verbose, callback=callback, profile=profile)
@@ -112,7 +113,6 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None,
                tol=1.e-5, maxiter=300, M=None, solver=None, verbose=True,
                callback=None, profile=None):
 
-    
     # make sure that the tod unit is compatible with the model's output unit
     if tod.unit == '':
         tod = tod.view()
@@ -124,14 +124,11 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None,
                 "' incompatible with that of the model '" + Quantity(1, 
                 model.unitout).unit + "'.")
 
-    if weight is None:
-        weight = Identity(description='Weight')
-
-    if unpacking is None:
-        unpacking = Identity()
-
     if solver is None:
         solver = scipy.sparse.linalg.cgs
+
+    if weight is None:
+        weight = Identity(description='Weight')
 
     C = model.T * weight * model
 
@@ -145,8 +142,20 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None,
             dyTdy = DdTdd(axis=0, scalar=hyper)
             C += dxTdx + dyTdy
 
-    C   = AllReduce() * unpacking.T * C * unpacking
-    rhs = AllReduce() * unpacking.T * model.T * weight * tod
+    # linear solvers handle vectors. the default unpacking is a reshape
+    shapein = flatten_sliced_shape(model.shapein)
+    reshaping = Reshaping(int(np.product(shapein)), shapein)
+    if unpacking is None:
+        unpacking = reshaping
+
+    if not isinstance(unpacking, Reshaping):
+        C = unpacking.T * C * unpacking
+    C = AllReduce() * C
+
+    if unpacking.shapein is None or len(unpacking.shapein) > 1:
+        unpacking = unpacking * reshaping
+
+    rhs = (AllReduce() * unpacking.T * model.T * weight)(tod)
 
     if not np.all(np.isfinite(rhs)):
         raise ValueError('RHS contains not finite values.')
@@ -154,6 +163,7 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None,
         raise ValueError("Incompatible size for RHS: '" + str(rhs.shape) + \
                          "' instead of '" + str(C.shape[1]) + "'.")
 
+    # preconditioner
     if M is not None:
         if isinstance(M, np.ndarray):
             M = M.copy()
@@ -161,8 +171,9 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None,
             M = Diagonal(M, description='Preconditioner')
         M = unpacking.T * M
 
+    # initial guess
     if x0 is not None:
-        x0 = unpacking.T * x0
+        x0 = unpacking.T(x0)
         x0[np.isnan(x0)] = 0.
         if x0.shape != (C.shape[1],):
             raise ValueError("Incompatible size for x0: '" + str(x0.shape) + \
