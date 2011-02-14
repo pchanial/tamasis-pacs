@@ -21,6 +21,8 @@ module module_math
     public :: mean
     public :: mean_degrees
     public :: minmax_degrees
+    public :: angle_lonlat
+    public :: barycenter_lonlat
     public :: median
     public :: median_nocopy
     public :: moment
@@ -370,6 +372,52 @@ contains
         maxv = modulo(maxv, 360._p)
 
     end subroutine minmax_degrees
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    pure elemental subroutine angle_lonlat(lon1, lat1, lon2, lat2, angle)
+
+        real(p), intent(in)  :: lon1, lat1, lon2, lat2
+        real(p), intent(out) :: angle
+        
+        angle = acos(cos(lat1*DEG2RAD) * cos(lat2*DEG2RAD) * cos((lon2 - lon1)*DEG2RAD) + sin(lat1*DEG2RAD) * sin(lat2*DEG2RAD)) * &
+                RAD2DEG
+
+    end subroutine angle_lonlat
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine barycenter_lonlat(lon, lat, lon0, lat0)
+
+        real(p), intent(in)  :: lon(:), lat(:)
+        real(p), intent(out) :: lon0, lat0
+
+        real(p) :: x, y, z, phi, cotheta, cocotheta
+        integer :: i
+
+        x = 0
+        y = 0
+        z = 0
+        !$omp parallel do reduction(+:x,y,z) private(phi,cotheta,cocotheta)
+        do i = 1, size(lon)
+            phi = lon(i) * DEG2RAD
+            cotheta = lat(i) * DEG2RAD
+            if (cotheta /= cotheta .or. phi /= phi) cycle
+            cocotheta = cos(cotheta)
+            x = x + cocotheta * cos(phi)
+            y = y + cocotheta * sin(phi)
+            z = z + sin(cotheta)
+        end do
+        !$omp end parallel do
+        
+        lon0 = modulo(atan(y,x) * RAD2DEG + 360._p, 360._p)
+        lat0 = acos(sqrt((x**2 + y**2)/(x**2 + y**2 + z**2))) * RAD2DEG
+        
+    end subroutine barycenter_lonlat
 
 
     !-------------------------------------------------------------------------------------------------------------------------------

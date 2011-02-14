@@ -21,6 +21,8 @@ __all__ = [
     'ds9',
     'gaussian',
     'hs',
+    'angle_lonlat',
+    'barycenter_lonlat',
     'mean_degrees',
     'minmax_degrees',
     'phasemask_fourquadrant',
@@ -111,6 +113,62 @@ def hs(arg):
             value = value[0:-3] + '...'
         print(lname+value)
 
+
+#-------------------------------------------------------------------------------
+
+
+def angle_lonlat(lon1, lat1, lon2=None, lat2=None):
+    """
+    Returns the angle between vectors on the celestial sphere in degrees.
+
+    Parameters
+    ----------
+    lon1, lon2 : array of numbers
+        longitude in degrees
+    lat1, lat2 : array of numbers
+        latitude in degrees
+
+    Example
+    -------
+    >>> angle_lonlat((ra1,dec1), (ra2,dec2))
+    >>> angle_lonlat(ra1, dec1, ra2, dec2)
+    """
+
+    if lon2 is None and lat2 is None:
+        lon2, lat2 = lat1
+        lon1, lat1 = lon1
+    lon1 = np.array(lon1, dtype=var.FLOAT_DTYPE, ndmin=1, copy=False).ravel()
+    lat1 = np.array(lat1, dtype=var.FLOAT_DTYPE, ndmin=1, copy=False).ravel()
+    lon2 = np.array(lon2, dtype=var.FLOAT_DTYPE, ndmin=1, copy=False).ravel()
+    lat2 = np.array(lat2, dtype=var.FLOAT_DTYPE, ndmin=1, copy=False).ravel()
+    angle = tmf.angle_lonlat(lon1, lat1, lon2, lat2)
+    if angle.size == 1:
+        angle = float(angle)
+    return angle
+
+
+#-------------------------------------------------------------------------------
+
+
+def barycenter_lonlat(lon, lat):
+    """
+    Returns the barycenter of vectors on the celestial sphere.
+
+    Parameters
+    ----------
+    lon : array of numbers
+        longitude in degrees
+    lat : array of numbers
+        latitude in degrees
+    """
+    lon = np.asarray(lon, dtype=var.FLOAT_DTYPE).ravel()
+    lat = np.asarray(lat, dtype=var.FLOAT_DTYPE).ravel()
+    return tmf.barycenter_lonlat(lon, lat)
+
+
+#-------------------------------------------------------------------------------
+
+
 def mean_degrees(array):
     """
     Returns the mean value of an array of values in degrees, by taking into 
@@ -195,30 +253,11 @@ def plot_scan(input, map=None, title=None, new_figure=True, linewidth=2, **kw):
     if nvalids == 0:
         raise ValueError('There is no valid pointing.')
 
-    crval = [mean_degrees(ra), np.nansum(dec)/nvalids]
-    ra_min,  ra_max  = minmax_degrees(ra)
-    dec_min, dec_max = np.nanmin(dec), np.nanmax(dec)
-    cdelt = np.max((ra_max-ra_min)/1000., (dec_max-dec_min)/1000.)
-    header = create_fitsheader(None, naxis=[1,1], cdelt=cdelt, crval=crval,
-                               crpix=[1,1])
+    crval = barycenter_lonlat(ra, dec)
+    cdelt = np.nanmax(angle_lonlat((ra,dec), crval)) / 100
+    header = create_fitsheader(None, naxis=[201,201], cdelt=cdelt, crval=crval,
+                               crpix=[101,101])
 
-    proj = kapteyn.wcs.Projection(header)
-    coords = np.array([ra, dec]).T
-    xy = proj.topixel(coords)
-    xmin = int(np.round(np.nanmin(xy[:,0])))
-    xmax = int(np.round(np.nanmax(xy[:,0])))
-    ymin = int(np.round(np.nanmin(xy[:,1])))
-    ymax = int(np.round(np.nanmax(xy[:,1])))
-    xmargin = int(np.ceil((xmax - xmin + 1) / 10.))
-    ymargin = int(np.ceil((ymax - ymin + 1) / 10.))
-    xmin -= xmargin
-    xmax += xmargin
-    ymin -= ymargin
-    ymax += ymargin
-    naxis = (xmax - xmin + 1, ymax - ymin + 1)
-    crpix = (-xmin+2, -ymin+2)
-    header = create_fitsheader(None, naxis=naxis, cdelt=cdelt, crval=crval,
-                               crpix=crpix)
     fitsobj = kapteyn.maputils.FITSimage(externalheader=header)
     if new_figure:
         fig = pyplot.figure()

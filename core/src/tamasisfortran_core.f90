@@ -960,6 +960,62 @@ end subroutine minmax_degrees
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
+subroutine barycenter_lonlat(lon, lat, n, lon0, lat0)
+
+    use module_math,    only : barycenter_lonlat_ => barycenter_lonlat
+    use module_tamasis, only : p
+    implicit none
+
+    !f2py threadsafe
+    !f2py intent(in)     :: lon, lat
+    !f2py intent(hide)   :: n = size(lon)
+    !f2py intent(out)    :: lon0, lat0
+
+    real(p), intent(in)  :: lon(n), lat(n)
+    integer, intent(in)  :: n
+    real(p), intent(out) :: lon0, lat0
+
+    call barycenter_lonlat_(lon, lat, lon0, lat0)
+
+end subroutine barycenter_lonlat
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine angle_lonlat(lon1, lat1, m, lon2, lat2, n, angle)
+
+    use module_math,    only : angle_lonlat_ => angle_lonlat
+    use module_tamasis, only : p
+    implicit none
+
+    !f2py threadsafe
+    !f2py intent(in)     :: lon1, lat1
+    !f2py intent(hide)   :: m = size(lon1)
+    !f2py intent(in)     :: lon2, lat2
+    !f2py intent(hide)   :: n = size(lon2)
+    !f2py intent(out)    :: angle(max(m,n))
+
+    real(p), intent(in)  :: lon1(m), lat1(m)
+    integer, intent(in)  :: m
+    real(p), intent(in)  :: lon2(n), lat2(n)
+    integer, intent(in)  :: n
+    real(p), intent(out) :: angle(max(m,n))
+
+    if (m == 1) then
+        call angle_lonlat_(lon1(1), lat1(1), lon2, lat2, angle)
+    else if (n == 1) then
+        call angle_lonlat_(lon1, lat1, lon2(1), lat2(1), angle)
+    else
+        call angle_lonlat_(lon1, lat1, lon2, lat2, angle)
+    end if
+
+end subroutine angle_lonlat
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
 subroutine distance_1d(nx, origin, resolution, array)
 
     use module_math,    only : distance
