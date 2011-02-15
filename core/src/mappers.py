@@ -234,7 +234,7 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None,
     output.unit = tod.unit + ' ' + (1/Quantity(1, model.unitout)).unit + ' ' + \
                   Quantity(1, model.unitin).unit
 
-    coverage = model.T(numpy.ones(tod.shape), True, True, True)
+    coverage = model.T(np.ones(tod.shape), True, True, True)
     output.header = coverage.header
     output.coverage = coverage
 
