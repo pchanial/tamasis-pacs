@@ -193,15 +193,14 @@ def minmax_degrees(array):
 
 def plot_scan(input, map=None, title=None, new_figure=True, linewidth=2, **kw):
 
-    def plot_scan_(input, image, linewidth=linewidth, **kw):
-        for slice in input:
-            x, y = image.topixel(slice[0], slice[1])
-            dest = 0
-            for n in slice[2]:
-                p = pyplot.plot(x[dest:dest+n], y[dest:dest+n],
-                                linewidth=linewidth, **kw)
-                pyplot.plot(x[dest], y[dest], 'o', color=p[0]._color)
-                dest += n
+    def plot_scan_(ra, dec, nsamples, image, linewidth=linewidth, **kw):
+        x, y = image.topixel(ra, dec)
+        dest = 0
+        for n in nsamples:
+            p = pyplot.plot(x[dest:dest+n], y[dest:dest+n],
+                            linewidth=linewidth, **kw)
+            pyplot.plot(x[dest], y[dest], 'o', color=p[0]._color)
+            dest += n
 
     if type(input) not in (list, tuple):
         input = [input]
@@ -232,34 +231,39 @@ def plot_scan(input, map=None, title=None, new_figure=True, linewidth=2, **kw):
                                  'gth.')
             input[islice] = (ra, dec, (ra.size,))
 
-    if isinstance(map, Map) and map.has_wcs():
-        image = map.imshow(title=title)
-        x, y = image.topixel(ra, dec)
-        plot_scan_(input, image, linewidth=linewidth, **kw)
-        return image
-
     npointings = sum([s[0].size for s in input])
     ra = np.empty(npointings)
     dec = np.empty(npointings)
 
     dest = 0
+    nsamples = []
     for slice in input:
         n = slice[0].size
         ra [dest:dest+n] = slice[0]
         dec[dest:dest+n] = slice[1]
+        nsamples += slice[2]
         dest += n
 
     nvalids = np.sum(np.isfinite(ra*dec))
     if nvalids == 0:
-        raise ValueError('There is no valid pointing.')
+        raise ValueError('There is no valid coordinates.')
+
+    if isinstance(map, Map) and map.has_wcs():
+        image = map.imshow(title=title)
+        plot_scan_(ra, dec, nsamples, image, linewidth=linewidth, **kw)
+        return image
 
     crval = barycenter_lonlat(ra, dec)
     angles = angle_lonlat((ra,dec), crval)
     angle_max = np.nanmax(angles)
     if angle_max >= 90.:
-        print 'Warning: some values have an angular distance to the projectio' \
-              'n point greater than 90 degrees.'
-        angle_max = np.nanmax(angles[angles < 90])
+        print 'Warning: some coordinates have an angular distance to the proj' \
+              'ection point greater than 90 degrees.'
+        mask = angles >= 90
+        ra[mask] = np.nan
+        dec[mask] = np.nan
+        angles[mask] = np.nan
+        angle_max = np.nanmax(angles)
     cdelt = np.rad2deg(np.tan(np.deg2rad(angle_max))) / 100
     header = create_fitsheader(None, naxis=[201,201], cdelt=cdelt, crval=crval,
                                crpix=[101,101])
@@ -278,7 +282,7 @@ def plot_scan(input, map=None, title=None, new_figure=True, linewidth=2, **kw):
     image.interact_toolbarinfo()
     image.interact_writepos()
     pyplot.show()
-    plot_scan_(input, image, linewidth=linewidth, **kw)
+    plot_scan_(ra, dec, nsamples, image, linewidth=linewidth, **kw)
     return image
 
 
