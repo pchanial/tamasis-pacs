@@ -1,5 +1,6 @@
 Requirements:
 =============
+o 64 bit computer
 o cfitsio >= 3.23 (shared library required, 'make shared')
 o FFTW3 3.2.2
 o Fortran 2003 compiler
@@ -14,6 +15,7 @@ o python 2.6
     - pyfits 2.3 (http://www.stsci.edu/resources/software_hardware/pyfits)
     - scipy
 o wcslib 4.4.4
+o LAPACK
 
 Recommended packages:
 =====================
