@@ -225,8 +225,8 @@ def plot_scan(input, map=None, title=None, new_figure=True, linewidth=2, **kw):
         elif type(slice) not in (list,tuple) or len(slice) != 2:
             raise TypeError('Invalid input.')
         else:
-            ra = np.asarray(slice[0])
-            dec = np.asarray(slice[1])
+            ra = np.array(slice[0], ndmin=1, copy=False)
+            dec = np.array(slice[1], ndmin=1, copy=False)
             if ra.shape != dec.shape:
                 raise ValueError('Input R.A. and Dec do not have the same len' \
                                  'gth.')
@@ -254,7 +254,13 @@ def plot_scan(input, map=None, title=None, new_figure=True, linewidth=2, **kw):
         raise ValueError('There is no valid pointing.')
 
     crval = barycenter_lonlat(ra, dec)
-    cdelt = np.nanmax(angle_lonlat((ra,dec), crval)) / 100
+    angles = angle_lonlat((ra,dec), crval)
+    angle_max = np.nanmax(angles)
+    if angle_max >= 90.:
+        print 'Warning: some values have an angular distance to the projectio' \
+              'n point greater than 90 degrees.'
+        angle_max = np.nanmax(angles[angles < 90])
+    cdelt = np.rad2deg(np.tan(np.deg2rad(angle_max))) / 100
     header = create_fitsheader(None, naxis=[201,201], cdelt=cdelt, crval=crval,
                                crpix=[101,101])
 

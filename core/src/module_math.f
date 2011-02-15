@@ -414,8 +414,9 @@ contains
         end do
         !$omp end parallel do
         
-        lon0 = modulo(atan(y,x) * RAD2DEG + 360._p, 360._p)
+        lon0 = modulo(atan2(y,x) * RAD2DEG + 360._p, 360._p)
         lat0 = acos(sqrt((x**2 + y**2)/(x**2 + y**2 + z**2))) * RAD2DEG
+        lat0 = sign(lat0, z)
         
     end subroutine barycenter_lonlat
 
