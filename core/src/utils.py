@@ -1,18 +1,17 @@
 import kapteyn
 import numpy as np
 import os
-import pyfits
 import re
 import scipy.special
 import tamasisfortran as tmf
-import time
 import scipy.signal
 
 from matplotlib import pyplot
 from . import var
-from .datatypes import Map, create_fitsheader
 from .numpyutils import _my_isscalar
+from .wcsutils import barycenter_lonlat
 from .quantity import Quantity
+from .datatypes import Map, create_fitsheader
 
 __all__ = [ 
     'airy_disk',
@@ -21,10 +20,6 @@ __all__ = [
     'ds9',
     'gaussian',
     'hs',
-    'angle_lonlat',
-    'barycenter_lonlat',
-    'mean_degrees',
-    'minmax_degrees',
     'phasemask_fourquadrant',
     'plot_scan',
     'profile',
@@ -112,80 +107,6 @@ def hs(arg):
         if len(value) == 72-length-2:
             value = value[0:-3] + '...'
         print(lname+value)
-
-
-#-------------------------------------------------------------------------------
-
-
-def angle_lonlat(lon1, lat1, lon2=None, lat2=None):
-    """
-    Returns the angle between vectors on the celestial sphere in degrees.
-
-    Parameters
-    ----------
-    lon1, lon2 : array of numbers
-        longitude in degrees
-    lat1, lat2 : array of numbers
-        latitude in degrees
-
-    Example
-    -------
-    >>> angle_lonlat((ra1,dec1), (ra2,dec2))
-    >>> angle_lonlat(ra1, dec1, ra2, dec2)
-    """
-
-    if lon2 is None and lat2 is None:
-        lon2, lat2 = lat1
-        lon1, lat1 = lon1
-    lon1 = np.array(lon1, dtype=var.FLOAT_DTYPE, ndmin=1, copy=False).ravel()
-    lat1 = np.array(lat1, dtype=var.FLOAT_DTYPE, ndmin=1, copy=False).ravel()
-    lon2 = np.array(lon2, dtype=var.FLOAT_DTYPE, ndmin=1, copy=False).ravel()
-    lat2 = np.array(lat2, dtype=var.FLOAT_DTYPE, ndmin=1, copy=False).ravel()
-    angle = tmf.angle_lonlat(lon1, lat1, lon2, lat2)
-    if angle.size == 1:
-        angle = float(angle)
-    return angle
-
-
-#-------------------------------------------------------------------------------
-
-
-def barycenter_lonlat(lon, lat):
-    """
-    Returns the barycenter of vectors on the celestial sphere.
-
-    Parameters
-    ----------
-    lon : array of numbers
-        longitude in degrees
-    lat : array of numbers
-        latitude in degrees
-    """
-    lon = np.asarray(lon, dtype=var.FLOAT_DTYPE).ravel()
-    lat = np.asarray(lat, dtype=var.FLOAT_DTYPE).ravel()
-    return tmf.barycenter_lonlat(lon, lat)
-
-
-#-------------------------------------------------------------------------------
-
-
-def mean_degrees(array):
-    """
-    Returns the mean value of an array of values in degrees, by taking into 
-    account the discrepancy at 0 degree
-    """
-    return tmf.mean_degrees(np.asarray(array, dtype=var.FLOAT_DTYPE).ravel())
-
-
-#-------------------------------------------------------------------------------
-
-
-def minmax_degrees(array):
-    """
-    Returns the minimum and maximum value of an array of values in degrees, 
-    by taking into account the discrepancy at 0 degree.
-    """
-    return tmf.minmax_degrees(np.asarray(array, dtype=var.FLOAT_DTYPE).ravel())
 
 
 #-------------------------------------------------------------------------------
