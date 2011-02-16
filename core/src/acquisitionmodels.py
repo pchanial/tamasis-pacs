@@ -16,7 +16,7 @@ from .datatypes import Map, Tod, combine_sliced_shape, flatten_sliced_shape, val
 from .numpyutils import _my_isscalar
 from .processing import interpolate_linear
 from .quantity import Quantity, UnitError, _divide_unit, _multiply_unit
-from .utils import diff, diffT, diffTdiff
+from .utils import diff, diffT, diffTdiff, shift
 
 __all__ = [
     'AcquisitionModel',
@@ -40,6 +40,7 @@ __all__ = [
     'Reshaping',
     'ResponseTruncatedExponential',
     'Scalar',
+    'Shift',
     'Unpacking',
     'asacquisitionmodel',
 ]
@@ -1315,31 +1316,64 @@ class Padding(AcquisitionModelLinear):
             return None
         return combine_sliced_shape(shapeout[0:-1], np.array(shapeout[-1]) -\
                                     self.left - self.right)
-       
+
+
+#-------------------------------------------------------------------------------
+
+
+class Shift(Square):
+
+    def __init__(self, n, axis=None, shapein=None, description=None):
+        Square.__init__(self, shapein=shapein, description=description)
+        if axis is None:
+            if not isinstance(n, (list, tuple, np.ndarray)):
+                n = (n,)
+            axis = tuple(np.arange(-len(n), 0))
+        elif not isinstance(axis, (list, tuple, np.ndarray)):
+            n = (n,)
+            axis = (axis,)
+        elif not isinstance(n, (list, tuple, np.ndarray)) or \
+             len(n) !=  len(axis):
+            n = len(axis) * (n,)
+        self.n = [np.array(v, dtype=int) for v in n]
+        self.axis = [int(v) for v in axis]
+
+    def direct(self, input, inplace, cachein, cacheout):
+        output = self.validate_input_inplace(input, inplace)
+        for n, axis in zip(self.n, self.axis):
+            shift(output, n, axis)
+        return output
+
+    def transpose(self, input, inplace, cachein, cacheout):
+        output = self.validate_input_inplace(input, inplace)
+        for n, axis in zip(self.n, self.axis):
+            shift(output, -n, axis)
+        return output        
+
 
 #-------------------------------------------------------------------------------
 
 
 class CircularShift(Square):
     
-    def __init__(self, n, axes=None, shapein=None, description=None):
+    def __init__(self, n, axis=None, shapein=None, description=None):
         Square.__init__(self, shapein=shapein, description=description)
         if _my_isscalar(n):
             n = (n,)
-        if axes is None:
-            axes = tuple(np.arange(-len(n), 0))
-        elif _my_isscalar(axes):
-            axes = (axes,)
+        if axis is None:
+            axis = tuple(np.arange(-len(n), 0))
+        elif _my_isscalar(axis):
+            axis = (axis,)
         self.n = tuple(map(int, n))
-        self.axes = tuple(map(int, axes))
+        self.axis = tuple(map(int, axis))
 
     def direct(self, input, inplace, cachein, cacheout):
-        for axis, n in zip(self.axes, self.n):
+        for axis, n in zip(self.axis, self.n):
             input = np.roll(input, -n, axis=axis)
         return input
 
     def transpose(self, input, inplace, cachein, cacheout):
-        for axis, n in zip(self.axes, self.n):
+        for axis, n in zip(self.axis, self.n):
             input = np.roll(input, n, axis=axis)
         return input
 
@@ -1352,7 +1386,7 @@ class Fft(Square):
     Performs complex fft
     """
 
-    def __init__(self, shape, axes=None, flags=['estimate'], description=None):
+    def __init__(self, shape, flags=['estimate'], description=None):
         Square.__init__(self, description=description, shapein=shape,
                         dtype=var.COMPLEX_DTYPE)
         if fftw3.planning.lib_threads is None:
@@ -1360,7 +1394,6 @@ class Fft(Square):
         else:
             nthreads = tmf.info_nthreads()
         self.n = np.product(shape)
-        self.axes = axes
         self._in  = np.zeros(shape, dtype=var.COMPLEX_DTYPE)
         self._out = np.zeros(shape, dtype=var.COMPLEX_DTYPE)
         self.forward_plan = fftw3.Plan(self._in, self._out, direction='forward',

@@ -310,3 +310,33 @@ a[0,1:]=0
 b = r(a)
 if any_neq(b[0,:], [np.exp(-t/1.) for t in range(0,10)]): raise TestFailure()
 if any_neq(r.T.dense(), r.dense().T): raise TestFailure()
+
+#----------------------
+# Discrete Differences
+#----------------------
+
+for axis in range(4):
+    dX = DiscreteDifference(axis=axis, shapein=(3,4,5,6))
+    if any_neq(dX.dense().T, dX.T.dense()): raise TestFailure()
+
+for axis in range(4):
+    dX = DiscreteDifference(axis=axis, shapein=(3,4,5,6))
+    dtd = DdTdd(axis=axis, shapein=(3,4,5,6))
+    if any_neq(np.matrix(dX.T.dense()) * np.matrix(dX.dense()), dtd.dense()): raise TestFailure()
+
+#-------
+# Shift
+#-------
+
+for axis in range(4):
+    shift = Shift(1, axis=axis, shapein=(3,4,5,6))
+    if any_neq(shift.dense().T, shift.T.dense()): raise TestFailure()
+for axis in range(1,4):
+    shift = Shift((1,2,3), axis=axis, shapein=(3,4,5,6))
+    if any_neq(shift.dense().T, shift.T.dense()): raise TestFailure()
+for axis in range(2,4):
+    shift = Shift(np.random.random_integers(-2,2,(3,4)), axis=axis, shapein=(3,4,5,6))
+    if any_neq(shift.dense().T, shift.T.dense()): raise TestFailure()
+for axis in range(3,4):
+    shift = Shift(np.random.random_integers(-2,2,(3,4,5)), axis=axis, shapein=(3,4,5,6))
+    if any_neq(shift.dense().T, shift.T.dense()): raise TestFailure()

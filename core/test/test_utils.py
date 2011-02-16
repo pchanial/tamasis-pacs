@@ -1,6 +1,6 @@
 import numpy as np
 from tamasis import *
-from tamasis.utils import _distance_slow, diff as udiff, diffT, diffTdiff
+from tamasis.utils import _distance_slow, diff as udiff, diffT, diffTdiff, shift
 
 class TestFailure(Exception):
     pass
@@ -62,16 +62,29 @@ for axis in range(4):
     a[:s[0],:s[1],:s[2],:s[3]] -= ref
     if any_neq(a, 0): raise TestFailure()
 
-# diff.T
-for axis in range(4):
-    dX = DiscreteDifference(axis=axis, shapein=(3,4,5,6))
-    if any_neq(dX.dense().T, dX.T.dense()): raise TestFailure()
+# shift
 
-# diff.T diff
-for axis in range(4):
-    dX = DiscreteDifference(axis=axis, shapein=(3,4,5,6))
-    dtd = DdTdd(axis=axis, shapein=(3,4,5,6))
-    if any_neq(np.matrix(dX.T.dense()) * np.matrix(dX.dense()), dtd.dense()): raise TestFailure()
+for a in (np.ones(10),np.ones((12,10))):
+    for s in (10,11,100,-10,-11,-100):
+        b = a.copy()
+        shift(b,s,axis=-1)
+        if any_neq(b, 0): raise TestFailure()
+
+a = np.array([[1.,1.,1.,1.],[2.,2.,2.,2.]])
+shift(a, [1,-1], axis=1)
+if any_neq(a, [[0,1,1,1],[2,2,2,0]]): raise TestFailure()
+
+a = np.array([[0.,0,0],[0,1,0],[0,0,0]])
+b = a.copy()
+shift(b, 1, axis=0)
+if any_neq(b, np.roll(a,1,axis=0)): raise TestFailure()
+shift(b, -2, axis=0)
+if any_neq(b, np.roll(a,-1,axis=0)): raise TestFailure()
+b = a.copy()
+shift(b, 1, axis=1)
+if any_neq(b, np.roll(a,1,axis=1)): raise TestFailure()
+shift(b, -2, axis=1)
+if any_neq(b, np.roll(a,-1,axis=1)): raise TestFailure()
 
 # profile
 

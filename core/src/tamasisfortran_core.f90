@@ -850,6 +850,52 @@ end subroutine diffTdiff
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
+subroutine shift(array, asize, dim, ashape, arank, offset, offsetsize)
+
+    use module_math,    only : shift_fast, shift_slow
+    use module_tamasis, only : p
+    implicit none
+
+    !f2py intent(inout)    :: array(asize)
+    !f2py intent(hide)     :: asize
+    !f2py intent(in)       :: dim
+    !f2py intent(in)       :: ashape
+    !f2py intent(hide)     :: arank=size(ashape)
+    !f2py intent(in)       :: offset(offsetsize)
+    !f2py intent(hide)     :: offsetsise=size(offset)
+
+    integer*8, intent(in)  :: asize
+    real(p), intent(inout) :: array(asize)
+    integer, intent(in)    :: dim
+    integer, intent(in)    :: arank
+    integer*8, intent(in)  :: ashape(arank)
+    integer, intent(in)    :: offsetsize
+    integer, intent(in)    :: offset(offsetsize)
+
+    integer :: idim, nfast, nshift, nslow
+
+    nfast = 1
+    nslow = 1
+    do idim = 1, dim-1
+        nfast = nfast * ashape(idim)
+    end do
+    nshift = ashape(dim)
+    do idim = dim+1, arank
+        nslow = nslow * ashape(idim)
+    end do
+
+    if (dim == 1) then
+        call shift_fast(array(1), nshift, nslow, offset)
+    else
+        call shift_slow(array(1), nfast, nshift, nslow, offset)
+    end if
+
+end subroutine shift
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
 subroutine masking(input, ninputs, mask, nmasks, status)
 
     use iso_fortran_env, only : ERROR_UNIT

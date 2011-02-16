@@ -257,8 +257,8 @@ def plot_scan(input, map=None, title=None, new_figure=True, linewidth=2, **kw):
     angles = angle_lonlat((ra,dec), crval)
     angle_max = np.nanmax(angles)
     if angle_max >= 90.:
-        print 'Warning: some coordinates have an angular distance to the proj' \
-              'ection point greater than 90 degrees.'
+        print('Warning: some coordinates have an angular distance to the proj' \
+              'ection point greater than 90 degrees.')
         mask = angles >= 90
         ra[mask] = np.nan
         dec[mask] = np.nan
@@ -313,8 +313,6 @@ def profile(input, origin=None, bin=1., nbins=None, histogram=False):
     else:
         origin = np.ascontiguousarray(origin, var.FLOAT_DTYPE)
     
-    print type(input.shape[0]-origin[1])
-    print type(origin[1])
     if nbins is None:
         nbins = int(max(input.shape[0]-origin[1], origin[1],
                         input.shape[1]-origin[0], origin[0]) / bin)
@@ -368,7 +366,14 @@ def diff(array, axis=0):
     """
     Inplace discrete difference
     """
-    array = np.asanyarray(array)
+
+    if not isinstance(array, np.ndarray):
+        raise TypeError('Input array is not an ndarray.')
+
+    if array.dtype != var.FLOAT_DTYPE:
+        raise TypeError('The data type of the input array is not ' + \
+                        str(var.FLOAT_DTYPE.type) + '.')
+
     rank = array.ndim
     
     if rank == 0:
@@ -377,7 +382,6 @@ def diff(array, axis=0):
         array.shape = ()
     else:
         tmf.diff(array.ravel(), rank-axis, np.asarray(array.T.shape))
-    return array
 
     
 #-------------------------------------------------------------------------------
@@ -387,7 +391,14 @@ def diffT(array, axis=0):
     """
     Inplace discrete difference transpose
     """
-    array = np.asanyarray(array)
+
+    if not isinstance(array, np.ndarray):
+        raise TypeError('Input array is not an ndarray.')
+
+    if array.dtype != var.FLOAT_DTYPE:
+        raise TypeError('The data type of the input array is not ' + \
+                        str(var.FLOAT_DTYPE.type) + '.')
+
     rank = array.ndim
 
     if rank == 0:
@@ -396,7 +407,6 @@ def diffT(array, axis=0):
         array.shape = ()
     else:
         tmf.difft(array.ravel(), rank-axis, np.asarray(array.T.shape))
-    return array
 
     
 #-------------------------------------------------------------------------------
@@ -406,7 +416,14 @@ def diffTdiff(array, axis=0, scalar=1.):
     """
     Inplace discrete difference transpose times discrete difference
     """
-    array = np.asanyarray(array)
+
+    if not isinstance(array, np.ndarray):
+        raise TypeError('Input array is not an ndarray.')
+
+    if array.dtype != var.FLOAT_DTYPE:
+        raise TypeError('The data type of the input array is not ' + \
+                        str(var.FLOAT_DTYPE.type) + '.')
+
     rank = array.ndim
     
     if rank == 0:
@@ -416,7 +433,65 @@ def diffTdiff(array, axis=0, scalar=1.):
     else:
         tmf.difftdiff(array.ravel(), rank-axis, np.asarray(array.T.shape),
                       scalar)
-    return array
+
+    
+#-------------------------------------------------------------------------------
+
+
+def shift(array, n, axis=0):
+    """
+    Shift array elements inplace along a given axis.
+
+    Elements that are shifted beyond the last position are not re-introduced
+    at the first.
+
+    Parameters
+    ----------
+    array : float array
+        Input array to be modified
+
+    n : integer number or array
+        The number of places by which elements are shifted. If it is an array,
+        specific offsets are applied along the first dimensions.
+
+    axis : int, optional
+        The axis along which elements are shifted. By default, it is the first
+        axis.
+
+    Examples
+    --------
+    >>> a = ones(8)
+    >>> shift(a, 3); a
+    array([0., 0., 0., 1., 1., 1., 1., 1., 1.])
+
+    >>> a = array([[1.,1.,1.,1.],[2.,2.,2.,2.]])
+    >>> shift(a, [1,-1], axis=1); a
+    array([[0., 1., 1., 1.],
+           [2., 2., 2., 0.]])
+    """
+    if not isinstance(array, np.ndarray):
+        raise TypeError('Input array is not an ndarray.')
+
+    if array.dtype != var.FLOAT_DTYPE:
+        raise TypeError('The data type of the input array is not ' + \
+                        str(var.FLOAT_DTYPE.name) + '.')
+
+    rank = array.ndim
+    n = np.array(n, ndmin=1, dtype='int32').ravel()
+    
+    if axis < 0:
+        axis = rank + axis
+
+    if axis == 0 and n.size > 1 or n.size != 1 and n.size not in \
+       np.cumproduct(array.shape[0:axis]):
+        raise ValueError('The offset size is incompatible with the first dime' \
+                         'nsions of the array')
+    if rank == 0:
+        array.shape = (1,)
+        array[:] = 0
+        array.shape = ()
+    else:
+        tmf.shift(array.ravel(), rank-axis, np.asarray(array.T.shape), n)
 
     
 #-------------------------------------------------------------------------------
@@ -442,7 +517,7 @@ def distance(shape, origin=None, resolution=1.):
     Example
     -------
     nx, ny = 3, 3
-    print distance((ny,nx))
+    print(distance((ny,nx)))
     [[ 1.41421356  1.          1.41421356]
     [ 1.          0.          1.        ]
     [ 1.41421356  1.          1.41421356]]

@@ -42,6 +42,8 @@ module module_math
     public :: diffT_slow
     public :: diffTdiff_fast
     public :: diffTdiff_slow
+    public :: shift_fast
+    public :: shift_slow
 
     interface distance
         module procedure distance_1d, distance_2d, distance_3d
@@ -1059,6 +1061,70 @@ contains
         !$omp end parallel do
 
     end subroutine diffTdiff_slow
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine shift_fast(array, m, n, offset)
+
+        real(p), intent(inout) :: array(m,n)
+        integer, intent(in)    :: m, n
+        integer, intent(in)    :: offset(:)
+
+        integer :: i, j, d
+
+        !$omp parallel do private(d)
+        do j = 1, n
+            d = offset((j-1) / (n / size(offset)) + 1)
+            if (d == 0) cycle
+            if (d > 0) then
+                do i = m, d+1, -1
+                    array(i,j) = array(i-d,j)
+                end do
+                array(1:min(d,m),j) = 0
+            else
+                do i = 1, m+d
+                    array(i,j) = array(i-d,j)
+                end do
+                array(max(m+d+1,1):m,j) = 0             
+            end if
+        end do
+        !$omp end parallel do
+
+    end subroutine shift_fast
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine shift_slow(array, m, n, o, offset)
+
+        real(p), intent(inout) :: array(m,n,o)
+        integer, intent(in)    :: m, n, o
+        integer, intent(in)    :: offset(:)
+
+        integer :: j, k, d
+
+        !$omp parallel do private(d)
+        do k = 1, o
+            d = offset((k-1) / (o / size(offset)) + 1)
+            if (d == 0) cycle
+            if (d > 0) then
+                do j = n, d+1, -1
+                    array(:,j,k) = array(:,j-d,k)
+                end do
+                array(:,1:min(d,n),k) = 0
+            else
+                do j = 1, n+d
+                    array(:,j,k) = array(:,j-d,k)
+                end do
+                array(:,max(n+d+1,1):n,k) = 0             
+            end if
+        end do
+        !$omp end parallel do
+
+    end subroutine shift_slow
 
 
 end module module_math
