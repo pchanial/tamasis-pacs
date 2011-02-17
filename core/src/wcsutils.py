@@ -192,6 +192,26 @@ def create_fitsheader(array, extname=None, crval=(0.,0.), crpix=None,
 #-------------------------------------------------------------------------------
 
 
+def get_cdelt_crota2(header):
+    try:
+        cd = np.array([[header['CD1_1'], header['CD1_2']],
+                       [header['CD2_1'], header['CD2_2']]], float)
+    except KeyError:
+        if any([not k in header for k in ('CDELT1', 'CDELT2', 'CROTA2')]):
+            raise KeyError('Header has no astrometry.')
+        return np.array([header['CDELT1'], header['CDELT2']]), header['CROTA2']
+
+    det = np.linalg.det(cd)
+    sgn = det / np.abs(det)
+    cdelt = np.array([sgn * np.sqrt(cd[0,0]**2 + cd[0,1]**2),
+                      np.sqrt(cd[1,1]**2 + cd[1,0]**2)])
+    rot = np.arctan2(-cd[1,0], cd[1,1])
+    return cdelt, np.rad2deg(rot)
+    
+
+#-------------------------------------------------------------------------------
+
+
 def mean_degrees(array):
     """
     Returns the mean value of an array of values in degrees, by taking into 

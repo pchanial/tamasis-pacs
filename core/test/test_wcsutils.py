@@ -1,5 +1,6 @@
 import numpy as np
 from tamasis import *
+from tamasis.wcsutils import get_cdelt_crota2
 
 class TestFailure(Exception):
     pass
@@ -27,3 +28,16 @@ for c1, c2, angle in input:
 if any_neq(barycenter_lonlat([30,40], [0, 0]), [35,0]): raise TestFailure()
 if any_neq(barycenter_lonlat([20,20,20], [-90,0,90]), [20,0]): raise TestFailure()
 if any_neq(barycenter_lonlat([20,20,20], [0,45,90]), [20,45]): raise TestFailure()
+
+# get_cdelt_crota2
+header = create_fitsheader(np.ones((10,10)), cdelt=(-1.2,3))
+cdelt, rot = get_cdelt_crota2(header)
+if any_neq(cdelt, (-1.2,3)): raise TestFailure()
+if any_neq(rot, 0): raise TestFailure()
+
+theta=np.deg2rad(25.)
+cd = np.diag((-1.5,3)).dot(np.array([[np.cos(theta),np.sin(theta)],[-np.sin(theta), np.cos(theta)]]))
+header = create_fitsheader(np.ones((10,10)), cd=cd)
+cdelt, rot = get_cdelt_crota2(header)
+if any_neq(cdelt, (-1.5,3)): raise TestFailure()
+if any_neq(rot, 25.): raise TestFailure()
