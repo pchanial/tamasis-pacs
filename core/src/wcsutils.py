@@ -6,10 +6,7 @@ from . import var
 
 __all__ = [ 
     'angle_lonlat',
-    'barycenter_lonlat',
     'create_fitsheader',
-    'minmax_degrees',
-    'mean_degrees',
 ]
 
 def angle_lonlat(lon1, lat1, lon2=None, lat2=None):
@@ -66,7 +63,7 @@ def barycenter_lonlat(lon, lat):
 
 def create_fitsheader(array, extname=None, crval=(0.,0.), crpix=None,
                       ctype=('RA---TAN','DEC--TAN'), cunit='deg', cd=None,
-                      cdelt=None, naxis=None):
+                      cdelt=None, crota2=None, naxis=None):
     """
     Return a FITS header
 
@@ -94,6 +91,8 @@ def create_fitsheader(array, extname=None, crval=(0.,0.), crpix=None,
             CD2_1 CD2_2
     cdelt : 2 element array
         Physical increment at the reference pixel
+    crota2 : double
+        Rotation angle counterclockwise from the North axis
     naxis : 2 element array
         (NAXIS1,NAXIS2) tuple, to be specified only if array argument is None
 
@@ -150,7 +149,11 @@ def create_fitsheader(array, extname=None, crval=(0.,0.), crpix=None,
             return header
         if not isinstance(cdelt, (list, tuple, np.ndarray)):
             cdelt = (-cdelt, cdelt)
-        cd = np.array(((cdelt[0], 0), (0,cdelt[1])))
+        if crota2 is None:
+            crota2 = 0.
+        theta=np.deg2rad(crota2)
+        cd = np.diag(cdelt).dot(np.array([[ np.cos(theta), np.sin(theta)],
+                                          [-np.sin(theta), np.cos(theta)]]))
 
     crval = np.asarray(crval, dtype=np.float64)
     if crval.size != 2:
