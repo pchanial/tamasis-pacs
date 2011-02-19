@@ -10,8 +10,10 @@ from . import var
 from matplotlib import pyplot as P
 from mpi4py import MPI
 from tamasis.core import *
+from tamasis.mpiutils import split_observation
 from tamasis.observations import Observation, Instrument, FlatField, create_scan
 from tamasis.stringutils import strenum, strplural
+from tamasis.wcsutils import combine_fitsheader
 
 __all__ = [ 'PacsObservation',
             'PacsSimulation',
@@ -102,8 +104,8 @@ class PacsBase(Observation):
             self.instrument.distortion_yz.base.base.T,
             resolution)
         if status != 0: raise RuntimeError()
-        header = _str2fitsheader(header)
-        return header
+        headers = var.mpi_comm.allgather(_str2fitsheader(header))
+        return combine_fitsheader(headers)
     get_map_header.__doc__ = Observation.get_map_header.__doc__
     
     def get_pointing_matrix(self, header, resolution, npixels_per_sample=0,
@@ -509,8 +511,8 @@ class PacsObservation(PacsBase):
             transparent_mode, reject_bad_line)
 
         # get the observations and detector mask for the current processor
-        slice_observation, slice_detector = _split_observation(nfilenames,
-             int(np.sum(detector_mask == 0)))
+        slice_observation, slice_detector = split_observation(var.mpi_comm,
+             int(np.sum(detector_mask == 0)), nfilenames)
         filename = filename[slice_observation]
         nsamples_all = nsamples_all[slice_observation]
         nfilenames = len(filename)
@@ -1177,56 +1179,6 @@ def _files2tmf(filename):
         filename_ += f + (length-len(f))*' '
     return filename_, nfilenames
 
-
-#-------------------------------------------------------------------------------
-
-
-def _split_observation(nobservations, ndetectors):
-    nnodes  = var.mpi_comm.Get_size()
-    nthreads = tmf.info_nthreads()
-
-    # number of observations. They should approximatively be of the same length
-    nx = nobservations
-
-    # number of detectors, grouped by the number of cpu cores
-    ny = int(np.ceil(float(ndetectors) / nthreads))
-
-    # we start with the miminum blocksize and increase it until we find a
-    # configuration that covers all the observations
-    blocksize = int(np.ceil(float(nx * ny) / nnodes))
-    while True:
-        # by looping over x first, we favor larger numbers of detectors and
-        # fewer numbers of observations per processor, to minimise inter-
-        # processor communication in case of correlations between
-        # detectors
-        for xblocksize in range(1, blocksize+1):
-            if float(blocksize) / xblocksize != blocksize // xblocksize:
-                continue
-            yblocksize = int(blocksize // xblocksize)
-            nx_block = int(np.ceil(float(nx) / xblocksize))
-            ny_block = int(np.ceil(float(ny) / yblocksize))
-            if nx_block * ny_block <= nnodes:
-                break
-        if nx_block * ny_block <= nnodes:
-            break
-        blocksize += 1
-
-    rank = var.mpi_comm.Get_rank()
-
-    ix = rank // ny_block
-    iy = rank %  ny_block
-
-    # check that the processor has something to do
-    if ix >= nx_block:
-        iobservation = slice(0,0)
-        idetector = slice(0,0)
-    else:
-        iobservation = slice(ix * xblocksize, (ix+1) * xblocksize)
-        idetector    = slice(iy * yblocksize * nthreads, (iy+1) * yblocksize * \
-                             nthreads)
-
-    return iobservation, idetector
-        
 
 #-------------------------------------------------------------------------------
 
