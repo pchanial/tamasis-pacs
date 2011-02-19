@@ -3,6 +3,8 @@ import pyfits
 import tamasisfortran as tmf
 
 from . import var
+from .numpyutils import _my_isscalar
+from kapteyn import wcs
 
 __all__ = [ 
     'angle_lonlat',
@@ -56,6 +58,60 @@ def barycenter_lonlat(lon, lat):
     lon = np.asarray(lon, dtype=var.FLOAT_DTYPE).ravel()
     lat = np.asarray(lat, dtype=var.FLOAT_DTYPE).ravel()
     return tmf.barycenter_lonlat(lon, lat)
+
+
+#-------------------------------------------------------------------------------
+
+
+def combine_fitsheader(headers, cdelt=None, crota2=None):
+    """
+    Returns a FITS header which encompasses all input headers.
+    """
+
+    if not isinstance(headers, (list, tuple)):
+        header = (headers,)
+
+    if len(headers) == 1 and cdelt is None and crota2 is None:
+        return headers[0]
+
+    crval = barycenter_lonlat([h['CRVAL1'] for h in headers],
+                              [h['CRVAL2'] for h in headers])
+
+    if cdelt is None or crota2 is None:
+        cdeltrot = [get_cdelt_crota2(h) for h in headers]
+
+    if cdelt is None:
+        cdelt = min([np.min(abs(cdelt)) for cdelt,rot in cdeltrot])
+
+    if crota2 is None:
+        crota2 = tmf.mean_degrees(np.array([rot for cdelt,rot in cdeltrot]))
+
+    header0 = create_fitsheader(None, cdelt=cdelt, crota2=crota2, crpix=(1,1),
+                                crval=crval, naxis=(1,1))
+
+    proj0 = wcs.Projection(header0)
+    xy0 = []
+    for h in headers:
+        proj = wcs.Projection(h)
+        nx = h['NAXIS1']
+        ny = h['NAXIS2']
+        x  = h['CRPIX1']
+        y  = h['CRPIX2']
+        edges = proj.toworld(([0.5,x,nx+0.5,0.5,x,nx+0.5,0.5,x,nx+0.5],
+                              [0.5,0.5,0.5,y,y,y,ny+0.5,ny+0.5,ny+0.5]))
+        xy0.append(proj0.topixel(edges))
+
+    xmin0 = np.round(min([min(c[0]) for c in xy0]))
+    xmax0 = np.round(max([max(c[0]) for c in xy0]))
+    ymin0 = np.round(min([min(c[1]) for c in xy0]))
+    ymax0 = np.round(max([max(c[1]) for c in xy0]))
+
+    header0['NAXIS1'] = int(xmax0 - xmin0 + 1)
+    header0['NAXIS2'] = int(ymax0 - ymin0 + 1)
+    header0['CRPIX1'] = 2 - xmin0
+    header0['CRPIX2'] = 2 - ymin0
+
+    return header0
 
 
 #-------------------------------------------------------------------------------
@@ -147,7 +203,7 @@ def create_fitsheader(array, extname=None, crval=(0.,0.), crpix=None,
     else:
         if cdelt is None:
             return header
-        if not isinstance(cdelt, (list, tuple, np.ndarray)):
+        if _my_isscalar(cdelt):
             cdelt = (-cdelt, cdelt)
         if crota2 is None:
             crota2 = 0.
@@ -170,7 +226,7 @@ def create_fitsheader(array, extname=None, crval=(0.,0.), crpix=None,
     if ctype.size != 2:
         raise ValueError('CTYPE does not have two elements.')
 
-    if not isinstance(cunit, (list, tuple, np.ndarray)):
+    if _my_isscalar(cunit):
         cunit = (cunit, cunit)
     cunit = np.asarray(cunit, dtype=np.string_)
     if cunit.size != 2:
