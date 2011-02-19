@@ -1,6 +1,7 @@
 import tamasisfortran as tmf
 import var
 from .var import VERSION as __version__
+from .mpiutils import *
 from .numpyutils import *
 from .wcsutils import *
 from .quantity import *

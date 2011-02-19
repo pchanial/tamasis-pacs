@@ -255,7 +255,7 @@ class test(BuildContext):
     fun = 'test_fun'
 
 def test_fun(ctx):
-    Options.commands = ['test-fortran', 'test-python'] + Options.commands
+    Options.commands = ['test-fortran', 'test-python', 'test-mpi'] + Options.commands
 
 class test_fortran(BuildContext):
     """run Fortran test suite"""
@@ -299,6 +299,20 @@ def test_python_fun(bld):
         files = bld.path.ant_glob(subdir+'/test/test_*.py')
         for file in files:
             bld(rule   = '${PYTHON} ' + file.abspath() + ' > /dev/null',
+                always = True)
+            bld.add_group()
+
+class test_mpi(BuildContext):
+    """run MPI test suite"""
+    cmd = 'test-mpi'
+    fun = 'test_mpi_fun'
+
+def test_mpi_fun(bld):
+    files = ['core/test/test_mpiutils.py']
+    for n in [1, 2,4]:
+        for file in files:
+            bld(rule   = 'mpirun -n ' + str(n) + ' ${PYTHON} ' + \
+                         bld.path.find_node(file).abspath() + ' > /dev/null',
                 always = True)
             bld.add_group()
 
