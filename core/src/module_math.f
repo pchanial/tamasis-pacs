@@ -401,6 +401,12 @@ contains
         real(p) :: x, y, z, phi, cotheta, cocotheta
         integer :: i
 
+        if (size(lon) == 0) then
+            lon0 = NaN
+            lat0 = NaN
+            return
+        end if
+
         x = 0
         y = 0
         z = 0
