@@ -298,8 +298,9 @@ def test_python_fun(bld):
     for subdir in subdirs:
         files = bld.path.ant_glob(subdir+'/test/test_*.py')
         for file in files:
-            bld(rule   = '${PYTHON} ' + file.abspath() + ' > /dev/null',
-                always = True)
+            file = file.abspath()
+            if 'test_mpi' in file: continue
+            bld(rule='${PYTHON} ' + file + ' > /dev/null', always=True)
             bld.add_group()
 
 class test_mpi(BuildContext):
@@ -308,13 +309,14 @@ class test_mpi(BuildContext):
     fun = 'test_mpi_fun'
 
 def test_mpi_fun(bld):
-    files = ['core/test/test_mpiutils.py']
-    for n in [1, 2,4]:
+    for subdir in subdirs:
+        files = bld.path.ant_glob(subdir+'/test/test_mpi*.py')
         for file in files:
-            bld(rule   = 'mpirun -n ' + str(n) + ' ${PYTHON} ' + \
-                         bld.path.find_node(file).abspath() + ' > /dev/null',
-                always = True)
-            bld.add_group()
+            for n in [1, 2, 4]:
+                bld(rule='export OMP_NUM_THREADS=1; mpirun -n ' + str(n) + \
+                    ' ${PYTHON} ' + file.abspath() + ' > /dev/null; unset OMP' \
+                    '_NUM_THREADS', always=True)
+                bld.add_group()
 
 
 
