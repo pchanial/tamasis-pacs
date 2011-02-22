@@ -79,9 +79,6 @@ class PacsBase(Observation):
         return data.T
 
     def get_map_header(self, resolution=None, oversampling=True):
-        if var.mpi_comm.Get_size() > 1:
-            raise NotImplementedError('The common map header should be '
-                'specified if more than one job is running.')
         if resolution is None:
             resolution = self.DEFAULT_RESOLUTION[self.instrument.band]
 
@@ -121,8 +118,6 @@ class PacsBase(Observation):
         nsamples = self.get_nfinesamples() if oversampling else \
             self.get_nsamples()
         if header is None:
-            if var.mpi_comm.Get_size() > 1:
-                raise ValueError('With MPI, the map header must be specified.')
             header = self.get_map_header(resolution, oversampling)
         elif isinstance(header, str):
             header = _str2fitsheader(header)
