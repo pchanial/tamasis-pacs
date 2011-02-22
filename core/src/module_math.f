@@ -1100,8 +1100,8 @@ contains
 
     subroutine shift_slow(array, m, n, o, offset)
 
-        real(p), intent(inout) :: array(m,n,o)
         integer, intent(in)    :: m, n, o
+        real(p), intent(inout) :: array(m,n,o)
         integer, intent(in)    :: offset(:)
 
         integer :: j, k, d
