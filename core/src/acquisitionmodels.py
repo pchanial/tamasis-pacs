@@ -1535,7 +1535,8 @@ class AllReduce(Square):
     def direct(self, input, inplace, cachein, cacheout):
         output = self.validate_input_inplace(input, inplace)
         if MPI.COMM_WORLD.Get_size() > 1:
-            output[:] = var.mpi_comm.allreduce(output, op=self.operator)
+            var.mpi_comm.Allreduce(MPI.IN_PLACE, [output, MPI.DOUBLE],
+                                   op=self.operator)
         return output
 
     def transpose(self, input, inplace, cachein, cacheout):
