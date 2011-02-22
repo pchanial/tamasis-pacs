@@ -36,16 +36,16 @@ class Ds9(object):
     >>> ds9.open_in_new_window = False
     >>> d = ds9.current
     >>> d.set('scale linear')
-    >>> ds9(my new map)
+    >>> ds9(mynewmap, 'zoom to fit')
     """
-    def __call__(self, array, origin=None, **keywords):
+    def __call__(self, array, xpamsg=None, origin=None, **keywords):
         if not isinstance(array, str):
             array = np.asanyarray(array)
             dtype = array.dtype
         else:
             dtype = None
         array = Map(array, dtype=dtype, copy=False, origin=origin)
-        array.ds9(new=self.open_in_new_window, **keywords)
+        array.ds9(xpamsg=xpamsg, new=self.open_in_new_window, **keywords)
 
     @property
     def targets(self):
@@ -60,7 +60,7 @@ class Ds9(object):
         """
         Return current ds9 instance.
         """
-        targets = self.targets()
+        targets = self.targets
         if targets is None:
             return None
         return self.get(targets[-1])

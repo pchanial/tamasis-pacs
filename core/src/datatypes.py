@@ -230,7 +230,6 @@ class FitsArray(Quantity):
             -cmap heat
             -scale scope local
             -scale mode 99.5
-            -zoom to fit
         Other access points can be set before the data is loaded though
         the keywords (see examples below).
         After the array is loaded, the map's header is set and the user
@@ -259,7 +258,7 @@ class FitsArray(Quantity):
         Examples
         --------
         >>> m = Map('myfits.fits')
-        >>> d=m.ds9('saveimage png myfits.png', scale='histequ', 
+        >>> d=m.ds9(('zoom to fit','saveimage png myfits.png'),scale='histequ', 
                     cmap='invert yes', height=400)
         >>> d.set('exit')
         """
@@ -276,9 +275,6 @@ class FitsArray(Quantity):
         if id is None:
             if 'cmap' not in keywords:
                 keywords['cmap'] = 'heat'
-
-            if 'zoom' not in keywords:
-                keywords['zoom'] = 'to fit'
 
             if 'scale' not in keywords:
                 keywords['scale'] = ('scope local', 'mode 99.5')
@@ -300,7 +296,7 @@ class FitsArray(Quantity):
                 command += reduce(lambda x,y: \
                                   str(x) + ' -' + k + ' ' + str(y),v,'')
 
-            os.system(command + '&')
+            os.system(command + ' &')
 
             # start the xpans name server
             if xpa.xpaaccess("xpans", None, 1) == None:
@@ -322,11 +318,14 @@ class FitsArray(Quantity):
 
         # get ds9 instance with given id
         d = ds9.ds9(id)
+
+        # load array
         d.set_np2arr(self.view(np.ndarray).T)
 
+        # load header
         if self.has_wcs():
             d.set('wcs append', str(self.header))
-    
+
         if xpamsg is not None:
             if isinstance(xpamsg, str):
                 xpamsg = (xpamsg,)
