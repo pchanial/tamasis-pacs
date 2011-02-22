@@ -187,25 +187,18 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine cd_info(cd, cdelt, rot)
+    subroutine cd_info(cd, cdelt, crota2)
 
-        real(p), intent(in) :: cd(2,2)
+        real(p), intent(in)  :: cd(2,2)
         real(p), intent(out) :: cdelt(2)
-        real(p), intent(out) :: rot
+        real(p), intent(out) :: crota2
         
-        real(p) :: cd_(2,2), cdelt_im(2), vrot(2), junk, work(6)
-        integer :: status
+        real(p) :: det
 
-        cd_ = cd
-#if PRECISION_REAL == 4
-        call sgeev('N', 'N', 2, cd_, 2, cdelt, cdelt_im, junk, 1, junk, 1, work, size(work), status)
-#elif PRECISION_REAL == 8
-        call dgeev('N', 'N', 2, cd_, 2, cdelt, cdelt_im, junk, 1, junk, 1, work, size(work), status)
-#else
-        stop 'CD_INFO: PRECISION_REAL=16 is not implemented.'
-#endif
-        vrot = matmul(cd, [1._p, 0._p])
-        rot = atan2(vrot(2),vrot(1)) * RAD2DEG
+        det = cd(1,1) * cd(2,2) - cd(2,1) * cd(1,2)
+        cdelt(1) = sign(sqrt(cd(1,1)**2 + cd(1,2)**2), det)
+        cdelt(2) = sqrt(cd(2,2)**2 + cd(2,1)**2)
+        crota2   = atan2(-cd(2,1),cd(2,2)) * RAD2DEG
 
     end subroutine cd_info
 

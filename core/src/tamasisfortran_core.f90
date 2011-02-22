@@ -675,51 +675,51 @@ subroutine divide_inplace(a, b, n)
 end subroutine divide_inplace
 
 
-!-----------------------------------------------------------------------------------------------------------------------------------
-
-
-subroutine add_inplace_blas(a, b, n)
-
-    use module_tamasis,  only : p
-    implicit none
-
-    !f2py threadsafe
-    !f2py intent(inout)    :: a
-    !f2py intent(hide)     :: n = size(a)
-    !f2py intent(in)       :: b
-
-    real(p), intent(inout) :: a(n)
-    real(p), intent(in)    :: b(n)
-    integer, intent(in)    :: n
-
-    call daxpy(n, 1._p, b, 1, a, 1)
-
-end subroutine add_inplace_blas
-
-
-!-----------------------------------------------------------------------------------------------------------------------------------
-
-
-subroutine subtract_inplace_blas(a, b, n)
-
-    use module_tamasis,  only : p
-    implicit none
-
-    !f2py threadsafe
-    !f2py intent(inout)    :: a
-    !f2py intent(hide)     :: n = size(a)
-    !f2py intent(in)       :: b
-
-    real(p), intent(inout) :: a(n)
-    real(p), intent(in)    :: b(n)
-    integer, intent(in)    :: n
-
-    call daxpy(n, -1._p, b, 1, a, 1)
-
-end subroutine subtract_inplace_blas
-
-
-!-----------------------------------------------------------------------------------------------------------------------------------
+!!$!-----------------------------------------------------------------------------------------------------------------------------------
+!!$
+!!$
+!!$subroutine add_inplace_blas(a, b, n)
+!!$
+!!$    use module_tamasis,  only : p
+!!$    implicit none
+!!$
+!!$    !f2py threadsafe
+!!$    !f2py intent(inout)    :: a
+!!$    !f2py intent(hide)     :: n = size(a)
+!!$    !f2py intent(in)       :: b
+!!$
+!!$    real(p), intent(inout) :: a(n)
+!!$    real(p), intent(in)    :: b(n)
+!!$    integer, intent(in)    :: n
+!!$
+!!$    call daxpy(n, 1._p, b, 1, a, 1)
+!!$
+!!$end subroutine add_inplace_blas
+!!$
+!!$
+!!$!-----------------------------------------------------------------------------------------------------------------------------------
+!!$
+!!$
+!!$subroutine subtract_inplace_blas(a, b, n)
+!!$
+!!$    use module_tamasis,  only : p
+!!$    implicit none
+!!$
+!!$    !f2py threadsafe
+!!$    !f2py intent(inout)    :: a
+!!$    !f2py intent(hide)     :: n = size(a)
+!!$    !f2py intent(in)       :: b
+!!$
+!!$    real(p), intent(inout) :: a(n)
+!!$    real(p), intent(in)    :: b(n)
+!!$    integer, intent(in)    :: n
+!!$
+!!$    call daxpy(n, -1._p, b, 1, a, 1)
+!!$
+!!$end subroutine subtract_inplace_blas
+!!$
+!!$
+!!$!-----------------------------------------------------------------------------------------------------------------------------------
 
 
 subroutine diff(array, asize, dim, ashape, arank)

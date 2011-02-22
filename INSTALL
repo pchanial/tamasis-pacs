@@ -15,7 +15,7 @@ o python 2.6
     - pyfits 2.3 (http://www.stsci.edu/resources/software_hardware/pyfits)
     - scipy
 o wcslib 4.4.4
-o LAPACK
+
 
 Recommended packages:
 =====================

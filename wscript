@@ -22,7 +22,7 @@ out = 'build'
 subdirs = ['core', 'madcap', 'pacs']
 
 # Required libraries
-libraries = ['CFITSIO', 'FFTW3', 'LAPACK', 'OPENMP', 'WCSLIB']
+libraries = ['CFITSIO', 'FFTW3', 'OPENMP', 'WCSLIB']
 
 # Required Python packages
 required_modules = ['numpy',
@@ -92,6 +92,7 @@ def configure(conf):
             conf.env.FCFLAGS_OPENMP = ['-openmp']
             conf.env.LIB_OPENMP = ['iomp5']
         conf.env.F2PYFCOMPILER = 'intelem'
+        # should add -Wl,--start-group and -Wl,--end-group
         conf.env.LIB_LAPACK = ['mkl_intel_lp64','mkl_intel_thread','mkl_core', 'iomp5']
 
     if conf.options.precision_real == '16':
@@ -131,9 +132,10 @@ end program test""",
         compile_filename = 'test.f',
         features         = 'fc fcprogram',
         msg              = "Checking for 'fftw3' double precision",
-        use=['FFTW3'])
+        use              = ['FFTW3'])
 
-    fragment = """
+    if 'LAPACK' in libraries:
+        fragment = """
 program test
     integer, parameter :: p = kind(1.d0)
     real(p)            :: u(2), v(2)
@@ -142,16 +144,17 @@ program test
     call daxpy(2, 3._p, u, 1, v, 1)
 end program test
 """
-    if conf.options.precision_real == '4':
-        fragment = fragment.replace('kind(1.d0)', 'kind(1.)').replace('daxpy','saxpy')
-    conf.check_cc(
-        fragment         = fragment,
-        compile_filename = 'test.f',
-        features         = 'fc fcprogram',
-        msg              = "Checking for 'blas'",
-        use=['LAPACK'])
+        if conf.options.precision_real == '4':
+            fragment = fragment.replace('kind(1.d0)', 'kind(1.)') \
+                               .replace('daxpy','saxpy')
+        conf.check_cc(
+            fragment         = fragment,
+            compile_filename = 'test.f',
+            features         = 'fc fcprogram',
+            msg              = "Checking for 'blas'",
+            use              = ['LAPACK'])
 
-    fragment = """
+        fragment = """
 program test
     integer, parameter :: p = kind(1.d0)
     integer            :: status
@@ -160,14 +163,16 @@ program test
     call dgeev('N', 'N', 2, cd, 2, vr, vim, junk, 1, junk, 1, work, size(work), status)
 end program test
 """
-    if conf.options.precision_real == '4':
-        fragment = fragment.replace('kind(1.d0)', 'kind(1.)').replace('dgeev','sgeev')
-    conf.check_cc(
-        fragment         = fragment,
-        compile_filename = 'test.f',
-        features         = 'fc fcprogram',
-        msg              = "Checking for 'lapack'",
-        use=['LAPACK'])
+        if conf.options.precision_real == '4':
+            fragment = fragment.replace('kind(1.d0)', 'kind(1.)') \
+                               .replace('dgeev','sgeev')
+        conf.check_cc(
+            fragment         = fragment,
+            compile_filename = 'test.f',
+            features         = 'fc fcprogram',
+            msg              = "Checking for 'lapack'",
+            use              = ['LAPACK'])
+
     conf.check_cfg(package='wcslib',  args=['--libs', '--cflags'])
     conf.check_cfg(modversion='wcslib')
     check_wcslib_external(conf.env)
