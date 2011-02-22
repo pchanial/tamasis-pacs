@@ -1006,6 +1006,12 @@ contains
         do last = obs%nsamples, 1, -1
             if (.not. obs%p(last)%removed) exit
         end do
+        
+        ! test if all samples are removed in this slice
+        if (first > last) then
+            status = 0
+            return
+        end if
 
         ! set mask from policy
         mask = spread(pack(obs%p(first:last)%masked, .not. obs%p(first:last)%removed), 2, ndetectors)

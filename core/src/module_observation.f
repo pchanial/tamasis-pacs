@@ -9,7 +9,7 @@ module module_observation
     use iso_fortran_env,  only : ERROR_UNIT, OUTPUT_UNIT
     use module_fitstools, only : FLEN_VALUE, ft_close, ft_open, ft_open_bintable, ft_read_column, ft_read_image, ft_read_keyword,  &
                                  ft_read_keyword_hcss, ft_check_error_cfitsio
-    use module_math,      only : NaN, mean, mean_degrees, median, neq_real
+    use module_math,      only : NaN, barycenter_lonlat, mean, mean_degrees, median, neq_real
     use module_string,    only : strinteger, strlowcase, strreal, strsection, strternary
     use module_tamasis,   only : p, POLICY_KEEP, POLICY_MASK, POLICY_REMOVE
     implicit none
@@ -234,12 +234,12 @@ contains
 
         allocate (ra(this%nslices), dec(this%nslices))
         do islice = 1, this%nslices
-            ra (islice) = mean_degrees(this%slice(islice)%p%ra,  logical(this%slice(islice)%p%removed))
-            dec(islice) = mean        (this%slice(islice)%p%dec, logical(this%slice(islice)%p%removed))
+            call barycenter_lonlat(pack(this%slice(islice)%p%ra,  .not. this%slice(islice)%p%removed),                             &
+                                   pack(this%slice(islice)%p%dec, .not. this%slice(islice)%p%removed),                             &
+                                   ra(islice), dec(islice))
         end do
 
-        ra0  = mean_degrees(ra)
-        dec0 = mean(dec)
+        call barycenter_lonlat(ra, dec, ra0, dec0)
         
     end subroutine compute_center
 
