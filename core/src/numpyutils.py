@@ -105,7 +105,8 @@ def any_neq(a, b, rtol=None, atol=0.):
 
     if var.verbose and result:
         factor = np.nanmax(abs(a-b) / (rtol * np.maximum(abs(a),abs(b)) + atol))
-        print('Argument data differ by factor ' + str(factor) + '.')
+        print('Argument data difference exceeds tolerance by factor ' + \
+              str(factor) + '.')
 
     return result
 
