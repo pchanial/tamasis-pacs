@@ -14,8 +14,8 @@ rank = tamasis.var.mpi_comm.Get_rank()
 size = tamasis.var.mpi_comm.Get_size()
 obs = PacsObservation(filename=data_dir + 'frames_blue.fits',
                       fine_sampling_factor=1)
-
-tod = obs.get_tod()
+obs.pointing.chop[:] = 0
+tod = obs.get_tod(flatfielding=False)
 
 map_ref = Map(data_dir + 'frames_blue_map_rls_cgs_tol1e-6.fits')
 
@@ -42,9 +42,9 @@ class Callback():
     def __call__(self, x):
         self.niterations += 1
 
-map_iter = mapper_rls(tod, model, hyper=1., tol=1.e-6, callback=None,
-                      profile=profile, maxiter=10 if profile else 1000,
-                      solver=cgs)
+map_iter = mapper_rls(tod, model, hyper=1., tol=1.e-6, profile=profile,
+                      callback=None if tamasis.var.verbose else Callback(),
+                      maxiter=10 if profile else 1000, solver=cgs)
 
 if profile is None:
     print 'Elapsed time: ' + str(map_iter.header['TIME'])
