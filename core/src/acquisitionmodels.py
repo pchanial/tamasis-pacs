@@ -1169,22 +1169,22 @@ class Reshaping(AcquisitionModelLinear):
                                         shapein=shapein, shapeout=shapeout)
 
     def direct(self, input, inplace, cachein, cacheout):
-        output = self.validate_input_direct(input)
+        output = self.validate_input_direct(input, inplace)
         output = _smart_reshape(output, self.shapeout)
         return output
 
     def transpose(self, input, inplace, cachein, cacheout):
-        output = self.validate_input_transpose(input)
+        output = self.validate_input_transpose(input, inplace)
         output = _smart_reshape(output, self.shapein)
         return output
 
-    def validate_input_direct(self, input):
-        input = np.asanyarray(input)
+    def validate_input_direct(self, input, inplace):
+        input = np.array(input, copy=not inplace, subok=True)
         shapeout = self.validate_shapein(input.shape)
         return input
 
-    def validate_input_transpose(self, input):
-        input = np.asanyarray(input)
+    def validate_input_transpose(self, input, inplace):
+        input = np.array(input, copy=not inplace, subok=True)
         shapeout = self.validate_shapeout(input.shape)
         return input
 
