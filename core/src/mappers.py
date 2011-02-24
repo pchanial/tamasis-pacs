@@ -125,7 +125,7 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None,
                 model.unitout).unit + "'.")
 
     if solver is None:
-        solver = scipy.sparse.linalg.cgs
+        solver = scipy.sparse.linalg.bicgstab
 
     if weight is None:
         weight = Identity(description='Weight')
