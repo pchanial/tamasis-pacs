@@ -169,7 +169,7 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None,
             M = M.copy()
             M[~np.isfinite(M)] = np.max(M[np.isfinite(M)])
             M = Diagonal(M, description='Preconditioner')
-        M = unpacking.T * M
+        M = unpacking.T * M * unpacking
 
     # initial guess
     if x0 is not None:
@@ -226,9 +226,8 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None,
                            str(callback.niterations) + ' iterations).')
 
     if info > 0:
-        callback.niterations += 1
-        if callback.niterations != maxiter:
-            print('Warning: mapper_rls: maxiter != niter...')
+        print('Warning: Solver reached maximum number of iterations without r' \
+              'eaching tolerance value.')
 
     output = Map(unpacking(solution, True, True, True), copy=False)
     output.unit = tod.unit + ' ' + (1/Quantity(1, model.unitout)).unit + ' ' + \
