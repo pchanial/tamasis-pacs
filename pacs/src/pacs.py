@@ -131,7 +131,7 @@ class PacsBase(Observation):
         else:
             sizeofpmatrix = 1
         pmatrix = np.empty(sizeofpmatrix, dtype=np.int64)
-        
+
         new_npixels_per_sample, status = tmf.pacs_pointing_matrix(
             self.instrument.band,
             nvalids,
@@ -319,24 +319,10 @@ class PacsBase(Observation):
                         str(self.slice[0].compression_factor))
 
         # scan speed
-        scan_speed = []
-        scan_speed_reliable = []
-        isample = 0
-        for slice in self.slice:
-            p = self.pointing[isample:isample+slice.nsamples_all]
-            isample += slice.nsamples_all
-            nsamples = np.sum(~p.removed)
-            inscan = (p.info == self.pointing.INSCAN) * ~p.removed
-            ninscans = np.sum(inscan)
-            if ninscans == 0:
-                inscan[:] = True
-            scan_speed_reliable.append('' if ninscans >= 0.25 * nsamples and \
-                                       nsamples > 10 else '~')
-            scan_speed.append(np.round(np.median(p.velocity[inscan]),1))
+        scan_speed = self.slice.scan_speed
         print_each_scan_speed = not same(scan_speed)
         if not print_each_scan_speed:
-            info.append('scan speed ' + scan_speed_reliable[0] + \
-                        str(scan_speed[0]))
+            info.append('scan speed ' + str(scan_speed[0]) + ' "/s')
         
         # unit
         if self.__class__.__name__ == 'PacsObservation':
@@ -404,8 +390,8 @@ class PacsBase(Observation):
                 result += sp + '     Compression: x' + \
                     str(slice.compression_factor) + '\n'
             if print_each_scan_speed:
-                result += sp + '     Scan speed:  ' + \
-                    scan_speed_reliable[islice] + str(scan_speed[islice]) + '\n'
+                result += sp + '     Scan speed:  ' + str(scan_speed[islice]) +\
+                          ' "/s\n'
             result += sp + '     In-scan:     ' + \
                 _str_policy(p.info == Pointing.INSCAN) + '\n'
             result += sp + '     Turnaround:  ' + \
@@ -542,11 +528,11 @@ class PacsObservation(PacsBase):
 
         # store observation information
         mode, compression_factor, unit, ra, dec, cam_angle, scan_angle, \
-            scan_length, scan_speed, scan_step, scan_nlegs, frame_time, \
-            frame_ra, frame_dec, frame_pa, frame_chop, frame_info, \
-            frame_masked, frame_removed, nmasks, mask_name_flat, \
-            mask_activated, status = tmf.pacs_info_observation(filename_,
-                nfilenames, np.array(policy, np.int32),np.sum(nsamples_all))
+            scan_length, scan_step, scan_nlegs, frame_time, frame_ra, \
+            frame_dec, frame_pa, frame_chop, frame_info, frame_masked, \
+            frame_removed, nmasks, mask_name_flat, mask_activated, status = \
+            tmf.pacs_info_observation(filename_, nfilenames,
+                np.array(policy, np.int32),np.sum(nsamples_all))
         if status != 0: raise RuntimeError()
 
         flen_value = len(unit) // nfilenames
@@ -644,7 +630,6 @@ class PacsObservation(PacsBase):
         self.slice.scan_length = scan_length
         self.slice.scan_nlegs = scan_nlegs
         self.slice.scan_step = scan_step
-        self.slice.scan_speed = scan_speed
         self.slice.nmasks = nmasks
         self.slice.mask_name      = mask_name
         self.slice.mask_activated = mask_activated[:,0:nmasks_max]
@@ -654,6 +639,7 @@ class PacsObservation(PacsBase):
             frame_info, frame_masked, frame_removed,
             nsamples=self.slice.nsamples_all, dtype=self.POINTING_DTYPE)
         self.pointing.chop = frame_chop
+        self.slice.scan_speed = _scan_speed(self.pointing)
 
         # store frame policy
         self.policy = policy
@@ -928,9 +914,10 @@ class PacsSimulation(PacsBase):
         self.slice.delay = delay
         self.slice.unit = ''
         for field in ('ra', 'dec', 'cam_angle', 'scan_angle', 'scan_nlegs',
-                      'scan_length', 'scan_step', 'scan_speed'):
+                      'scan_length', 'scan_step'):
             self.slice[field] = pointing.header[field] if field in \
                 pointing.header else 0
+        self.slice.scan_speed = _scan_speed(self.pointing)
         self.slice.ninscans = np.sum(self.pointing.info == Pointing.INSCAN)
         self.slice.nturnarounds = np.sum(self.pointing.info==Pointing.TURNAROUND)
         self.slice.nothers = np.sum(self.pointing.info == Pointing.OTHER)
@@ -1238,7 +1225,6 @@ def _write_mask(obs, mask, filename):
 
 #-------------------------------------------------------------------------------
 
-
 def _write_status(obs, filename):
 
     s = obs.slice[0]
@@ -1252,7 +1238,7 @@ def _write_status(obs, filename):
         raise ValueError('Unable to save into a single file. The observations '\
                          'do not have the same observing mode.')
     mode = s.mode
-    band_type   = {'blue':'BS', 'green':'BL', 'red':'RS'}[obs.instrument.band]
+    band_type   = {'blue':'BS', 'green':'BS', 'red':'RS'}[obs.instrument.band]
 
     cusmode = {'prime':'PacsPhoto', 'parallel':'SpirePacsParallel',
                'transparent':'__PacsTranspScan', 'unknown':'__Calibration'}
@@ -1265,15 +1251,6 @@ def _write_status(obs, filename):
     else:
         comp_mode = ''
 
-    if obs.slice[0].scan_speed == 10.:
-        scan_speed = 'low'
-    elif obs.slice[0].scan_speed == 20.:
-        scan_speed = 'medium'
-    elif obs.slice[0].scan_speed == 60.:
-        scan_speed = 'high'
-    else:
-        scan_speed = str(obs.slice[0].scan_speed)
-        
     if obs.pointing.size != np.sum(obs.slice.nsamples_all):
         raise ValueError('The pointing and slice attribute are incompatible. ' \
                          'This should not happen.')
@@ -1286,39 +1263,40 @@ def _write_status(obs, filename):
     cc = pyfits.createCard
     
     header = pyfits.Header([
-            cc('simple', True), 
-            cc('BITPIX', 32), 
-            cc('NAXIS', 0), 
-            cc('EXTEND', True, 'May contain datasets'), 
-            cc('TYPE', 'HPPAVG'+band_type, 'Product Type Identification'), 
-            cc('CREATOR', 'TAMASIS v' + var.VERSION, 'Generator of this file'), 
-            cc('INSTRUME', 'PACS', 'Instrument attached to this file'), 
-            cc('TELESCOP', 'Herschel Space Observatory', 'Name of telescope'),
-            cc('OBS_MODE', 'Scan map', 'Observation mode name'),
-            cc('RA', s.ra),
-            cc('DEC', s.dec),
-            cc('EQUINOX', 2000., 'Equinox of celestial coordinate system'),
-            cc('RADESYS', 'ICRS', 'Coordinate reference frame for the RA and DEC'),
-            cc('CUSMODE', cusmode[mode], 'CUS observation mode'),
-            cc('META_0', obs.instrument.shape[0]),
-            cc('META_1', obs.instrument.shape[1]), 
-            cc('META_2', obs.instrument.band.title()+' Photometer'), 
-            cc('META_3', ('Floating Average  : ' + str(compression_factor)) if compression_factor > 1 else 'None'), 
-            cc('META_4', comp_mode),
-            cc('META_5', s.scan_angle),
-            cc('META_6', s.scan_length),
-            cc('META_7', s.scan_nlegs),
-            cc('META_8', scan_speed),
-            cc('HIERARCH key.META_0', 'detRow'), 
-            cc('HIERARCH key.META_1', 'detCol'), 
-            cc('HIERARCH key.META_2', 'camName'), 
-            cc('HIERARCH key.META_3', 'algorithm'), 
-            cc('HIERARCH key.META_4', 'compMode'),
-            cc('HIERARCH key.META_5', 'mapScanAngle'),
-            cc('HIERARCH key.META_6', 'mapScanLegLength'),
-            cc('HIERARCH key.META_7', 'mapScanNumLegs'),
-            cc('HIERARCH key.META_8', 'mapScanSpeed'),
-            ])
+        cc('simple', True), 
+        cc('BITPIX', 32), 
+        cc('NAXIS', 0), 
+        cc('EXTEND', True, 'May contain datasets'), 
+        cc('TYPE', 'HPPAVG'+band_type, 'Product Type Identification'), 
+        cc('CREATOR', 'TAMASIS v' + var.VERSION, 'Generator of this file'), 
+        cc('INSTRUME', 'PACS', 'Instrument attached to this file'), 
+        cc('TELESCOP', 'Herschel Space Observatory', 'Name of telescope'),
+        cc('OBS_MODE', 'Scan map', 'Observation mode name'),
+        cc('RA', s.ra),
+        cc('DEC', s.dec),
+        cc('EQUINOX', 2000., 'Equinox of celestial coordinate system'),
+        cc('RADESYS', 'ICRS', 'Coordinate reference frame for the RA and DEC'),
+        cc('CUSMODE', cusmode[mode], 'CUS observation mode'),
+        cc('META_0', obs.instrument.shape[0]),
+        cc('META_1', obs.instrument.shape[1]), 
+        cc('META_2', obs.instrument.band.title()+' Photometer'), 
+        cc('META_3', ('Floating Average  : ' + str(compression_factor)) \
+           if compression_factor > 1 else 'None'), 
+        cc('META_4', comp_mode),
+        cc('META_5', s.scan_angle),
+        cc('META_6', s.scan_length),
+        cc('META_7', s.scan_nlegs),
+        cc('META_8', 'blue2' if obs.instrument.band == 'green' else 'blue1'),
+        cc('HIERARCH key.META_0', 'detRow'), 
+        cc('HIERARCH key.META_1', 'detCol'), 
+        cc('HIERARCH key.META_2', 'camName'), 
+        cc('HIERARCH key.META_3', 'algorithm'), 
+        cc('HIERARCH key.META_4', 'compMode'),
+        cc('HIERARCH key.META_5', 'mapScanAngle'),
+        cc('HIERARCH key.META_6', 'mapScanLegLength'),
+        cc('HIERARCH key.META_7', 'mapScanNumLegs'),
+        cc('HIERARCH key.META_8', 'blue'),
+    ])
 
     hdu = pyfits.PrimaryHDU(None, header)
     fits.append(hdu)
@@ -1327,3 +1305,22 @@ def _write_status(obs, filename):
     fits.append(status)
     fits.writeto(filename, clobber=True)
 
+
+#-------------------------------------------------------------------------------
+
+
+def _scan_speed(pointing):
+    nslices = len(pointing.nsamples)
+    speed = np.ndarray(nslices, float)
+    velocity = pointing.velocity
+    removed = pointing.removed
+    info = pointing.info
+    dest = 0
+    for islice in range(nslices):
+        n = pointing.nsamples[islice]
+        inscan = (info[dest:dest+n] == pointing.INSCAN) * ~removed[dest:dest+n]
+        if not np.any(inscan):
+            inscan[:] = True
+        speed[islice] = np.round(np.median(velocity[dest:dest+n][inscan]),1)
+        dest += n
+    return speed

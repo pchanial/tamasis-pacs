@@ -26,8 +26,9 @@ subroutine pacs_info_init(filename, nfilenames, band, transparent_mode, nsamples
 
     class(PacsObservationSlice), allocatable :: slice
     integer                                  :: iobs, unit, first, last
-    character(len=FLEN_VALUE)                :: obstype, compmode
+    character(len=FLEN_VALUE)                :: camname, blue, compmode
     character(len=7)                         :: band_
+    logical                                  :: found
 
     ! split input filename
     if (mod(len(filename), nfilenames) /= 0) then
@@ -55,8 +56,15 @@ subroutine pacs_info_init(filename, nfilenames, band, transparent_mode, nsamples
         call ft_open(trim(slice%filename), unit, status)
         if (status /= 0) return
 
-        call ft_read_keyword(unit, 'TYPE', obstype, status=status)
+        call ft_read_keyword_hcss(unit, 'camName', camname, status=status)
         if (status /= 0) return
+
+        call ft_read_keyword_hcss(unit, 'blue', blue, found, status)
+        if (status /= 0) return
+        if (.not. found) then
+            call ft_read_keyword(unit, 'FILTER', blue, status=status)
+            if (status /= 0) return
+        end if
 
         call ft_read_keyword_hcss(unit, 'compMode', compmode, status=status)
         if (status /= 0) return
@@ -64,25 +72,25 @@ subroutine pacs_info_init(filename, nfilenames, band, transparent_mode, nsamples
         call ft_close(unit, status)
         if (status /= 0) return
 
-        select case (obstype)
-            case ('HPPRAWBS')
+        if (camname == 'Blue Photometer') then
+            if (blue == 'blue1' .or. blue == 'blue70um') then
                 band_ = 'blue'
-            case ('HPPRAWBL')
+            else if (blue == 'blue2' .or. blue == 'blue100um') then
                 band_ = 'green'
-            case ('HPPRAWRS')
-                band_ = 'red'
-            case ('HPPAVGBS')
-                band_ = 'blue'
-            case ('HPPAVGBL')
-                band_ = 'green'
-            case ('HPPAVGRS')
-                band_ = 'red'
-            case default
-                write (ERROR_UNIT, '(a)') "Unknown observation type '" // trim(obstype) // "' in file '" // trim(slice%filename)   &
-                      // "'."
+            else
+                write (ERROR_UNIT, '(a)') "Error: Invalid blue camera identifier '" // trim(blue) // "' in file '" //              &
+                      trim(slice%filename) // "'."
                 status = 1
                 return
-        end select
+            end if
+        else if (camname == 'Red Photometer') then
+            band_ = 'red'
+        else
+            write (ERROR_UNIT, '(a)') "Error: Invalid camera name '" // trim(camname) // "' in file '" // trim(slice%filename)     &
+                  // "'."
+            status = 1
+            return
+        end if
 
         if (iobs == 1) then
             band = band_
@@ -105,7 +113,7 @@ end subroutine pacs_info_init
 
 
 subroutine pacs_info_observation(filename, nfilenames, policy, nsamples_tot, cusmode, compression, unit, ra, dec, cam_angle,       &
-                                 scan_angle, scan_length, scan_speed, scan_step, scan_nlegs, frame_time, frame_ra, frame_dec,      &
+                                 scan_angle, scan_length, scan_step, scan_nlegs, frame_time, frame_ra, frame_dec,      &
                                  frame_pa, frame_chop, frame_info, frame_masked, frame_removed, nmasks, mask_name, mask_activated, &
                                  status)
 
@@ -120,7 +128,7 @@ subroutine pacs_info_observation(filename, nfilenames, policy, nsamples_tot, cus
     !f2py intent(in)            :: policy
     !f2py intent(in)            :: nsamples_tot
     !f2py character(len=70*nfilenames), intent(out), depend(nfilenames) :: cusmode, unit
-    !f2py intent(out)           :: compression, ra, dec, cam_angle, scan_angle, scan_length, scan_speed, scan_step
+    !f2py intent(out)           :: compression, ra, dec, cam_angle, scan_angle, scan_length, scan_step
     !f2py intent(out)           :: scan_nlegs
     !f2py intent(out)           :: frame_time, frame_ra, frame_dec, frame_pa, frame_chop, frame_info, frame_masked, frame_removed
     !f2py intent(out)           :: nmasks, mask_activated
@@ -132,7 +140,7 @@ subroutine pacs_info_observation(filename, nfilenames, policy, nsamples_tot, cus
     integer, intent(in)                             :: policy(4)
     integer, intent(in)                             :: nsamples_tot
     character(len=70*nfilenames), intent(out)       :: cusmode, unit !XXX hack around f2py bug with array of characters
-    real(p), intent(out), dimension(nfilenames)     :: ra, dec, cam_angle, scan_angle, scan_length, scan_speed, scan_step
+    real(p), intent(out), dimension(nfilenames)     :: ra, dec, cam_angle, scan_angle, scan_length, scan_step
     integer, intent(out), dimension(nfilenames)     :: compression, scan_nlegs, nmasks
     real(p), intent(out), dimension(nsamples_tot)   :: frame_time, frame_ra, frame_dec, frame_pa, frame_chop, frame_info
     logical*1, intent(out), dimension(nsamples_tot) :: frame_masked, frame_removed
@@ -184,7 +192,6 @@ subroutine pacs_info_observation(filename, nfilenames, policy, nsamples_tot, cus
     cam_angle   = obs%slice%cam_angle
     scan_angle  = obs%slice%scan_angle
     scan_length = obs%slice%scan_length
-    scan_speed  = obs%slice%scan_speed
     scan_step   = obs%slice%scan_step
     scan_nlegs  = obs%slice%scan_nlegs
     

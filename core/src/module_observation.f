@@ -73,7 +73,7 @@ public :: PacsObservationSlice
         character(len=FLEN_VALUE) :: band
         character(len=FLEN_VALUE) :: observing_mode
         real(p)                   :: ra, dec
-        real(p)                   :: cam_angle, scan_angle, scan_length, scan_speed, scan_step
+        real(p)                   :: cam_angle, scan_angle, scan_length, scan_step
         integer                   :: scan_nlegs
         character(len=FLEN_VALUE) :: unit
         integer                   :: compression_factor
@@ -418,11 +418,37 @@ contains
         class(PacsObservationSlice), intent(inout) :: this
         integer, intent(out)                       :: status
 
-        integer                       :: isample, nbs, nbl, nr, nu, nmax, nsamples, unit
+        integer                       :: nsamples, unit
         character(len=5), allocatable :: bands(:)
-        character(len=5)              :: band
+        character(len=FLEN_VALUE)     :: camname, blue
+        logical                       :: found
 
-        this%band = ''
+
+        call ft_open(trim(this%filename), unit, status)
+        if (status /= 0) return
+
+        call ft_read_keyword_hcss(unit, 'camName', camname, status=status)
+        if (status /= 0) return
+
+        call ft_read_keyword_hcss(unit, 'blue', blue, found, status)
+        if (status /= 0) return
+        if (.not. found) then
+            call ft_read_keyword(unit, 'FILTER', blue, status=status)
+            if (status /= 0) return
+        end if
+
+        call ft_close(unit, status)
+        if (status /= 0) return
+
+        if (camname == 'Blue Photometer') then
+            if (blue == 'blue1' .or. blue == 'blue70um') then
+                this%band = 'blue'
+            else
+                this%band = 'green'
+            end if
+        else
+            this%band = 'red'
+        end if
 
         call ft_open_bintable(trim(this%filename) // '[Status]', unit, nsamples, status)
         if (status /= 0) return
@@ -434,73 +460,14 @@ contains
         call ft_close(unit, status)
         if (status /= 0) return
 
-        ! get first defined BAND
-        do isample=1, nsamples
-            if (bands(isample) /= 'UNDEF') exit
-        end do
-
-        nbs = 0
-        nbl = 0
-        nr  = 0
-        nu  = 0
-        do isample=1, nsamples
-            select case (bands(isample))
-                case ('BS')
-                    nbs = nbs + 1
-                case ('BL')
-                    nbl = nbl + 1
-                case ('R')
-                    nr = nr + 1
-                case ('UNDEF')
-                    nu = nu + 1
-                case default
-                    status = 1
-                    write (ERROR_UNIT, '(a)') "Invalid band '" // bands(isample) // "'."
-                    return
-            end select
-        end do
-
-        ! check that there is at least one defind BAND
-        if (nu == nsamples) then
-            status = 1
-            write (ERROR_UNIT, '(a)') 'All observation samples have UNDEF band.'
-            return
-        end if
-
-        
-        ! check observation mostly has one BAND
-        nmax = max(nbs, nbl, nr)
-        if (real(nmax)/(nsamples-nu) < 0.99) then
-            status = 1
-            write (ERROR_UNIT, '(a)') 'Observation is BANDSWITCH.'
-            return
-        end if
-
-        ! mark other BAND as invalid
-        if (nmax == nbs) then
-            band = 'BS'
-        else if (nmax == nbl) then
-            band = 'BL'
-        else
-            band = 'R'
-        end if
-        this%p%invalid = this%p%invalid .or. bands /= band
-
-        ! get band
-        if (nmax == nbs) then
-            band = 'blue'
-        else if (nmax == nbl) then
-            band = 'green'
-        else
-            band = 'red'
-        end if
-        this%band = band
-
-        ! check observation only has one band
-        if (nsamples /= nmax + nu) then
-            write (OUTPUT_UNIT, '(a)') "Warning: some samples do not come from the '" // trim(band) //                             &
-                  "' band. They have been marked as invalid."
-        end if
+        select case (this%band)
+            case ('blue')
+                this%p%invalid = this%p%invalid .or. bands /= 'BS'
+            case ('green')
+                this%p%invalid = this%p%invalid .or. bands /= 'BL'
+            case ('red')
+                this%p%invalid = this%p%invalid .or. bands /= 'R'
+        end select
 
     end subroutine set_band
 
@@ -515,7 +482,7 @@ contains
 
         logical                   :: found
         integer                   :: unit
-        character(len=FLEN_VALUE) :: algorithm, mode, scan_speed
+        character(len=FLEN_VALUE) :: algorithm, mode
 
         call ft_open(trim(this%filename), unit, status)
         if (status /= 0) return
@@ -540,47 +507,7 @@ contains
         if (status /= 0) return
 
         call ft_read_keyword_hcss(unit, 'mapScanLegLength', this%scan_length, found, status)
-        if (status /= 0) return
-        
-        call ft_read_keyword_hcss(unit, 'mapScanSpeed', scan_speed, found, status)
-        if (status /= 0) return
-        if (found) then
-
-            read (scan_speed,*,iostat=status) this%scan_speed
-            if (status /= 0) then
-                select case (strlowcase(scan_speed))
-                    case ('low')
-                        this%scan_speed = 10._p
-                    case ('medium')
-                        this%scan_speed = 20._p
-                    case ('high')
-                        this%scan_speed = 60._p
-                    case default
-                        status = 1
-                        write (ERROR_UNIT, '(a)') "email-me pierre.chanial@cea.fr: mapscanspeed: '" // trim(scan_speed) // "'."
-                    end select
-            end if
-
-        else
-
-            call ft_read_keyword_hcss(unit, 'mapScanRate', scan_speed, found, status)
-            if (status /= 0) return
-            if (found) then                
-                select case (strlowcase(scan_speed))
-                    case ('slow')
-                        this%scan_speed = 10._p
-                    case ('medium')
-                        this%scan_speed = 20._p
-                    case ('fast')
-                        this%scan_speed = 60._p
-                    case default
-                        status = 1
-                        write (ERROR_UNIT, '(a)') "email-me pierre.chanial@cea.fr: mapscanrate: '" // trim(scan_speed) // "'."
-                end select
-            else
-            end if
-
-        end if
+        if (status /= 0) return        
 
         call ft_read_keyword_hcss(unit, 'mapScanNumLegs',   this%scan_nlegs, found, status)
         if (status /= 0) return
