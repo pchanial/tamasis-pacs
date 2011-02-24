@@ -333,6 +333,10 @@ class Pointing(FitsArray, np.recarray):
         result.header = create_fitsheader(None, naxis=result.size)
         return result
 
+    def __array_finalize__(self, array):
+        nsamples = getattr(array, 'nsamples', None)
+        self.nsamples = (self.size,) if nsamples is None else nsamples
+
     @property
     def velocity(self):
         ra = Quantity(self.ra, 'deg')
