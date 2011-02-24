@@ -725,6 +725,43 @@ end subroutine pacs_pointing_matrix
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
+subroutine pacs_uv2ad(u, v, ncoords, ra, dec, pa, chop, nsamples, distortion_yz, a, d)
+
+    !f2py threadsafe
+    !f2py intent(in)   :: u, v, ra, dec, pa, chop, distortion_yz
+    !f2py intent(hide) :: ncoords = size(u)
+    !f2py intent(hide) :: nsamples = size(ra)
+    !f2py intent(out)  :: a, d
+
+    use module_pacsinstrument, only : uv2yz, yz2ad
+    use module_tamasis,        only : p
+    implicit none
+
+    integer, intent(in)  :: ncoords, nsamples
+    real(p), intent(in)  :: u(ncoords), v(ncoords), ra(nsamples), dec(nsamples), pa(nsamples), chop(nsamples)
+    real(p), intent(in)  :: distortion_yz(2,3,3,3)
+    real(p), intent(out) :: a(ncoords,nsamples), d(ncoords,nsamples)
+
+    real(p) :: coords(2,ncoords), coords_uv(2,ncoords)
+    integer :: isample
+
+    coords_uv(1,:) = u
+    coords_uv(2,:) = v
+    !$omp parallel do private(coords)
+    do isample = 1, nsamples
+        coords = uv2yz(coords_uv, distortion_yz, chop(isample))
+        coords = yz2ad(coords, ra(isample), dec(isample), pa(isample))
+        a(:,isample) = coords(1,:)
+        d(:,isample) = coords(2,:)
+    end do
+    !$omp end parallel do
+
+end subroutine pacs_uv2ad
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
 subroutine pacs_multiplexing_direct(signal, multiplexed, fine_sampling_factor, ij, nsamples, ndetectors)
 
     use module_pacsinstrument, only : multiplexing_direct

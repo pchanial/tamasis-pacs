@@ -29,6 +29,8 @@ module module_pacsinstrument
     public :: read_filter_calibration_ncorrelations
     public :: read_filter_calibration
     public :: read_filter_filename
+    public :: uv2yz
+    public :: yz2ad
 
     integer, parameter :: NDIMS = 2
     integer, parameter :: NVERTICES = 4

@@ -98,7 +98,7 @@ class PacsBase(Observation):
             np.ascontiguousarray(self.pointing.removed,np.int8),
             np.asfortranarray(self.instrument.detector_mask, np.int8),
             self.instrument.detector_corner.base.base.swapaxes(0,1).copy().T,
-            self.instrument.distortion_yz.base.base.T,
+            self.instrument.distortion_yz.base.base.base,
             resolution)
         if status != 0: raise RuntimeError()
         headers = var.mpi_comm.allgather(_str2fitsheader(header))
@@ -153,7 +153,7 @@ class PacsBase(Observation):
             self.instrument.detector_center.base.base.swapaxes(0,1).copy().T,
             self.instrument.detector_corner.base.base.swapaxes(0,1).copy().T,
             np.asfortranarray(self.instrument.detector_area),
-            self.instrument.distortion_yz.base.base.T,
+            self.instrument.distortion_yz.base.base.base,
             npixels_per_sample,
             str(header).replace('\n',''),
             pmatrix)
@@ -225,7 +225,27 @@ class PacsBase(Observation):
             tod.derived_units['detector'] = self.instrument.detector_area
         return tod
     unpack.__doc__ = Observation.unpack.__doc__
-    
+
+    def uv2ad(self, u, v, ra=None, dec=None, pa=None, chop=None):
+        def validate(input, attr):
+            if input is None:
+                return getattr(self.pointing, attr)[~self.pointing.removed]
+            return np.ascontiguousarray(input, var.FLOAT_DTYPE)
+        u = np.array(u, var.FLOAT_DTYPE, order='c', ndmin=1, copy=False)
+        v = np.array(v, var.FLOAT_DTYPE, order='c', ndmin=1, copy=False)
+        if ra is not None and dec is not None:
+            if pa is None:
+                pa = ra * 0.
+            if chop is NOne:
+                chop = ra * 0.
+        elif (ra is None) ^ (dec is None):
+            raise ValueError('Both R.A. and Dec must be set.')
+            
+        ra, dec = tmf.pacs_uv2ad(u, v, validate(ra, 'ra'), validate(dec, 'dec'),
+                                 validate(pa, 'pa'), validate(chop, 'chop'),
+                                 self.instrument.distortion_yz.base.base.base)
+        return ra.squeeze(), dec.squeeze()
+
     def save(self, filename, tod):
         
         if np.rank(tod) != 3:
