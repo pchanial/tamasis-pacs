@@ -9,7 +9,7 @@ import scipy.signal
 from matplotlib import pyplot
 from . import var
 from .numpyutils import _my_isscalar
-from .wcsutils import barycenter_lonlat
+from .wcsutils import angle_lonlat, barycenter_lonlat
 from .quantity import Quantity
 from .datatypes import Map, create_fitsheader
 
