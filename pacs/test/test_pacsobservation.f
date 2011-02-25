@@ -72,6 +72,10 @@ program test_pacsobservation
     afilename(1) = filename // '[:l+]'
     call obs%init(afilename, policy, status)
     if (status == 0) call failure('badinit5')
+
+    afilename(1) = filename // '[370:]'
+    call obs%init(afilename, policy, status)
+    if (status == 0) call failure('badinit6')
     deallocate (afilename)
 
     ! array

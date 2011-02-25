@@ -298,7 +298,7 @@ contains
         length = len_trim(filename)
         if (length > len(this%filename)) then
             status = 1
-            write (ERROR_UNIT,'(a,i0,a,i0,a)') 'ERROR: Input filename length is too long ', length, '. Maximum is ',               &
+            write (ERROR_UNIT,'(a,i0,a,i0,a)') 'Error: Input filename length is too long ', length, '. Maximum is ',               &
                   len(this%filename), '.'
             return
         end if
@@ -313,7 +313,7 @@ contains
 
         if (pos == 1) then
             status = 1
-            write (ERROR_UNIT,'(a)') "ERROR: Missing opening bracket in '" // trim(filename) // "'."
+            write (ERROR_UNIT,'(a)') "Error: Missing opening bracket in '" // trim(filename) // "'."
             return
         end if
       
@@ -333,7 +333,7 @@ contains
         if (delim > pos) then
             read (filename(pos:delim-1), '(i20)', iostat=status) first
             if (status /= 0) then
-                write (ERROR_UNIT,'(a)') "ERROR: Invalid first sample: '" // filename(pos-1:length+1) // "'."
+                write (ERROR_UNIT,'(a)') "Error: Invalid first sample: '" // filename(pos-1:length+1) // "'."
                 return
             end if
         end if
@@ -343,7 +343,7 @@ contains
             if (delim < length) then
                 read (filename(delim+1:length), '(i20)', iostat=status) last
                 if (status /= 0) then
-                    write (ERROR_UNIT,'(a)') "ERROR: Invalid last sample: '" // filename(pos-1:length+1) // "'."
+                    write (ERROR_UNIT,'(a)') "Error: Invalid last sample: '" // filename(pos-1:length+1) // "'."
                     return
                 end if
             end if
@@ -353,13 +353,13 @@ contains
 
         if (last /= 0 .and. last < first) then
             status = 1
-            write (ERROR_UNIT,'(a,2(i0,a))')"ERROR: Last sample '", last,  "' is less than the first sample '", first, "'."
+            write (ERROR_UNIT,'(a,2(i0,a))')"Error: Last sample '", last,  "' is less than the first sample '", first, "'."
             return
         end if
 
         if (first < 0) then
             status = 1
-            write (ERROR_UNIT,'(a,i0,a)')"ERROR: The first sample '", first, "' is less than 1."
+            write (ERROR_UNIT,'(a,i0,a)')"Error: The first sample '", first, "' is less than 1."
             return
         end if
 
@@ -391,11 +391,18 @@ contains
                          (policy%other      == POLICY_REMOVE) .and. this%p%other      .or.                                         &
                          (policy%invalid    == POLICY_REMOVE) .and. this%p%invalid
         
+        if (first > this%nsamples) then
+            write (ERROR_UNIT,'(a,2(i0,a))') "Error: In file '" // trim(this%filename) // "', the lower bound '", first,           &
+                 "' exceeds the size of the observation '", this%nsamples, "'."
+            status = 1
+            return
+        end if
+
         ! if a slice is specified, remove its complement
         this%p(1:first-1)%removed = .true.
         if (last > this%nsamples) then
             status = 1
-            write (ERROR_UNIT,'(a,2(i0,a))') "ERROR: In file '" // trim(this%filename) // "', the last sample '", last,        &
+            write (ERROR_UNIT,'(a,2(i0,a))') "Error: In file '" // trim(this%filename) // "', the upper bound '", last,            &
                  "' exceeds the size of the observation '", this%nsamples, "'."
             return
         end if
@@ -493,14 +500,14 @@ contains
         if (algorithm(1:19) == 'Floating Average  :') then
             read (algorithm(20:),'(i3)', iostat=status) this%compression_factor
             if (status /= 0) then
-                write (ERROR_UNIT, '(a)') "ERROR: The compression algorithm '" // trim(algorithm) // "' is not understood."
+                write (ERROR_UNIT, '(a)') "Error: The compression algorithm '" // trim(algorithm) // "' is not understood."
                 return
             end if
         else if (algorithm == 'None') then
             this%compression_factor = 1
         else
             status = 1
-            write (ERROR_UNIT, '(a)') "ERROR: The compression algorithm '" // trim(algorithm) // "' is not understood."
+            write (ERROR_UNIT, '(a)') "Error: The compression algorithm '" // trim(algorithm) // "' is not understood."
         end if
 
         call ft_read_keyword_hcss(unit, 'mapScanAngle',     this%scan_angle, found, status)
@@ -607,7 +614,7 @@ contains
 
         if (this%nsamples == 0) then
             status = 1
-            write (ERROR_UNIT, '(a)') 'ERROR: Status extension is empty.'
+            write (ERROR_UNIT, '(a)') 'Error: Status extension is empty.'
             return
         end if
 
@@ -808,7 +815,7 @@ contains
             if (delta(isample-1) <= 0) then
                 if (isample < this%nsamples) then
                     if (delta(isample) <= 0) then
-                        write (ERROR_UNIT,'(a)') "ERROR: The pointing time is not strictly increasing."
+                        write (ERROR_UNIT,'(a)') "Error: The pointing time is not strictly increasing."
                         return
                     end if
                 end if
@@ -824,7 +831,7 @@ contains
         
         if (njumps > 0) then
             if (verbose) then
-                write (OUTPUT_UNIT,'(a,i0,a)') "Warning: In observation '" // trim(this%filename) //         &
+                write (OUTPUT_UNIT,'(a,i0,a)') "Warning: In file '" // trim(this%filename) //                                      &
                      "', the pointing fine time has ", njumps, ' negative jump(s). The affected fra&
                      &mes have been marked as invalid.'
             end if
@@ -834,8 +841,7 @@ contains
         ! check if there are gaps
         delta_max = maxval(abs(delta))
         if (verbose .and. any(neq_real(delta, this%sampling_interval, 1.e-3_p))) then
-            write (OUTPUT_UNIT,'(a,$)') "Warning: In observation '" // trim(this%filename) //"', the pointing time is not evenly sp&
-                  &aced."
+            write (OUTPUT_UNIT,'(a,$)') "Warning: In file '" // trim(this%filename) //"', the pointing time is not evenly spaced."
             if (delta_max > 1.5_p * this%sampling_interval) then
                 write (OUTPUT_UNIT,'(a)') ' Largest gap is ' // strreal(delta_max*1000._p,1) // 'ms.'
             else
@@ -952,7 +958,7 @@ contains
         this%band = this%slice(1)%band
         if (any(this%slice%band /= this%band)) then
             status = 1
-            write (ERROR_UNIT,'(a)') 'ERROR: Observations do not have the same band: '
+            write (ERROR_UNIT,'(a)') 'Error: Observations do not have the same band: '
             do islice = 1, this%nslices
                 write (ERROR_UNIT,'(a)') '- ' // trim(this%slice(islice)%band)
             end do
