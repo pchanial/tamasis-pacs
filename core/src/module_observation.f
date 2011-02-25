@@ -581,10 +581,6 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    ! if the first sample to consider is not specified, then:
-    !     - if the bbid is set, we search starting from the beginning the first valid sample
-    !     - otherwise, we search starting from the end for the first sample that satisfies abs(chopfpuangle) > 0.01.
-    ! if invalid samples have been found, we then discard the first 10, that might be affected by relaxation.
     subroutine set_flags(this, status)
 
         class(PacsObservationSlice), intent(inout) :: this
@@ -618,6 +614,7 @@ contains
             return
         end if
 
+        ! handle observations with missing BBIDs
         if (maxval(bbid) == 0) then
             where (abs(chop) > 0.01_p)
                 bbid = z'4004'
@@ -643,8 +640,8 @@ contains
             if (inscan(itarget)) exit
         end do
         if (itarget <= this%nsamples) then
-            ! backward search first non turnaround sample
-            do isample = itarget-1, 1, -1
+            ! backward search of the first non turnaround sample (but don't go back too much, we would include too much of the slew)
+            do isample = itarget-1, max(itarget-201,1), -1
                 if (.not. turnaround(isample)) exit
             end do
             ! mask as off-scan all samples before the 0x4000 block that precedes the first inscan block
