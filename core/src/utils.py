@@ -120,7 +120,10 @@ def plot_scan(input, map=None, title=None, new_figure=True, linewidth=2, **kw):
         for n in nsamples:
             p = pyplot.plot(x[dest:dest+n], y[dest:dest+n],
                             linewidth=linewidth, **kw)
-            pyplot.plot(x[dest], y[dest], 'o', color=p[0]._color)
+            for i in xrange(dest, dest+n):
+                if np.isfinite(x[i]) and np.isfinite(y[i]):
+                    pyplot.plot(x[i], y[i], 'o', color=p[0]._color)
+                    break
             dest += n
 
     if type(input) not in (list, tuple):
