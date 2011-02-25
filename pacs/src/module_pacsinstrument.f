@@ -608,8 +608,7 @@ contains
 
         call obs%compute_center(ra0, dec0)
 
-        call ft_create_header(0, 0, [[-resolution/3600._p, 0._p], [0._p, resolution/3600._p]], ra0, dec0, 1._p, 1._p,  &
-             header)
+        call ft_create_header(0, 0, [[-resolution/3600._p, 0._p], [0._p, resolution/3600._p]], ra0, dec0, 1._p, 1._p, header)
 
         call init_astrometry(header, status=status)
         if (status /= 0) return
