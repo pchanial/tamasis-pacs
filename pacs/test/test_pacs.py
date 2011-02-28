@@ -8,13 +8,13 @@ from uuid import uuid1
 
 class TestFailure(Exception): pass
 
-tamasis.var.verbose = True
+tamasis.var.verbose = False
 
 data_dir = os.path.dirname(__file__) + '/data/'
 
 # slice[10:19]
 obs = PacsObservation(data_dir+'frames_blue.fits[11:20]')
-tod = obs.get_tod()
+tod = obs.get_tod(flatfielding=False)
 
 filename = 'obs-'+str(uuid1())+'.fits'
 try:
@@ -64,9 +64,7 @@ compression  = CompressionAverage(obs.slice.compression_factor)
 masking      = Masking(tod.mask)
 
 model = masking * crosstalk * multiplexing * projection * telescope
-print(model)
-model = projection
-print(model)
+print model
 
 # naive map
 tod.inunit('Jy/arcsec^2')
@@ -95,3 +93,21 @@ std_naive = np.std(map_naive4[40:60,40:60])
 std_ref = np.std(map_ref[40:60,40:60])
 relerror = abs(std_naive-std_ref) / std_ref
 if relerror > 0.025: raise TestFailure('Tncompatibility with HCSS photproject: ' + str(relerror*100)+'%.')
+
+map_naive_ref = Map(data_dir + 'frames_blue_map_naive.fits')
+obs = PacsObservation(data_dir + 'frames_blue.fits', policy_detector='mask')
+projection = Projection(obs, header=map_naive_ref.header, oversampling=False, npixels_per_sample=6)
+tod = obs.get_tod(flatfielding=False)
+masking = Masking(tod.mask)
+model = masking * projection
+map_naive = mapper_naive(tod, model)
+if any_neq(map_naive, map_naive_ref, 2.e-12): raise TestFailure()
+
+obs_rem = PacsObservation(data_dir + 'frames_blue.fits', policy_detector='remove')
+projection_rem = Projection(obs_rem, header=map_naive.header, oversampling=False, npixels_per_sample=7)
+tod_rem = obs_rem.get_tod(flatfielding=False)
+masking_rem = Masking(tod_rem.mask)
+model_rem = masking_rem * projection_rem
+map_naive_rem = mapper_naive(tod_rem, model_rem)
+if any_neq(map_naive, map_naive_rem, 2.e-12): raise TestFailure()
+

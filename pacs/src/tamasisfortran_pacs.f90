@@ -2,26 +2,23 @@
 !
 ! Author: P. Chanial
 
-subroutine pacs_info_init(filename, nfilenames, band, transparent_mode, nsamples, status)
+subroutine pacs_info_instrument_init(filename, nfilenames, band, transparent_mode, status)
 
     use iso_fortran_env,        only : ERROR_UNIT
     use module_fitstools,       only : FLEN_VALUE, ft_close, ft_open, ft_read_keyword, ft_read_keyword_hcss
-    use module_pacsobservation, only : PacsObservation, PacsObservationSlice, MaskPolicy
-    use module_string,          only : strlowcase
+    use module_pacsobservation, only : PacsObservationSlice
     implicit none
 
     !f2py threadsafe
     !f2py intent(in)              :: filename
     !f2py intent(in)              :: nfilenames
     !f2py intent(out)             :: band
-    !f2py intent(out)             :: nsamples(nfilenames)
     !f2py intent(out)             :: status
 
     character(len=*), intent(in)  :: filename
     integer, intent(in)           :: nfilenames
     character(len=7), intent(out) :: band
     logical, intent(out)          :: transparent_mode
-    integer, intent(out)          :: nsamples(nfilenames)
     integer, intent(out)          :: status
 
     class(PacsObservationSlice), allocatable :: slice
@@ -42,15 +39,6 @@ subroutine pacs_info_init(filename, nfilenames, band, transparent_mode, nsamples
     do iobs = 1, nfilenames
 
         call slice%set_filename(filename((iobs-1)*len(filename)/nfilenames+1:iobs*len(filename)/nfilenames), first, last, status)
-        if (status /= 0) return
-
-        call ft_open(trim(slice%filename) // '[Signal]', unit, status)
-        if (status /= 0) return
-
-        call ft_read_keyword(unit, 'NAXIS1', nsamples(iobs), status=status)
-        if (status /= 0) return
-
-        call ft_close(unit, status)
         if (status /= 0) return
 
         call ft_open(trim(slice%filename), unit, status)
@@ -106,7 +94,116 @@ subroutine pacs_info_init(filename, nfilenames, band, transparent_mode, nsamples
 
     end do
 
-end subroutine pacs_info_init
+end subroutine pacs_info_instrument_init
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine pacs_info_instrument(band, nrows, ncolumns, input_active_fraction, detector_bad, detector_center,        &
+                                detector_corner, detector_area, distortion_yz, flatfield_optical, flatfield_detector, responsivity,&
+                                output_active_fraction, status)
+
+    use module_pacsinstrument, only : read_calibration_files
+    use module_tamasis,        only : p
+    implicit none
+
+    !f2py threadsafe
+    !f2py intent(in)             :: band
+    !f2py intent(in)             :: nrows
+    !f2py intent(in)             :: ncolumns
+    !f2py intent(in)             :: input_active_fraction
+    !f2py intent(out)            :: detector_bad
+    !f2py intent(out)            :: detector_center
+    !f2py intent(out)            :: detector_corner
+    !f2py intent(out)            :: detector_area
+    !f2py intent(out)            :: distortion_yz
+    !f2py intent(out)            :: flatfield_optical
+    !f2py intent(out)            :: flatfield_detector
+    !f2py intent(out)            :: responsivity
+    !f2py intent(out)            :: output_active_fraction
+    !f2py intent(out)            :: status
+
+    character(len=*), intent(in) :: band
+    integer, intent(in)          :: nrows, ncolumns
+    real(p), intent(in)          :: input_active_fraction
+    logical*1, intent(out)       :: detector_bad(nrows,ncolumns)
+    real(p), intent(out)         :: detector_center(2,nrows,ncolumns)
+    real(p), intent(out)         :: detector_corner(2,4,nrows,ncolumns)
+    real(p), intent(out)         :: detector_area(nrows,ncolumns)
+    real(p), intent(out)         :: distortion_yz(2,3,3,3)
+    real(p), intent(out)         :: flatfield_optical(nrows,ncolumns)
+    real(p), intent(out)         :: flatfield_detector(nrows,ncolumns)
+    real(p), intent(out)         :: responsivity
+    real(p), intent(out)         :: output_active_fraction
+    integer, intent(out)         :: status
+
+    logical*1, allocatable :: detector_bad_all(:,:)
+    real(p), allocatable   :: detector_center_all(:,:,:)
+    real(p), allocatable   :: detector_corner_all(:,:,:,:)
+    real(p), allocatable   :: detector_area_all(:,:)
+    real(p), allocatable   :: flatfield_optical_all(:,:)
+    real(p), allocatable   :: flatfield_detector_all(:,:)
+
+    ! read calibration files
+    output_active_fraction = input_active_fraction
+    call read_calibration_files(band, detector_bad_all, detector_center_all, detector_corner_all, detector_area_all,               &
+         flatfield_optical_all, flatfield_detector_all, distortion_yz, responsivity, output_active_fraction, status)
+    if (status /= 0) return
+
+    ! copy the allocatable arrays
+    detector_bad       = detector_bad_all
+    detector_center    = detector_center_all
+    detector_corner    = detector_corner_all
+    detector_area      = detector_area_all
+    flatfield_optical  = flatfield_optical_all
+    flatfield_detector = flatfield_detector_all
+
+end subroutine pacs_info_instrument
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine pacs_info_observation_init(filename, nfilenames, nsamples, status)
+
+    use module_fitstools,       only : ft_close, ft_open, ft_read_keyword
+    use module_pacsobservation, only : PacsObservationSlice
+    use module_tamasis,         only : p
+    implicit none
+
+    !f2py threadsafe
+    !f2py intent(in)             :: filename
+    !f2py intent(in)             :: nfilenames
+    !f2py intent(out)            :: nsamples(nfilenames)
+    !f2py intent(out)            :: status
+
+    character(len=*), intent(in) :: filename
+    integer, intent(in)          :: nfilenames
+    integer, intent(out)         :: nsamples(nfilenames)
+    integer, intent(out)         :: status
+
+    class(PacsObservationSlice), allocatable :: slice
+    integer                                  :: iobs, unit, first, last
+    allocate (slice)
+
+    do iobs = 1, nfilenames
+
+        call slice%set_filename(filename((iobs-1)*len(filename)/nfilenames+1:iobs*len(filename)/nfilenames), first, last, status)
+        if (status /= 0) return
+
+        call ft_open(trim(slice%filename) // '[Signal]', unit, status)
+        if (status /= 0) return
+
+        call ft_read_keyword(unit, 'NAXIS1', nsamples(iobs), status=status)
+        if (status /= 0) return
+
+        call ft_close(unit, status)
+        if (status /= 0) return
+
+    end do
+
+end subroutine pacs_info_observation_init
 
 
 !-----------------------------------------------------------------------------------------------------------------------------------
@@ -223,101 +320,6 @@ end subroutine pacs_info_observation
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine pacs_info_detector_mask(band, nrows, ncolumns, detector_mask, status)
-
-    use iso_fortran_env,       only : ERROR_UNIT
-    use module_pacsinstrument, only : read_detector_mask
-
-    !f2py threadsafe
-    !f2py intent(in)             :: band
-    !f2py intent(in)             :: nrows, ncolumns
-    !f2py intent(out)            :: detector_mask
-    !f2py intent(out)            :: status
-
-    character(len=*), intent(in) :: band
-    integer, intent(in)          :: nrows, ncolumns
-    logical*1, intent(out)       :: detector_mask(nrows,ncolumns)
-    integer, intent(out)         :: status
-
-    logical*1, allocatable       :: tmp(:,:)
-
-    ! read calibration file
-    call read_detector_mask(band, tmp, status)
-    if (status /= 0) return
-
-    ! copy allocatable array
-    detector_mask = tmp
-
-end subroutine pacs_info_detector_mask
-
-
-!-----------------------------------------------------------------------------------------------------------------------------------
-
-
-subroutine pacs_info_instrument(band, detector_mask, nrows, ncolumns, input_active_fraction, detector_center, detector_corner,     &
-                                detector_area, distortion_yz, flatfield_optical, flatfield_detector, responsivity,                 &
-                                output_active_fraction, status)
-
-    use module_pacsinstrument, only : read_calibration_files
-    use module_tamasis,        only : p
-    implicit none
-
-    !f2py threadsafe
-    !f2py intent(in)             :: band
-    !f2py intent(in)             :: detector_mask
-    !f2py intent(hide)           :: nrows = shape(detector_mask,0)
-    !f2py intent(hide)           :: ncolumns = shape(detector_mask,1)
-    !f2py intent(in)             :: input_active_fraction
-    !f2py intent(out)            :: detector_center
-    !f2py intent(out)            :: detector_corner
-    !f2py intent(out)            :: detector_area
-    !f2py intent(out)            :: distortion_yz
-    !f2py intent(out)            :: flatfield_optical
-    !f2py intent(out)            :: flatfield_detector
-    !f2py intent(out)            :: responsivity
-    !f2py intent(out)            :: output_active_fraction
-    !f2py intent(out)            :: status
-
-    character(len=*), intent(in) :: band
-    logical*1, intent(in)        :: detector_mask(nrows,ncolumns)
-    integer, intent(in)          :: nrows, ncolumns
-    real(p), intent(in)          :: input_active_fraction
-    real(p), intent(out)         :: detector_center(2,nrows,ncolumns)
-    real(p), intent(out)         :: detector_corner(2,4,nrows,ncolumns)
-    real(p), intent(out)         :: detector_area(nrows,ncolumns)
-    real(p), intent(out)         :: distortion_yz(2,3,3,3)
-    real(p), intent(out)         :: flatfield_optical(nrows,ncolumns)
-    real(p), intent(out)         :: flatfield_detector(nrows,ncolumns)
-    real(p), intent(out)         :: responsivity
-    real(p), intent(out)         :: output_active_fraction
-    integer, intent(out)         :: status
-
-    real(p), allocatable :: detector_center_all(:,:,:)
-    real(p), allocatable :: detector_corner_all(:,:,:,:)
-    real(p), allocatable :: detector_area_all(:,:)
-    real(p), allocatable :: flatfield_optical_all(:,:)
-    real(p), allocatable :: flatfield_detector_all(:,:)
-
-    ! read calibration files
-    output_active_fraction = input_active_fraction
-    call read_calibration_files(band, detector_mask, detector_center_all, detector_corner_all, detector_area_all,                  &
-                                flatfield_optical_all, flatfield_detector_all, distortion_yz, responsivity, output_active_fraction,&
-                                status)
-    if (status /= 0) return
-
-    ! copy the allocatable arrays
-    detector_center    = detector_center_all
-    detector_corner    = detector_corner_all
-    detector_area      = detector_area_all
-    flatfield_optical  = flatfield_optical_all
-    flatfield_detector = flatfield_detector_all
-
-end subroutine pacs_info_instrument
-
-
-!-----------------------------------------------------------------------------------------------------------------------------------
-
-
 subroutine pacs_read_filter_calibration_ncorrelations(band, ncorrelations, status)
 
     use module_pacsinstrument, only : read_filter_calibration_ncorrelations
@@ -392,8 +394,8 @@ end subroutine pacs_read_filter_calibration
 
 
 subroutine pacs_map_header(band, nslices, npointings, nsamples_tot, compression_factor, delay, fine_sampling_factor,               &
-                           oversampling, time, ra, dec, pa, chop, masked, removed, detector_mask, nrows, ncolumns, detector_corner,&
-                           distortion_yz, resolution, header, status)
+                           oversampling, time, ra, dec, pa, chop, masked, removed, detector_mask, nrows, ncolumns, detector_bad,   &
+                           detector_corner, distortion_yz, resolution, header, status)
 
     use module_pacsinstrument,  only : PacsInstrument
     use module_pacsobservation, only : PacsObservation
@@ -419,6 +421,7 @@ subroutine pacs_map_header(band, nslices, npointings, nsamples_tot, compression_
     !f2py intent(in)                               :: detector_mask(nrows,ncolumns)
     !f2py intent(hide)                             :: nrows = shape(detector_mask,0)
     !f2py intent(hide)                             :: ncolumns = shape(detector_mask,1)
+    !f2py intent(in)                               :: detector_bad(nrows,ncolumns)
     !f2py intent(in)                               :: detector_corner(2,4,nrows,ncolumns)
     !f2py intent(in)                               :: distortion_yz(2,3,3,3)
     !f2py intent(in)                               :: resolution
@@ -438,6 +441,7 @@ subroutine pacs_map_header(band, nslices, npointings, nsamples_tot, compression_
     logical*1, intent(in)                          :: detector_mask(nrows,ncolumns)
     integer, intent(in)                            :: nrows
     integer, intent(in)                            :: ncolumns
+    logical*1, intent(in)                          :: detector_bad(nrows,ncolumns)
     real(p), intent(in)                            :: detector_corner(2,4,nrows,ncolumns)
     real(p), intent(in)                            :: distortion_yz(2,3,3,3)
     real(p), intent(in)                            :: resolution
@@ -454,8 +458,8 @@ subroutine pacs_map_header(band, nslices, npointings, nsamples_tot, compression_
 
     ! initialise pacs instrument
     allocate (pacs)
-    call pacs%init_with_variables(band, detector_mask, fine_sampling_factor, status, detector_corner_all=detector_corner,          &
-                                  distortion_yz=distortion_yz)
+    call pacs%init_with_variables(band, detector_mask, fine_sampling_factor, status, detector_bad_all=detector_bad,                &
+                                  detector_corner_all=detector_corner, distortion_yz=distortion_yz)
     if (status /= 0) return
 
     ! compute the map header
@@ -468,8 +472,8 @@ end subroutine pacs_map_header
 
 
 subroutine pacs_tod(band, filename, nslices, npointings, nsamples_tot, compression_factor, delay, fine_sampling_factor, time, ra,  &
-                    dec, pa, chop, masked, removed, detector_mask, flatfield_detector, do_flatfielding, do_subtraction_mean,       &
-                    nvalids, ndetectors, selected_mask, nrows, ncolumns, signal, mask, status)
+                    dec, pa, chop, masked, removed, detector_mask, detector_bad, flatfield_detector, do_flatfielding,              &
+                    do_subtraction_mean, nvalids, ndetectors, selected_mask, nrows, ncolumns, signal, mask, status)
 
 
     use iso_fortran_env,        only : ERROR_UNIT
@@ -497,6 +501,7 @@ subroutine pacs_tod(band, filename, nslices, npointings, nsamples_tot, compressi
     !f2py intent(in)                               :: masked(nsamples_tot)
     !f2py intent(in)                               :: removed(nsamples_tot)
     !f2py intent(in)                               :: detector_mask(nrows,ncolumns)
+    !f2py intent(in)                               :: detector_bad(nrows,ncolumns)
     !f2py intent(in)                               :: flatfield_detector(nrows,ncolumns)
     !f2py intent(in)                               :: do_flatfielding
     !f2py intent(in)                               :: do_subtraction_mean
@@ -520,6 +525,7 @@ subroutine pacs_tod(band, filename, nslices, npointings, nsamples_tot, compressi
     real(p), intent(in), dimension(nsamples_tot)   :: time, ra, dec, pa, chop
     logical*1, intent(in), dimension(nsamples_tot) :: masked, removed
     logical*1, intent(in)                          :: detector_mask(nrows,ncolumns)
+    logical*1, intent(in)                          :: detector_bad(nrows,ncolumns)
     real(p), intent(in)                            :: flatfield_detector(nrows,ncolumns)
     logical, intent(in)                            :: do_flatfielding, do_subtraction_mean
     integer, intent(in)                            :: nvalids
@@ -552,7 +558,8 @@ subroutine pacs_tod(band, filename, nslices, npointings, nsamples_tot, compressi
 
     ! initialise pacs instrument
     allocate (pacs)
-    call pacs%init_with_variables(band, detector_mask, fine_sampling_factor, status, flatfield_detector_all=flatfield_detector)
+    call pacs%init_with_variables(band, detector_mask, fine_sampling_factor, status, detector_bad_all=detector_bad,                &
+                                  flatfield_detector_all=flatfield_detector)
     if (status /= 0) return
 
     ! check number of detectors

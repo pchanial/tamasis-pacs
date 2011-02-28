@@ -97,6 +97,7 @@ class PacsBase(Observation):
             np.ascontiguousarray(self.pointing.masked, np.int8),
             np.ascontiguousarray(self.pointing.removed,np.int8),
             np.asfortranarray(self.instrument.detector_mask, np.int8),
+            np.asfortranarray(self.instrument.detector_bad, np.int8),
             self.instrument.detector_corner.base.base.swapaxes(0,1).copy().T,
             self.instrument.distortion_yz.base.base.base,
             resolution)
@@ -403,42 +404,6 @@ class PacsBase(Observation):
 
         return result
 
-    def _get_detector_mask(self, band, detector_mask, transparent_mode,
-                           reject_bad_line):
-        shape = (16,32) if band == 'red' else (32,64)
-        if type(detector_mask) is str:
-            if detector_mask == 'calibration':
-                detector_mask, status = tmf.pacs_info_detector_mask(
-                    band, shape[0], shape[1])
-                if status != 0: raise RuntimeError()
-                detector_mask = np.ascontiguousarray(detector_mask, np.bool8)
-            else:
-                raise ValueError('Invalid specification for the detector_mask.')
-        elif detector_mask is None:
-            detector_mask = np.zeros(shape, np.bool8)
-        else:
-            if detector_mask.shape != shape:
-                raise ValueError('Invalid shape of the input detector mask: ' +\
-                    str(detector_mask.shape) + ' for the ' + band + ' band.')
-            detector_mask = np.array(detector_mask, np.bool8, copy=False)
-
-        # mask non-transmitting detectors in transparent mode
-        if transparent_mode:
-            if band == 'red':
-                detector_mask[0:8,0:8] = 1
-                detector_mask[0:8,16:] = 1
-                detector_mask[8:,:]    = 1
-            else:
-                detector_mask[0:16,0:16] = 1
-                detector_mask[0:16,32:]  = 1
-                detector_mask[16:,:]     = 1
-
-        # mask erratic line
-        if reject_bad_line and band != 'red':
-            detector_mask[11,16:32] = 1
-
-        return detector_mask
-
 
 #-------------------------------------------------------------------------------
 
@@ -449,26 +414,27 @@ class PacsObservation(PacsBase):
     the observations to be processed.
     """
     def __init__(self, filename, fine_sampling_factor=1,
-                 detector_mask='calibration', reject_bad_line=False,
+                 policy_detector='mask', reject_bad_line=False,
                  policy_inscan='keep', policy_turnaround='keep',
                  policy_other='remove', policy_invalid='mask',
                  active_fraction=0, delay=0.):
         """
         Parameters
         ----------
-        filename: string or array of string
+        filenames: string or array of string
               This argument indicates the filenames of the observations
               to be processed. The files must be FITS files, as saved by
               the HCSS method FitsArchive.
         fine_sampling_factor: integer
               Set this value to a power of two, which will increase the
               acquisition model's sampling frequency beyond 40Hz
-        detector_mask: None, 'calibration' or boolean array
-              If None, no detector will be filtered out. if 'calibration',
-              the detector mask will be read from a calibration file.
-              Otherwise, it must be of the same shape as the camera:
-              (16,32) for the red band and (32,64) for the others.
-              Use 0 to keep a detector and 1 to filter it out.
+        policy_detector: 'keep', 'mask' or 'remove'
+              This keyword controls the handling of the bad detectors.
+              'keep' will handle bad detectors like valid ones.
+              'mask' will  enforce a zero data value and a True mask value in
+              the Tod returned by get_tod().
+              'remove' will discard the bad detectors from the Tod returned by
+              get_tod().
         reject_bad_line: boolean
               If True, the erratic line [11,16:32] (starting from 0) in
               the blue channel will be filtered out
@@ -497,30 +463,60 @@ class PacsObservation(PacsBase):
         - policy: frame policy
 
         """
-        if type(filename) == str:
+        if not isinstance(filename, (list,tuple)):
             filename = (filename,)
         filename_, nfilenames = _files2tmf(filename)
+        active_fraction = float(active_fraction)
 
-        band, transparent_mode, nsamples_all, status = tmf.pacs_info_init(
+        band, transparent_mode, status = tmf.pacs_info_instrument_init(
             filename_, nfilenames)
         if status != 0: raise RuntimeError()
         band = band.strip()
 
-        # get the detector mask, before distributing the detectors to the
-        # processors
-        detector_mask = self._get_detector_mask(band, detector_mask,
-            transparent_mode, reject_bad_line)
+        # store instrument information
+        shape = (16,32) if band == 'red' else (32,64)
+        detector_bad, detector_center, detector_corner, detector_area, \
+        distortion_yz, oflat, dflat, responsivity, active_fraction, status = \
+            tmf.pacs_info_instrument(band, shape[0], shape[1], active_fraction)
+        if status != 0: raise RuntimeError()
+        detector_bad = detector_bad.astype(np.bool8)
+
+        # get detector mask according to policy
+        detector_mask = _get_detector_mask(band, detector_bad, policy_detector,
+                                           transparent_mode, reject_bad_line)
+
+        # distribute the workload over the processors
+        detector_mask, filename = split_observation(var.mpi_comm, detector_mask,
+                                                    filename)
+        filename_, nfilenames = _files2tmf(filename)
+
+        self.instrument = Instrument('PACS/' + band.capitalize(), detector_mask)
+        self.instrument.active_fraction = active_fraction
+        self.instrument.band = band
+        self.instrument.reject_bad_line = reject_bad_line
+        self.instrument.fine_sampling_factor = fine_sampling_factor
+        self.instrument.detector_bad = Map(detector_bad, dtype=np.bool8,
+                                           origin='upper')
+        self.instrument.detector_center = detector_center.T.swapaxes(0,1) \
+            .copy().view(dtype=[('u',var.FLOAT_DTYPE),('v',var.FLOAT_DTYPE)]) \
+            .view(np.recarray)
+        self.instrument.detector_corner = detector_corner.T.swapaxes(0,1) \
+            .copy().view(dtype=[('u',var.FLOAT_DTYPE),('v',var.FLOAT_DTYPE)]) \
+            .view(np.recarray)
+        self.instrument.detector_area = Map(np.ascontiguousarray(detector_area),
+            unit='arcsec^2', origin='upper')
+        self.instrument.distortion_yz = distortion_yz.T.view(dtype=[('y', \
+            var.FLOAT_DTYPE), ('z',var.FLOAT_DTYPE)]).view(np.recarray)
+        self.instrument.flatfield = FlatField(oflat, dflat)
+        self.instrument.responsivity = Quantity(responsivity, 'V/Jy')
+        self.instrument.detector_time_constant = Map(pyfits.open(CALIBFILE_DTC)\
+            [{'red':1, 'green':2, 'blue':3}[band]].data, unit='ms',
+            origin='upper')
 
         # get the observations and detector mask for the current processor
-        slice_observation, slice_detector = split_observation(var.mpi_comm,
-             int(np.sum(detector_mask == 0)), nfilenames)
-        filename = filename[slice_observation]
-        nsamples_all = nsamples_all[slice_observation]
-        nfilenames = len(filename)
-        igood = np.where(detector_mask.flat == 0)[0]
-        detector_mask = np.ones(detector_mask.shape, np.bool8)
-        detector_mask.flat[igood[slice_detector]] = 0
-        filename_, nfilenames = _files2tmf(filename)
+        nsamples_all, status = tmf.pacs_info_observation_init(filename_,
+            nfilenames)
+        if status != 0: raise RuntimeError()
 
         # frame policy
         policy = MaskPolicy('inscan,turnaround,other,invalid', (policy_inscan,
@@ -540,34 +536,6 @@ class PacsObservation(PacsBase):
                 for i in range(nfilenames)]
         unit = [unit[i*flen_value:(i+1)*flen_value].strip() \
                 for i in range(nfilenames)]
-
-        # store instrument information
-        detector_center, detector_corner, detector_area, distortion_yz, oflat, \
-            dflat, responsivity, active_fraction, status = \
-            tmf.pacs_info_instrument(band, np.asfortranarray(detector_mask,
-                np.int8), float(active_fraction))
-        if status != 0: raise RuntimeError()
-
-        self.instrument = Instrument('PACS/' + band.capitalize(), detector_mask)
-        self.instrument.active_fraction = active_fraction
-        self.instrument.band = band
-        self.instrument.reject_bad_line = reject_bad_line
-        self.instrument.fine_sampling_factor = fine_sampling_factor
-        self.instrument.detector_center = detector_center.T.swapaxes(0,1) \
-            .copy().view(dtype=[('u',var.FLOAT_DTYPE),('v',var.FLOAT_DTYPE)]) \
-            .view(np.recarray)
-        self.instrument.detector_corner = detector_corner.T.swapaxes(0,1) \
-            .copy().view(dtype=[('u',var.FLOAT_DTYPE),('v',var.FLOAT_DTYPE)]) \
-            .view(np.recarray)
-        self.instrument.detector_area = Map(np.ascontiguousarray(detector_area),
-            unit='arcsec^2', origin='upper')
-        self.instrument.distortion_yz = distortion_yz.T.view(dtype=[('y', \
-            var.FLOAT_DTYPE), ('z',var.FLOAT_DTYPE)]).view(np.recarray)
-        self.instrument.flatfield = FlatField(oflat, dflat)
-        self.instrument.responsivity = Quantity(responsivity, 'V/Jy')
-        self.instrument.detector_time_constant = Map(pyfits.open(CALIBFILE_DTC)\
-            [{'red':1, 'green':2, 'blue':3}[band]].data, unit='ms',
-            origin='upper')
 
         # store slice information
         nmasks_max = np.max(nmasks)
@@ -721,6 +689,7 @@ class PacsObservation(PacsBase):
             np.ascontiguousarray(self.pointing.masked, np.int8),
             np.ascontiguousarray(self.pointing.removed,np.int8),
             np.asfortranarray(self.instrument.detector_mask, np.int8),
+            np.asfortranarray(self.instrument.detector_bad, np.int8),
             np.asfortranarray(self.instrument.flatfield.detector),
             flatfielding,
             subtraction_mean,
@@ -790,7 +759,7 @@ class PacsSimulation(PacsBase):
     This class creates a simulated PACS observation.
     """
     def __init__(self, pointing, band, mode=None, fine_sampling_factor=1,
-                 detector_mask='calibration', reject_bad_line=False,
+                 policy_detector='mask', reject_bad_line=False,
                  policy_inscan='keep', policy_turnaround='keep',
                  policy_other='keep', policy_invalid='keep', active_fraction=0,
                  delay=0.):
@@ -840,35 +809,22 @@ class PacsSimulation(PacsBase):
                     band + " band is incompatible with the compression factor" \
                     " '" + str(compression_factor) + "'.")
 
-        # detector mask
-        detector_mask = self._get_detector_mask(band, detector_mask,
+        # store instrument information
+        shape = (16,32) if band == 'red' else (32,64)
+        detector_bad, detector_center, detector_corner, detector_area, \
+        distortion_yz, oflat, dflat, responsivity, active_fraction, status = \
+            tmf.pacs_info_instrument(band, shape[0], shape[1], active_fraction)
+        if status != 0: raise RuntimeError()
+
+        # get detector mask according to policy
+        detector_mask = _get_detector_mask(band, detector_bad, policy_detector,
             mode == 'transparent', reject_bad_line)
 
-        # store pointing information
-        if not hasattr(pointing, 'chop'):
-            pointing.chop = np.zeros(pointing.size, var.FLOAT_DTYPE)
-        pointing.masked  = \
-            (policy_inscan     == 'mask')   * \
-                (pointing.info == Pointing.INSCAN) + \
-            (policy_turnaround == 'mask')   * \
-                (pointing.info == Pointing.TURNAROUND) + \
-            (policy_other      == 'mask')   * \
-                (pointing.info == Pointing.OTHER)
-        pointing.removed = \
-            (policy_inscan     == 'remove') * \
-                (pointing.info == Pointing.INSCAN) + \
-            (policy_turnaround == 'remove') * \
-                (pointing.info == Pointing.TURNAROUND) + \
-            (policy_other      == 'remove') * \
-                (pointing.info == Pointing.OTHER)
-        self.pointing = pointing
+        # distribute the workload over the processors
+        detector_mask, filename = split_observation(var.mpi_comm, detector_mask,
+                                                    ('simulation',))
+        filename_, nfilenames = _files2tmf(filename)
 
-        # store instrument information
-        detector_center, detector_corner, detector_area, distortion_yz, oflat, \
-            dflat, responsivity, active_fraction, status = \
-            tmf.pacs_info_instrument(band, np.asfortranarray(detector_mask, \
-                np.int8), float(active_fraction))
-        if status != 0: raise RuntimeError()
         self.instrument = Instrument('PACS/'+band.capitalize(),detector_mask)
         self.instrument.active_fraction = active_fraction
         self.instrument.band = band
@@ -890,6 +846,25 @@ class PacsSimulation(PacsBase):
             [{'red':1, 'green':2, 'blue':3}[band]].data, unit='ms',
             origin='upper')
 
+        # store pointing information
+        if not hasattr(pointing, 'chop'):
+            pointing.chop = np.zeros(pointing.size, var.FLOAT_DTYPE)
+        pointing.masked  = \
+            (policy_inscan     == 'mask')   * \
+                (pointing.info == Pointing.INSCAN) + \
+            (policy_turnaround == 'mask')   * \
+                (pointing.info == Pointing.TURNAROUND) + \
+            (policy_other      == 'mask')   * \
+                (pointing.info == Pointing.OTHER)
+        pointing.removed = \
+            (policy_inscan     == 'remove') * \
+                (pointing.info == Pointing.INSCAN) + \
+            (policy_turnaround == 'remove') * \
+                (pointing.info == Pointing.TURNAROUND) + \
+            (policy_other      == 'remove') * \
+                (pointing.info == Pointing.OTHER)
+        self.pointing = pointing
+
         self.slice = np.recarray(1, dtype=[
                 ('filename', 'S256'),
                 ('nsamples_all', int),
@@ -907,7 +882,7 @@ class PacsSimulation(PacsBase):
                 ('scan_speed', float)
                 ])
 
-        self.slice.filename = ''
+        self.slice.filename = filename
         self.slice.nsamples_all = self.pointing.size
         self.slice.mode = mode
         self.slice.compression_factor = compression_factor
@@ -1168,6 +1143,39 @@ def pacs_get_psf(band, resolution, kind='calibration'):
         return func((size,size), fwhm=fwhm, resolution=resolution)
 
     raise NotImplementedError()
+
+
+#-------------------------------------------------------------------------------
+
+
+def _get_detector_mask(band, detector_bad, policy_detector, transparent,
+                       reject_bad_line):
+    policy_detector = policy_detector.lower()
+    if policy_detector not in ('keep', 'mask', 'remove'):
+        raise ValueError("Invalid detector policy '" + policy_detector + \
+              "'. Expected values are 'keep', 'mask' or 'remove'.")
+
+    if policy_detector == 'keep':
+        detector_bad[:] = False
+    elif reject_bad_line and band != 'red':
+        detector_bad[11,16:32] = True
+
+    detector_mask = detector_bad.copy()
+    if policy_detector != 'remove':
+        detector_mask[:] = False
+
+    # mask the non-transmitting detectors in transparent mode
+    if transparent:
+        if band == 'red':
+            detector_mask[0:8,0:8] = True
+            detector_mask[0:8,16:] = True
+            detector_mask[8:,:]    = True
+        else:
+            detector_mask[0:16,0:16] = True
+            detector_mask[0:16,32:]  = True
+            detector_mask[16:,:]     = True
+
+    return detector_mask
 
 
 #-------------------------------------------------------------------------------

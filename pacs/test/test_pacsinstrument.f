@@ -21,45 +21,44 @@ program test_pacsinstrument
     integer                :: count1, count2, count_rate, count_max
     real(p)                :: ra, dec, pa, chop, xmin, xmax, ymin, ymax, ra0, dec0
     character(len=2880*2)  :: header
-    logical*1, allocatable :: detector_mask(:,:)
-    logical*1              :: detector_mask_red(16,32)
+    logical*1              :: detector_mask_blue(32,64)
+    logical*1              :: detector_mask_red (16,32)
 
-    real(p), allocatable :: detector_center_all(:,:,:)
-    real(p), allocatable :: detector_corner_all(:,:,:,:)
-    real(p), allocatable :: detector_area_all(:,:)
-    real(p), allocatable :: flatfield_optical_all(:,:)
-    real(p), allocatable :: flatfield_detector_all(:,:)
-    real(p)              :: distortion_yz(2,3,3,3)
-    real(p)              :: responsivity
-    real(p)              :: active_fraction
+    logical*1, allocatable :: detector_bad_all(:,:)
+    real(p), allocatable   :: detector_center_all(:,:,:)
+    real(p), allocatable   :: detector_corner_all(:,:,:,:)
+    real(p), allocatable   :: detector_area_all(:,:)
+    real(p), allocatable   :: flatfield_optical_all(:,:)
+    real(p), allocatable   :: flatfield_detector_all(:,:)
+    real(p)                :: distortion_yz(2,3,3,3)
+    real(p)                :: responsivity
+    real(p)                :: active_fraction
 
-    real(p), allocatable :: a_vect(:), d_vect(:), ad_vect(:,:)
-    integer              :: n
-
-    ! initialise observation
-    allocate(obs)
-    call obs%init(filename, policy, status)
-    if (status /= 0) call failure('init_pacsobservation')
+    real(p), allocatable   :: a_vect(:), d_vect(:), ad_vect(:,:)
+    integer                :: n
 
     ! initialise pacs instrument
-    allocate(pacs)
-    call pacs%read_detector_mask(obs%band, detector_mask, status,                                                                  &
-         transparent_mode=obs%slice(1)%observing_mode=='transparent')
-    if (status /= 0) call failure('pacs%read_detector_mask')
-    call pacs%init_with_calfiles(obs%band, detector_mask, 1, status)
+    allocate (pacs)
+    detector_mask_blue = .false.
+    call pacs%init_with_calfiles('blue', detector_mask_blue, 1, status)
     if (status /= 0) call failure('pacs%init_with_calfiles')
 
     ! read calibration files
     active_fraction = 0
-    call pacs%read_calibration_files(obs%band, detector_mask, detector_center_all, detector_corner_all, detector_area_all,         &
+    call pacs%read_calibration_files('blue', detector_bad_all, detector_center_all, detector_corner_all, detector_area_all,        &
                                      flatfield_optical_all, flatfield_detector_all, distortion_yz, responsivity, active_fraction,  &
                                      status)
     if (status /= 0) call failure('read_calibration_files')
 
+    ! initialise observation
+    allocate (obs)
+    call obs%init(filename, policy, status)
+    if (status /= 0) call failure('init_pacsobservation')
+
     allocate(time(obs%nsamples))
     time = obs%slice(1)%p%time
 
-    if (pacs%ndetectors /= 1997) call failure('ndetectors')
+    if (pacs%ndetectors /= 2048) call failure('ndetectors')
     if (size(time) /= 360) call failure('nsamples')
     if (any(shape(pacs%detector_corner) /= [2,4*pacs%ndetectors])) call failure('shape detector_corner')
 
@@ -185,18 +184,18 @@ program test_pacsinstrument
     if (status /= 0) call failure('pacs%init 1')
     call pacs%destroy()
 
-    call pacs%init_with_calfiles('green', detector_mask, 1, status)
+    call pacs%init_with_calfiles('green', detector_mask_blue, 1, status)
     if (status /= 0) call failure('pacs%init 2')
     call pacs%destroy()
 
-    call pacs%init_with_calfiles('blue', detector_mask, 1, status)
+    call pacs%init_with_calfiles('blue', detector_mask_blue, 1, status)
     if (status /= 0) call failure('pacs%init 3')
     call pacs%destroy()
 
-    call pacs%init_with_calfiles('x', detector_mask, 1, status)
+    call pacs%init_with_calfiles('x', detector_mask_blue, 1, status)
     if (status == 0) call failure('pacs%init 4')
 
-    call pacs%init_with_calfiles('blue', detector_mask, 3, status)
+    call pacs%init_with_calfiles('blue', detector_mask_blue, 3, status)
     if (status == 0) call failure('pacs%init 5')
 
 contains

@@ -4,7 +4,7 @@ module module_pacsinstrument
     use module_filtering,       only : FilterUncorrelated
     use module_fitstools,       only : FLEN_VALUE, ft_check_error_cfitsio, ft_close, ft_create_header, ft_open, ft_open_image,     &
                                        ft_read_image, ft_read_keyword, ft_read_keyword_hcss, ft_read_slice, ft_test_extension
-    use module_math,            only : DEG2RAD, mInf, pInf, mean, nint_down, nint_up
+    use module_math,            only : DEG2RAD, mInf, pInf, NaN, mean, nint_down, nint_up
     use module_pacsobservation, only : PacsObservationSlice, PacsObservation
     use module_pointingmatrix,  only : PointingElement, xy2pmatrix, xy2roi, roi2pmatrix
     use module_projection,      only : convex_hull, surface_convex_polygon
@@ -25,7 +25,6 @@ module module_pacsinstrument
     public :: multiplexing_direct
     public :: multiplexing_transpose
     public :: read_calibration_files
-    public :: read_detector_mask
     public :: read_filter_calibration_ncorrelations
     public :: read_filter_calibration
     public :: read_filter_filename
@@ -60,11 +59,11 @@ module module_pacsinstrument
         integer                :: fine_sampling_factor
         logical                :: transparent_mode
 
-        logical*1, allocatable :: bad(:,:)  ! .true. for bad detectors
-        logical*1, allocatable :: mask(:,:) ! .true. if the bad detector has been filtered out in the flattened list of detectors
+        logical*1, allocatable :: mask(:,:) ! true if the detector has been filtered out in the flattened list of detectors
         integer, allocatable   :: ij(:,:)
         integer, allocatable   :: pq(:,:)
 
+        logical*1, allocatable :: detector_bad(:)  ! true for bad detectors (returned timeline values are null)
         real(p), allocatable   :: detector_center(:,:)
         real(p), allocatable   :: detector_corner(:,:)
         real(p), allocatable   :: detector_area(:)
@@ -84,7 +83,6 @@ module module_pacsinstrument
         procedure, public :: compute_projection
         procedure, public :: destroy
         procedure, public :: read
-        procedure, public, nopass :: read_detector_mask
 
         procedure, public, nopass :: uv2yz
         procedure, public, nopass :: yz2ad
@@ -108,23 +106,23 @@ contains
         integer, intent(in)                  :: fine_sampling_factor
         integer, intent(out)                 :: status
 
-        real(p), allocatable :: detector_center_all(:,:,:)
-        real(p), allocatable :: detector_corner_all(:,:,:,:)
-        real(p), allocatable :: detector_area_all(:,:)
-        real(p), allocatable :: flatfield_optical_all(:,:)
-        real(p), allocatable :: flatfield_detector_all(:,:)
-        real(p)              :: distortion_yz(NDIMS,DISTORTION_DEGREE,DISTORTION_DEGREE,DISTORTION_DEGREE)
-        real(p)              :: responsivity, active_fraction
+        logical*1, allocatable :: detector_bad_all(:,:)
+        real(p), allocatable   :: detector_center_all(:,:,:)
+        real(p), allocatable   :: detector_corner_all(:,:,:,:)
+        real(p), allocatable   :: detector_area_all(:,:)
+        real(p), allocatable   :: flatfield_optical_all(:,:)
+        real(p), allocatable   :: flatfield_detector_all(:,:)
+        real(p)                :: distortion_yz(NDIMS,DISTORTION_DEGREE,DISTORTION_DEGREE,DISTORTION_DEGREE)
+        real(p)                :: responsivity, active_fraction
 
         active_fraction = 0
 
-        call this%read_calibration_files(band, detector_mask, detector_center_all, detector_corner_all, detector_area_all,         &
-                                         flatfield_optical_all, flatfield_detector_all, distortion_yz, responsivity,               &
-                                         active_fraction, status)
+        call this%read_calibration_files(band, detector_bad_all, detector_center_all, detector_corner_all, detector_area_all,      &
+             flatfield_optical_all, flatfield_detector_all, distortion_yz, responsivity,  active_fraction, status)
         if (status /= 0) return
 
-        call this%init_with_variables(band, detector_mask, fine_sampling_factor, status, detector_center_all, detector_corner_all, &
-                                      detector_area_all, flatfield_optical_all, flatfield_detector_all, distortion_yz)
+        call this%init_with_variables(band, detector_mask, fine_sampling_factor, status, detector_bad_all, detector_center_all,    &
+             detector_corner_all, detector_area_all, flatfield_optical_all, flatfield_detector_all, distortion_yz)
         if (status /= 0) return
 
     end subroutine init_with_calfiles
@@ -134,7 +132,7 @@ contains
 
 
     ! a flattened array of detector values is travelled through columns and then through rows
-    subroutine init_with_variables(this, band, detector_mask, fine_sampling_factor, status, detector_center_all,                   &
+    subroutine init_with_variables(this, band, detector_mask, fine_sampling_factor, status, detector_bad_all, detector_center_all, &
                                    detector_corner_all, detector_area_all, flatfield_optical_all, flatfield_detector_all,          &
                                    distortion_yz)
 
@@ -143,6 +141,7 @@ contains
         logical*1, intent(in)                :: detector_mask(:,:)
         integer, intent(in)                  :: fine_sampling_factor
         integer, intent(out)                 :: status
+        logical*1, intent(in), optional      :: detector_bad_all(:,:)
         real(p), intent(in), optional        :: detector_center_all(:,:,:)
         real(p), intent(in), optional        :: detector_corner_all(:,:,:,:)
         real(p), intent(in), optional        :: detector_area_all(:,:)
@@ -195,9 +194,19 @@ contains
         allocate (this%ij(NDIMS, this%ndetectors))
         allocate (this%pq(NDIMS, this%ndetectors))
 
+        allocate (this%detector_bad(this%ndetectors))
+        if (present(detector_bad_all)) then
+            if (any(shape(detector_bad_all) /= shape(detector_mask))) then
+                write (ERROR_UNIT,'(a)') 'Error: Invalid shape for the bad detector mask.'
+                return
+            end if
+        else
+            this%detector_bad = .false.
+        end if
+
         if (present(detector_center_all)) then
             if (any(shape(detector_center_all) /= [NDIMS,shape(detector_mask)])) then
-                write (ERROR_UNIT,'(a)') 'Invalid shape for the detector center array.'
+                write (ERROR_UNIT,'(a)') 'Error: Invalid shape for the detector center array.'
                 return
             end if
             allocate (this%detector_center(NDIMS,this%ndetectors))
@@ -257,6 +266,9 @@ contains
                 this%pq(2,idetector) = iq-1
                 this%ij(1,idetector) = mod(ip-1, 16)
                 this%ij(2,idetector) = mod(iq-1, 16)
+                if (present(detector_bad_all)) then
+                    this%detector_bad(idetector) = detector_bad_all(ip,iq)
+                end if
                 if (present(detector_center_all)) then
                     this%detector_center(:,idetector) = detector_center_all(:,ip,iq)
                 end if
@@ -288,87 +300,21 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
  
 
-    subroutine read_detector_mask(band, detector_mask, status, transparent_mode, reject_bad_line)
-
-        character(len=*), intent(in)        :: band
-        logical*1, intent(out), allocatable :: detector_mask(:,:)
-        integer, intent(out)                :: status
-        logical, intent(in), optional       :: transparent_mode
-        logical, intent(in), optional       :: reject_bad_line
-
-        logical*1, allocatable :: tmp(:,:)
-        integer                :: nrows, ncolumns
-        
-        status = 1
-
-        if (band /= 'blue' .and. band /= 'green' .and. band /= 'red') then
-            write (ERROR_UNIT,'(a)') "READ_DETECTOR_MASK: Invalid band '" // band // "'. Valid values are 'blue', 'green' or 'red'."
-            return
-        end if
-
-        if (band == 'red') then
-            nrows    = SHAPE_RED(1)
-            ncolumns = SHAPE_RED(2)
-        else
-            nrows    = SHAPE_BLUE(1)
-            ncolumns = SHAPE_BLUE(2)
-        end if
-
-        call ft_read_image(get_calfile(FILENAME_BPM) // '[' // trim(band) // ']', tmp, status)
-        if (status /= 0) return
-
-        if (size(tmp,2) /= nrows .or. size(tmp,1) /= ncolumns) then
-            write (ERROR_UNIT, '(a,4(i0,a))') 'Invalid shape of the calibration detector mask (', size(tmp,2), ',', size(tmp,1),   &
-                  ') instead of (', nrows, ',', ncolumns, ')'
-            return
-        end if
-
-        allocate (detector_mask(nrows,ncolumns))
-        detector_mask = transpose(tmp)
-
-        if (present(transparent_mode)) then
-            if (transparent_mode) then
-                if (band == 'red') then
-                    detector_mask(1:8,1:8) = .true.
-                    detector_mask(1:8,17:) = .true.
-                    detector_mask(9:,:)    = .true.
-                else
-                    detector_mask(1:16,1:16) = .true.
-                    detector_mask(1:16,33:)  = .true.
-                    detector_mask(17:,:)     = .true.
-                end if
-            end if
-        end if
-
-        if (present(reject_bad_line)) then
-            if (reject_bad_line .and. band /= 'red') then
-                detector_mask(12,17:32) = .true.
-            end if
-        end if
-        
-        status = 0
-
-    end subroutine read_detector_mask
-
-
-    !-------------------------------------------------------------------------------------------------------------------------------
- 
-
-    subroutine read_calibration_files(band, detector_mask, detector_center_all, detector_corner_all, detector_area_all,            &
+    subroutine read_calibration_files(band, detector_bad_all, detector_center_all, detector_corner_all, detector_area_all,         &
                                       flatfield_optical_all, flatfield_detector_all, distortion_yz, responsivity, active_fraction, &
                                       status)
 
-        character(len=*), intent(in)      :: band
-        logical*1, intent(in)             :: detector_mask(:,:)
-        real(p), intent(out), allocatable :: detector_center_all(:,:,:)
-        real(p), intent(out), allocatable :: detector_corner_all(:,:,:,:)
-        real(p), intent(out), allocatable :: detector_area_all(:,:)
-        real(p), intent(out), allocatable :: flatfield_optical_all(:,:)
-        real(p), intent(out), allocatable :: flatfield_detector_all(:,:)
-        real(p), intent(out)              :: distortion_yz(NDIMS,DISTORTION_DEGREE,DISTORTION_DEGREE,DISTORTION_DEGREE)
-        real(p), intent(out)              :: responsivity
-        real(p), intent(inout)            :: active_fraction
-        integer, intent(out)              :: status
+        character(len=*), intent(in)        :: band
+        logical*1, intent(out), allocatable :: detector_bad_all(:,:)
+        real(p), intent(out), allocatable   :: detector_center_all(:,:,:)
+        real(p), intent(out), allocatable   :: detector_corner_all(:,:,:,:)
+        real(p), intent(out), allocatable   :: detector_area_all(:,:)
+        real(p), intent(out), allocatable   :: flatfield_optical_all(:,:)
+        real(p), intent(out), allocatable   :: flatfield_detector_all(:,:)
+        real(p), intent(out)                :: distortion_yz(NDIMS,DISTORTION_DEGREE,DISTORTION_DEGREE,DISTORTION_DEGREE)
+        real(p), intent(out)                :: responsivity
+        real(p), intent(inout)              :: active_fraction
+        integer, intent(out)                :: status
 
         
         ! hdu extension for the blue, green and red band, in this order
@@ -384,11 +330,12 @@ contains
         real(p), allocatable :: flatfield_total_all(:,:)
         real(p)              :: center(2,2)
         real(p)              :: calib_active_fraction, coef
+        logical*1, allocatable :: tmpl(:,:)
 
         status = 1
 
         if (band /= 'blue' .and. band /= 'green' .and. band /= 'red') then
-            write (ERROR_UNIT,'(a)') "READ_DETECTOR_MASK: Invalid band '" // band // "'. Valid values are 'blue', 'green' or 'red'."
+            write (ERROR_UNIT,'(a)') "Error: Invalid band '" // band // "'. Expected values are 'blue', 'green' or 'red'."
             return
         end if
 
@@ -407,12 +354,7 @@ contains
             channel  = 'blue'
         end if
 
-        if (size(detector_mask,1) /= nrows .or. size(detector_mask,2) /= ncolumns) then
-            write (ERROR_UNIT, '(a,4(i0,a))') 'Invalid shape of the input detector mask (', size(detector_mask,1), ',',            &
-                  size(detector_mask,2), ') instead of (', nrows, ',', ncolumns, ')'
-            return
-        end if
-
+        allocate (detector_bad_all      (nrows,ncolumns))
         allocate (detector_center_all   (NDIMS,nrows,ncolumns))
         allocate (detector_corner_all   (NDIMS,NVERTICES,nrows,ncolumns))
         allocate (detector_area_all     (nrows,ncolumns))
@@ -420,6 +362,11 @@ contains
         allocate (flatfield_detector_all(nrows,ncolumns))
         allocate (flatfield_total_all   (nrows,ncolumns))
         
+        ! bad detectors
+        call ft_read_image(get_calfile(FILENAME_BPM) // '[' // band // ']', tmpl, status)
+        if (status /= 0) return
+        detector_bad_all = transpose(tmpl)
+
         ! UV centers
         call ft_read_image(get_calfile(FILENAME_SAA) // '[u' // trim(channel) // ']', tmp2, status)
         if (status /= 0) return
@@ -485,8 +432,8 @@ contains
         ! detector area
         do ip = 1, nrows
             do iq = 1, ncolumns
-                detector_area_all(ip,iq) = abs(surface_convex_polygon(real(uv2yz(detector_corner_all(:,:,ip,iq),         &
-                    distortion_yz, 0._p), p))) * 3600._p**2
+                detector_area_all(ip,iq) = abs(surface_convex_polygon(real(uv2yz(detector_corner_all(:,:,ip,iq), distortion_yz,    &
+                     0._p), p))) * 3600._p**2
             end do
         end do
         
@@ -494,9 +441,8 @@ contains
         center = detector_area_all(nrows/2:nrows/2+1,ncolumns/2:ncolumns/2+1)
         flatfield_optical_all  = detector_area_all / mean(reshape(center, [4]))
         flatfield_detector_all = flatfield_total_all / flatfield_optical_all
-        where (detector_mask)
-            flatfield_optical_all  = 1._p
-            flatfield_detector_all = 1._p
+        where (detector_bad_all)
+            flatfield_detector_all = NaN
         end where
 
     end subroutine read_calibration_files
@@ -1115,6 +1061,11 @@ contains
 
         call ft_close(unit, status)
 
+        ! apply bad detector mask
+        do idetector = 1, size(mask,2)
+            if (this%detector_bad(idetector)) mask(:,idetector) = .true.
+        end do
+
     end subroutine read_one
 
 
@@ -1316,6 +1267,7 @@ contains
         deallocate (this%flatfield_optical)
         deallocate (this%flatfield_detector)
         deallocate (this%flatfield_total)
+        deallocate (this%detector_bad)
         deallocate (this%detector_center)
         deallocate (this%detector_corner)
         deallocate (this%detector_area)

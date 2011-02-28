@@ -14,7 +14,7 @@ program test_pacsobservation
     character(len=*), parameter         :: filename = 'pacs/test/data/frames_blue.fits'
     character(len=255), allocatable     :: afilename(:)
     integer                :: status, idetector
-    logical*1, allocatable :: detector_mask(:,:)
+    logical*1              :: detector_mask_blue(32,64)
     real(p), allocatable   :: signal(:,:)
     logical*1, allocatable :: mask(:,:)
     integer                :: first, last
@@ -105,10 +105,8 @@ program test_pacsobservation
     deallocate (afilename)
 
     allocate (pacs)
-    call pacs%read_detector_mask(obs%band, detector_mask, status,                                                                  &
-         transparent_mode=obs%slice(1)%observing_mode=='transparent')
-    if (status /= 0) call failure('pacs%read_detector_mask')
-    call pacs%init_with_calfiles(obs%band, detector_mask, 1, status)
+    detector_mask_blue = .false.
+    call pacs%init_with_calfiles(obs%band, detector_mask_blue, 1, status)
     if (status /= 0) call failure('pacs%init_with_calfiles')
 
     allocate (signal(obs%slice(1)%nsamples,pacs%ndetectors))

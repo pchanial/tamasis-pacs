@@ -34,7 +34,7 @@ program test_ngc6946_bpj
     integer*8                           :: nsamples
     real(p), allocatable                :: map1d(:)
     type(pointingelement), allocatable  :: pmatrix(:,:,:)
-    logical*1, allocatable              :: detector_mask(:,:)
+    logical*1                           :: detector_mask(32,64)
 
     call system_clock(count0, count_rate, count_max)
 
@@ -52,9 +52,8 @@ program test_ngc6946_bpj
 
     ! initialise pacs instrument
     allocate (pacs)
-    call pacs%read_detector_mask(obs%band, detector_mask, status,                                                      &
-         transparent_mode=obs%slice(1)%observing_mode=='transparent')
-    if (status /= 0) call failure('pacs%read_detector_mask')
+    detector_mask = .true.
+    detector_mask(1:16,17:32) = .false.
     call pacs%init_with_calfiles(obs%band, detector_mask, 1, status)
     if (status /= 0) call failure('pacs%init_with_calfiles')
 
@@ -83,6 +82,7 @@ program test_ngc6946_bpj
     ! remove flat field
     write (*,'(a)') 'Flat-fielding... '
     call divide_vectordim2(signal, pacs%flatfield_detector)
+    where (mask) signal = 0
 
     ! remove mean value in timeline
     write (*,'(a)') 'Removing mean value... '

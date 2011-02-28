@@ -3,11 +3,16 @@ import tamasisfortran as tmf
 
 __all__ = []
 
-def split_observation(comm, ndetectors, nobservations):
+def split_observation(comm, detectors, observations):
+
+    size  = comm.Get_size()
+    if size == 1:
+        return detectors.copy(), list(observations)
 
     rank = comm.Get_rank()
-    nnodes  = comm.Get_size()
     nthreads = tmf.info_nthreads()
+    ndetectors = np.sum(~detectors)
+    nobservations = len(observations)
 
     # number of observations. They should approximatively be of the same length
     nx = nobservations
@@ -17,7 +22,7 @@ def split_observation(comm, ndetectors, nobservations):
 
     # we start with the miminum blocksize and increase it until we find a
     # configuration that covers all the observations
-    blocksize = int(np.ceil(float(nx * ny) / nnodes))
+    blocksize = int(np.ceil(float(nx * ny) / size))
     while True:
         # by looping over x first, we favor larger numbers of detectors and
         # fewer numbers of observations per processor, to minimise inter-
@@ -29,9 +34,9 @@ def split_observation(comm, ndetectors, nobservations):
             yblocksize = int(blocksize // xblocksize)
             nx_block = int(np.ceil(float(nx) / xblocksize))
             ny_block = int(np.ceil(float(ny) / yblocksize))
-            if nx_block * ny_block <= nnodes:
+            if nx_block * ny_block <= size:
                 break
-        if nx_block * ny_block <= nnodes:
+        if nx_block * ny_block <= size:
             break
         blocksize += 1
 
@@ -40,14 +45,17 @@ def split_observation(comm, ndetectors, nobservations):
 
     # check that the processor has something to do
     if ix >= nx_block:
-        iobservation = slice(0,0)
         idetector = slice(0,0)
+        iobservation = slice(0,0)
     else:
-        iobservation = slice(ix * xblocksize, (ix+1) * xblocksize)
         idetector    = slice(iy * yblocksize * nthreads, (iy+1) * yblocksize * \
                              nthreads)
+        iobservation = slice(ix * xblocksize, (ix+1) * xblocksize)
 
-    return iobservation, idetector
-        
+    detectors_ = detectors.copy()
+    igood = np.where(~detectors_.ravel())[0]
+    detectors_.ravel()[igood[0:idetector.start]] = True
+    detectors_.ravel()[igood[idetector.stop:]] = True
+    observations_ = list(observations)
 
-#-------------------------------------------------------------------------------
+    return detectors_, observations_
