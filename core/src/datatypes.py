@@ -598,6 +598,7 @@ class Tod(FitsArray):
         result = np.ndarray.reshape(self, newdims, order=order)
         if self.mask is not None:
             result.mask = self.mask.reshape(newdims, order=order)
+        result.derived_units = self.derived_units.copy()
         return result
 
     @staticmethod
