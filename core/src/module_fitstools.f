@@ -1173,9 +1173,9 @@ contains
         character(len=*), parameter :: format_str = "(a8,'= ',a22)"
 
         header = ' '
-        header(0*80+1:1*80) = 'SIMPLE  =                    T / Fits standard'
-        header(1*80+1:2*80) = 'BITPIX  =                  -64 / Bits per pixel'
-        header(2*80+1:3*80) = 'NAXIS   =                    2'
+        header(0*80+1:1*80) = 'SIMPLE  =                      T / Fits standard'
+        header(1*80+1:2*80) = 'BITPIX  =                    -64 / Bits per pixel'
+        header(2*80+1:3*80) = 'NAXIS   =                      2'
         write (header( 3*80+1: 4*80),format_int) 'NAXIS1  ', naxis1
         write (header( 4*80+1: 5*80),format_int) 'NAXIS2  ', naxis2
         write (header( 5*80+1: 6*80),format_dbl) 'CRVAL1  ', crval1
