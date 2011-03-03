@@ -39,9 +39,6 @@ program test_pacsinstrument
 
     ! initialise pacs instrument
     allocate (pacs)
-    detector_mask_blue = .false.
-    call pacs%init_with_calfiles('blue', detector_mask_blue, 1, status)
-    if (status /= 0) call failure('pacs%init_with_calfiles')
 
     ! read calibration files
     active_fraction = 0
@@ -50,6 +47,50 @@ program test_pacsinstrument
                                      status)
     if (status /= 0) call failure('read_calibration_files')
 
+    detector_mask_blue = .false.
+    call pacs%init_with_calfiles('blue', detector_mask_blue, 1, status)
+    if (status /= 0) call failure('pacs%init_with_calfiles all')
+
+    if (pacs%ndetectors /= 2048) call failure('ndetectors all')
+    if (any(shape(pacs%detector_corner) /= [2,4*pacs%ndetectors])) call failure('shape detector_corner all')
+
+    if (any(pacs%pq(:,2)   /= [0,1])) call failure('pq1 all')
+    if (any(pacs%ij(:,2)   /= [0,1])) call failure('ij1 all')
+    if (any(pacs%detector_corner(:,5:8) /= detector_corner_all(:,:,1,2))) call failure('uv1 all')
+
+    i = count(.not. pacs%mask(1:8,1:16))
+    if (any(pacs%pq(:,1+i) /= [8,0])) call failure('pq2 all')
+    if (any(pacs%ij(:,1+i) /= [8,0])) call failure('ij2 all')
+    if (any(pacs%detector_corner(:,i*4+1:i*4+4) /= detector_corner_all(:,:,9,1))) call failure('uv2 all')
+
+    i = count(.not. pacs%mask(1:16,:)) + count(.not. pacs%mask(17:32,1:16))
+    if (any(pacs%pq(:,1+i) /= [16,16])) call failure('pq3 all')
+    if (any(pacs%ij(:,1+i) /= [0,0])) call failure('ij3 all')
+    if (any(pacs%detector_corner(:,i*4+1:i*4+4) /= detector_corner_all(:,:,17,17))) call failure('uv3 all')
+
+    call pacs%destroy
+
+    detector_mask_blue = detector_bad_all
+    call pacs%init_with_calfiles('blue', detector_mask_blue, 1, status)
+    if (status /= 0) call failure('pacs%init_with_calfiles rem')
+
+    if (pacs%ndetectors /= 1997) call failure('ndetectors rem')
+    if (any(shape(pacs%detector_corner) /= [2,4*pacs%ndetectors])) call failure('shape detector_corner rem')
+
+    if (any(pacs%pq(:,2)   /= [0,1])) call failure('pq1 rem')
+    if (any(pacs%ij(:,2)   /= [0,1])) call failure('ij1 rem')
+    if (any(pacs%detector_corner(:,5:8) /= detector_corner_all(:,:,1,2))) call failure('uv1 rem')
+
+    i = count(.not. pacs%mask(1:8,1:16))
+    if (any(pacs%pq(:,1+i) /= [8,0])) call failure('pq2 rem')
+    if (any(pacs%ij(:,1+i) /= [8,0])) call failure('ij2 rem')
+    if (any(pacs%detector_corner(:,i*4+1:i*4+4) /= detector_corner_all(:,:,9,1))) call failure('uv2 rem')
+
+    i = count(.not. pacs%mask(1:16,:)) + count(.not. pacs%mask(17:32,1:16))
+    if (any(pacs%pq(:,1+i) /= [16,16])) call failure('pq3 rem')
+    if (any(pacs%ij(:,1+i) /= [0,0])) call failure('ij3 rem')
+    if (any(pacs%detector_corner(:,i*4+1:i*4+4) /= detector_corner_all(:,:,17,17))) call failure('uv3 rem')
+    
     ! initialise observation
     allocate (obs)
     call obs%init(filename, policy, status)
@@ -57,22 +98,7 @@ program test_pacsinstrument
 
     allocate(time(obs%nsamples))
     time = obs%slice(1)%p%time
-
-    if (pacs%ndetectors /= 2048) call failure('ndetectors')
     if (size(time) /= 360) call failure('nsamples')
-    if (any(shape(pacs%detector_corner) /= [2,4*pacs%ndetectors])) call failure('shape detector_corner')
-
-    i = count(.not. pacs%mask(1,:))
-
-    if (any(pacs%pq(:,2)   /= [0,1])) call failure('pq1')
-    if (any(pacs%pq(:,1+i) /= [1,0])) call failure('pq2')
-    if (any(pacs%ij(:,2)   /= [0,1])) call failure('ij1')
-    if (any(pacs%ij(:,1+i) /= [1,0])) call failure('ij2')
-
-    if (any(pacs%detector_corner(:,5:8) /= detector_corner_all(:,:,1,2)))          &
-        call failure('uv1')
-    if (any(pacs%detector_corner(:,i*4+1:i*4+4) /= detector_corner_all(:,:,2,1)))  &
-        call failure('uv2')
 
     allocate(yz(ndims, size(pacs%detector_corner,2)))
     allocate(ad(ndims, size(pacs%detector_corner,2)))

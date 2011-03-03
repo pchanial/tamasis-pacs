@@ -51,8 +51,9 @@ module module_pacsinstrument
     character(len=*), parameter :: FILENAME_RES = 'PCalPhotometer_Responsivity_FM_v5.fits'
 
     type PacsInstrument
- 
+
         character(len=5)       :: band
+        integer                :: nblocks
         integer                :: nrows
         integer                :: ncolumns
         integer                :: ndetectors
@@ -149,7 +150,7 @@ contains
         real(p), intent(in), optional        :: flatfield_detector_all(:,:)
         real(p), intent(in), optional        :: distortion_yz(:,:,:,:)
 
-        integer :: nrows, ncolumns, idetector, ip, iq
+        integer :: nblocks, nrows, ncolumns, idetector, ib, ip, iq
 
         status = 1
 
@@ -162,14 +163,16 @@ contains
         ! check fine sampling factor
         if (all(fine_sampling_factor /= [1,2,4,8,16,32])) then
             write (ERROR_UNIT,'(a)') "INIT: Invalid sampling factor '" //     &
-                strinteger(fine_sampling_factor) // "'. Valid values are '1', '2', '4', '8', '16' or '32'."
+                  strinteger(fine_sampling_factor) // "'. Valid values are '1', '2', '4', '8', '16' or '32'."
             return
         end if
 
         if (band == 'red') then
+            nblocks  = 2
             nrows    = SHAPE_RED(1)
             ncolumns = SHAPE_RED(2)
         else
+            nblocks  = 8
             nrows    = SHAPE_BLUE(1)
             ncolumns = SHAPE_BLUE(2)
         end if
@@ -182,6 +185,7 @@ contains
 
         ! get basic information
         this%band       = band
+        this%nblocks    = nblocks
         this%nrows      = nrows
         this%ncolumns   = ncolumns
         this%ndetectors = count(.not. detector_mask)
@@ -258,36 +262,43 @@ contains
 
         idetector = 1
 
-        do ip = 1, nrows
+        do ib = 1, nblocks
 
-            do iq = 1, ncolumns
-                if (this%mask(ip,iq)) cycle
-                this%pq(1,idetector) = ip-1
-                this%pq(2,idetector) = iq-1
-                this%ij(1,idetector) = mod(ip-1, 16)
-                this%ij(2,idetector) = mod(iq-1, 16)
-                if (present(detector_bad_all)) then
-                    this%detector_bad(idetector) = detector_bad_all(ip,iq)
-                end if
-                if (present(detector_center_all)) then
-                    this%detector_center(:,idetector) = detector_center_all(:,ip,iq)
-                end if
-                if (present(detector_corner_all)) then
-                    this%detector_corner(:,NVERTICES * (idetector-1)+1:NVERTICES*idetector) = detector_corner_all(:,:,ip,iq)
-                end if
-                if (present(detector_area_all)) then
-                    this%detector_area(idetector) = detector_area_all(ip,iq)
-                end if
-                if (present(flatfield_optical_all)) then
-                    this%flatfield_optical(idetector) = flatfield_optical_all(ip,iq)
-                end if
-                if (present(flatfield_detector_all)) then
-                    this%flatfield_detector(idetector) = flatfield_detector_all(ip,iq)
-                end if
-                idetector = idetector + 1
+            do ip = (ib - 1) / 4 * 16 + 1, (ib - 1) / 4 * 16 + 16
+
+                do iq = modulo(ib - 1, 4) * 16 + 1, modulo(ib - 1, 4) * 16 + 16
+
+                    if (this%mask(ip,iq)) cycle
+                    this%pq(1,idetector) = ip-1
+                    this%pq(2,idetector) = iq-1
+                    this%ij(1,idetector) = mod(ip-1, 16)
+                    this%ij(2,idetector) = mod(iq-1, 16)
+                    if (present(detector_bad_all)) then
+                        this%detector_bad(idetector) = detector_bad_all(ip,iq)
+                    end if
+                    if (present(detector_center_all)) then
+                        this%detector_center(:,idetector) = detector_center_all(:,ip,iq)
+                    end if
+                    if (present(detector_corner_all)) then
+                        this%detector_corner(:,NVERTICES * (idetector-1)+1:NVERTICES*idetector) = detector_corner_all(:,:,ip,iq)
+                    end if
+                    if (present(detector_area_all)) then
+                        this%detector_area(idetector) = detector_area_all(ip,iq)
+                    end if
+                    if (present(flatfield_optical_all)) then
+                        this%flatfield_optical(idetector) = flatfield_optical_all(ip,iq)
+                    end if
+                    if (present(flatfield_detector_all)) then
+                        this%flatfield_detector(idetector) = flatfield_detector_all(ip,iq)
+                    end if
+                    idetector = idetector + 1
+
+                end do
+
             end do
+
         end do
-        
+
         if (present(flatfield_optical_all) .and. present(flatfield_detector_all)) then
             this%flatfield_total = this%flatfield_optical * this%flatfield_detector
         end if
@@ -298,7 +309,7 @@ contains
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
- 
+
 
     subroutine read_calibration_files(band, detector_bad_all, detector_center_all, detector_corner_all, detector_area_all,         &
                                       flatfield_optical_all, flatfield_detector_all, distortion_yz, responsivity, active_fraction, &
@@ -316,7 +327,7 @@ contains
         real(p), intent(inout)              :: active_fraction
         integer, intent(out)                :: status
 
-        
+
         ! hdu extension for the blue, green and red band, in this order
         integer, parameter   :: HDU_FLATFIELD(3)    = [12, 7, 2]                                    ! v3
         integer, parameter   :: HDU_RESPONSIVITY(3) = [6, 4, 2]                                     ! v5
@@ -361,7 +372,7 @@ contains
         allocate (flatfield_optical_all (nrows,ncolumns))
         allocate (flatfield_detector_all(nrows,ncolumns))
         allocate (flatfield_total_all   (nrows,ncolumns))
-        
+
         ! bad detectors
         call ft_read_image(get_calfile(FILENAME_BPM) // '[' // band // ']', tmpl, status)
         if (status /= 0) return
@@ -383,7 +394,7 @@ contains
             call ft_read_image(get_calfile(FILENAME_SAA) // '+' // strinteger(HDU_CORNER(iv,ichannel)+1), tmp2, status)
             if (status /= 0) return
             detector_corner_all(2,iv,:,:) = transpose(tmp2)
-            
+
         end do
 
         ! active fraction
@@ -421,7 +432,7 @@ contains
                 do iq = 1, ncolumns
                     do iv = 1, NVERTICES
                         detector_corner_all(:,iv,ip,iq) = (detector_corner_all(:,iv,ip,iq) - detector_center_all(:,ip,iq)) *       &
-                                                           coef + detector_center_all(:,ip,iq)
+                                                          coef + detector_center_all(:,ip,iq)
                     end do
                 end do
             end do
@@ -436,7 +447,7 @@ contains
                      0._p), p))) * 3600._p**2
             end do
         end do
-        
+
         ! optical and detector flat fields
         center = detector_area_all(nrows/2:nrows/2+1,ncolumns/2:ncolumns/2+1)
         flatfield_optical_all  = detector_area_all / mean(reshape(center, [4]))
@@ -484,31 +495,31 @@ contains
                 u_pow = 1
             endif
             do j = 1, DISTORTION_DEGREE
-              if (j /= 1) then
-                  v_pow = v_pow * uv(2,:)
-              else
-                  v_pow = 1
-              end if
-              do i = 1, DISTORTION_DEGREE
-                  if (i /= 1) then
-                      a_pow = a_pow * chop
-                  else
-                      a_pow = 1
-                  end if
-                  do l = 1, n
-                      ratio = - u_pow(l) * v_pow(l) * a_pow
-                      yz(1,l) = yz(1,l) + distortion_yz(1, i, j, k) * ratio
-                      yz(2,l) = yz(2,l) + distortion_yz(2, i, j, k) * ratio
-                  end do
-              end do
-           end do
+                if (j /= 1) then
+                    v_pow = v_pow * uv(2,:)
+                else
+                    v_pow = 1
+                end if
+                do i = 1, DISTORTION_DEGREE
+                    if (i /= 1) then
+                        a_pow = a_pow * chop
+                    else
+                        a_pow = 1
+                    end if
+                    do l = 1, n
+                        ratio = - u_pow(l) * v_pow(l) * a_pow
+                        yz(1,l) = yz(1,l) + distortion_yz(1, i, j, k) * ratio
+                        yz(2,l) = yz(2,l) + distortion_yz(2, i, j, k) * ratio
+                    end do
+                end do
+            end do
         end do
-    
+
         ! convert from arcsecond to degrees
         yz = - yz / 3600._p
 
     end function uv2yz
- 
+
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
@@ -607,11 +618,11 @@ contains
 
             ! check if it is required to interpolate pointing positions
             if (oversampling) then
-               sampling_factor = this%fine_sampling_factor * obs%slice(islice)%compression_factor
-               offset = obs%slice(islice)%offset
+                sampling_factor = this%fine_sampling_factor * obs%slice(islice)%compression_factor
+                offset = obs%slice(islice)%offset
             else
-               sampling_factor = 1
-               offset = 0
+                sampling_factor = 1
+                offset = 0
             end if
 
 #ifndef IFORT
@@ -632,9 +643,9 @@ contains
                 ymin = min(ymin, minval(hull(2,:)))
                 ymax = max(ymax, maxval(hull(2,:)))
 
-             end do
+            end do
 #ifndef IFORT
-             !$omp end parallel do
+            !$omp end parallel do
 #endif
 
         end do
@@ -669,9 +680,9 @@ contains
 
             case (NEAREST_NEIGHBOUR)
                 call this%compute_projection_nearest_neighbour(obs, oversampling, nx, ny, pmatrix, npixels_per_sample, out)
-            
+
             case (SHARP_EDGES)
-               call this%compute_projection_sharp_edges(obs, oversampling, nx, ny, pmatrix, npixels_per_sample, out)
+                call this%compute_projection_sharp_edges(obs, oversampling, nx, ny, pmatrix, npixels_per_sample, out)
 
         end select
 
@@ -726,16 +737,16 @@ contains
 
             nsamples = obs%slice(islice)%nsamples
             nvalids  = obs%slice(islice)%nvalids
-            
+
             chop_old = pInf
 
             ! check if it is required to interpolate pointing positions
             if (oversampling) then
-               sampling_factor = this%fine_sampling_factor * obs%slice(islice)%compression_factor
-               offset = obs%slice(islice)%offset
+                sampling_factor = this%fine_sampling_factor * obs%slice(islice)%compression_factor
+                offset = obs%slice(islice)%offset
             else
-               sampling_factor = 1
-               offset = 0
+                sampling_factor = 1
+                offset = 0
             end if
 
             allocate (valids(nvalids))
@@ -749,32 +760,32 @@ contains
             !$omp parallel do default(shared) firstprivate(chop_old)                            &
             !$omp private(ifine, isample, itime, ra, dec, pa, chop, coords, coords_yz, x, y, s) &
             !$omp reduction(max : npixels_per_sample) reduction(.or. : out)
-            
+
             ! loop over the samples which have not been removed
             do ivalid = 1, nvalids
                 isample = valids(ivalid)
                 do ifine = 1, sampling_factor
-                     itime = (isample - 1) * sampling_factor + ifine
-                     call obs%get_position_index(islice, itime, sampling_factor, offset, ra, dec, pa, chop)
-                     if (abs(chop-chop_old) > 1.e-2_p) then
-                         coords_yz = this%uv2yz(this%detector_center, this%distortion_yz, chop)
-                         chop_old = chop
-                     end if
-                     coords = this%yz2ad(coords_yz, ra, dec, pa)
-                     call ad2xys_gnomonic(coords, x, y, s)
-                     itime  = (ivalid-1) * sampling_factor + ifine + dest
-                     ! the input map has flux densities, not surface brightness
-                     ! f_idetector = f_imap * weight
-                     ! with weight = detector_area / pixel_area
-                     ! and pixel_area = reference_area / s
-                     call xy2pmatrix(x, y, nx, ny, out, pmatrix(1,itime,:))
-                     pmatrix(1,itime,:)%weight = s * this%detector_area / reference_area
-                 end do
-             end do
+                    itime = (isample - 1) * sampling_factor + ifine
+                    call obs%get_position_index(islice, itime, sampling_factor, offset, ra, dec, pa, chop)
+                    if (abs(chop-chop_old) > 1.e-2_p) then
+                        coords_yz = this%uv2yz(this%detector_center, this%distortion_yz, chop)
+                        chop_old = chop
+                    end if
+                    coords = this%yz2ad(coords_yz, ra, dec, pa)
+                    call ad2xys_gnomonic(coords, x, y, s)
+                    itime  = (ivalid-1) * sampling_factor + ifine + dest
+                    ! the input map has flux densities, not surface brightness
+                    ! f_idetector = f_imap * weight
+                    ! with weight = detector_area / pixel_area
+                    ! and pixel_area = reference_area / s
+                    call xy2pmatrix(x, y, nx, ny, out, pmatrix(1,itime,:))
+                    pmatrix(1,itime,:)%weight = s * this%detector_area / reference_area
+                end do
+            end do
 
-             !$omp end parallel do
-             dest = dest + nvalids * sampling_factor
-             deallocate (valids)
+            !$omp end parallel do
+            dest = dest + nvalids * sampling_factor
+            deallocate (valids)
 
         end do
 
@@ -812,16 +823,16 @@ contains
 
             nsamples = obs%slice(islice)%nsamples
             nvalids  = obs%slice(islice)%nvalids
-            
+
             chop_old = pInf
 
             ! check if it is required to interpolate pointing positions
             if (oversampling) then
-               sampling_factor = this%fine_sampling_factor * obs%slice(islice)%compression_factor
-               offset = obs%slice(islice)%offset
+                sampling_factor = this%fine_sampling_factor * obs%slice(islice)%compression_factor
+                offset = obs%slice(islice)%offset
             else
-               sampling_factor = 1
-               offset = 0
+                sampling_factor = 1
+                offset = 0
             end if
 
             allocate (valids(nvalids))
@@ -835,28 +846,28 @@ contains
             !$omp parallel do default(shared) firstprivate(chop_old)                        &
             !$omp private(ifine, isample, itime, ra, dec, pa, chop, coords, coords_yz, roi) &
             !$omp reduction(max : npixels_per_sample) reduction(.or. : out)
-            
+
             ! loop over the samples which have not been removed
             do ivalid = 1, nvalids
                 isample = valids(ivalid)
                 do ifine = 1, sampling_factor
-                     itime = (isample - 1) * sampling_factor + ifine
-                     call obs%get_position_index(islice, itime, sampling_factor, offset, ra, dec, pa, chop)
-                     if (abs(chop-chop_old) > 1.e-2_p) then
-                         coords_yz = this%uv2yz(this%detector_corner, this%distortion_yz, chop)
-                         chop_old = chop
-                     end if
-                     itime  = (ivalid-1) * sampling_factor + ifine + dest
-                     coords = this%yz2ad(coords_yz, ra, dec, pa)
-                     coords = ad2xy_gnomonic(coords)
-                     roi    = xy2roi(coords, NVERTICES)
-                     call roi2pmatrix(roi, NVERTICES, coords, nx, ny, npixels_per_sample, out, pmatrix(:,itime,:))
-                 end do
-             end do
+                    itime = (isample - 1) * sampling_factor + ifine
+                    call obs%get_position_index(islice, itime, sampling_factor, offset, ra, dec, pa, chop)
+                    if (abs(chop-chop_old) > 1.e-2_p) then
+                        coords_yz = this%uv2yz(this%detector_corner, this%distortion_yz, chop)
+                        chop_old = chop
+                    end if
+                    itime  = (ivalid-1) * sampling_factor + ifine + dest
+                    coords = this%yz2ad(coords_yz, ra, dec, pa)
+                    coords = ad2xy_gnomonic(coords)
+                    roi    = xy2roi(coords, NVERTICES)
+                    call roi2pmatrix(roi, NVERTICES, coords, nx, ny, npixels_per_sample, out, pmatrix(:,itime,:))
+                end do
+            end do
 
-             !$omp end parallel do
-             dest = dest + nvalids * sampling_factor
-             deallocate (valids)
+            !$omp end parallel do
+            dest = dest + nvalids * sampling_factor
+            deallocate (valids)
 
         end do
 
@@ -953,7 +964,7 @@ contains
         do last = obs%nsamples, 1, -1
             if (.not. obs%p(last)%removed) exit
         end do
-        
+
         ! test if all samples are removed in this slice
         if (first > last) then
             status = 0
@@ -983,7 +994,7 @@ contains
             signal(:,idetector) = pack(signal_, .not. obs%p(first:last)%removed)
 
         end do
-        
+
         call ft_close(unit, status)
         if (status /= 0) return
 
@@ -999,7 +1010,7 @@ contains
             call ft_read_keyword(unit, 'DS_' // strinteger(imask-1), mask_extension(imask), status=status)
             if (status /= 0) return
         end do
-        
+
         firstcompressed = (first - 1) / 32 + 1
         lastcompressed  = (last  - 1) / 32 + 1
         ncompressed     = lastcompressed - firstcompressed + 1
@@ -1023,7 +1034,7 @@ contains
             if (mask_shape(1) /= naxis1) then
                 status = 1
                 write (ERROR_UNIT, '(a,2(i0,a))') "The observation '" // trim(obs%filename) // "', has an incompatible dimension in&
-                       & mask '" // trim(mask_name) // "' (", naxis1, ' instead of ', mask_shape(1), ').'
+                      & mask '" // trim(mask_name) // "' (", naxis1, ' instead of ', mask_shape(1), ').'
                 return
             end if
 
@@ -1115,15 +1126,15 @@ contains
         integer, intent(out)                  :: status
 
         select case (band)
-            case ('blue')
-                call read_filter_filename(get_calfile(FILENAME_IB), mask, filter, status)
-            case ('green')
-                call read_filter_filename(get_calfile(FILENAME_IG), mask, filter, status)
-            case ('red')
-                call read_filter_filename(get_calfile(FILENAME_IR), mask, filter, status)
-            case default
-                status = 1
-                write (ERROR_UNIT,'(a)') "READ_FILTER_CALIBRATION: invalid band: '" // band // "'."
+        case ('blue')
+            call read_filter_filename(get_calfile(FILENAME_IB), mask, filter, status)
+        case ('green')
+            call read_filter_filename(get_calfile(FILENAME_IG), mask, filter, status)
+        case ('red')
+            call read_filter_filename(get_calfile(FILENAME_IR), mask, filter, status)
+        case default
+            status = 1
+            write (ERROR_UNIT,'(a)') "READ_FILTER_CALIBRATION: invalid band: '" // band // "'."
         end select
 
     end subroutine read_filter_calibration
@@ -1140,11 +1151,14 @@ contains
         integer, intent(out)                  :: status
 
         real(p), allocatable :: data(:,:)
-        integer              :: idetector, ndetectors, nrows, ncolumns, ip, iq
+        integer              :: idetector, ndetectors, nblocks, ib, ip, iq
 
         ndetectors = size(mask) - count(mask)
-        nrows = size(mask, 1)
-        ncolumns = size(mask, 2)
+        if (size(mask,2) == 64) then
+            nblocks = 8
+        else
+            nblocks = 2
+        end if
 
         call ft_read_image(filename, data, status)
         if (status /= 0) return
@@ -1158,16 +1172,18 @@ contains
         end if
         filter%ndetectors = ndetectors
         filter%bandwidth  = 2 * filter%ncorrelations + 1
-        
+
         allocate (filter%data(filter%ncorrelations+1,filter%ndetectors))
 
         !XXX CHECK P, Q layout in calibration file
         idetector = 1
-        do ip = 1, nrows
-            do iq = 1, ncolumns
-                if (mask(ip,iq)) cycle
-                filter%data(:,idetector) = data(:, (ip-1) * ncolumns + iq)
-                idetector = idetector + 1
+        do ib = 1, nblocks
+            do ip = (ib - 1) / 4 * 16 + 1, (ib - 1) / 4 * 16 + 16
+                do iq = modulo(ib - 1, 4) * 16 + 1, modulo(ib - 1, 4) * 16 + 16
+                    if (mask(ip,iq)) cycle
+                    filter%data(:,idetector) = data(:, (ip-1) * size(mask,2) + iq)
+                    idetector = idetector + 1
+                end do
             end do
         end do
 

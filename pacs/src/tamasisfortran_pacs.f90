@@ -858,3 +858,181 @@ subroutine pacs_bitmask(mask, nsamples, ndetectors, bitmask)
     !$omp end parallel do
 
 end subroutine pacs_bitmask
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine pacs_pack_real(input, ndata, ncolumns, nrows, ndetectors, mask, output)
+
+    use module_tamasis, only : p
+    implicit none
+
+    !f2py intent(in)      :: input(ndata,ncolumns,nrows)
+    !f2py intent(hide)    :: ndata=shape(input,0)
+    !f2py intent(hide)    :: ncolumns=shape(input,1)
+    !f2py intent(hide)    :: nrows=shape(input,2)
+    !f2py intent(in)      :: ndetectors
+    !f2py intent(in)      :: mask(ncolumns,nrows)
+    !f2py intent(out)     :: output(ndata,ndetectors)
+
+    integer, intent(in)   :: ndata, ncolumns, nrows, ndetectors
+    real(p), intent(in)   :: input(ndata,ncolumns,nrows)
+    logical*1, intent(in) :: mask(ncolumns,nrows)
+    real(p), intent(out)  :: output(ndata,ndetectors)
+
+    integer :: nblocks, idetector, i, j, k
+
+    if (nrows == 32) then
+        nblocks = 8
+    else
+        nblocks = 2
+    end if
+
+    idetector = 1
+    do k = 1, nblocks
+        do i = (k - 1) / 4 * 16 + 1, (k - 1) / 4 * 16 + 16
+            do j = modulo(k - 1, 4) * 16 + 1, modulo(k - 1, 4) * 16 + 16 
+                if (mask(j,i)) cycle
+                output(:,idetector) = input(:,j,i)
+                idetector = idetector + 1
+            end do
+        end do
+    end do
+    
+end subroutine pacs_pack_real
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine pacs_pack_int8(input, ndata, ncolumns, nrows, ndetectors, mask, output)
+
+    use module_tamasis, only : p
+    implicit none
+
+    !f2py intent(in)       :: input(ndata,ncolumns,nrows)
+    !f2py intent(hide)     :: ndata=shape(input,0)
+    !f2py intent(hide)     :: ncolumns=shape(input,1)
+    !f2py intent(hide)     :: nrows=shape(input,2)
+    !f2py intent(in)       :: ndetectors
+    !f2py intent(in)       :: mask(ncolumns,nrows)
+    !f2py intent(out)      :: output(ndata,ndetectors)
+
+    integer, intent(in)    :: ndata, ncolumns, nrows, ndetectors
+    logical*1, intent(in)  :: input(ndata,ncolumns,nrows)
+    logical*1, intent(in)  :: mask(ncolumns,nrows)
+    logical*1, intent(out) :: output(ndata,ndetectors)
+
+    integer :: nblocks, idetector, i, j, k
+
+    if (nrows == 32) then
+        nblocks = 8
+    else
+        nblocks = 2
+    end if
+
+    idetector = 1
+    do k = 1, nblocks
+        do i = (k - 1) / 4 * 16 + 1, (k - 1) / 4 * 16 + 16
+            do j = modulo(k - 1, 4) * 16 + 1, modulo(k - 1, 4) * 16 + 16 
+                if (mask(j,i)) cycle
+                output(:,idetector) = input(:,j,i)
+                idetector = idetector + 1
+            end do
+        end do
+    end do
+    
+end subroutine pacs_pack_int8
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine pacs_unpack_real(input, ndata, ndetectors, ncolumns, nrows, mask, output)
+
+    use module_tamasis, only : p
+    implicit none
+
+    !f2py intent(in)      :: input(ndata,ndetectors)
+    !f2py intent(hide)    :: ndata=shape(input,0)
+    !f2py intent(hide)    :: ndetectors=shape(input,1)
+    !f2py intent(in)      :: ncolumns
+    !f2py intent(in)      :: nrows
+    !f2py intent(in)      :: mask(ncolumns,nrows)
+    !f2py intent(out)     :: output(ndata,ncolumns,nrows)
+
+    integer, intent(in)   :: ndata, ndetectors, ncolumns, nrows
+    real(p), intent(in)   :: input(ndata,ndetectors)
+    logical*1, intent(in) :: mask(ncolumns,nrows)
+    real(p), intent(out)  :: output(ndata,ncolumns,nrows)
+
+    integer :: nblocks, idetector, i, j, k
+
+    if (nrows == 32) then
+        nblocks = 8
+    else
+        nblocks = 2
+    end if
+
+    idetector = 1
+    do k = 1, nblocks
+        do i = (k - 1) / 4 * 16 + 1, (k - 1) / 4 * 16 + 16
+            do j = modulo(k - 1, 4) * 16 + 1, modulo(k - 1, 4) * 16 + 16 
+                if (mask(j,i)) then
+                    output(:,j,i) = 0
+                    cycle
+                end if
+                output(:,j,i) = input(:,idetector)
+                idetector = idetector + 1
+            end do
+        end do
+    end do
+
+end subroutine pacs_unpack_real
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine pacs_unpack_int8(input, ndata, ndetectors, ncolumns, nrows, mask, output)
+
+    use module_tamasis, only : p
+    implicit none
+
+    !f2py intent(in)       :: input(ndata,ndetectors)
+    !f2py intent(hide)     :: ndata=shape(input,0)
+    !f2py intent(hide)     :: ndetectors=shape(input,1)
+    !f2py intent(in)       :: ncolumns
+    !f2py intent(in)       :: nrows
+    !f2py intent(in)       :: mask(ncolumns,nrows)
+    !f2py intent(out)      :: output(ndata,ncolumns,nrows)
+
+    integer, intent(in)    :: ndata, ndetectors, ncolumns, nrows
+    logical*1, intent(in)  :: input(ndata,ndetectors)
+    logical*1, intent(in)  :: mask(ncolumns,nrows)
+    logical*1, intent(out) :: output(ndata,ncolumns,nrows)
+
+    integer :: nblocks, idetector, i, j, k
+
+    if (nrows == 32) then
+        nblocks = 8
+    else
+        nblocks = 2
+    end if
+
+    idetector = 1
+    do k = 1, nblocks
+        do i = (k - 1) / 4 * 16 + 1, (k - 1) / 4 * 16 + 16
+            do j = modulo(k - 1, 4) * 16 + 1, modulo(k - 1, 4) * 16 + 16 
+                if (mask(j,i)) then
+                    output(:,j,i) = .true.
+                    cycle
+                end if
+                output(:,j,i) = input(:,idetector)
+                idetector = idetector + 1
+            end do
+        end do
+    end do
+
+end subroutine pacs_unpack_int8

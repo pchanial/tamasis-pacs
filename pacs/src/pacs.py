@@ -42,25 +42,12 @@ class PacsBase(Observation):
             {
                 'detector_reference': Quantity(1 / \
                     self.instrument.active_fraction, 'detector'),
-                'detector' : self.get_detector_area(),
+                'detector' : self.pack(self.instrument.detector_area),
                 'V' : volt,
             },{
                 'V' : volt
             }
             )
-
-    def get_detector_area(self):
-        """
-        Return the area of the non masked detectors.
-        """
-        return self.instrument.detector_area[~self.instrument.detector_mask]
-
-    def get_detector_time_constant(self):
-        """
-        Return the time constants of the non masked detectors.
-        """
-        return self.instrument \
-                   .detector_time_constant[~self.instrument.detector_mask]
 
     def get_filter_uncorrelated(self):
         """
@@ -202,31 +189,78 @@ class PacsBase(Observation):
                      unit='Jy/detector',
                      derived_units=self.get_derived_units()[0],
                      nsamples=nsamples)
-        result = self.pack(result)
         if subtraction_mean:
             result.T[:] -= np.mean(result, axis=1)
         if flatfielding:
-            result.T[:] /= self.instrument.flatfield \
-                               .detector[~self.instrument.detector_mask]
+            result.T[:] /= self.pack(self.instrument.flatfield.detector)
 
         compression = CompressionAverage(self.slice.compression_factor/4)
         result = compression(result)
         return result
 
-    def pack(self, tod):
-        tod = Observation.pack(self, tod)
-        if 'detector' in tod.derived_units:
-            tod.derived_units['detector'] = self.get_detector_area()
-        return tod
-    pack.__doc__ = Observation.pack.__doc__
-    
-    def unpack(self, tod):
-        tod = Observation.unpack(self, tod)
-        if 'detector' in tod.derived_units:
-            tod.derived_units['detector'] = self.instrument.detector_area
-        return tod
-    unpack.__doc__ = Observation.unpack.__doc__
+    def pack(self, input):
+        input = np.asanyarray(input)
+        if input.ndim == 2:
+            input = input.reshape((input.shape[0], input.shape[1], 1))
+        elif input.ndim != 3:
+            raise ValueError('Invalid number of dimensions.')
+        m = self.instrument.detector_mask.view(np.int8)
+        n = self.get_ndetectors()
+        if input.dtype == var.FLOAT_DTYPE:
+            output = tmf.pacs_pack_real(input.T, n, m.T).T
+        elif input.dtype.itemsize == 1:
+            output = tmf.pacs_pack_int8(input.view(np.int8).T, n, m.T).T
+        else:
+            raise TypeError("Data type '" + input.dtype.name + "' is not hand" \
+                            'led.')
+        output = output.squeeze()
+        if type(input) == np.ndarray:
+            return output
+        output = output.view(input.__class__)
+        if hasattr(input, '_unit'):
+            output._unit = input._unit
+            output._derived_units = input._derived_units.copy()
+        if isinstance(input, Tod):
+            output.nsamples = input.nsamples
+            if input.mask is not None:
+                mask = input.mask.view(np.int8)
+                output.mask = tmf.pacs_pack_int8(mask.T, n, m.T).T
+            if 'detector' in input.derived_units:
+                output.derived_units['detector'] = self.pack(
+                    output.derived_units['detector'])
+        return output
 
+    def unpack(self, input):
+        input = np.asanyarray(input)
+        if input.ndim == 1:
+            input = input.reshape((-1, 1))
+        elif input.ndim != 2:
+            raise ValueError('Invalid number of dimensions.')
+        m = self.instrument.detector_mask.view(np.int8)
+        if input.dtype == var.FLOAT_DTYPE:
+            output = tmf.pacs_unpack_real(input.T, m.T).T
+        elif input.dtype.itemsize == 1:
+            output = tmf.pacs_unpack_int8(input.view(np.int8).T, m.T).T
+        else:
+            raise TypeError("Data type '" + input.dtype.name + "' is not hand" \
+                            'led.')
+        output = output.squeeze()
+        if type(input) == np.ndarray:
+            return output
+        output = output.view(input.__class__)
+        if hasattr(input, '_unit'):
+            output._unit = input._unit
+            output._derived_units = input._derived_units.copy()
+        if isinstance(input, Tod):
+            output.nsamples = input.nsamples
+            if input.mask is not None:
+                mask = input.mask.view(np.int8)
+                output.mask = tmf.pacs_unpack_int8(mask.T, m.T).T
+            if 'detector' in input.derived_units:
+                output.derived_units['detector'] = self.unpack(
+                    output.derived_units['detector'])
+        return output
+                
     def uv2ad(self, u, v, ra=None, dec=None, pa=None, chop=None):
         def validate(input, attr):
             if input is None:
@@ -707,6 +741,7 @@ class PacsObservation(PacsBase):
 
         if not raw:
             tod.inunit(unit)
+
         return tod
 
     @property

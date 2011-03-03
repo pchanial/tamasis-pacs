@@ -56,8 +56,8 @@ tod.save('tod_preprocessed.fits')
 projection = Projection(obs,
                         method='sharp',
                         npixels_per_sample=5)
-response = ResponseTruncatedExponential(
-    obs.get_detector_time_constant() / obs.SAMPLING_PERIOD)
+response = ResponseTruncatedExponential(obs.pack(
+    obs.instrument.detector_time_constant) / obs.SAMPLING_PERIOD)
 compression = CompressionAverage(obs.slice.compression_factor)
 masking = Masking(tod.mask)
 model = masking * compression * response * projection
