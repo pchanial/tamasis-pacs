@@ -209,7 +209,7 @@ end subroutine pacs_info_observation_init
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine pacs_info_observation(filename, nfilenames, policy, nsamples_tot, cusmode, compression, unit, ra, dec, cam_angle,       &
+subroutine pacs_info_observation(filename, nfilenames, policy, nsamples_tot, obsid, cusmode, compression, unit, ra, dec, cam_angle,&
                                  scan_angle, scan_length, scan_step, scan_nlegs, frame_time, frame_ra, frame_dec,      &
                                  frame_pa, frame_chop, frame_info, frame_masked, frame_removed, nmasks, mask_name, mask_activated, &
                                  status)
@@ -225,7 +225,7 @@ subroutine pacs_info_observation(filename, nfilenames, policy, nsamples_tot, cus
     !f2py intent(in)            :: policy
     !f2py intent(in)            :: nsamples_tot
     !f2py character(len=70*nfilenames), intent(out), depend(nfilenames) :: cusmode, unit
-    !f2py intent(out)           :: compression, ra, dec, cam_angle, scan_angle, scan_length, scan_step
+    !f2py intent(out)           :: obsid, compression, ra, dec, cam_angle, scan_angle, scan_length, scan_step
     !f2py intent(out)           :: scan_nlegs
     !f2py intent(out)           :: frame_time, frame_ra, frame_dec, frame_pa, frame_chop, frame_info, frame_masked, frame_removed
     !f2py intent(out)           :: nmasks, mask_activated
@@ -238,7 +238,7 @@ subroutine pacs_info_observation(filename, nfilenames, policy, nsamples_tot, cus
     integer, intent(in)                             :: nsamples_tot
     character(len=70*nfilenames), intent(out)       :: cusmode, unit !XXX hack around f2py bug with array of characters
     real(p), intent(out), dimension(nfilenames)     :: ra, dec, cam_angle, scan_angle, scan_length, scan_step
-    integer, intent(out), dimension(nfilenames)     :: compression, scan_nlegs, nmasks
+    integer, intent(out), dimension(nfilenames)     :: obsid, compression, scan_nlegs, nmasks
     real(p), intent(out), dimension(nsamples_tot)   :: frame_time, frame_ra, frame_dec, frame_pa, frame_chop, frame_info
     logical*1, intent(out), dimension(nsamples_tot) :: frame_masked, frame_removed
     character(len=70*32*nfilenames), intent(out)    :: mask_name
@@ -283,6 +283,7 @@ subroutine pacs_info_observation(filename, nfilenames, policy, nsamples_tot, cus
             mask_activated(imask,iobs) = obs%slice(iobs)%mask_activated(imask)
         end do
     end do
+    obsid       = obs%slice%obsid
     compression = obs%slice%compression_factor
     ra          = obs%slice%ra
     dec         = obs%slice%dec
