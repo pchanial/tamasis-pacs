@@ -2115,7 +2115,11 @@ contains
         if (.not. found_) then
             value = .false.
             if (status == 202 .and. present(found)) status = 0
-            junk = ft_check_error_cfitsio(status, unit)
+            if (status == 202) then
+                write (ERROR_UNIT,'(a)') "Error: FITS keyword '" // keyword // "' is not found."
+            else
+                junk = ft_check_error_cfitsio(status, unit)
+            end if
         end if
 
         if (present(found))   found = found_
@@ -2145,7 +2149,11 @@ contains
         if (.not. found_) then
             value = 0
             if (status == 202 .and. present(found)) status = 0
-            junk = ft_check_error_cfitsio(status, unit)
+            if (status == 202) then
+                write (ERROR_UNIT,'(a)') "Error: FITS keyword '" // keyword // "' is not found."
+            else
+                junk = ft_check_error_cfitsio(status, unit)
+            end if
         end if
 
         if (present(found))   found = found_
@@ -2175,7 +2183,11 @@ contains
         if (.not. found_) then
             value = 0
             if (status == 202 .and. present(found)) status = 0
-            junk = ft_check_error_cfitsio(status, unit)
+            if (status == 202) then
+                write (ERROR_UNIT,'(a)') "Error: FITS keyword '" // keyword // "' is not found."
+            else
+                junk = ft_check_error_cfitsio(status, unit)
+            end if
         end if
 
         if (present(found))   found = found_
@@ -2225,7 +2237,11 @@ contains
         if (.not. found_) then
             value = 0._dp
             if (status == 202 .and. present(found)) status = 0
-            junk = ft_check_error_cfitsio(status, unit)
+            if (status == 202) then
+                write (ERROR_UNIT,'(a)') "Error: FITS keyword '" // keyword // "' is not found."
+            else
+                junk = ft_check_error_cfitsio(status, unit)
+            end if
         end if
 
         if (present(found))   found = found_
@@ -2276,7 +2292,11 @@ contains
         found_ = status == 0
         if (.not. found_) then
             if (status == 202 .and. present(found)) status = 0
-            junk = ft_check_error_cfitsio(status, unit)
+            if (status == 202) then
+                write (ERROR_UNIT,'(a)') "Error: FITS keyword '" // keyword // "' is not found."
+            else
+                junk = ft_check_error_cfitsio(status, unit)
+            end if
         end if
 
         if (present(found))   found = found_
