@@ -8,7 +8,7 @@ from uuid import uuid1
 
 class TestFailure(Exception): pass
 
-tamasis.var.verbose = False
+tamasis.var.verbose = True
 
 data_dir = os.path.dirname(__file__) + '/data/'
 
@@ -96,18 +96,20 @@ if relerror > 0.025: raise TestFailure('Tncompatibility with HCSS photproject: '
 
 map_naive_ref = Map(data_dir + 'frames_blue_map_naive.fits')
 obs = PacsObservation(data_dir + 'frames_blue.fits', policy_detector='mask')
+obs.pointing.chop[:] = 0
 projection = Projection(obs, header=map_naive_ref.header, oversampling=False, npixels_per_sample=6)
 tod = obs.get_tod(flatfielding=False)
 masking = Masking(tod.mask)
 model = masking * projection
 map_naive = mapper_naive(tod, model)
-if any_neq(map_naive, map_naive_ref, 2.e-12): raise TestFailure()
+if any_neq(map_naive, map_naive_ref, 1.e-11): raise TestFailure()
 
 obs_rem = PacsObservation(data_dir + 'frames_blue.fits', policy_detector='remove')
+obs_rem.pointing.chop[:] = 0
 projection_rem = Projection(obs_rem, header=map_naive.header, oversampling=False, npixels_per_sample=7)
 tod_rem = obs_rem.get_tod(flatfielding=False)
 masking_rem = Masking(tod_rem.mask)
 model_rem = masking_rem * projection_rem
 map_naive_rem = mapper_naive(tod_rem, model_rem)
-if any_neq(map_naive, map_naive_rem, 2.e-12): raise TestFailure()
+if any_neq(map_naive, map_naive_rem, 1.e-11): raise TestFailure()
 
