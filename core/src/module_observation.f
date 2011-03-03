@@ -72,6 +72,7 @@ public :: PacsObservationSlice
         character(len=256)        :: filename
         character(len=FLEN_VALUE) :: band
         character(len=FLEN_VALUE) :: observing_mode
+        integer                   :: obsid
         real(p)                   :: ra, dec
         real(p)                   :: cam_angle, scan_angle, scan_length, scan_step
         integer                   :: scan_nlegs
@@ -492,6 +493,9 @@ contains
         character(len=FLEN_VALUE) :: algorithm, mode
 
         call ft_open(trim(this%filename), unit, status)
+        if (status /= 0) return
+
+        call ft_read_keyword(unit, 'obs_id', this%obsid, found, status)
         if (status /= 0) return
 
         call ft_read_keyword_hcss(unit, 'algorithm', algorithm, status=status)

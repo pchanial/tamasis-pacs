@@ -557,7 +557,7 @@ class PacsObservation(PacsBase):
             policy_turnaround, policy_other, policy_invalid), 'Frame Policy')
 
         # store observation information
-        mode, compression_factor, unit, ra, dec, cam_angle, scan_angle, \
+        obsid, mode, compression_factor, unit, ra, dec, cam_angle, scan_angle, \
             scan_length, scan_step, scan_nlegs, frame_time, frame_ra, \
             frame_dec, frame_pa, frame_chop, frame_info, frame_masked, \
             frame_removed, nmasks, mask_name_flat, mask_activated, status = \
@@ -596,6 +596,7 @@ class PacsObservation(PacsBase):
         self.slice = np.recarray(nfilenames, dtype=[
                 ('filename', 'S256'),
                 ('nsamples_all', int),
+                ('obsid', int),
                 ('mode', 'S32'),
                 ('compression_factor', int),
                 ('delay', float),
@@ -621,6 +622,7 @@ class PacsObservation(PacsBase):
         self.slice.nsamples_all = nsamples_all
         self.slice.nfinesamples = nsamples_all * compression_factor * \
                                   fine_sampling_factor
+        self.slice.obsid = obsid
         self.slice.mode = mode
         self.slice.compression_factor = compression_factor
         self.slice.delay = delay
@@ -903,6 +905,7 @@ class PacsSimulation(PacsBase):
         self.slice = np.recarray(1, dtype=[
                 ('filename', 'S256'),
                 ('nsamples_all', int),
+                ('obsid', int),
                 ('mode', 'S32'),
                 ('compression_factor', int),
                 ('delay', float),
@@ -919,6 +922,7 @@ class PacsSimulation(PacsBase):
 
         self.slice.filename = filename
         self.slice.nsamples_all = self.pointing.size
+        self.slice.obsid = 0
         self.slice.mode = mode
         self.slice.compression_factor = compression_factor
         self.slice.delay = delay
