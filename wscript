@@ -221,7 +221,8 @@ def build(bld):
 
     #XXX this should be a Task...
     cmd = '${F2PY} --fcompiler=${F2PYFCOMPILER} --f90exec=${FC}'
-    cmd += ' --f90flags="${FCFLAGS}"'
+    cmd += ' --f90flags="${FCFLAGS}'
+    cmd += ' ${FCFLAGS_OPENMP}"' if 'OPENMP' in libraries else '"'
     cmd += ' --quiet' if bld.options.verbose == 0 else ''
     cmd += ' -DF2PY_REPORT_ON_ARRAY_COPY=1'
     cmd += ' -m tamasisfortran -c ' + string.join(map(str, [s.abspath() for s in source]))
