@@ -319,19 +319,21 @@ ities of different units may have changed operands to common unit '" + \
 
         elif ufunc in (np.greater, np.greater_equal, np.less, np.less_equal,
                        np.equal, np.not_equal, np.iscomplex, np.isfinite,
-                       np.isinf, np.isnan, np.isreal):
+                       np.isinf, np.isnan, np.isreal, np.bitwise_or, np.invert,
+                       np.logical_and, np.logical_not, np.logical_or,
+                       np.logical_xor):
             if np.rank(array) == 0:
                 return bool(array)
-            array = array.magnitude
+            if hasattr(array, 'coverage'):
+                array.coverage = None
+            if hasattr(array, '_mask'):
+                array._mask = None
+            array._unit = {}
 
         elif ufunc in (np.arccos, np.arccosh, np.arcsin, np.arcsinh, np.arctan,
                        np.arctanh, np.arctan2, np.cos, np.cosh, np.exp, np.exp2,
                        np.log, np.log2, np.log10, np.sin, np.sinh, np.tan,
                        np.tanh):
-            array._unit = {}
-
-        elif ufunc in (np.bitwise_or, np.invert, np.logical_and, np.logical_not,
-                       np.logical_or, np.logical_xor):
             array._unit = {}
 
         elif ufunc in (np.abs, np.negative):
