@@ -582,22 +582,37 @@ end subroutine unpack_transpose
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine add_inplace(a, b, n)
+subroutine add_inplace(a, m, b, n)
 
     use module_tamasis,  only : p
-    use module_math, only : add
     implicit none
 
     !f2py threadsafe
     !f2py intent(inout)    :: a
-    !f2py intent(hide)     :: n = size(a)
+    !f2py intent(hide)     :: m = size(a)
     !f2py intent(in)       :: b
+    !f2py intent(hide)     :: n = size(b)
 
-    real(p), intent(inout) :: a(n)
+    real(p), intent(inout) :: a(m)
     real(p), intent(in)    :: b(n)
-    integer, intent(in)    :: n
+    integer, intent(in)    :: m, n
+    integer                :: i, o
 
-    call add(a, b, n)
+    if (m == n) then
+        !$omp parallel do
+        do i = 1, m
+            a(i) = a(i) + b(i)
+        end do
+        !$omp end parallel do
+        return
+    end if
+
+    o = m / n
+    !$omp parallel do
+    do i = 1, n
+        a((i-1)*o+1:i*o) = a((i-1)*o+1:i*o) + b(i)
+    end do
+    !$omp end parallel do
 
 end subroutine add_inplace
 
@@ -605,24 +620,35 @@ end subroutine add_inplace
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine subtract_inplace(a, b, n)
+subroutine subtract_inplace(a, m, b, n)
 
     use module_tamasis,  only : p
     implicit none
 
     !f2py threadsafe
     !f2py intent(inout)    :: a
-    !f2py intent(hide)     :: n = size(a)
+    !f2py intent(hide)     :: m = size(a)
     !f2py intent(in)       :: b
+    !f2py intent(hide)     :: n = size(b)
 
-    real(p), intent(inout) :: a(n)
+    real(p), intent(inout) :: a(m)
     real(p), intent(in)    :: b(n)
-    integer, intent(in)    :: n
-    integer                :: i
+    integer, intent(in)    :: m, n
+    integer                :: i, o
 
+    if (m == n) then
+        !$omp parallel do
+        do i = 1, m
+            a(i) = a(i) - b(i)
+        end do
+        !$omp end parallel do
+        return
+    end if
+
+    o = m / n
     !$omp parallel do
     do i = 1, n
-        a(i) = a(i) - b(i)
+        a((i-1)*o+1:i*o) = a((i-1)*o+1:i*o) - b(i)
     end do
     !$omp end parallel do
 
@@ -632,24 +658,35 @@ end subroutine subtract_inplace
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine multiply_inplace(a, b, n)
+subroutine multiply_inplace(a, m, b, n)
 
     use module_tamasis,  only : p
     implicit none
 
     !f2py threadsafe
     !f2py intent(inout)    :: a
-    !f2py intent(hide)     :: n = size(a)
+    !f2py intent(hide)     :: m = size(a)
     !f2py intent(in)       :: b
+    !f2py intent(hide)     :: n = size(b)
 
-    real(p), intent(inout) :: a(n)
+    real(p), intent(inout) :: a(m)
     real(p), intent(in)    :: b(n)
-    integer, intent(in)    :: n
-    integer                :: i
+    integer, intent(in)    :: m, n
+    integer                :: i, o
 
+    if (m == n) then
+        !$omp parallel do
+        do i = 1, m
+            a(i) = a(i) * b(i)
+        end do
+        !$omp end parallel do
+        return
+    end if
+
+    o = m / n
     !$omp parallel do
     do i = 1, n
-        a(i) = a(i) * b(i)
+        a((i-1)*o+1:i*o) = a((i-1)*o+1:i*o) * b(i)
     end do
     !$omp end parallel do
 
@@ -659,75 +696,42 @@ end subroutine multiply_inplace
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine divide_inplace(a, b, n)
+subroutine divide_inplace(a, m, b, n)
 
     use module_tamasis,  only : p
     implicit none
 
     !f2py threadsafe
     !f2py intent(inout)    :: a
-    !f2py intent(hide)     :: n = size(a)
+    !f2py intent(hide)     :: m = size(a)
     !f2py intent(in)       :: b
+    !f2py intent(hide)     :: n = size(b)
 
-    real(p), intent(inout) :: a(n)
+    real(p), intent(inout) :: a(m)
     real(p), intent(in)    :: b(n)
-    integer, intent(in)    :: n
-    integer                :: i
+    integer, intent(in)    :: m, n
+    integer                :: i, o
 
+    if (m == n) then
+        !$omp parallel do
+        do i = 1, m
+            a(i) = a(i) / b(i)
+        end do
+        !$omp end parallel do
+        return
+    end if
+
+    o = m / n
     !$omp parallel do
     do i = 1, n
-        a(i) = a(i) / b(i)
+        a((i-1)*o+1:i*o) = a((i-1)*o+1:i*o) / b(i)
     end do
     !$omp end parallel do
 
 end subroutine divide_inplace
 
 
-!!$!-----------------------------------------------------------------------------------------------------------------------------------
-!!$
-!!$
-!!$subroutine add_inplace_blas(a, b, n)
-!!$
-!!$    use module_tamasis,  only : p
-!!$    implicit none
-!!$
-!!$    !f2py threadsafe
-!!$    !f2py intent(inout)    :: a
-!!$    !f2py intent(hide)     :: n = size(a)
-!!$    !f2py intent(in)       :: b
-!!$
-!!$    real(p), intent(inout) :: a(n)
-!!$    real(p), intent(in)    :: b(n)
-!!$    integer, intent(in)    :: n
-!!$
-!!$    call daxpy(n, 1._p, b, 1, a, 1)
-!!$
-!!$end subroutine add_inplace_blas
-!!$
-!!$
-!!$!-----------------------------------------------------------------------------------------------------------------------------------
-!!$
-!!$
-!!$subroutine subtract_inplace_blas(a, b, n)
-!!$
-!!$    use module_tamasis,  only : p
-!!$    implicit none
-!!$
-!!$    !f2py threadsafe
-!!$    !f2py intent(inout)    :: a
-!!$    !f2py intent(hide)     :: n = size(a)
-!!$    !f2py intent(in)       :: b
-!!$
-!!$    real(p), intent(inout) :: a(n)
-!!$    real(p), intent(in)    :: b(n)
-!!$    integer, intent(in)    :: n
-!!$
-!!$    call daxpy(n, -1._p, b, 1, a, 1)
-!!$
-!!$end subroutine subtract_inplace_blas
-!!$
-!!$
-!!$!-----------------------------------------------------------------------------------------------------------------------------------
+!-----------------------------------------------------------------------------------------------------------------------------------
 
 
 subroutine diff(array, asize, dim, ashape, arank)

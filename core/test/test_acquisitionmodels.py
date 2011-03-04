@@ -177,31 +177,31 @@ if any_neq(tod, tod2): raise TestFailure('fft4')
 #--------------------------------
 
 model = 1. + Identity()
-if model((3,)) != [6] or model(3) != 6: raise TestFailure('Addition')
+if model((3,)) != [6] or model(3) != [6]: raise TestFailure('Addition')
 
 model = - Identity()
-if model((3,)) != [-3] or model(3) != -3: raise TestFailure('-I')
+if model((3,)) != [-3] or model(3) != [-3]: raise TestFailure('-I')
 
 model = (-2) * Identity()
-if model((3,)) != [-6] or model(3) != -6: raise TestFailure('-2 I')
+if model((3,)) != [-6] or model(3) != [-6]: raise TestFailure('-2 I')
 
 model = -(2 * Identity())
-if model((3,)) != [-6] or model(3) != -6: raise TestFailure('-(2I)')
+if model((3,)) != [-6] or model(3) != [-6]: raise TestFailure('-(2I)')
 
 model = 1. - Identity()
-if model((3,)) != [0] or model(3) != 0: raise TestFailure('Subtraction1')
+if model((3,)) != [0] or model(3) != [0]: raise TestFailure('Subtraction1')
 
 model = 1. - 2 * Identity()
-if model((3,)) != [-3] or model(3) != -3: raise TestFailure('Subtraction2')
+if model((3,)) != [-3] or model(3) != [-3]: raise TestFailure('Subtraction2')
 
 model += 2*Identity()
-if model((3,)) != [3] or model(3) != 3: raise TestFailure('+=')
+if model((3,)) != [3] or model(3) != [3]: raise TestFailure('+=')
 
 model -= 2*Identity()
-if model((3,)) != [-3] or model(3) != -3: raise TestFailure('-=')
+if model((3,)) != [-3] or model(3) != [-3]: raise TestFailure('-=')
 
 model *= 2
-if model((3,)) != [-6] or model(3) != -6: raise TestFailure('*=')
+if model((3,)) != [-6] or model(3) != [-6]: raise TestFailure('*=')
 
 #------------------------------------
 # Linearoperator -> AcquisitionModel
