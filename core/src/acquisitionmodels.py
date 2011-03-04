@@ -251,7 +251,7 @@ class AcquisitionModel(object):
                              unitin, unitout,
                              validate_input_shape):
 
-        input = np.asanyarray(input)
+        input = np.array(input, ndmin=1, subok=True, copy=False)
         try:
             input = np.asanyarray(input, _get_dtype(self.dtype, input.dtype))
         except:
@@ -571,7 +571,7 @@ class Composite(AcquisitionModel):
         pass
 
     def validate_input(self, input, shape):
-        input = np.asanyarray(input)
+        input = np.array(input, ndmin=1, subok=True, copy=False)
         if shape is not None and type(shape[-1]) is tuple:
             input = Tod(input, nsamples=shape[-1], copy=False)
         return input
@@ -601,17 +601,20 @@ class Addition(Composite):
         input = self.validate_input(input, self.shapein)
         output = self.blocks[0].direct(input, False, False, False)
         for i, model in enumerate(self.blocks[1:]):
-            last = i == len(self.blocks) - 1
-            output += model.direct(input, inplace and last, cachein, cacheout)
+            last = i == len(self.blocks) - 2
+            tmf.add_inplace(np.array(output, ndmin=1, copy=False).T,
+                            np.array(model.direct(input, inplace and last,
+                            cachein, cacheout), ndmin=1, copy=False).T)
         return output
 
     def transpose(self, input, inplace, cachein, cacheout):
         input = self.validate_input(input, self.shapeout)
         output = self.blocks[0].transpose(input, False, False, False)
         for i, model in enumerate(self.blocks[1:]):
-            last = i == len(self.blocks) - 1
-            output += model.transpose(input, inplace and last, cachein,
-                                      cacheout)
+            last = i == len(self.blocks) - 2
+            tmf.add_inplace(np.array(output, ndmin=1, copy=False).T,
+                            np.array(model.transpose(input, inplace and last,
+                            cachein, cacheout), ndmin=1, copy=False).T)
         return output
 
     @property
@@ -789,7 +792,11 @@ class Symmetric(Square):
 
 
 class Diagonal(Symmetric):
-    """Diagonal operator"""
+    """Diagonal operator.
+
+    The diagonal elements can be of dimensions lesser than the input array, in
+    which case the diagonal elements are replicated along the fast dimensions.
+    """
 
     def __init__(self, diagonal, shapein=None, description=None):
         diagonal = np.asarray(diagonal, dtype=var.get_default_dtype(diagonal))
@@ -801,7 +808,8 @@ class Diagonal(Symmetric):
         output = self.validate_input_inplace(input, inplace)
         if output.ndim == 0:
             return output * self.diagonal
-        output.T[:] *= self.diagonal.T
+        tmf.multiply_inplace(output.T, np.array(self.diagonal, ndmin=1,
+                             copy=False).T)
         return output
 
     def validate_shapein(self, shapein):
@@ -1179,12 +1187,12 @@ class Reshaping(AcquisitionModelLinear):
         return output
 
     def validate_input_direct(self, input, inplace):
-        input = np.array(input, copy=not inplace, subok=True)
+        input = np.array(input, ndmin=1, copy=not inplace, subok=True)
         shapeout = self.validate_shapein(input.shape)
         return input
 
     def validate_input_transpose(self, input, inplace):
-        input = np.array(input, copy=not inplace, subok=True)
+        input = np.array(input, ndmin=1, copy=not inplace, subok=True)
         shapeout = self.validate_shapeout(input.shape)
         return input
 

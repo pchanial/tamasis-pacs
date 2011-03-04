@@ -34,8 +34,6 @@ module module_math
     public :: swap
     public :: eq_real
     public :: neq_real
-    public :: add
-!!$    public :: add_blas
     public :: diff_fast
     public :: diff_slow
     public :: diffT_fast
@@ -848,37 +846,6 @@ contains
     end function neq_real
 
 
-    !-------------------------------------------------------------------------------------------------------------------------------
-
-
-    subroutine add(a, b, n)
-        real(p), intent(inout) :: a(n)
-        real(p), intent(in)    :: b(n)
-        integer, intent(in)    :: n
-        integer                :: i
-
-        !$omp parallel do
-        do i = 1, n
-            a(i) = a(i) + b(i)
-        end do
-        !$omp end parallel do
-
-    end subroutine add
-
-
-!!$    !-------------------------------------------------------------------------------------------------------------------------------
-!!$
-!!$
-!!$    subroutine add_blas(a, b)
-!!$
-!!$        real(p), intent(inout) :: a(:)
-!!$        real(p), intent(in)    :: b(:)
-!!$
-!!$        call daxpy(size(a), 1._p, b, 1, a, 1)
-!!$
-!!$    end subroutine add_blas
-!!$
-!!$
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
