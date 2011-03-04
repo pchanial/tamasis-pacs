@@ -331,9 +331,12 @@ class Pointing(FitsArray, np.recarray):
         result = result.view(cls)
         result.nsamples = nsamples
         result.header = create_fitsheader(None, naxis=result.size)
+        result._unit = {}
+        result._derived_units = {}
         return result
 
     def __array_finalize__(self, array):
+        FitsArray.__array_finalize__(self, array)
         nsamples = getattr(array, 'nsamples', None)
         self.nsamples = (self.size,) if nsamples is None else nsamples
 
