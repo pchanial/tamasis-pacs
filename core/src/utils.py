@@ -103,7 +103,7 @@ def hs(arg):
     length = np.max(list(map(len, names)))
     lnames = np.array([names[i].ljust(length)+': ' for i in range(len(names))])
     for name, lname in zip(names, lnames):
-        value = str(getattr(arg, name))[0:72-length-2]
+        value = str(getattr(arg, name))[0:72-length-2].replace('\n', ' ')
         if len(value) == 72-length-2:
             value = value[0:-3] + '...'
         print(lname+value)
