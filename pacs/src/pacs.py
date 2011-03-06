@@ -323,8 +323,9 @@ class PacsBase(Observation):
                 active = slice[islice].mask_activated[0:slice[islice].nmasks]
                 a = [m for m, act in zip(masks, active) if act]
                 d = [m for m, act in zip(masks, active) if not act]
-            return (strplural(s + 'activated mask', len(m), False, \
-                ': ').capitalize() + ', '.join(m) for s,m in (('',a), ('de',d)))
+            return ((('no ' if len(m) == 0 else '') + strplural(s + 'activate' \
+                'd mask', len(m), False, ': ' + ', '.join(m))).capitalize() \
+                for s,m in (('',a), ('de',d)))
 
         nthreads = tmf.info_nthreads()
         ndetectors = self.get_ndetectors()
@@ -369,7 +370,7 @@ class PacsBase(Observation):
         if self.__class__.__name__ == 'PacsObservation':        
             homogeneous = 'nmasks' not in self.slice.dtype.names or \
                 same(self.slice.nmasks) and all([same(a) for a in \
-                self.slice.mask_name.T])
+                self.slice.mask_name[:,:self.slice[0].nmasks]])
             if homogeneous:
                 (a,d) = ad_masks(self.slice, 0)
                 result += sp + a + '\n'
@@ -416,8 +417,8 @@ class PacsBase(Observation):
 
             if self.__class__.__name__ == 'PacsObservation' and not homogeneous:
                 (a,d) = ad_masks(self.slice, islice)
-                result += sp + '      ' + a + '\n'
-                result += sp + '      ' + d + '\n'
+                result += sp + '     ' + a + '\n'
+                result += sp + '     ' + d + '\n'
 
             if print_each_mode:
                 result += sp + '     Mode:        ' + slice.mode + '\n'
