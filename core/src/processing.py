@@ -70,10 +70,7 @@ def filter_median(tod, length=10, mask=None):
     elif mask is None:
         mask = np.zeros(tod.shape, np.int8)
     else:
-        if not mask.flags.c_contiguous:
-            mask = np.ascontiguousarray(mask, np.int8)
-        else:
-            mask = np.asarray(mask, np.int8)
+        mask = np.ascontiguousarray(mask, np.bool8).view(np.int8)
 
     n = tod.shape[-1]
     status = tmf.filter_median(filtered.reshape((-1,n)).T,
