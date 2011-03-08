@@ -356,7 +356,7 @@ def diffTdiff(array, axis=0, scalar=1.):
         array.shape = ()
     else:
         tmf.difftdiff(array.ravel(), rank-axis, np.asarray(array.T.shape),
-                      scalar)
+                      np.asarray(scalar, dtype=var.FLOAT_DTYPE))
 
     
 #-------------------------------------------------------------------------------
