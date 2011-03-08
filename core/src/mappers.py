@@ -6,8 +6,8 @@ import time
 
 from mpi4py import MPI
 from . import var
-from .acquisitionmodels import Diagonal, DdTdd, Identity, Masking,\
-     AllReduce, Reshaping
+from .acquisitionmodels import Addition, Diagonal, DdTdd, Identity, Masking, \
+                               AllReduce, Reshaping
 from .datatypes import Map, Tod, create_fitsheader, flatten_sliced_shape
 from .quantity import Quantity, UnitError
 
@@ -130,17 +130,17 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None,
     if weight is None:
         weight = Identity(description='Weight')
 
+    hyper = np.asarray(hyper, dtype=var.FLOAT_DTYPE)
+
     C = model.T * weight * model
 
-    if hyper != 0:
-        ntods = tod.size if tod.mask is None else np.sum(tod.mask == 0)
-        ntods = var.mpi_comm.allreduce(ntods, op=MPI.SUM)
-        nmaps = model.shape[1]
-        if var.mpi_comm.Get_rank() == 0:
-            hyper = np.array(hyper * ntods / nmaps, dtype=var.FLOAT_DTYPE)
-            dxTdx = DdTdd(axis=1, scalar=hyper)
-            dyTdy = DdTdd(axis=0, scalar=hyper)
-            C += dxTdx + dyTdy
+    ntods = tod.size if tod.mask is None else int(np.sum(tod.mask == 0))
+    ntods = var.mpi_comm.allreduce(ntods, op=MPI.SUM)
+    nmaps = model.shape[1]
+    ddTdd = Addition([DdTdd(axis=axis, scalar=hyper * ntods / nmaps) \
+                      for axis in range(len(model.shapein))])
+    if hyper != 0 and var.mpi_comm.Get_rank() == 0:
+        C += ddTdd
 
     # linear solvers handle vectors. the default unpacking is a reshape
     shapein = flatten_sliced_shape(model.shapein)
@@ -221,6 +221,7 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None,
         solution, info = solver(C, rhs, x0=x0, tol=tol, maxiter=maxiter,
                                 callback=callback, M=M)
 
+    time0 = time.time() - time0
     if info < 0:
         raise RuntimeError('Solver failure (code=' + str(info) + ' after ' + \
                            str(callback.niterations) + ' iterations).')
@@ -238,7 +239,17 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None,
     output.header = coverage.header
     output.coverage = coverage
 
-    output.header.update('time', time.time() - time0)
+    delta = model(output, False, False, True) - tod
+    likelihood = delta * weight(delta, True, True, True)
+    likelihood = var.mpi_comm.allreduce(np.sum(likelihood),op=MPI.SUM).magnitude
+    prior = output * ddTdd(output)
+    prior = var.mpi_comm.allreduce(np.sum(prior), op=MPI.SUM).magnitude
+    output.header.update('likeliho', float(likelihood) / ntods)
+    output.header.update('criter', float(likelihood + prior) / ntods)
+    output.header.update('hyper', float(hyper))
+    output.header.update('nsamples', ntods)
+    output.header.update('npixels', nmaps)
+    output.header.update('time', time0)
     if hasattr(callback, 'niterations'):
         output.header.update('niter', callback.niterations)
     output.header.update('maxiter', maxiter)
