@@ -257,8 +257,8 @@ class Quantity(np.ndarray):
                      np.greater_equal, np.less, np.less_equal, np.equal,
                      np.not_equal):
             for arg in context[1]:
-                u = getattr(arg, '_unit', None)
-                if u is None or u == self._unit:
+                u = getattr(arg, '_unit', {})
+                if len(u) == 0 or u == self._unit:
                     continue
 
                 print("Warning: applying function '" + str(ufunc) + "' to Quant\
