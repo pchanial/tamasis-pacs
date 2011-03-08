@@ -78,6 +78,12 @@ class MadMap1Observation(Observation):
         if resolution is not None:
             raise ValueError('The map resolution cannot be specified for MADm' \
                              'ap1 observations.')
+        if method is None:
+            method = 'default'
+        method = method.lower()
+        if method != 'default':
+            raise ValueError("Invalid pointing matrix method '" + method + "'.")
+
         header = pyfits.Header()
         header.update('simple', True)
         header.update('bitpix', -64)
@@ -94,7 +100,7 @@ class MadMap1Observation(Observation):
         pmatrix = np.zeros(sizeofpmatrix, dtype=np.int64)
         status = tmf.madmap1_read_tod(self.info.todfile, self.info.invnttfile, self.info.convert, self.info.npixels_per_sample, tod.T, pmatrix)
         if status != 0: raise RuntimeError()
-        return pmatrix, header, ndetectors, nsamples, \
+        return method, pmatrix, header, ndetectors, nsamples, \
                self.info.npixels_per_sample, (None, None), (None, None)
 
     def get_tod(self, unit=None):

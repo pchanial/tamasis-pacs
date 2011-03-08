@@ -889,7 +889,7 @@ class Projection(AcquisitionModelLinear):
     def __init__(self, observation, method=None, header=None, resolution=None,
                  npixels_per_sample=0, oversampling=True, description=None):
 
-        self._pmatrix, self.header, ndetectors, nsamples, \
+        self.method, self._pmatrix, self.header, ndetectors, nsamples, \
         self.npixels_per_sample, (unitout, unitin), (duout, duin) = \
             observation.get_pointing_matrix(header,
                                             resolution,

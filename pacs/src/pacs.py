@@ -1,14 +1,17 @@
+import gc
 import glob
 import kapteyn
 import numpy as np
 import os
 import pyfits
 import re
+import scipy
 import tempfile
 
 from . import var
 from matplotlib import pyplot as P
 from mpi4py import MPI
+from tamasis.acquisitionmodels import Composite
 from tamasis.core import *
 from tamasis.mpiutils import split_observation
 from tamasis.observations import Observation, Instrument, FlatField, create_scan
@@ -18,6 +21,7 @@ from tamasis.wcsutils import combine_fitsheader
 __all__ = [ 'PacsObservation',
             'PacsSimulation',
             'pacs_create_scan',
+            'pacs_compute_delay',
             'pacs_get_psf',
             'pacs_plot_scan',
             'pacs_preprocess' ]
@@ -152,8 +156,8 @@ class PacsBase(Observation):
             return self.get_pointing_matrix(header, resolution,
                 new_npixels_per_sample, method, oversampling)
 
-        return pmatrix, header, ndetectors, nsamples, npixels_per_sample, \
-               ('/detector', '/pixel'), self.get_derived_units()
+        return method, pmatrix, header, ndetectors, nsamples, \
+            npixels_per_sample, ('/detector','/pixel'), self.get_derived_units()
     get_pointing_matrix.__doc__ = Observation.get_pointing_matrix.__doc__
 
     def get_random(self, flatfielding=True, subtraction_mean=True):
@@ -313,6 +317,7 @@ class PacsBase(Observation):
 
         # some helpers
         def same(a):
+            a = np.asarray(a)
             return np.all(a == a[0])
         def ad_masks(slice, islice):
             if 'nmasks' not in slice.dtype.names:
@@ -369,8 +374,7 @@ class PacsBase(Observation):
         # mask information
         if self.__class__.__name__ == 'PacsObservation':        
             homogeneous = 'nmasks' not in self.slice.dtype.names or \
-                same(self.slice.nmasks) and all([same(a) for a in \
-                self.slice.mask_name[:,:self.slice[0].nmasks]])
+                same([set(m) for m in self.slice.mask_name])
             if homogeneous:
                 (a,d) = ad_masks(self.slice, 0)
                 result += sp + a + '\n'
@@ -1184,6 +1188,100 @@ def pacs_get_psf(band, resolution, kind='calibration'):
 
     raise NotImplementedError()
 
+
+#-------------------------------------------------------------------------------
+
+
+def pacs_compute_delay(obs, tod, model, weight=None, tol_delay=1.e-3,
+                       tol_mapper=1.e-3, hyper=1., full_output=False):
+    
+    """
+    Compute temporal offset between the PACS counter and the spacecraft clock.
+
+    Parameters
+    ----------
+    obs : PacsObservation
+    tod : Tod
+    model : acquisition model
+    weight : N^-1 operator
+    tol_delay : float
+        Relative error in delay acceptable for convergence.
+    tol_mapper : float
+        Mapper tolerance.
+    hyper : float
+        Mapper smoothness hyperparameter.
+    full_output : boolean
+        if true, returns additional information.
+
+    Returns
+    -------
+
+    delay : float
+        Temporal offset between the PACS counter and the spacecraft clock.
+    criterion : float
+        Criterion of the map constructed with the returned delay.
+    delays : list of floats
+        Iterated delays.
+    criteria : list of floats
+        Criteria associated with the iterated delays.
+    map : Map
+        Map constructed with the returned delay.
+    """
+    global map_rls
+
+    def func_model(obs, tod, model):
+
+        def substitute_projection(model):
+            for i, c in enumerate(model.blocks):
+                if isinstance(c, Projection):
+                    model.blocks[i] = Projection(obs, method=c.method,
+                       header=c.header, npixels_per_sample=c.npixels_per_sample)
+                    return True
+                elif isinstance(c, Composite):
+                    if substitute_projection(c):
+                        return True
+            return False
+
+        if isinstance(model, Projection):
+            return Projection(obs, method=model.method, header=model.header,
+                              npixels_per_sample=model.npixels_per_sample)
+        if isinstance(model, Composite):
+            if substitute_projection(model):
+                return model
+
+        raise TypeError('There is no projection in this acquisition model.')
+    
+    delays = []
+    criteria = []
+
+    def criteria_delay(params, obs, tod, model, invntt, tol, hyper):
+        global map_rls
+        delay = params if np.rank(params) == 0 else params[0]
+        obs.slice[0].delay = delay
+        model = func_model(obs, tod, model)
+        map_rls = mapper_rls(tod, model, weight=invntt, tol=tol, hyper=hyper)
+        criterion = map_rls.header['criter']
+        delays.append(delay)
+        criteria.append(criterion)
+        gc.collect()
+        return criterion
+
+    if obs.slice.size > 1:
+        raise ValueError('Temporal delay is determined within a single obsid.')
+
+    if weight is None:
+        weight = Identity()
+
+    method = scipy.optimize.brent
+    result = method(criteria_delay, (obs, tod, model, weight, tol_mapper,
+                    hyper), brack=(-60.,-30,0.), tol=tol_delay)
+
+    map_rls.header.update('delay', result)
+
+    if full_output:
+        return result, map_rls.header['criter'], delays, criteria, map_rls
+
+    return result
 
 #-------------------------------------------------------------------------------
 
