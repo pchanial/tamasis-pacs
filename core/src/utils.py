@@ -298,14 +298,22 @@ def diff(array, axis=0):
         raise TypeError('The data type of the input array is not ' + \
                         str(var.FLOAT_DTYPE.type) + '.')
 
+    if axis < 0:
+        raise ValueError("Invalid negative axis '" + str(axis) + "'.")
+
     rank = array.ndim
     
     if rank == 0:
         array.shape = (1,)
         array[:] = 0
         array.shape = ()
-    else:
-        tmf.diff(array.ravel(), rank-axis, np.asarray(array.T.shape))
+        return
+
+    if axis >= rank:
+        raise ValueError("Invalid axis '" + str(axis) + "'. Expected value is" \
+                         ' less than ' + str(rank-1) + '.')
+
+    tmf.diff(array.T, rank-axis, np.asarray(array.T.shape))
 
     
 #-------------------------------------------------------------------------------
@@ -323,14 +331,22 @@ def diffT(array, axis=0):
         raise TypeError('The data type of the input array is not ' + \
                         str(var.FLOAT_DTYPE.type) + '.')
 
+    if axis < 0:
+        raise ValueError("Invalid negative axis '" + str(axis) + "'.")
+
     rank = array.ndim
 
     if rank == 0:
         array.shape = (1,)
         array[:] = 0
         array.shape = ()
-    else:
-        tmf.difft(array.ravel(), rank-axis, np.asarray(array.T.shape))
+        return
+
+    if axis >= rank:
+        raise ValueError("Invalid axis '" + str(axis) + "'. Expected value is" \
+                         ' less than ' + str(rank-1) + '.')
+
+    tmf.difft(array.T, rank-axis, np.asarray(array.T.shape))
 
     
 #-------------------------------------------------------------------------------
@@ -348,15 +364,23 @@ def diffTdiff(array, axis=0, scalar=1.):
         raise TypeError('The data type of the input array is not ' + \
                         str(var.FLOAT_DTYPE.type) + '.')
 
+    if axis < 0:
+        raise ValueError("Invalid negative axis '" + str(axis) + "'.")
+
     rank = array.ndim
     
     if rank == 0:
         array.shape = (1,)
         array[:] = 0
         array.shape = ()
-    else:
-        tmf.difftdiff(array.ravel(), rank-axis, np.asarray(array.T.shape),
-                      np.asarray(scalar, dtype=var.FLOAT_DTYPE))
+        return
+    
+    if axis >= rank:
+        raise ValueError("Invalid axis '" + str(axis) + "'. Expected value is" \
+                         ' less than ' + str(rank) + '.')
+
+    tmf.difftdiff(array.T, rank-axis, np.asarray(array.T.shape),
+                  np.asarray(scalar, dtype=var.FLOAT_DTYPE))
 
     
 #-------------------------------------------------------------------------------
