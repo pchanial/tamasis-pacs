@@ -65,16 +65,18 @@ def filter_median(tod, length=10, mask=None):
     Median filtering, O(1) in window length
     """
     filtered = Tod(tod)
-    if mask is None and tod.mask is not None:
-        mask = tod.mask.view(np.int8)
-    elif mask is None:
-        mask = np.zeros(tod.shape, np.int8)
-    else:
+    if mask is not None :
         mask = np.ascontiguousarray(mask, np.bool8).view(np.int8)
+    elif hasattr(tod, 'mask') and tod.mask is not None and \
+         tod.mask is not np.ma.nomask:
+        mask = tod.mask.view(np.int8)
+    else:
+        mask = np.zeros(tod.shape, np.int8)
 
-    n = tod.shape[-1]
-    status = tmf.filter_median(filtered.reshape((-1,n)).T,
-        mask.reshape((-1,n)).T, length, np.array(tod.nsamples, np.int32))
+    nsamples = getattr(tod, 'nsamples', (tod.shape[-1],))
+    nsamples_tot = tod.shape[-1]
+    status = tmf.filter_median(filtered.reshape((-1,nsamples_tot)).T,
+        mask.reshape((-1,nsamples_tot)).T, length, np.array(nsamples, np.int32))
     if status != 0:
         raise RuntimeError()
     return filtered
