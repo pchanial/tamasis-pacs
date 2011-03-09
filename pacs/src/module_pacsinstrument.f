@@ -452,9 +452,6 @@ contains
         center = detector_area_all(nrows/2:nrows/2+1,ncolumns/2:ncolumns/2+1)
         flatfield_optical_all  = detector_area_all / mean(reshape(center, [4]))
         flatfield_detector_all = flatfield_total_all / flatfield_optical_all
-        where (detector_bad_all)
-            flatfield_detector_all = NaN
-        end where
 
     end subroutine read_calibration_files
 
