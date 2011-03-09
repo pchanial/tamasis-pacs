@@ -253,9 +253,9 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    ! median filtering in O(1) for the window length
-    ! the samples inside the window form an histogram which is updated as the window slides.
-    ! the number of elements in the histogram is length minus the number of NaN value in the window.
+    ! Median filtering in O(1) for the window length
+    ! The samples inside the window form an histogram which is updated as the window slides.
+    ! Except for the edges, the number of elements in the histogram is length minus the number of NaN value in the window.
     subroutine median_filtering_mask_1d_1d(data, mask, length)
 
         real(p), intent(inout) :: data(:)
@@ -345,27 +345,25 @@ contains
                 hist(old) = hist(old) - 1
                 nvalids = nvalids - 1
 
-                if (old >= ibin) then
-                    if (hist(ibin) == 0) then
-                        if (nvalids == 0) then
-                            filter(i) = NaN
-                            even = .true.
-                            cycle
-                        else if (even) then
-                            call median_filtering_next(hist, ibin, irank)
-                        else
-                            call median_filtering_previous(hist, ibin, irank)
-                        end if
-                    else if (.not. even) then
-                        irank = irank - 1
-                        if (irank == 0) then
-                            call median_filtering_previous(hist, ibin, irank)
-                        end if
+                if (nvalids == 0) then
+                    filter(i) = NaN
+                    even = .true.
+                    cycle
+                end if
+
+                if (even) then
+                    if (old < ibin) then
+                        irank = irank + 1
                     end if
-                else if (even) then
-                    irank = irank + 1
                     if (irank > hist(ibin)) then
                         call median_filtering_next(hist, ibin, irank)
+                    end if
+                else
+                    if (old >= ibin) then
+                        irank = irank - 1
+                    end if
+                    if (irank == 0) then
+                        call median_filtering_previous(hist, ibin, irank)
                     end if
                 end if
                 even = .not. even

@@ -393,7 +393,7 @@ subroutine filter_median(data, mask, length, nsamples, nsamples_tot, ndetectors,
     integer, intent(in)    :: ndetectors
     integer, intent(out)   :: status
 
-    integer :: islice, start
+    integer :: islice, idetector, start
     integer :: count_start
 
     if (sum(nsamples) /= nsamples_tot) then
@@ -416,6 +416,14 @@ subroutine filter_median(data, mask, length, nsamples, nsamples_tot, ndetectors,
         call median_filtering(data(start:start+nsamples(islice)-1,:), mask(start:start+nsamples(islice)-1,:), length)
         start = start + nsamples(islice)
     end do
+
+    ! the filtered timeline has NaN only if it is completely masked
+    do idetector = 1, ndetectors
+        if (data(1,idetector) /= data(1,idetector)) then
+            data(:,idetector) = 0
+        end if
+    end do
+
     call info_time('Median filtering (length=' // strinteger(length) // ')', count_start)
 
 end subroutine filter_median
