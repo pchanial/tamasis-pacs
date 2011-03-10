@@ -370,7 +370,7 @@ class PacsBase(Observation):
         if self.__class__.__name__ == 'PacsObservation':        
             homogeneous = 'nmasks' not in self.slice.dtype.names or \
                 same(self.slice.nmasks) and all([same(a) for a in \
-                self.slice.mask_name[:,:self.slice[0].nmasks]])
+                self.slice.mask_name.T])
             if homogeneous:
                 (a,d) = ad_masks(self.slice, 0)
                 result += sp + a + '\n'
