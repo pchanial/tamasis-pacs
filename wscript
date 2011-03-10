@@ -306,7 +306,8 @@ def test_python_fun(bld):
         for file in files:
             file = file.abspath()
             if 'test_mpi' in file: continue
-            bld(rule='${PYTHON} ' + file + ' > /dev/null', always=True)
+            bld(rule='${PYTHON} ' + file + (' > /dev/null' \
+                if bld.options.verbose == 0 else ''), always=True)
             bld.add_group()
 
 class test_mpi(BuildContext):
@@ -320,7 +321,8 @@ def test_mpi_fun(bld):
         for file in files:
             for n in [1, 2, 4]:
                 bld(rule='export OMP_NUM_THREADS=1; mpirun -n ' + str(n) + \
-                    ' ${PYTHON} ' + file.abspath() + ' > /dev/null; unset OMP' \
+                    ' ${PYTHON} ' + file.abspath() + (' > /dev/null' \
+                if bld.options.verbose == 0 else '') + '; unset OMP' \
                     '_NUM_THREADS', always=True)
                 bld.add_group()
 
