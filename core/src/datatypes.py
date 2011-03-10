@@ -268,7 +268,7 @@ class FitsArray(Quantity):
 
         id = None
         if not new:
-            list = ds9.ds9_targets()
+            list = ds9.targets
             if list is not None:
                 id = list[-1]
 
