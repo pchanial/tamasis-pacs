@@ -320,7 +320,10 @@ class FitsArray(Quantity):
         d = ds9.ds9(id)
 
         # load array
-        d.set_np2arr(self.view(np.ndarray).T)
+        input = self
+        if input.dtype.kind in ('b', 'i'):
+            input = np.array(input, np.int32, copy=False)
+        d.set_np2arr(input.T)
 
         # load header
         if self.has_wcs():
