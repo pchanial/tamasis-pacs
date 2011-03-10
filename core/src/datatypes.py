@@ -80,6 +80,18 @@ class FitsArray(Quantity):
         Quantity.__array_finalize__(self, array)
         self._header = getattr(array, '_header', None)
 
+    def __getattr__(self, name):
+        if self.dtype.names is None or name not in self.dtype.names:
+            raise AttributeError("'" + self.__class__.__name__ + "' object ha" \
+                "s no attribute '" + name + "'")
+        return self[name]
+
+    def __setattr__(self, name, value):
+        if self.dtype.names and name in self.dtype.names:
+            self[name] = value
+        else:
+            super(FitsArray,self).__setattr__(name, value)
+
     @staticmethod
     def empty(shape, header=None, unit=None, derived_units=None, dtype=None,
               order=None):
