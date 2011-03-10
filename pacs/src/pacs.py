@@ -39,6 +39,7 @@ class PacsBase(Observation):
                       ('masked', np.bool8), ('removed', np.bool8)]
     DETECTOR_DTYPE = [
         ('masked', np.bool8), ('removed', np.bool8),
+        ('column', int), ('row', int), ('p', int), ('q', int), ('group', int),
         ('center', [('u',var.FLOAT_DTYPE),('v',var.FLOAT_DTYPE)]),
         ('corner', [('u',var.FLOAT_DTYPE),('v',var.FLOAT_DTYPE)], 4),
         ('area', var.FLOAT_DTYPE), ('time_constant', var.FLOAT_DTYPE),
@@ -83,6 +84,16 @@ class PacsBase(Observation):
         instrument.reject_bad_line = reject_bad_line
         instrument.fine_sampling_factor = fine_sampling_factor
         instrument.detector.masked = detector_bad
+        pq = np.indices(shape)
+        instrument.detector.row = pq[0] % 16
+        instrument.detector.column = pq[1] % 16
+        instrument.detector.p = pq[0]
+        instrument.detector.q = pq[1]
+        instrument.detector.group = pq[1] // 16 + 1
+        if band != 'red':
+            instrument.detector.group[0:16,:] += 4
+        else:
+            instrument.detector.group = 10 - instrument.detector.group
         instrument.detector.center.u = detector_center[:,:,0]
         instrument.detector.center.v = detector_center[:,:,1]
         instrument.detector.corner.u = detector_corner[:,:,:,0]
