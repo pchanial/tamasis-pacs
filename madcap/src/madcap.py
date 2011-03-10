@@ -38,7 +38,7 @@ class MadMap1Observation(Observation):
             mapmask[mask == missing_value] = 1
 
         # Store instrument information
-        self.instrument = Instrument('Unknown', np.zeros((ndetectors,)))
+        self.instrument = Instrument('Unknown', (ndetectors,))
 
         # Store observation information
         class MadMap1ObservationInfo(object):

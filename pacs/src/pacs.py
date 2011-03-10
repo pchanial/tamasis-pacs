@@ -14,7 +14,7 @@ from mpi4py import MPI
 from tamasis.acquisitionmodels import Composite
 from tamasis.core import *
 from tamasis.mpiutils import split_observation
-from tamasis.observations import Observation, Instrument, FlatField, create_scan
+from tamasis.observations import Observation, Instrument, create_scan
 from tamasis.stringutils import strenum, strplural
 from tamasis.wcsutils import combine_fitsheader
 
@@ -37,6 +37,13 @@ class PacsBase(Observation):
                       ('dec', var.FLOAT_DTYPE), ('pa', var.FLOAT_DTYPE),
                       ('chop', var.FLOAT_DTYPE), ('info', np.int64),
                       ('masked', np.bool8), ('removed', np.bool8)]
+    DETECTOR_DTYPE = [
+        ('masked', np.bool8), ('removed', np.bool8),
+        ('center', [('u',var.FLOAT_DTYPE),('v',var.FLOAT_DTYPE)]),
+        ('corner', [('u',var.FLOAT_DTYPE),('v',var.FLOAT_DTYPE)], 4),
+        ('area', var.FLOAT_DTYPE), ('time_constant', var.FLOAT_DTYPE),
+        ('flat_total', var.FLOAT_DTYPE), ('flat_detector', var.FLOAT_DTYPE),
+        ('flat_optical', var.FLOAT_DTYPE)]
     SAMPLING_PERIOD = Quantity(0.024996, 's')
 
 
@@ -66,31 +73,30 @@ class PacsBase(Observation):
             detector_bad[11,16:32] = True
 
         dflat[detector_bad] = np.nan
+        detector_center = detector_center.T.swapaxes(0,1)
+        detector_corner = detector_corner.T.swapaxes(0,1)
 
-        detector_mask = np.zeros(shape, np.bool8)
-        instrument = Instrument('PACS/' + band.capitalize(), detector_mask)
+        instrument = Instrument('PACS/' + band.capitalize(), shape,
+                                self.DETECTOR_DTYPE)
         instrument.band = band
         instrument.active_fraction = active_fraction
         instrument.reject_bad_line = reject_bad_line
         instrument.fine_sampling_factor = fine_sampling_factor
-        instrument.detector_bad = Map(detector_bad, dtype=np.bool8,
-            origin='upper')
-        instrument.detector_center = detector_center.T.swapaxes(0,1).copy() \
-            .view(dtype=[('u',var.FLOAT_DTYPE),('v',var.FLOAT_DTYPE)]) \
-            .view(np.recarray)
-        instrument.detector_corner = detector_corner.T.swapaxes(0,1).copy() \
-            .view(dtype=[('u',var.FLOAT_DTYPE),('v',var.FLOAT_DTYPE)]) \
-            .view(np.recarray)
-        instrument.detector_area = Map(np.ascontiguousarray(detector_area),
-            unit='arcsec^2', origin='upper')
+        instrument.detector.masked = detector_bad
+        instrument.detector.center.u = detector_center[:,:,0]
+        instrument.detector.center.v = detector_center[:,:,1]
+        instrument.detector.corner.u = detector_corner[:,:,:,0]
+        instrument.detector.corner.v = detector_corner[:,:,:,1]
+        instrument.detector.time_constant = pyfits.open(CALIBFILE_DTC) \
+            [{'red':1, 'green':2, 'blue':3}[band]].data / 1000. # 's'
+        instrument.detector.time_constant[detector_bad] = np.nan
+        instrument.detector.area = detector_area # arcsec^2
+        instrument.detector.flat_total = dflat * oflat
+        instrument.detector.flat_detector = dflat
+        instrument.detector.flat_optical = oflat
         instrument.distortion_yz = distortion_yz.T.view(dtype=[('y', \
             var.FLOAT_DTYPE), ('z',var.FLOAT_DTYPE)]).view(np.recarray)
-        instrument.flatfield = FlatField(oflat, dflat)
         instrument.responsivity = Quantity(responsivity, 'V/Jy')
-        instrument.detector_time_constant = Map(pyfits.open(CALIBFILE_DTC) \
-            [{'red':1, 'green':2, 'blue':3}[band]].data, unit='ms',
-            origin='upper')
-        instrument.detector_time_constant[instrument.detector_bad] = np.nan
 
         self.instrument = instrument
 
@@ -100,7 +106,8 @@ class PacsBase(Observation):
             {
                 'detector_reference': Quantity(1 / \
                     self.instrument.active_fraction, 'detector'),
-                'detector' : self.pack(self.instrument.detector_area),
+                'detector' : Quantity(self.pack(self.instrument.detector.area),
+                                      'arcsec^2'),
                 'V' : volt,
             },{
                 'V' : volt
@@ -118,7 +125,7 @@ class PacsBase(Observation):
 
         data, status = tmf.pacs_read_filter_calibration(
             self.instrument.band, ncorrelations, self.get_ndetectors(),
-            np.asfortranarray(self.instrument.detector_mask, np.int8))
+            np.asfortranarray(self.instrument.detector.removed, np.int8))
         if status != 0: raise RuntimeError()
 
         return data.T
@@ -126,6 +133,8 @@ class PacsBase(Observation):
     def get_map_header(self, resolution=None, oversampling=True):
         if resolution is None:
             resolution = self.DEFAULT_RESOLUTION[self.instrument.band]
+        
+        detector = self.instrument.detector
 
         header, status = tmf.pacs_map_header(
             self.instrument.band,
@@ -141,9 +150,9 @@ class PacsBase(Observation):
             np.ascontiguousarray(self.pointing.chop),
             np.ascontiguousarray(self.pointing.masked, np.int8),
             np.ascontiguousarray(self.pointing.removed,np.int8),
-            np.asfortranarray(self.instrument.detector_mask, np.int8),
-            np.asfortranarray(self.instrument.detector_bad, np.int8),
-            self.instrument.detector_corner.base.base.swapaxes(0,1).copy().T,
+            np.asfortranarray(self.instrument.detector.removed, np.int8),
+            np.asfortranarray(self.instrument.detector.masked, np.int8),
+            detector.corner.swapaxes(0,1).view((float,2)).copy().T,
             self.instrument.distortion_yz.base.base.base,
             resolution)
         if status != 0: raise RuntimeError()
@@ -178,6 +187,8 @@ class PacsBase(Observation):
             sizeofpmatrix = 1
         pmatrix = np.empty(sizeofpmatrix, dtype=np.int64)
 
+        detector = self.instrument.detector
+
         new_npixels_per_sample, status = tmf.pacs_pointing_matrix(
             self.instrument.band,
             nvalids,
@@ -194,11 +205,11 @@ class PacsBase(Observation):
             np.ascontiguousarray(self.pointing.masked, np.int8),
             np.ascontiguousarray(self.pointing.removed,np.int8),
             method,
-            np.asfortranarray(self.instrument.detector_mask, np.int8),
+            np.asfortranarray(self.instrument.detector.removed, np.int8),
             self.get_ndetectors(),
-            self.instrument.detector_center.base.base.swapaxes(0,1).copy().T,
-            self.instrument.detector_corner.base.base.swapaxes(0,1).copy().T,
-            np.asfortranarray(self.instrument.detector_area),
+            detector.center.swapaxes(0,1).view((float,2)).copy().T,
+            detector.corner.swapaxes(0,1).view((float,2)).copy().T,
+            np.asfortranarray(self.instrument.detector.area),
             self.instrument.distortion_yz.base.base.base,
             npixels_per_sample,
             str(header).replace('\n',''),
@@ -248,19 +259,19 @@ class PacsBase(Observation):
         if subtraction_mean:
             result.T[:] -= np.mean(result, axis=1)
         if flatfielding:
-            result.T[:] /= self.pack(self.instrument.flatfield.detector)
+            result.T[:] /= self.pack(self.instrument.detector.flat_detector)
 
         compression = CompressionAverage(self.slice.compression_factor/4)
         result = compression(result)
         return result
 
     def pack(self, input):
-        input = np.asanyarray(input)
+        input = np.array(input, order='c', copy=False, subok=True)
         if input.ndim == 2:
             input = input.reshape((input.shape[0], input.shape[1], 1))
         elif input.ndim != 3:
             raise ValueError('Invalid number of dimensions.')
-        m = self.instrument.detector_mask.view(np.int8)
+        m = np.ascontiguousarray(self.instrument.detector.removed).view(np.int8)
         n = self.get_ndetectors()
         if input.dtype == var.FLOAT_DTYPE:
             output = tmf.pacs_pack_real(input.T, n, m.T).T
@@ -287,12 +298,12 @@ class PacsBase(Observation):
         return output
 
     def unpack(self, input):
-        input = np.asanyarray(input)
+        input = np.array(input, order='c', copy=False, subok=True)
         if input.ndim == 1:
             input = input.reshape((-1, 1))
         elif input.ndim != 2:
             raise ValueError('Invalid number of dimensions.')
-        m = self.instrument.detector_mask.view(np.int8)
+        m = np.ascontiguousarray(self.instrument.detector.removed).view(np.int8)
         if input.dtype == var.FLOAT_DTYPE:
             output = tmf.pacs_unpack_real(input.T, m.T).T
         elif input.dtype.itemsize == 1:
@@ -569,8 +580,8 @@ class PacsObservation(PacsBase):
             fine_sampling_factor, policy_detector, reject_bad_line)
 
         # get work load according to detector policy and MPI process
-        self.instrument.detector_mask[:], filename = _get_workload(band,
-            filename, self.instrument.detector_bad, policy_detector,
+        self.instrument.detector.removed, filename = _get_workload(band,
+            filename, self.instrument.detector.masked, policy_detector,
             transparent_mode)
         filename_, nfilenames = _files2tmf(filename)
 
@@ -751,9 +762,9 @@ class PacsObservation(PacsBase):
             np.ascontiguousarray(self.pointing.chop),
             np.ascontiguousarray(self.pointing.masked, np.int8),
             np.ascontiguousarray(self.pointing.removed,np.int8),
-            np.asfortranarray(self.instrument.detector_mask, np.int8),
-            np.asfortranarray(self.instrument.detector_bad, np.int8),
-            np.asfortranarray(self.instrument.flatfield.detector),
+            np.asfortranarray(self.instrument.detector.removed, np.int8),
+            np.asfortranarray(self.instrument.detector.masked, np.int8),
+            np.asfortranarray(self.instrument.detector.flat_detector),
             flatfielding,
             subtraction_mean,
             int(np.sum(self.get_nsamples())),
@@ -828,10 +839,9 @@ class PacsSimulation(PacsBase):
                  policy_other='keep', policy_invalid='keep', active_fraction=0,
                  delay=0.):
 
-        pointing_ = pointing.copy()
-        if pointing.header is not None:
-            pointing_.header = pointing.header.copy()
-        pointing = pointing_
+        header = pointing.header.copy() if pointing.header else None
+        pointing = pointing.copy()
+        pointing.header = header
 
         band = band.lower()
         choices = ('blue', 'green', 'red')
@@ -878,26 +888,26 @@ class PacsSimulation(PacsBase):
             fine_sampling_factor, policy_detector, reject_bad_line)
 
         # get work load according to detector policy and MPI process
-        self.instrument.detector_mask[:], filename = _get_workload(band,
-            ('simulation',), self.instrument.detector_bad, policy_detector,
+        self.instrument.detector.removed, filename = _get_workload(band,
+            ('simulation',), self.instrument.detector.masked, policy_detector,
             mode == 'transparent')
 
         # store pointing information
         if not hasattr(pointing, 'chop'):
             pointing.chop = np.zeros(pointing.size, var.FLOAT_DTYPE)
         pointing.masked  = \
-            (policy_inscan     == 'mask')   * \
-                (pointing.info == Pointing.INSCAN) + \
-            (policy_turnaround == 'mask')   * \
-                (pointing.info == Pointing.TURNAROUND) + \
-            (policy_other      == 'mask')   * \
+            (policy_inscan     == 'mask')   & \
+                (pointing.info == Pointing.INSCAN) | \
+            (policy_turnaround == 'mask')   & \
+                (pointing.info == Pointing.TURNAROUND) | \
+            (policy_other      == 'mask')   & \
                 (pointing.info == Pointing.OTHER)
         pointing.removed = \
-            (policy_inscan     == 'remove') * \
-                (pointing.info == Pointing.INSCAN) + \
-            (policy_turnaround == 'remove') * \
-                (pointing.info == Pointing.TURNAROUND) + \
-            (policy_other      == 'remove') * \
+            (policy_inscan     == 'remove') & \
+                (pointing.info == Pointing.INSCAN) | \
+            (policy_turnaround == 'remove') & \
+                (pointing.info == Pointing.TURNAROUND) | \
+            (policy_other      == 'remove') & \
                 (pointing.info == Pointing.OTHER)
         self.pointing = pointing
 
@@ -1281,25 +1291,25 @@ def pacs_compute_delay(obs, tod, model, weight=None, tol_delay=1.e-3,
 #-------------------------------------------------------------------------------
 
 
-def _get_workload(band, slices, detector_bad, policy_detector, transparent):
+def _get_workload(band, slices, detector_masked, policy_detector, transparent):
 
-    detector_mask = detector_bad.copy()
+    detector_removed = detector_masked.copy()
     if policy_detector != 'remove':
-        detector_mask[:] = False
+        detector_removed[:] = False
 
     # mask the non-transmitting detectors in transparent mode
     if transparent:
         if band == 'red':
-            detector_mask[0:8,0:8] = True
-            detector_mask[0:8,16:] = True
-            detector_mask[8:,:]    = True
+            detector_removed[0:8,0:8] = True
+            detector_removed[0:8,16:] = True
+            detector_removed[8:,:]    = True
         else:
-            detector_mask[0:16,0:16] = True
-            detector_mask[0:16,32:]  = True
-            detector_mask[16:,:]     = True
+            detector_removed[0:16,0:16] = True
+            detector_removed[0:16,32:]  = True
+            detector_removed[16:,:]     = True
 
     # distribute the workload over the processors
-    return split_observation(var.mpi_comm, detector_mask, slices)
+    return split_observation(var.mpi_comm, detector_removed, slices)
 
 
 #-------------------------------------------------------------------------------
@@ -1346,10 +1356,11 @@ def _write_mask(obs, mask, filename):
     pyfits.append(filename, None, header)
 
     mask = mask.view()
-    mask.shape = (np.product(obs.instrument.shape),-1)
+    shape = obs.instrument.detector.shape
+    mask.shape = (obs.instrument.detector.size, -1)
     bitmask = tmf.pacs_bitmask(mask.T.view(np.int8))
     bitmask = bitmask.T
-    bitmask.shape = (obs.instrument.shape[0], obs.instrument.shape[1],-1)
+    bitmask.shape = (shape[0], shape[1],-1)
     header = create_fitsheader(bitmask, extname='Tamasis')
     header.update('INFO____', 'Tamasis mask')
     pyfits.append(filename, bitmask, header)
@@ -1409,8 +1420,8 @@ def _write_status(obs, filename):
         cc('EQUINOX', 2000., 'Equinox of celestial coordinate system'),
         cc('RADESYS', 'ICRS', 'Coordinate reference frame for the RA and DEC'),
         cc('CUSMODE', cusmode[mode], 'CUS observation mode'),
-        cc('META_0', obs.instrument.shape[0]),
-        cc('META_1', obs.instrument.shape[1]), 
+        cc('META_0', obs.instrument.detector.shape[0]),
+        cc('META_1', obs.instrument.detector.shape[1]), 
         cc('META_2', obs.instrument.band.title()+' Photometer'), 
         cc('META_3', ('Floating Average  : ' + str(compression_factor)) \
            if compression_factor > 1 else 'None'), 

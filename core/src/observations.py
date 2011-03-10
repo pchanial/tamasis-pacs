@@ -6,7 +6,7 @@ from .numpyutils import _my_isscalar
 from .quantity import Quantity
 from .stringutils import strenum
 
-__all__ = ['Observation', 'Instrument', 'FlatField', 'MaskPolicy', 'Pointing']
+__all__ = ['Observation', 'Instrument', 'MaskPolicy', 'Pointing']
 
 class Observation(object):
 
@@ -20,7 +20,7 @@ class Observation(object):
         """
         Return the number of detectors, according to the detector mask.
         """
-        return int(np.sum(self.instrument.detector_mask == 0))
+        return int(np.sum(~self.instrument.detector.removed))
 
     def get_filter_uncorrelated(self):
         """
@@ -50,7 +50,7 @@ class Observation(object):
         dest = 0
         for slice in self.slice:
             result.append(
-                np.sum(~self.pointing[dest:dest+slice.nsamples_all].removed))
+                int(np.sum(~self.pointing[dest:dest+slice.nsamples_all].removed)))
             dest += slice.nsamples_all
         return tuple(result)
 
@@ -100,11 +100,11 @@ class Observation(object):
         """
         if np.rank(tod) != 2:
             raise ValueError('The input Tod is not packed.')
-        ndetectors = self.instrument.detector_mask.size
+        ndetectors = self.instrument.detector.size
         nvalids  = self.get_ndetectors()
         nsamples = tod.shape[-1]
 
-        newshape = np.concatenate((self.instrument.shape, (nsamples,)))
+        newshape = np.concatenate((self.instrument.detector.shape, (nsamples,)))
         if nvalids != tod.shape[0]:
             raise ValueError("The detector mask has a number of valid detecto" \
                 "rs '" + str(np.sum(mask == 0)) + "' incompatible with the pac" \
@@ -115,7 +115,7 @@ class Observation(object):
             return tod.reshape(newshape)
 
         # otherwise copy the detector timelines one by one
-        mask = self.instrument.detector_mask.ravel()
+        mask = self.instrument.detector.removed.ravel()
         utod = Tod.empty(newshape, nsamples=tod.nsamples, unit=tod.unit,
                          derived_units=tod.derived_units, dtype=tod.dtype, 
                          mask=np.empty(newshape, dtype='int8'))
@@ -157,9 +157,9 @@ class Observation(object):
         unpack: inverse method
 
         """
-        if np.rank(tod) != np.rank(self.instrument.detector_mask)+1:
+        if np.rank(tod) != np.rank(self.instrument.detector.removed)+1:
             raise ValueError('The input Tod is not unpacked.')
-        ndetectors = self.instrument.detector_mask.size
+        ndetectors = self.instrument.detector.size
         nvalids = self.get_ndetectors()
         nsamples = tod.shape[-1]
 
@@ -174,7 +174,7 @@ class Observation(object):
             return tod.reshape((ndetectors, nsamples))
 
         # otherwise copy the detector timelines one by one
-        mask = self.instrument.detector_mask.ravel()
+        mask = self.instrument.detector.removed.ravel()
         ptod = Tod.empty(newshape, nsamples=tod.nsamples, unit=tod.unit,
                          derived_units=tod.derived_units, dtype=tod.dtype, 
                          mask=np.empty(newshape, dtype='int8'))
@@ -199,26 +199,22 @@ class Observation(object):
 class Instrument(object):
     """
     Class storing information about the instrument.
-    Attributes include: name, ndetectors, shape, detector_mask
+    Attributes include: name, detector
     """
-    def __init__(self, name, detector_mask):
+    def __init__(self, name, shape, dtype=None):
+
+        if dtype is None:
+            dtype = [('masked', np.bool8), ('removed', np.bool8)]
         self.name = name
-        self.detector_mask = Map(detector_mask, origin='upper', dtype='bool8',
-                                 copy=True)
-        self.shape = detector_mask.shape
+        self.detector = Map.zeros(shape, dtype=dtype, origin='upper')
 
-
-#-------------------------------------------------------------------------------
-
-
-class FlatField(object):
-    def __init__(self, optical, detector):
-        self.optical = Map(optical, origin='upper')
-        self.detector = Map(detector, origin='upper')
-
-    @property
-    def total(self):
-        return Map(self.optical * self.detector, origin='upper')
+    def __getattribute__(self, name):
+        table = {'detector_time_constant':'time_constant',
+                 'detector_mask':'removed', 'detector_bad':'masked'}
+        if name in table:
+            print("\nXXXXXX\nPlease update your script: 'obs.instrument." + name + "' is DEPRECATED and will be removed in the next version of Tamasis. Use 'obs.instrument.detector." + table[name] + "' instead.\nXXXXXX\n")
+            return self.detector[table[name]]
+        return object.__getattribute__(self, name)
 
 
 #-------------------------------------------------------------------------------
@@ -281,21 +277,12 @@ POINTING_DTYPE = [('time', var.FLOAT_DTYPE), ('ra', var.FLOAT_DTYPE),
                   ('info', np.int64), ('masked', np.bool8),
                   ('removed', np.bool8)]
 
-class Pointing(FitsArray, np.recarray):
+class Pointing(FitsArray):
     INSCAN     = 1
     TURNAROUND = 2
     OTHER      = 3
     def __new__(cls, time, ra, dec, pa, info=None, masked=None, removed=None,
                 nsamples=None, dtype=None):
-
-        if nsamples is None:
-            nsamples = (time.size,)
-        else:
-            if _my_isscalar(nsamples):
-                nsamples = (nsamples,)
-            else:
-                nsamples = tuple(nsamples)
-        nsamples_tot = np.sum(nsamples)
 
         if info is None:
             info = Pointing.INSCAN
@@ -316,11 +303,21 @@ class Pointing(FitsArray, np.recarray):
         info    = np.asarray(info)
         masked  = np.asarray(masked)
         removed = np.asarray(removed)
+
+        if nsamples is None:
+            nsamples = (time.size,)
+        else:
+            if _my_isscalar(nsamples):
+                nsamples = (nsamples,)
+            else:
+                nsamples = tuple(nsamples)
+        nsamples_tot = np.sum(nsamples)
+
         if np.any([x.size not in (1, nsamples_tot) \
                    for x in [ra, dec, pa, info, masked, removed]]):
             raise ValueError('The pointing inputs do not have the same size.')
 
-        result = np.recarray(nsamples_tot, dtype=dtype)
+        result = FitsArray.zeros(nsamples_tot, dtype=dtype)
         result.time    = time
         result.ra      = ra
         result.dec     = dec
@@ -328,20 +325,29 @@ class Pointing(FitsArray, np.recarray):
         result.info    = info
         result.masked  = masked
         result.removed = removed
-        result = result.view(cls)
-        result.nsamples = nsamples
         result.header = create_fitsheader(None, naxis=result.size)
         result._unit = {}
         result._derived_units = {}
-        return result
+        result = result.view(cls)
+        result.nsamples = nsamples
+
+        return result.view(cls)
 
     def __array_finalize__(self, array):
         FitsArray.__array_finalize__(self, array)
         nsamples = getattr(array, 'nsamples', None)
         self.nsamples = (self.size,) if nsamples is None else nsamples
 
+    def __getattr__(self, name):
+        if self.dtype.names is None or name not in self.dtype.names:
+            raise AttributeError("'" + self.__class__.__name__ + "' object ha" \
+                                 "s no attribute '" + name + "'")
+        return self[name].magnitude
+
     @property
     def velocity(self):
+        if self.size <= 1:
+            return Quantity(np.nan, 'arcsec/s')
         ra = Quantity(self.ra, 'deg')
         dec = Quantity(self.dec, 'deg')
         dra  = np.diff(ra)
