@@ -1219,7 +1219,8 @@ def pacs_get_psf(band, resolution, kind='calibration'):
 
 
 def pacs_compute_delay(obs, tod, model, weight=None, tol_delay=1.e-3,
-                       tol_mapper=1.e-3, hyper=1., full_output=False):
+                       tol_mapper=1.e-3, hyper=1., brack=(-60.,-30.,0.),
+                       full_output=False):
     
     """
     Compute temporal offset between the PACS counter and the spacecraft clock.
@@ -1285,6 +1286,7 @@ def pacs_compute_delay(obs, tod, model, weight=None, tol_delay=1.e-3,
         delay = params if np.rank(params) == 0 else params[0]
         obs.slice[0].delay = delay
         model = func_model(obs, tod, model)
+        print('\nDelay: ' + str(delay) + 'ms...')
         map_rls = mapper_rls(tod, model, weight=invntt, tol=tol, hyper=hyper)
         criterion = map_rls.header['criter']
         delays.append(delay)
@@ -1300,7 +1302,7 @@ def pacs_compute_delay(obs, tod, model, weight=None, tol_delay=1.e-3,
 
     method = scipy.optimize.brent
     result = method(criteria_delay, (obs, tod, model, weight, tol_mapper,
-                    hyper), brack=(-60.,-30,0.), tol=tol_delay)
+                    hyper), brack=brack, tol=tol_delay)
 
     map_rls.header.update('delay', result)
 
