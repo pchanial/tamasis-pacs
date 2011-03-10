@@ -19,7 +19,7 @@ mymap.header = header
 
 # creation of the simulation
 scan = pacs_create_scan(header['CRVAL1'], header['CRVAL2'], cam_angle=0., scan_length=60, scan_nlegs=1, scan_angle=20.)
-simul = PacsSimulation(scan, 'red', policy_detector='keep')
+simul = PacsSimulation(scan, 'red', policy_bad_detector='keep')
 
 # build the acquisition model
 model = CompressionAverage(simul.slice.compression_factor) * \
@@ -32,7 +32,7 @@ filename = 'simul-'+str(uuid1())+'.fits'
 
 try:
     simul.save(filename, tod)
-    simul2 = PacsObservation(filename, policy_detector='keep')
+    simul2 = PacsObservation(filename, policy_bad_detector='keep')
     status2 = simul2.status
     tod2 = simul2.get_tod(raw=True)
 finally:

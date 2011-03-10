@@ -48,16 +48,16 @@ class PacsBase(Observation):
 
 
     def __init__(self, band, active_fraction, delay, fine_sampling_factor,
-                 policy_detector, reject_bad_line):
+                 policy_bad_detector, reject_bad_line):
 
         """
         Set up the PACS instrument.
         """
 
-        policy_detector = policy_detector.lower()
-        if policy_detector not in ('keep', 'mask', 'remove'):
-            raise ValueError("Invalid detector policy '" + policy_detector + \
-                  "'. Expected values are 'keep', 'mask' or 'remove'.")
+        policy_bad_detector = policy_bad_detector.lower()
+        if policy_bad_detector not in ('keep', 'mask', 'remove'):
+            raise ValueError("Invalid detector policy '" + policy_bad_detector \
+                  + "'. Expected values are 'keep', 'mask' or 'remove'.")
 
         # get instrument information from calibration files
         shape = (16,32) if band == 'red' else (32,64)
@@ -67,7 +67,7 @@ class PacsBase(Observation):
         if status != 0: raise RuntimeError()
 
         detector_bad = detector_bad.view(np.bool8)
-        if policy_detector == 'keep':
+        if policy_bad_detector == 'keep':
             detector_bad[:] = False
         elif reject_bad_line and band != 'red':
             detector_bad[11,16:32] = True
@@ -516,7 +516,7 @@ class PacsObservation(PacsBase):
     the observations to be processed.
     """
     def __init__(self, filename, fine_sampling_factor=1,
-                 policy_detector='mask', reject_bad_line=False,
+                 policy_bad_detector='mask', reject_bad_line=False,
                  policy_inscan='keep', policy_turnaround='keep',
                  policy_other='remove', policy_invalid='mask',
                  active_fraction=0, delay=0.):
@@ -530,7 +530,7 @@ class PacsObservation(PacsBase):
         fine_sampling_factor: integer
               Set this value to a power of two, which will increase the
               acquisition model's sampling frequency beyond 40Hz
-        policy_detector: 'keep', 'mask' or 'remove'
+        policy_bad_detector: 'keep', 'mask' or 'remove'
               This keyword controls the handling of the bad detectors.
               'keep' will handle bad detectors like valid ones.
               'mask' will  enforce a zero data value and a True mask value in
@@ -577,11 +577,11 @@ class PacsObservation(PacsBase):
 
         # set up the instrument
         PacsBase.__init__(self, band, active_fraction, delay,
-            fine_sampling_factor, policy_detector, reject_bad_line)
+            fine_sampling_factor, policy_bad_detector, reject_bad_line)
 
         # get work load according to detector policy and MPI process
         self.instrument.detector.removed, filename = _get_workload(band,
-            filename, self.instrument.detector.masked, policy_detector,
+            filename, self.instrument.detector.masked, policy_bad_detector,
             transparent_mode)
         filename_, nfilenames = _files2tmf(filename)
 
@@ -834,7 +834,7 @@ class PacsSimulation(PacsBase):
     This class creates a simulated PACS observation.
     """
     def __init__(self, pointing, band, mode=None, fine_sampling_factor=1,
-                 policy_detector='mask', reject_bad_line=False,
+                 policy_bad_detector='mask', reject_bad_line=False,
                  policy_inscan='keep', policy_turnaround='keep',
                  policy_other='keep', policy_invalid='keep', active_fraction=0,
                  delay=0.):
@@ -885,12 +885,12 @@ class PacsSimulation(PacsBase):
 
         # set up the instrument
         PacsBase.__init__(self, band, active_fraction, delay,
-            fine_sampling_factor, policy_detector, reject_bad_line)
+            fine_sampling_factor, policy_bad_detector, reject_bad_line)
 
         # get work load according to detector policy and MPI process
         self.instrument.detector.removed, filename = _get_workload(band,
-            ('simulation',), self.instrument.detector.masked, policy_detector,
-            mode == 'transparent')
+            ('simulation',), self.instrument.detector.masked,
+            policy_bad_detector, mode == 'transparent')
 
         # store pointing information
         if not hasattr(pointing, 'chop'):
@@ -1291,10 +1291,10 @@ def pacs_compute_delay(obs, tod, model, weight=None, tol_delay=1.e-3,
 #-------------------------------------------------------------------------------
 
 
-def _get_workload(band, slices, detector_masked, policy_detector, transparent):
+def _get_workload(band, slices, detector_masked, policy, transparent):
 
     detector_removed = detector_masked.copy()
-    if policy_detector != 'remove':
+    if policy != 'remove':
         detector_removed[:] = False
 
     # mask the non-transmitting detectors in transparent mode
