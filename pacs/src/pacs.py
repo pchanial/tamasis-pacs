@@ -634,6 +634,8 @@ class PacsObservation(PacsBase):
         self.slice = np.recarray(nfilenames, dtype=[
             ('filename', 'S256'),
             ('nsamples_all', int),
+            ('start', int),
+            ('stop', int),
             ('obsid', int),
             ('mode', 'S32'),
             ('compression_factor', int),
@@ -658,8 +660,11 @@ class PacsObservation(PacsBase):
             self.slice[ifile].filename = match.group(1)
 
         self.slice.nsamples_all = nsamples_all
+        self.slice.start[0] = 0
+        self.slice.start[1:] = np.cumsum(nsamples_all)[:-1]
+        self.slice.stop = np.cumsum(nsamples_all)
         self.slice.nfinesamples = nsamples_all * compression_factor * \
-                                  fine_sampling_factor
+            fine_sampling_factor
         self.slice.obsid = obsid
         self.slice.mode = mode
         self.slice.compression_factor = compression_factor
@@ -911,26 +916,32 @@ class PacsSimulation(PacsBase):
                 (pointing.info == Pointing.OTHER)
         self.pointing = pointing
 
+        nsamples_all = self.pointing.size
+
         self.slice = np.recarray(1, dtype=[
-                ('filename', 'S256'),
-                ('nsamples_all', int),
-                ('obsid', int),
-                ('mode', 'S32'),
-                ('compression_factor', int),
-                ('delay', float),
-                ('unit', 'S32'),
-                ('ra', float),
-                ('dec', float),
-                ('cam_angle', float),
-                ('scan_angle', float),
-                ('scan_length', float),
-                ('scan_nlegs', int),
-                ('scan_step', float),
-                ('scan_speed', float)
-                ])
+            ('filename', 'S256'),
+            ('nsamples_all', int),
+            ('start', int),
+            ('stop', int),
+            ('obsid', int),
+            ('mode', 'S32'),
+            ('compression_factor', int),
+            ('delay', float),
+            ('unit', 'S32'),
+            ('ra', float),
+            ('dec', float),
+            ('cam_angle', float),
+            ('scan_angle', float),
+            ('scan_length', float),
+            ('scan_nlegs', int),
+            ('scan_step', float),
+            ('scan_speed', float)])
 
         self.slice.filename = filename
-        self.slice.nsamples_all = self.pointing.size
+        self.slice.nsamples_all = nsamples_all
+        self.slice.start[0] = 0
+        self.slice.start[1:] = np.cumsum(nsamples_all)[:-1]
+        self.slice.stop = np.cumsum(nsamples_all)
         self.slice.obsid = 0
         self.slice.mode = mode
         self.slice.compression_factor = compression_factor

@@ -46,13 +46,8 @@ class Observation(object):
         Return the number of valid pointings for each slice
         They are those for which self.pointing.removed is False
         """
-        result = []
-        dest = 0
-        for slice in self.slice:
-            result.append(
-                int(np.sum(~self.pointing[dest:dest+slice.nsamples_all].removed)))
-            dest += slice.nsamples_all
-        return tuple(result)
+        return tuple([int(np.sum(~self.pointing[s.start:s.stop].removed)) \
+                      for s in self.slice])
 
     def get_nfinesamples(self):
         """
