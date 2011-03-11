@@ -341,8 +341,10 @@ class Pointing(FitsArray):
 
     @property
     def velocity(self):
-        if self.size <= 1:
-            return Quantity(np.nan, 'arcsec/s')
+        if self.size == 0:
+            return Quantity([], 'arcsec/s')
+        elif self.size == 1:
+            return Quantity([np.nan], 'arcsec/s')
         ra = Quantity(self.ra, 'deg')
         dec = Quantity(self.dec, 'deg')
         dra  = np.diff(ra)

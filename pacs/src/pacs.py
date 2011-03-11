@@ -867,6 +867,8 @@ class PacsSimulation(PacsBase):
 
         # get compression factor from input pointing
         delta = np.median(pointing.time[1:]-pointing.time[0:-1])
+        if not np.isfinite(delta):
+            delta = self.SAMPLING_PERIOD
         compression_factor = int(np.round(delta / self.SAMPLING_PERIOD))
         if compression_factor <= 0:
             raise ValueError('Invalid time in pointing argument. Use PacsSimu' \
@@ -1005,7 +1007,8 @@ class PacsSimulation(PacsBase):
         self._status = status
 
         return status
-   
+
+
 #-------------------------------------------------------------------------------
 
 
