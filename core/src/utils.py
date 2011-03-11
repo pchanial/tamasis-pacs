@@ -189,7 +189,7 @@ def plot_scan(input, map=None, title=None, new_figure=True, linewidth=2, **kw):
         angles[mask] = np.nan
         angle_max = np.nanmax(angles)
     cdelt = np.rad2deg(np.tan(np.deg2rad(angle_max))) / 100
-    header = create_fitsheader(None, naxis=[201,201], cdelt=cdelt, crval=crval,
+    header = create_fitsheader(naxis=[201,201], cdelt=cdelt, crval=crval,
                                crpix=[101,101])
 
     fitsobj = kapteyn.maputils.FITSimage(externalheader=header)

@@ -14,7 +14,7 @@ tamasis.var.verbose = False
 msize = 50
 mymap = gaussian(2*(msize*2+1,), 10, unit='Jy/pixel')
 cd = np.array([[-1., 0.],[0., 1.]]) / 3600.
-header = create_fitsheader(mymap, crval=[53.,27.], cd=cd)
+header = create_fitsheader(fromdata=mymap, crval=[53.,27.], cd=cd)
 mymap.header = header
 
 # creation of the simulation

@@ -77,7 +77,7 @@ except ValueError:
 d = np.array([1,2])
 u = 'Jy'
 du = {'Jy':Quantity(1,'Yj')}
-h = create_fitsheader(d)
+h = create_fitsheader(fromdata=d)
 h.update('myk', 10)
 o = 'upper'
 n = (0, 2)
@@ -182,7 +182,7 @@ b = Tod(a, dtype=othertype, copy=False)
 if id(a) == id(b): raise TestFailure()
 if id(a.mask) != id(b.mask): raise TestFailure()
 
-header = create_fitsheader(np.ones((20,10)))
+header = create_fitsheader((10,20))
 a = FitsArray([10,20], header=header, unit='m')
 b = Tod(a)
 if id(a.header) == id(b.header): raise TestFailure()
@@ -258,7 +258,7 @@ if get_attributes(m) != ['info', 'coverage', 'error', 'origin', '_header', '_uni
 a = np.ones((4,3))
 a[1,2] = 4
 q = Quantity(a, unit='myunit', derived_units={'myunit': Quantity(2., 'Jy')})
-f = FitsArray(q, header=create_fitsheader(q, cdelt=0.5, crval=(4.,8.)))
+f = FitsArray(q, header=create_fitsheader(fromdata=q, cdelt=0.5, crval=(4.,8.)))
 m = Map(f, origin='upper', error=a*2, coverage=a*3)
 mask = np.zeros((4,3), np.bool8)
 mask[0,2] = True

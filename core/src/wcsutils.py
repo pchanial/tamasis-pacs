@@ -63,7 +63,7 @@ def barycenter_lonlat(lon, lat):
 #-------------------------------------------------------------------------------
 
 
-def combine_fitsheader(headers, cdelt=None, crota2=None):
+def combine_fitsheader(headers, cdelt=None, pa=None):
     """
     Returns a FITS header which encompasses all input headers.
     """
@@ -71,23 +71,23 @@ def combine_fitsheader(headers, cdelt=None, crota2=None):
     if not isinstance(headers, (list, tuple)):
         header = (headers,)
 
-    if len(headers) == 1 and cdelt is None and crota2 is None:
+    if len(headers) == 1 and cdelt is None and pa is None:
         return headers[0]
 
     crval = barycenter_lonlat([h['CRVAL1'] for h in headers],
                               [h['CRVAL2'] for h in headers])
 
-    if cdelt is None or crota2 is None:
-        cdeltrot = [get_cdelt_crota2(h) for h in headers]
+    if cdelt is None or pa is None:
+        cdeltpa = [get_cdelt_pa(h) for h in headers]
 
     if cdelt is None:
-        cdelt = min([np.min(abs(cdelt)) for cdelt,rot in cdeltrot])
+        cdelt = min([np.min(abs(cdelt)) for cdelt, pa in cdeltpa])
 
-    if crota2 is None:
-        crota2 = tmf.mean_degrees(np.array([rot for cdelt,rot in cdeltrot]))
+    if pa is None:
+        pa = tmf.mean_degrees(np.array([pa for cdelt, pa in cdeltpa]))
 
-    header0 = create_fitsheader(None, cdelt=cdelt, crota2=crota2, crpix=(1,1),
-                                crval=crval, naxis=(1,1))
+    header0 = create_fitsheader((1,1), cdelt=cdelt, pa=pa, crpix=(1,1),
+                                crval=crval)
 
     proj0 = wcs.Projection(header0)
     xy0 = []
@@ -117,19 +117,21 @@ def combine_fitsheader(headers, cdelt=None, crota2=None):
 #-------------------------------------------------------------------------------
 
 
-def create_fitsheader(array=None, extname=None, crval=(0.,0.), crpix=None,
-                      ctype=('RA---TAN','DEC--TAN'), cunit='deg', cd=None,
-                      cdelt=None, pa=None, crota2=None, equinox=2000., naxis=None):
+def create_fitsheader(naxis=None, fromdata=None, extname=None, crval=(0.,0.),
+                      crpix=None, ctype=('RA---TAN','DEC--TAN'), cunit='deg',
+                      cd=None, cdelt=None, pa=None, equinox=2000.):
     """
     Helper to create a FITS header.
 
     Parameters
     ----------
-    array : array_like or None
-        An array from which the dimensions will be extracted. Note that
-        by FITS convention, the dimension along X is the second value 
-        of the array shape and that the dimension along the Y axis is 
-        the first one. If None is specified, naxis keyword must be set.
+    naxis : array, optional
+        (NAXIS1,NAXIS2,...) tuple, which specifies the data dimensions.
+    fromdata : array_like, optional
+        An array from which the dimensions and typewill be extracted. Note
+        that following the FITS convention, the dimension along X is the
+        second value of the array shape and that the dimension along the
+        Y axis is the first one.
     extname : None or string
         if a string is specified ('' can be used), the returned header
         type will be an Image HDU (otherwise a Primary HDU).
@@ -151,22 +153,24 @@ def create_fitsheader(array=None, extname=None, crval=(0.,0.), crpix=None,
         Position angle of the Y=AXIS2 axis (=-CROTA2).
     equinox : float
         Reference equinox
-    naxis : 2 element array
-        (NAXIS1,NAXIS2) tuple, to be specified only if array argument is None
 
     Examples
     --------
     >>> map = Map.ones((10,100), unit='Jy/pixel')
-    >>> map.header = create_fitsheader(map, cd=[[-1,0],[0,1]])
-    >>> map.header = create_fitsheader(naxis=map.shape[::-1])
+    >>> map.header = create_fitsheader(naxis=(100,10), cd=[[-1,0],[0,1]])
+    >>> map.header = create_fitsheader(fromdata=map)
     """
 
-    if array is None:
+    if fromdata is None:
         if naxis is None:
-            raise ValueError('An array argument or naxis keyword should be sp' \
-                             'ecified.')
+            raise ValueError("Keywords 'naxis' or 'fromdata' must be specifie" \
+                             'd.')
+        if isinstance(naxis, np.ndarray) and naxis.size > 8:
+            raise ValueError('First argument is naxis=(NAXIS1,NAXIS2,...)')
+
         typename = 'float64'
     else:
+        array = fromdata
         if not isinstance(array, np.ndarray):
             raise TypeError('The input is not an ndarray.')
         naxis = tuple(reversed(array.shape))
@@ -210,9 +214,6 @@ def create_fitsheader(array=None, extname=None, crval=(0.,0.), crpix=None,
             cdelt = (-cdelt, cdelt)
         if pa is None:
             pa = 0.
-            if crota2 is not None:
-                pa = -crota2
-                print("\nXXXXXX\nDeprecated 'crota2' keyword. Use pa=-crota2 instead. This keyword will be removed in the next version.\nXXXXXX\n")
         theta=np.deg2rad(-pa)
         cd = np.diag(cdelt).dot(np.array([[ np.cos(theta), np.sin(theta)],
                                           [-np.sin(theta), np.cos(theta)]]))
@@ -258,21 +259,36 @@ def create_fitsheader(array=None, extname=None, crval=(0.,0.), crpix=None,
 #-------------------------------------------------------------------------------
 
 
-def get_cdelt_crota2(header):
+def get_cdelt_pa(header):
+    """
+    Extract scale and rotation from a FITS header.
+
+    Parameter
+    ---------
+    header : pyfits Header
+        The FITS header
+
+    Returns
+    -------
+    cdelt : 2 element array
+        Physical increment at the reference pixel.
+    pa : float
+        Position angle of the Y=AXIS2 axis (=-CROTA2).
+    """
     try:
         cd = np.array([[header['CD1_1'], header['CD1_2']],
                        [header['CD2_1'], header['CD2_2']]], float)
     except KeyError:
         if any([not k in header for k in ('CDELT1', 'CDELT2', 'CROTA2')]):
             raise KeyError('Header has no astrometry.')
-        return np.array([header['CDELT1'], header['CDELT2']]), header['CROTA2']
+        return np.array([header['CDELT1'], header['CDELT2']]), -header['CROTA2']
 
     det = np.linalg.det(cd)
     sgn = det / np.abs(det)
     cdelt = np.array([sgn * np.sqrt(cd[0,0]**2 + cd[0,1]**2),
                       np.sqrt(cd[1,1]**2 + cd[1,0]**2)])
-    rot = np.arctan2(-cd[1,0], cd[1,1])
-    return cdelt, np.rad2deg(rot)
+    pa = -np.arctan2(-cd[1,0], cd[1,1])
+    return cdelt, np.rad2deg(pa)
     
 
 #-------------------------------------------------------------------------------

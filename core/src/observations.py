@@ -320,7 +320,7 @@ class Pointing(FitsArray):
         result.info    = info
         result.masked  = masked
         result.removed = removed
-        result.header = create_fitsheader(None, naxis=result.size)
+        result.header = create_fitsheader(result.size)
         result._unit = {}
         result._derived_units = {}
         result = result.view(cls)
@@ -497,7 +497,7 @@ def create_scan(ra0, dec0, scan_acceleration, sampling_period, scan_angle=0.,
                             latitude / 3600.)
 
     scan = Pointing(time, ra, dec, 0., infos, dtype=dtype)
-    header = create_fitsheader(scan)
+    header = create_fitsheader(nsamples)
     header.update('ra', ra0)
     header.update('dec', dec0)
     header.update('HIERARCH scan_angle', scan_angle)

@@ -30,25 +30,25 @@ if any_neq(wu.barycenter_lonlat([30,40], [0, 0]), [35,0]): raise TestFailure()
 if any_neq(wu.barycenter_lonlat([20,20,20], [-90,0,90]), [20,0]): raise TestFailure()
 if any_neq(wu.barycenter_lonlat([20,20,20], [0,45,90]), [20,45]): raise TestFailure()
 
-# get_cdelt_crota2
-header = create_fitsheader(np.ones((10,10)), cdelt=(-1.2,3))
-cdelt, rot = wu.get_cdelt_crota2(header)
+# get_cdelt_pa
+header = create_fitsheader((10,10), cdelt=(-1.2,3))
+cdelt, pa = wu.get_cdelt_pa(header)
 if any_neq(cdelt, (-1.2,3)): raise TestFailure()
-if any_neq(rot, 0): raise TestFailure()
+if any_neq(pa, 0): raise TestFailure()
 
 cdelt  = (-1.5, 3)
-crota2 = 25.
-header = create_fitsheader(np.ones((10,10)), cdelt=cdelt, crota2=crota2)
-cdelt_, crota2_ = wu.get_cdelt_crota2(header)
+pa = -25.
+header = create_fitsheader((10,10), cdelt=cdelt, pa=pa)
+cdelt_, pa_ = wu.get_cdelt_pa(header)
 if any_neq(cdelt, cdelt_): raise TestFailure()
-if any_neq(crota2, crota2_): raise TestFailure()
+if any_neq(pa, pa_): raise TestFailure()
 
 # combine_fitsheader
 headers = [
-    wu.create_fitsheader(np.ones((1,1)), cdelt=3., crval=(0,0)),
-    wu.create_fitsheader(np.ones((3,3)), cdelt=1., crval=(1,1)),
-    wu.create_fitsheader(np.ones((5,5)), cdelt=1., crval=(3,3)),
-    wu.create_fitsheader(np.ones((2,2)), cdelt=1., crval=(5,5)),
+    wu.create_fitsheader((1,1), cdelt=3., crval=(0,0)),
+    wu.create_fitsheader((3,3), cdelt=1., crval=(1,1)),
+    wu.create_fitsheader((5,5), cdelt=1., crval=(3,3)),
+    wu.create_fitsheader((2,2), cdelt=1., crval=(5,5)),
 ]
 header0 = wu.combine_fitsheader(headers)
 proj0 = wcs.Projection(header0)

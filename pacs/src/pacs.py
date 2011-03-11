@@ -373,7 +373,7 @@ class PacsBase(Observation):
         _write_status(self, filename)
 
         if tod.header is None:
-            header = create_fitsheader(tod, extname='Signal')
+            header = create_fitsheader(fromdata=tod, extname='Signal')
         else:
             header = tod.header.copy()
             header.update('EXTNAME', 'Signal')
@@ -1377,7 +1377,7 @@ def _str2fitsheader(string):
 
 def _write_mask(obs, mask, filename):
 
-    header = create_fitsheader(np.ones(0), extname='Mask')
+    header = create_fitsheader(naxis=(), extname='Mask')
     header.update('DSETS___', 1)
     header.update('DS_0', 4)
     pyfits.append(filename, None, header)
@@ -1388,7 +1388,7 @@ def _write_mask(obs, mask, filename):
     bitmask = tmf.pacs_bitmask(mask.T.view(np.int8))
     bitmask = bitmask.T
     bitmask.shape = (shape[0], shape[1],-1)
-    header = create_fitsheader(bitmask, extname='Tamasis')
+    header = create_fitsheader(fromdata=bitmask, extname='Tamasis')
     header.update('INFO____', 'Tamasis mask')
     pyfits.append(filename, bitmask, header)
 

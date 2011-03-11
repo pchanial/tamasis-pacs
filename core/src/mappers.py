@@ -8,7 +8,7 @@ from mpi4py import MPI
 from . import var
 from .acquisitionmodels import Addition, Diagonal, DdTdd, Identity, Masking, \
                                AllReduce, Reshaping
-from .datatypes import Map, Tod, create_fitsheader, flatten_sliced_shape
+from .datatypes import Map, Tod, flatten_sliced_shape
 from .quantity import Quantity, UnitError
 
 

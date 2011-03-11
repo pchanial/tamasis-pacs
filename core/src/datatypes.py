@@ -128,7 +128,7 @@ class FitsArray(Quantity):
     @property
     def header(self):
         if self._header is None and not np.iscomplexobj(self):
-            self._header = create_fitsheader(self)
+            self._header = create_fitsheader(fromdata=self)
         return self._header
 
     @header.setter
@@ -150,7 +150,7 @@ class FitsArray(Quantity):
         if self.header is not None:
             header = self.header.copy()
         else:
-            header = create_fitsheader(self)
+            header = create_fitsheader(fromdata=self)
        
         if len(self._unit) != 0:
             header.update('BUNIT', self.unit)
@@ -491,10 +491,11 @@ class Map(FitsArray):
     def save(self, filename):
         FitsArray.save(self, filename, fitskw={'origin':'DISPORIG'})
         if self.error is not None:
-            header = create_fitsheader(self.error, extname='Error')
+            header = create_fitsheader(fromdata=self.error, extname='Error')
             pyfits.append(filename, self.error, header)
         if self.coverage is not None:
-            header = create_fitsheader(self.coverage, extname='Coverage')
+            header = create_fitsheader(fromdata=self.coverage,
+                                       extname='Coverage')
             pyfits.append(filename, self.coverage, header)
         _save_derived_units(filename, self.derived_units)
 
@@ -694,7 +695,7 @@ class Tod(FitsArray):
         FitsArray.save(self, filename, fitskw={'nsamples':'NSAMPLES'})
         if self.mask is None:
             return
-        header = create_fitsheader(self.mask, extname='Mask')
+        header = create_fitsheader(fromdata=self.mask, extname='Mask')
         pyfits.append(filename, self.mask.view(np.uint8), header)
         _save_derived_units(filename, self.derived_units)
 
@@ -795,5 +796,5 @@ def _save_derived_units(filename, du):
     buffer = StringIO.StringIO()
     pickle.dump(du, buffer, pickle.HIGHEST_PROTOCOL)
     data = np.frombuffer(buffer.getvalue(), np.uint8)
-    header = create_fitsheader(data, extname='derived_units')
+    header = create_fitsheader(fromdata=data, extname='derived_units')
     pyfits.append(filename, data, header)
