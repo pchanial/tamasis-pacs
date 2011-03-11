@@ -35,33 +35,8 @@ except ValidationError:
 # Masking
 #---------
 
-try:
-    mask = Masking('lkj')
-except TypeError:
-    pass
-else: 
-    raise TestFailure('mask str')
-try:
-    mask = Masking(3)
-except TypeError:
-    pass
-else: 
-    raise TestFailure('mask 3')
-try:
-    mask = Masking(object)
-except TypeError:
-    pass
-else: 
-    raise TestFailure('mask object')
-try:
-    mask = Masking(np.array(3))
-except TypeError:
-    pass
-else: 
-    raise TestFailure('mask ndarray rank=0')
-
 mask = Masking(None)
-if mask.shapein is not None or mask.shapeout is not None or mask.mask is not None:
+if mask.shapein is not None or mask.shapeout is not None or mask.mask.ndim != 1 or mask.mask[0]:
     raise TestFailure('Masking(None)')
 if mask(3) != 3:
     raise TestFailure('Masking(None)(data)')
@@ -86,7 +61,7 @@ c = np.array([3., 4., 0., 0., 3., 0.])
 
 mask = Masking(np.array([0, 0., 1., 1., 0., 1], dtype='int8'))
 if np.any(mask(b) != c): raise TestFailure('mask 1d direct1')
-mask = Masking(np.array([1, 1., 0., 0., 1., 0]))
+mask = Diagonal(np.array([1, 1., 0., 0., 1., 0]))
 if np.any(mask(b) != c): raise TestFailure('mask 1d direct2')
 mask = Masking(np.array([False, False, True, True, False, True]))
 if np.any(mask(b) != c): raise TestFailure('mask 1d direct3')
@@ -96,7 +71,7 @@ c = np.array([[3., 4.], [0., 0.], [3., 0.]])
 
 mask = Masking(np.array([[0, 0.], [1., 1.], [0., 1.]], dtype='int8'))
 if np.any(mask(b) != c): raise TestFailure('mask 2d direct1')
-mask = Masking(np.array([[1, 1.], [0., 0.], [1., 0.]]))
+mask = Diagonal(np.array([[1, 1.], [0., 0.], [1., 0.]]))
 if np.any(mask(b) != c): raise TestFailure('mask 2d direct2')
 mask = Masking(np.array([[False, False], [True, True], [False, True]]))
 if np.any(mask(b) != c): raise TestFailure('mask 2d direct3')
@@ -106,7 +81,7 @@ c = np.array([[[3, 4.], [0., 0.]], [[3., 0], [0, 0]]])
 
 mask = Masking(np.array([[[0, 0.], [1., 1.]], [[0., 1], [1, 1]]], dtype='int8'))
 if np.any(mask(b) != c): raise TestFailure('mask 3d direct')
-mask = Masking(np.array([[[1, 1], [0., 0]], [[1, 0], [0, 0]]]))
+mask = Diagonal(np.array([[[1, 1], [0., 0]], [[1, 0], [0, 0]]]))
 if np.any(mask(b) != c): raise TestFailure('mask 3d direct')
 mask = Masking(np.array([[[False, False], [True, True]], [[False, True], [True, True]]]))
 if np.any(mask(b) != c): raise TestFailure('mask 3d direct')
@@ -255,7 +230,7 @@ if a.dtype is not FTYPE: raise TestFailure()
 a = Diagonal(np.array([2,complex(3,1),4]))
 if a.dtype is not CTYPE: raise TestFailure()
 a = Masking(np.array([1, complex(2,2)]))
-if a.dtype is not CTYPE: raise TestFailure()
+if a.dtype is not FTYPE: raise TestFailure()
 a = Masking([True, False])
 if a.dtype is not FTYPE: raise TestFailure()
 a = Masking(np.array([0,1,0], dtype='int8'))

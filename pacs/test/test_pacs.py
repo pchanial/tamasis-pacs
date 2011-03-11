@@ -68,7 +68,6 @@ print model
 
 # naive map
 tod.inunit('Jy/arcsec^2')
-tod.mask[:] = 0
 backmap = model.T(tod.magnitude)
 unity = Tod.ones(tod.shape, nsamples=tod.nsamples)
 weights = model.T(unity)

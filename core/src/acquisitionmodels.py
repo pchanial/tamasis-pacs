@@ -792,29 +792,35 @@ class Symmetric(Square):
 
 
 class Diagonal(Symmetric):
-    """Diagonal operator.
+    """
+    Diagonal operator.
 
-    The diagonal elements can be of dimensions lesser than the input array, in
-    which case the diagonal elements are replicated along the fast dimensions.
+    Multiply by a diagonal matrix. The input of a Diagonal instance can be of
+    rank greater than the specified diagonal array, in which case the latter
+    is broadcast along the fast dimensions.
     """
 
     def __init__(self, diagonal, shapein=None, description=None):
-        diagonal = np.asarray(diagonal, dtype=var.get_default_dtype(diagonal))
+        diagonal = np.array(diagonal, dtype=var.get_default_dtype(diagonal),
+                            order='c')
         Symmetric.__init__(self, dtype=diagonal.dtype, description=description, 
                            shapein=shapein)
-        self.diagonal = diagonal
+        self.isscalar = diagonal.ndim == 0
+        self.diagonal = np.array(diagonal, ndmin=1, copy=False)
 
     def direct(self, input, inplace, cachein, cacheout):
         output = self.validate_input_inplace(input, inplace)
-        if output.ndim == 0:
-            return output * self.diagonal
-        tmf.multiply_inplace(output.T, np.array(self.diagonal, ndmin=1,
-                             copy=False).T)
+        if self.dtype == var.FLOAT_DTYPE:
+            tmf.multiply_inplace(output.T, self.diagonal.T)
+        else:
+            output.T[:] *= self.diagonal.T
         return output
 
     def validate_shapein(self, shapein):
         if shapein is None:
             return self.shapein
+        if self.isscalar:
+            return shapein
         if flatten_sliced_shape(shapein[0:self.diagonal.ndim]) != \
            self.diagonal.shape:
             raise ValueError('The input has an incompatible shape ' + \
@@ -826,7 +832,11 @@ class Diagonal(Symmetric):
 
 
 class DiscreteDifference(Square):
-    """Calculate the nth order discrete difference along given axis."""
+    """
+    Discrete difference operator.
+
+    Calculate the nth order discrete difference along given axis.
+    """
 
     def __init__(self, n=1, axis=0, shapein=None, description=None):
         Square.__init__(self, shapein=shapein, description=description)
@@ -1092,40 +1102,38 @@ class Scalar(Diagonal):
 
 class Masking(Symmetric):
     """
-    Class for mask application
-    Applying a boolean (or int8) mask sets to zero values whose mask is
-    True (non-null). Otherwise, the input is multiplied by the mask.
+    Mask operator.
+
+    Sets to zero values whose mask is True (non-null). The input of a Masking
+    instance can be of rank greater than the speficied mask, in which case the
+    latter is broadcast along the fast dimensions.
     """
 
     def __init__(self, mask, shapein=None, description=None):
+        Symmetric.__init__(self, description=description, dtype=var.FLOAT_DTYPE,
+                           shapein=shapein)
         if mask is None:
             print('Warning: input mask is None.')
-        else:
-            mask = np.asanyarray(mask)
-            if not _is_scientific_dtype(mask.dtype):
-                raise TypeError("Invalid mask type: '" + str(mask.dtype) + "'.")
-            if np.rank(mask) == 0:
-                raise TypeError('The input mask should not be scalar.')
-        if mask is not None and np.iscomplexobj(mask):
-            dtype = mask.dtype
-        else:
-            dtype = var.FLOAT_DTYPE
-
-        Symmetric.__init__(self, description=description, dtype=dtype,
-                           shapein=shapein)
-        self.mask = mask
+            mask = False
+        mask = np.array(mask, order='c', dtype=np.bool8)
+        self.isscalar = mask.ndim == 0
+        self.mask = np.array(mask, ndmin=1, copy=False)
 
     def direct(self, input, inplace, cachein, cacheout):
         output = self.validate_input_inplace(input, inplace)
-        if self.mask is None:
-            return output
-        if self.mask.dtype.itemsize == 1:
-            status = tmf.masking(output.T, self.mask.view(np.int8).T)
-            if status != 0: raise RuntimeError()
-        else:
-            output *= self.mask
+        status = tmf.masking(output.T, self.mask.view(np.int8).T)
+        if status != 0: raise RuntimeError()
         return output
 
+    def validate_shapein(self, shapein):
+        if shapein is None:
+            return self.shapein
+        if self.isscalar:
+            return shapein
+        if flatten_sliced_shape(shapein[0:self.mask.ndim]) != self.mask.shape:
+            raise ValueError('The input has an incompatible shape ' + \
+                             str(shapein) + '.')
+        return shapein
 
 #-------------------------------------------------------------------------------
 

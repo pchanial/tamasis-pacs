@@ -908,7 +908,7 @@ end subroutine shift
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine masking(input, ninputs, mask, nmasks, status)
+subroutine masking(input, m, mask, n, status)
 
     use iso_fortran_env, only : ERROR_UNIT
     use module_tamasis,  only : p
@@ -921,25 +921,41 @@ subroutine masking(input, ninputs, mask, nmasks, status)
     !f2py intent(hide)     :: nmasks=size(mask)
     !f2py intent(out)      :: status
 
-    real(p), intent(inout) :: input(ninputs)
-    logical*1, intent(in)  :: mask(nmasks)
-    integer, intent(in)    :: ninputs, nmasks
+    real(p), intent(inout) :: input(m)
+    logical*1, intent(in)  :: mask(n)
+    integer, intent(in)    :: m, n
     integer, intent(out)   :: status
 
-    if (ninputs /= nmasks) then
-        write (ERROR_UNIT,'(a,2(i0,a))') "The data array has a size incompatible with the mask ('", ninputs, "' instead of '",     &
-             nmasks, "')."
+    integer :: i, o
+
+    if (modulo(m, n) /= 0) then
+        write (ERROR_UNIT,'(a,2(i0,a))') "The data array has a size incompatible with the mask ('", m, "' instead of '", n, "')."
         status = 1
         return
     end if
 
-    !$omp parallel workshare
-    where (mask)
-        input = 0
-    end where
-    !$omp end parallel workshare
-
     status = 0
+
+    if (m == n) then
+        !$omp parallel workshare
+        where (mask)
+            input = 0
+        end where
+        !$omp end parallel workshare
+    else if (n == 1) then
+        if (mask(1)) then
+            !$omp parallel workshare
+            input = 0
+            !$omp end parallel workshare
+        end if
+    else
+        o = m / n
+        !$omp parallel do
+        do i = 1, n
+            if (mask(i)) input((i-1)*o+1:i*o) = 0
+        end do
+        !$omp end parallel do
+    end if
 
 end subroutine masking
 
