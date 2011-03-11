@@ -268,7 +268,7 @@ class FitsArray(Quantity):
 
         id = None
         if not new:
-            list = ds9.targets
+            list = ds9.ds9_targets()
             if list is not None:
                 id = list[-1]
 
@@ -320,7 +320,7 @@ class FitsArray(Quantity):
         d = ds9.ds9(id)
 
         # load array
-        input = self
+        input = self.view(np.ndarray)
         if input.dtype.kind in ('b', 'i'):
             input = np.array(input, np.int32, copy=False)
         d.set_np2arr(input.T)
