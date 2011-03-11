@@ -117,38 +117,40 @@ def combine_fitsheader(headers, cdelt=None, crota2=None):
 #-------------------------------------------------------------------------------
 
 
-def create_fitsheader(array, extname=None, crval=(0.,0.), crpix=None,
+def create_fitsheader(array=None, extname=None, crval=(0.,0.), crpix=None,
                       ctype=('RA---TAN','DEC--TAN'), cunit='deg', cd=None,
-                      cdelt=None, crota2=None, naxis=None):
+                      cdelt=None, pa=None, crota2=None, equinox=2000., naxis=None):
     """
-    Return a FITS header
+    Helper to create a FITS header.
 
     Parameters
     ----------
-    array : array_like
+    array : array_like or None
         An array from which the dimensions will be extracted. Note that
         by FITS convention, the dimension along X is the second value 
         of the array shape and that the dimension along the Y axis is 
-        the first one. If None is specified, naxis keyword must be set
+        the first one. If None is specified, naxis keyword must be set.
     extname : None or string
         if a string is specified ('' can be used), the returned header
-        type will be an Image HDU (otherwise a Primary HDU)
+        type will be an Image HDU (otherwise a Primary HDU).
     crval : 2 element array, optional
-        Reference pixel values (FITS convention)
+        Reference pixel values (FITS convention).
     crpix : 2 element array, optional
-        Reference pixel (FITS convention)
+        Reference pixel (FITS convention).
     ctype : 2 element string array, optional
-        Projection types
+        Projection types.
     cunit : string or 2 element string array
-        Units of the CD matrix (default is degrees/pixel)
+        Units of the CD matrix (default is degrees/pixel).
     cd : 2 x 2 array
-        Astrometry parameters
+        FITS parameters
             CD1_1 CD1_2
             CD2_1 CD2_2
-    cdelt : 2 element array
-        Physical increment at the reference pixel
-    crota2 : double
-        Rotation angle counterclockwise from the North axis
+    cdelt : float or 2 element array
+        Physical increment at the reference pixel.
+    pa : float
+        Position angle of the Y=AXIS2 axis (=-CROTA2).
+    equinox : float
+        Reference equinox
     naxis : 2 element array
         (NAXIS1,NAXIS2) tuple, to be specified only if array argument is None
 
@@ -156,6 +158,7 @@ def create_fitsheader(array, extname=None, crval=(0.,0.), crpix=None,
     --------
     >>> map = Map.ones((10,100), unit='Jy/pixel')
     >>> map.header = create_fitsheader(map, cd=[[-1,0],[0,1]])
+    >>> map.header = create_fitsheader(naxis=map.shape[::-1])
     """
 
     if array is None:
@@ -205,9 +208,12 @@ def create_fitsheader(array, extname=None, crval=(0.,0.), crpix=None,
             return header
         if _my_isscalar(cdelt):
             cdelt = (-cdelt, cdelt)
-        if crota2 is None:
-            crota2 = 0.
-        theta=np.deg2rad(crota2)
+        if pa is None:
+            pa = 0.
+            if crota2 is not None:
+                pa = -crota2
+                print("\nXXXXXX\nDeprecated 'crota2' keyword. Use pa=-crota2 instead. This keyword will be removed in the next version.\nXXXXXX\n")
+        theta=np.deg2rad(-pa)
         cd = np.diag(cdelt).dot(np.array([[ np.cos(theta), np.sin(theta)],
                                           [-np.sin(theta), np.cos(theta)]]))
 
@@ -244,6 +250,7 @@ def create_fitsheader(array, extname=None, crval=(0.,0.), crpix=None,
     header.update('ctype2', ctype[1])
     header.update('cunit1', cunit[0])
     header.update('cunit2', cunit[1])
+    header.update('equinox', 2000.)
 
     return header
 
