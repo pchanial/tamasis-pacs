@@ -142,7 +142,10 @@ contains
 
         !$omp parallel do private(i,j,v,w)
         do j = 1, size(data,2)
-            if (tau(j) <= 0) cycle
+            if (tau(j) <= 0 .or. tau(j) /= tau(j)) then
+                data(:,j) = 0
+                cycle
+            end if
             w = exp(-1/tau(j))
             v = 1._p - w
             do i = 2, size(data,1)
@@ -169,7 +172,10 @@ contains
         n = size(data,2)
         !$omp parallel do private(i,j,v,w)
         do j = 1, n
-            if (tau(j) <= 0) cycle
+            if (tau(j) <= 0 .or. tau(j) /= tau(j)) then
+                data(:,j) = 0
+                cycle
+            end if
             w = exp(-1/tau(j))
             v = 1._p - w
             data(m,j) = v * data(m,j)
