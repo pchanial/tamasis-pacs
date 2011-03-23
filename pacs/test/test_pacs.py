@@ -112,3 +112,15 @@ model_rem = masking_rem * projection_rem
 map_naive_rem = mapper_naive(tod_rem, model_rem)
 if any_neq(map_naive, map_naive_rem, 1.e-11): raise TestFailure()
 
+# pack/unpack
+for channel, nrows, ncolumns in ('red',16,32), ('blue',32,64):
+    obs = PacsSimulation(Pointing(0., 0., 0., 0.), channel)
+    for dt in (np.uint8, np.uint16, np.uint32, np.uint64):
+        a = np.arange(nrows*ncolumns*3, dtype=dt).reshape((nrows,ncolumns,-1))
+        p = obs.pack(a)
+        if np.any(a[1,0:16,:] != p[16:32,:]):
+            raise TestFailure()
+
+        u = obs.unpack(p)
+        if np.any(a != u):
+            raise TestFailure()

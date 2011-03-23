@@ -284,17 +284,10 @@ class PacsBase(Observation):
             raise ValueError('Invalid number of dimensions.')
         m = np.ascontiguousarray(self.instrument.detector.removed).view(np.int8)
         n = self.get_ndetectors()
-        if input.dtype == var.FLOAT_DTYPE:
-            output = tmf.pacs_pack_real(input.T, n, m.T).T
-        elif input.dtype.itemsize == 1:
-            output = tmf.pacs_pack_int8(input.view(np.int8).T, n, m.T).T
-        else:
-            raise TypeError("Data type '" + input.dtype.name + "' is not hand" \
-                            'led.')
-        output = output.squeeze()
+        output = tmf.pacs_pack(input.view(np.int8).T, n, m.T).T.squeeze()
         if type(input) == np.ndarray:
-            return output
-        output = output.view(input.__class__)
+            return output.view(dtype=input.dtype)
+        output = output.view(type=input.__class__, dtype=input.dtype)
         if hasattr(input, '_unit'):
             output._unit = input._unit
             output._derived_units = input._derived_units.copy()
@@ -315,17 +308,10 @@ class PacsBase(Observation):
         elif input.ndim != 2:
             raise ValueError('Invalid number of dimensions.')
         m = np.ascontiguousarray(self.instrument.detector.removed).view(np.int8)
-        if input.dtype == var.FLOAT_DTYPE:
-            output = tmf.pacs_unpack_real(input.T, m.T).T
-        elif input.dtype.itemsize == 1:
-            output = tmf.pacs_unpack_int8(input.view(np.int8).T, m.T).T
-        else:
-            raise TypeError("Data type '" + input.dtype.name + "' is not hand" \
-                            'led.')
-        output = output.squeeze()
+        output = tmf.pacs_unpack(input.view(np.int8).T, m.T).T.squeeze()
         if type(input) == np.ndarray:
-            return output
-        output = output.view(input.__class__)
+            return output.view(dtype=input.dtype)
+        output = output.view(type=input.__class__, dtype=input.dtype)
         if hasattr(input, '_unit'):
             output._unit = input._unit
             output._derived_units = input._derived_units.copy()
@@ -333,7 +319,7 @@ class PacsBase(Observation):
             output.nsamples = input.nsamples
             if input.mask is not None:
                 mask = input.mask.view(np.int8)
-                output.mask = tmf.pacs_unpack_int8(mask.T, m.T).T
+                output.mask = tmf.pacs_unpack(mask.T, m.T).T
             if 'detector' in input.derived_units:
                 output.derived_units['detector'] = self.unpack(
                     output.derived_units['detector'])
