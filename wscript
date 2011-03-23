@@ -310,6 +310,21 @@ def test_python_fun(bld):
                 if bld.options.verbose == 0 else ''), always=True)
             bld.add_group()
 
+class test_pacs(BuildContext):
+    """run PACS test suite"""
+    cmd = 'test-pacs'
+    fun = 'test_pacs_fun'
+
+def test_pacs_fun(bld):
+    subdir = 'pacs'
+    files = bld.path.ant_glob(subdir+'/test/test_*.py')
+    for file in files:
+        file = file.abspath()
+        if 'test_mpi' in file: continue
+        bld(rule='${PYTHON} ' + file + (' > /dev/null' \
+            if bld.options.verbose == 0 else ''), always=True)
+        bld.add_group()
+
 class test_mpi(BuildContext):
     """run MPI test suite"""
     cmd = 'test-mpi'
