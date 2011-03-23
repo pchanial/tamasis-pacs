@@ -689,15 +689,14 @@ contains
             call info_time('Computing the projector size', count_start)
         end if
 
-        if (npixels_per_sample > size(pmatrix,1) .and. size(pmatrix,1) > 0) then
-            status = 1
-            write (ERROR_UNIT,'(a,i0,a)') 'Error: Please update npixels_per_sample to ', npixels_per_sample, '.'
-        else if (npixels_per_sample < size(pmatrix,1) .or. size(pmatrix,1) == 0) then
+        if (npixels_per_sample /= size(pmatrix,1)) then
             write (OUTPUT_UNIT,'(a,i0,a)') "Warning: For this observation, you can set the keyword 'npixels_per_sample' to ",      &
                   npixels_per_sample, ' for better performances.'
         end if
 
-        if (out) then
+        if (npixels_per_sample == 0) then
+            write (OUTPUT_UNIT,'(a)') 'Warning: All detectors fall outside the map.'
+        else if (out) then
             write (OUTPUT_UNIT,'(a)') 'Warning: Some detectors fall outside the map.'
         end if
 

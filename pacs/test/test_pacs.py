@@ -124,3 +124,14 @@ for channel, nrows, ncolumns in ('red',16,32), ('blue',32,64):
         u = obs.unpack(p)
         if np.any(a != u):
             raise TestFailure()
+
+# pmatrix with nsamples_per_pixel == 0
+proj = Projection(obs, npixels_per_sample=2)
+header = proj.header.copy()
+header['crval1']=245.998427916727+1
+proj2 = Projection(obs, header=header)
+m = np.ones((header['NAXIS2'],header['NAXIS1']))
+t = proj2(m)
+if any_neq(minmax(t), [0,0]): raise TestFailure()
+t[:] = 1
+if any_neq(minmax(proj2.T(t)), [0,0]): raise TestFailure()

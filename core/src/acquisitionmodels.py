@@ -899,7 +899,7 @@ class Projection(AcquisitionModelLinear):
     def __init__(self, observation, method=None, header=None, resolution=None,
                  npixels_per_sample=0, oversampling=True, description=None):
 
-        self.method, self._pmatrix, self.header, ndetectors, nsamples, \
+        self.method, pmatrix, self.header, ndetectors, nsamples, \
         self.npixels_per_sample, (unitout, unitin), (duout, duin) = \
             observation.get_pointing_matrix(header,
                                             resolution,
@@ -927,11 +927,13 @@ class Projection(AcquisitionModelLinear):
                                         typeout=Tod,
                                         unitin=unitin,
                                         unitout=unitout)
-
-        self.pmatrix = self._pmatrix.view([('weight', 'f4'), ('pixel', 'i4')]) \
-                           .view(np.recarray)
-        self.pmatrix.resize((ndetectors, np.sum(nsamples),
-                             self.npixels_per_sample))
+        self._pmatrix = pmatrix
+        if self.npixels_per_sample == 0:
+            pmatrix = np.empty(0, dtype=np.int64)
+        self.pmatrix = pmatrix.view([('weight', 'f4'), ('pixel', 'i4')]) \
+                              .view(np.recarray)
+        self.pmatrix.shape = (ndetectors, np.sum(nsamples),
+                              self.npixels_per_sample)
 
     def direct(self, input, inplace, cachein, cacheout):
         input, output = self.validate_input_direct(input, cachein, cacheout)

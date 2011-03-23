@@ -195,6 +195,7 @@ class PacsBase(Observation):
             print('Info: Allocating '+str(sizeofpmatrix/2.**17)+' MiB for the '
                   'pointing matrix.')
         else:
+            # f2py doesn't accept zero-sized opaque arguments
             sizeofpmatrix = 1
         pmatrix = np.empty(sizeofpmatrix, dtype=np.int64)
 
@@ -227,8 +228,10 @@ class PacsBase(Observation):
             pmatrix)
         if status != 0: raise RuntimeError()
 
-        # the number of pixels per sample is now known, do the real computation
-        if npixels_per_sample == 0:
+        # if the actual number of pixels per sample is greater than
+        # the specified one, redo the computation of the pointing matrix
+        if new_npixels_per_sample > npixels_per_sample:
+            del pmatrix
             return self.get_pointing_matrix(header, resolution,
                 new_npixels_per_sample, method, oversampling)
 
