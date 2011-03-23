@@ -45,7 +45,7 @@ class PacsBase(Observation):
         ('area', var.FLOAT_DTYPE), ('time_constant', var.FLOAT_DTYPE),
         ('flat_total', var.FLOAT_DTYPE), ('flat_detector', var.FLOAT_DTYPE),
         ('flat_optical', var.FLOAT_DTYPE)]
-    SAMPLING_PERIOD = Quantity(0.024996, 's')
+    SAMPLING_PERIOD = 0.024996 # in seconds
 
 
     def __init__(self, band, active_fraction, delay, fine_sampling_factor,
