@@ -1394,7 +1394,8 @@ def _write_status(obs, filename):
         raise ValueError('Unable to save into a single file. The observations '\
                          'do not have the same observing mode.')
     mode = s.mode
-    band_type   = {'blue':'BS', 'green':'BS', 'red':'RS'}[obs.instrument.band]
+    channel = 'Red' if obs.instrument.band == 'red' else 'Blue'
+    band_type = {'blue':'BS', 'green':'BS', 'red':'RS'}[obs.instrument.band]
 
     cusmode = {'prime':'PacsPhoto', 'parallel':'SpirePacsParallel',
                'transparent':'__PacsTranspScan', 'unknown':'__Calibration'}
@@ -1435,7 +1436,7 @@ def _write_status(obs, filename):
         cc('CUSMODE', cusmode[mode], 'CUS observation mode'),
         cc('META_0', obs.instrument.detector.shape[0]),
         cc('META_1', obs.instrument.detector.shape[1]), 
-        cc('META_2', obs.instrument.band.title()+' Photometer'), 
+        cc('META_2', channel + ' Photometer'),
         cc('META_3', ('Floating Average  : ' + str(compression_factor)) \
            if compression_factor > 1 else 'None'), 
         cc('META_4', comp_mode),
