@@ -31,6 +31,23 @@ try:
 except ValidationError:
     pass
 
+tod = Tod([1,2,2,3,3,3,4,4,4,4], nsamples=(1,2,3,4))
+compression=CompressionAverage([1,2,3,4])
+tod2 = compression(tod)
+if any_neq(tod2, [1,2,3,4]): raise TestFailure()
+tod3 = compression.T(tod2)
+if any_neq(tod3, 10*[1]): raise TestFailure()
+
+#--------------------
+# Downsampling
+#--------------------
+tod = Tod([1,2,1,3,1,1,4,1,1,1], nsamples=(1,2,3,4))
+compression=DownSampling([1,2,3,4])
+tod2 = compression(tod)
+if any_neq(tod2, [1,2,3,4]): raise TestFailure()
+tod3 = compression.T(tod2)
+if any_neq(tod3, [1,2,0,3,0,0,4,0,0,0]): raise TestFailure()
+
 #---------
 # Masking
 #---------

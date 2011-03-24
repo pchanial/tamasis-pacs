@@ -163,7 +163,8 @@ end subroutine pointing_matrix_ptp
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine compression_average_direct(data, compressed, factor, nsamples, ndetectors)
+subroutine compression_average_direct(data, compressed, nsamples, nslices, factor, nfactors, nsamples_data, nsamples_compressed,   &
+                                      ndetectors)
 
     use module_compression, only : direct => compression_average_direct
     use module_tamasis,     only : p
@@ -172,15 +173,42 @@ subroutine compression_average_direct(data, compressed, factor, nsamples, ndetec
     !f2py threadsafe
     !f2py intent(in)     :: data
     !f2py intent(inout)  :: compressed
+    !f2py intent(in)     :: nsamples
+    !f2py intent(hide)   :: nslices = size(nsamples)
     !f2py intent(in)     :: factor
-    !f2py intent(hide)   :: nsamples = shape(data,0)
+    !f2py intent(hide)   :: nfactors = size(factor)
+    !f2py intent(hide)   :: nsamples_data = shape(data,0)
+    !f2py intent(hide)   :: nsamples_compressed = shape(compressed,0)
     !f2py intent(hide)   :: ndetectors = shape(data,1)
 
-    integer, intent(in)  :: factor, nsamples, ndetectors
-    real(p), intent(in)  :: data(nsamples,ndetectors)
-    real(p), intent(out) :: compressed(nsamples/factor,ndetectors)
+    integer, intent(in)  :: nfactors, nslices
+    integer, intent(in)  :: factor(nfactors), nsamples(nslices), nsamples_data, nsamples_compressed, ndetectors
+    real(p), intent(in)  :: data(nsamples_data,ndetectors)
+    real(p), intent(out) :: compressed(nsamples_compressed,ndetectors)
 
-    call direct(data, compressed, factor)
+    integer :: i, i2, j, j2, islice, f
+
+    i = 1
+    j = 1
+    islice = 1
+    f = factor(1)
+    do
+        i2 = i
+        j2 = j
+        do
+            i2 = i2 + nsamples(islice)
+            j2 = j2 + nsamples(islice) / f
+            if (islice == nslices) exit
+            if (factor(min(islice+1, nfactors)) /= f) exit
+            islice = islice + 1
+        end do
+        call direct(data(i:i2-1,:), compressed(j:j2-1,:), f)
+        if (islice == nslices) exit
+        i = i2
+        j = j2
+        islice = islice + 1
+        f = factor(islice)
+    end do
 
 end subroutine compression_average_direct
 
@@ -188,24 +216,52 @@ end subroutine compression_average_direct
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine compression_average_transpose(compressed, data, factor, nsamples, ndetectors)
+subroutine compression_average_transpose(compressed, data, nsamples, nslices, factor, nfactors, nsamples_compressed, nsamples_data,&
+                                         ndetectors)
 
-    use module_compression, only : transpos => compression_average_transpose
+    use module_compression, only : transpose => compression_average_transpose
     use module_tamasis,     only : p
     implicit none
 
     !f2py threadsafe
     !f2py intent(in)     :: compressed
     !f2py intent(inout)  :: data
+    !f2py intent(in)     :: nsamples
+    !f2py intent(hide)   :: nslices = size(nsamples)
     !f2py intent(in)     :: factor
-    !f2py intent(hide)   :: nsamples = shape(compressed,0)
-    !f2py intent(hide)   :: ndetectors = shape(compressed,1)
+    !f2py intent(hide)   :: nfactors = size(factor)
+    !f2py intent(hide)   :: nsamples_compressed = shape(compressed,0)
+    !f2py intent(hide)   :: nsamples_data = shape(data,0)
+    !f2py intent(hide)   :: ndetectors = shape(data,1)
 
-    integer, intent(in)  :: factor, nsamples, ndetectors
-    real(p), intent(in)  :: compressed(nsamples,ndetectors)
-    real(p), intent(out) :: data(nsamples*factor,ndetectors)
+    integer, intent(in)  :: nfactors, nslices
+    integer, intent(in)  :: factor(nfactors), nsamples(nslices), nsamples_data, nsamples_compressed, ndetectors
+    real(p), intent(in)  :: compressed(nsamples_compressed,ndetectors)
+    real(p), intent(out) :: data(nsamples_data,ndetectors)
 
-    call transpos(compressed, data, factor)
+    integer :: i, i2, j, j2, islice, f
+
+    i = 1
+    j = 1
+    islice = 1
+    f = factor(1)
+    do
+        i2 = i
+        j2 = j
+        do
+            i2 = i2 + nsamples(islice)
+            j2 = j2 + nsamples(islice) * f
+            if (islice == nslices) exit
+            if (factor(min(islice+1, nfactors)) /= f) exit
+            islice = islice + 1
+        end do
+        call transpose(compressed(i:i2-1,:), data(j:j2-1,:), f)
+        if (islice == nslices) exit
+        i = i2
+        j = j2
+        islice = islice + 1
+        f = factor(islice)
+    end do
 
 end subroutine compression_average_transpose
 
@@ -213,7 +269,8 @@ end subroutine compression_average_transpose
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine downsampling_direct(data, compressed, factor, nsamples, ndetectors)
+subroutine downsampling_direct(data, compressed, nsamples, nslices, factor, nfactors, nsamples_data, nsamples_compressed,          &
+                               ndetectors)
 
     use module_compression, only : direct => downsampling_direct
     use module_tamasis,     only : p
@@ -222,15 +279,42 @@ subroutine downsampling_direct(data, compressed, factor, nsamples, ndetectors)
     !f2py threadsafe
     !f2py intent(in)     :: data
     !f2py intent(inout)  :: compressed
+    !f2py intent(in)     :: nsamples
+    !f2py intent(hide)   :: nslices = size(nsamples)
     !f2py intent(in)     :: factor
-    !f2py intent(hide)   :: nsamples = shape(data,0)/factor
+    !f2py intent(hide)   :: nfactors = size(factor)
+    !f2py intent(hide)   :: nsamples_data = shape(data,0)
+    !f2py intent(hide)   :: nsamples_compressed = shape(compressed,0)
     !f2py intent(hide)   :: ndetectors = shape(data,1)
 
-    integer, intent(in)  :: factor, nsamples, ndetectors
-    real(p), intent(in)  :: data(nsamples*factor,ndetectors)
-    real(p), intent(out) :: compressed(nsamples,ndetectors)
+    integer, intent(in)  :: nfactors, nslices
+    integer, intent(in)  :: factor(nfactors), nsamples(nslices), nsamples_data, nsamples_compressed, ndetectors
+    real(p), intent(in)  :: data(nsamples_data,ndetectors)
+    real(p), intent(out) :: compressed(nsamples_compressed,ndetectors)
 
-    call direct(data, compressed, factor)
+    integer :: i, i2, j, j2, islice, f
+
+    i = 1
+    j = 1
+    islice = 1
+    f = factor(1)
+    do
+        i2 = i
+        j2 = j
+        do
+            i2 = i2 + nsamples(islice)
+            j2 = j2 + nsamples(islice) / f
+            if (islice == nslices) exit
+            if (factor(min(islice+1, nfactors)) /= f) exit
+            islice = islice + 1
+        end do
+        call direct(data(i:i2-1,:), compressed(j:j2-1,:), f)
+        if (islice == nslices) exit
+        i = i2
+        j = j2
+        islice = islice + 1
+        f = factor(islice)
+    end do
 
 end subroutine downsampling_direct
 
@@ -238,24 +322,52 @@ end subroutine downsampling_direct
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine downsampling_transpose(compressed, data, factor, nsamples, ndetectors)
+subroutine downsampling_transpose(compressed, data, nsamples, nslices, factor, nfactors, nsamples_compressed, nsamples_data,       &
+                                  ndetectors)
 
-    use module_compression, only : transpos => downsampling_transpose
+    use module_compression, only : transpose => downsampling_transpose
     use module_tamasis,     only : p
     implicit none
 
     !f2py threadsafe
-    !f2py intent(inout)  :: compressed
-    !f2py intent(in)     :: data
+    !f2py intent(in)     :: compressed
+    !f2py intent(inout)  :: data
+    !f2py intent(in)     :: nsamples
+    !f2py intent(hide)   :: nslices = size(nsamples)
     !f2py intent(in)     :: factor
-    !f2py intent(hide)   :: nsamples = shape(data,0)/factor
+    !f2py intent(hide)   :: nfactors = size(factor)
+    !f2py intent(hide)   :: nsamples_compressed = shape(compressed,0)
+    !f2py intent(hide)   :: nsamples_data = shape(data,0)
     !f2py intent(hide)   :: ndetectors = shape(data,1)
 
-    integer, intent(in)  :: factor, nsamples, ndetectors
-    real(p), intent(in)  :: compressed(nsamples,ndetectors)
-    real(p), intent(out) :: data(nsamples*factor,ndetectors)
+    integer, intent(in)  :: nfactors, nslices
+    integer, intent(in)  :: factor(nfactors), nsamples(nslices), nsamples_data, nsamples_compressed, ndetectors
+    real(p), intent(in)  :: compressed(nsamples_compressed,ndetectors)
+    real(p), intent(out) :: data(nsamples_data,ndetectors)
 
-    call transpos(compressed, data, factor)
+    integer :: i, i2, j, j2, islice, f
+
+    i = 1
+    j = 1
+    islice = 1
+    f = factor(1)
+    do
+        i2 = i
+        j2 = j
+        do
+            i2 = i2 + nsamples(islice)
+            j2 = j2 + nsamples(islice) * f
+            if (islice == nslices) exit
+            if (factor(min(islice+1, nfactors)) /= f) exit
+            islice = islice + 1
+        end do
+        call transpose(compressed(i:i2-1,:), data(j:j2-1,:), f)
+        if (islice == nslices) exit
+        i = i2
+        j = j2
+        islice = islice + 1
+        f = factor(islice)
+    end do
 
 end subroutine downsampling_transpose
 
