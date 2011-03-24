@@ -415,17 +415,6 @@ class Map(FitsArray):
             item.coverage = item.coverage[key]
         return item
 
-    @property
-    def header(self):
-        return self._header
-
-    @header.setter
-    def header(self, header):
-        if header is not None and not isinstance(header, pyfits.Header):
-            raise TypeError('Incorrect type for the input header (' + \
-                            str(type(header))+').')
-        self._header = header
-
     @staticmethod
     def empty(shape, coverage=None, error=None, origin='lower', header=None,
               unit=None, derived_units=None, dtype=None, order=None):
