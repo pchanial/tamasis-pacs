@@ -1,3 +1,6 @@
+! Copyright 2010-2011 Pierre Chanial
+! All rights reserved
+!
 module module_sort
 
     use module_math,    only : NaN, neq_real

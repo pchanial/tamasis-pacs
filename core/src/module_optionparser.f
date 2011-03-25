@@ -1,3 +1,6 @@
+! Copyright 2010-2011 Pierre Chanial
+! All rights reserved
+!
 ! Module for parsing command line options and arguments similar to python
 ! package OptionParser.
 ! A command line is a blank-delimited list of arguments and options.

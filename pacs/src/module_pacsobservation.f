@@ -1,3 +1,6 @@
+! Copyright 2010-2011 Pierre Chanial
+! All rights reserved
+!
 !-------------------------------------------------------------------------------
 !
 ! This module defines the pacsobservation derived type.

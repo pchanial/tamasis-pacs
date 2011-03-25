@@ -1,3 +1,6 @@
+! Copyright 2010-2011 Pierre Chanial
+! All rights reserved
+!
 module module_pointingmatrix
 
     use module_math,       only : NaN, nint_down, nint_up

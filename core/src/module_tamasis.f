@@ -1,3 +1,6 @@
+! Copyright 2010-2011 Pierre Chanial
+! All rights reserved
+!
 module module_tamasis
 
     use iso_fortran_env,  only : OUTPUT_UNIT

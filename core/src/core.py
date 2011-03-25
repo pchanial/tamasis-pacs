@@ -1,3 +1,6 @@
+# Copyrights 2010-2011 Pierre Chanial
+# All rights reserved
+#
 import tamasisfortran as tmf
 import var
 from .var import VERSION as __version__

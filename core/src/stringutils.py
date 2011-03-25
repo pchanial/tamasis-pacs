@@ -1,3 +1,6 @@
+# Copyrights 2010-2011 Pierre Chanial
+# All rights reserved
+#
 def strenum(choices, last='and'):
     """
     Enumerates elements of a list

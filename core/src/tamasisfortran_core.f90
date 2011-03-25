@@ -1,3 +1,6 @@
+! Copyright 2010-2011 Pierre Chanial
+! All rights reserved
+!
 ! Tamasis interface for f2py
 !
 ! Author: P. Chanial

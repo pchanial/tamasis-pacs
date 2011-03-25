@@ -1,3 +1,6 @@
+! Copyright 2010-2011 Pierre Chanial
+! All rights reserved
+!
 module module_preprocessor
 
     use module_math,    only : NaN, mean, median, sum_kahan

@@ -1,3 +1,6 @@
+# Copyrights 2010-2011 Pierre Chanial
+# All rights reserved
+#
 import kapteyn.maputils
 import matplotlib
 import matplotlib.pyplot as pyplot

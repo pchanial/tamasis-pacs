@@ -1,3 +1,6 @@
+! Copyright 2010-2011 Pierre Chanial
+! All rights reserved
+!
 ! interface to C 'macros' stdin, stdout, stderr
 module module_stdio
 

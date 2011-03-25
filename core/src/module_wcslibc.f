@@ -1,3 +1,6 @@
+! Copyright 2010-2011 Pierre Chanial
+! All rights reserved
+!
 ! interface to WCSLIB 4.4
 module module_wcslibc
 

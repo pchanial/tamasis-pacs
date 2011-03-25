@@ -1,3 +1,6 @@
+# Copyrights 2010-2011 Pierre Chanial
+# All rights reserved
+#
 #!/usr/bin/env python2.6
 #
 # NAME: tamasis_photproject

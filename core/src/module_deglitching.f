@@ -1,3 +1,6 @@
+! Copyright 2010-2011 Pierre Chanial
+! All rights reserved
+!
 module module_deglitching
 
     use module_math,           only : moment, mad, sigma_clipping

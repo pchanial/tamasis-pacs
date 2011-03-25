@@ -1,3 +1,6 @@
+# Copyrights 2010-2011 Pierre Chanial
+# All rights reserved
+#
 import numpy as np
 import os
 import tamasisfortran as tmf

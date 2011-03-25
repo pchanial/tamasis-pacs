@@ -1,3 +1,6 @@
+! Copyright 2010-2011 Pierre Chanial
+! All rights reserved
+!
 ! Because of bugs in gfortran and ifort related to array of classes
 ! the architecture is (temporarily hopefully) a mess
 ! this module should define a derived type: observationslice and the

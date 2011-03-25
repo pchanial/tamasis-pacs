@@ -1,3 +1,6 @@
+# Copyrights 2010-2011 Pierre Chanial
+# All rights reserved
+#
 from .core import *
 from .madcap import *
 from .pacs import *
