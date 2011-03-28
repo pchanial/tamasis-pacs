@@ -200,7 +200,11 @@ class PacsBase(Observation):
         else:
             # f2py doesn't accept zero-sized opaque arguments
             sizeofpmatrix = 1
-        pmatrix = np.empty(sizeofpmatrix, dtype=np.int64)
+        try:
+            pmatrix = np.empty(sizeofpmatrix, dtype=np.int64)
+        except MemoryError:
+            gc.collect()
+            pmatrix = np.empty(sizeofpmatrix, dtype=np.int64)
 
         detector = self.instrument.detector
 
