@@ -18,7 +18,7 @@ if not all(map(os.path.exists, datafile)):
     print('The data files are not found: ' + ', '.join(datafile))
     exit(0)
 
-pacs = PacsObservation(filename=[datafile[0]+'[6065:20000]', datafile[1]+'[6066:20001]'],
+pacs = PacsObservation([datafile[0]+'[6065:20000]', datafile[1]+'[6066:20001]'],
                        fine_sampling_factor=1)
 
 telescope    = Identity(description='Telescope PSF')

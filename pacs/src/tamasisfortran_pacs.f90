@@ -401,9 +401,9 @@ subroutine pacs_map_header(band, nslices, npointings, nsamples_tot, compression_
                            oversampling, time, ra, dec, pa, chop, masked, removed, detector_mask, nrows, ncolumns, detector_bad,   &
                            detector_corner, distortion_yz, resolution, header, status)
 
-    use module_pacsinstrument,  only : PacsInstrument
-    use module_pacsobservation, only : PacsObservation
-    use module_tamasis,         only : p
+    use module_pacsinstrument, only : SAMPLING_PERIOD, PacsInstrument
+    use module_observation,    only : Observation
+    use module_tamasis,        only : p
     implicit none
 
     !f2py threadsafe
@@ -452,12 +452,16 @@ subroutine pacs_map_header(band, nslices, npointings, nsamples_tot, compression_
     character(len=2880), intent(out)               :: header
     integer, intent(out)                           :: status
 
-    class(PacsObservation), allocatable :: obs
+    class(Observation), allocatable     :: obs
     class(PacsInstrument), allocatable  :: pacs
 
     ! initialise observations
     allocate(obs)
-    call obs%init_with_variables(time, ra, dec, pa, chop, masked, removed, npointings, compression_factor, delay, status)
+    ! offset of the fine time of the compressed frame wrt the fine time of the first frame
+    ! the fine time of a compressed frame is the average of the fine times of the contributing frames
+    ! the offset is in fraction of sampling interval
+    call obs%init(time, ra, dec, pa, chop, masked, removed, npointings, compression_factor,                                        &
+         (compression_factor - 1) / (2._p * compression_factor) +  delay / (1000 * SAMPLING_PERIOD * compression_factor), status)
     if (status /= 0) return
 
     ! initialise pacs instrument
@@ -481,8 +485,8 @@ subroutine pacs_tod(band, filename, nslices, npointings, nsamples_tot, compressi
 
 
     use iso_fortran_env,        only : ERROR_UNIT
-    use module_pacsinstrument,  only : PacsInstrument
-    use module_pacsobservation, only : PacsObservation
+    use module_observation,     only : Observation
+    use module_pacsinstrument,  only : SAMPLING_PERIOD, PacsInstrument
     use module_preprocessor,    only : divide_vectordim2, remove_nan, subtract_meandim1
     use module_tamasis,         only : p
     use module_string,          only : strsplit
@@ -541,14 +545,15 @@ subroutine pacs_tod(band, filename, nslices, npointings, nsamples_tot, compressi
     logical*1, intent(out)                         :: mask(nvalids, ndetectors)
     integer, intent(out)                           :: status
 
-    class(PacsObservation), allocatable            :: obs
+    class(Observation), allocatable                :: obs
     class(PacsInstrument), allocatable             :: pacs
     integer                                        :: iobs, destination, filename_len
     character(len=len(selected_mask)), allocatable :: selected_mask_(:)
 
     ! initialise observations
     allocate(obs)
-    call obs%init_with_variables(time, ra, dec, pa, chop, masked, removed, npointings, compression_factor, delay, status)
+    call obs%init(time, ra, dec, pa, chop, masked, removed, npointings, compression_factor,                                        &
+         (compression_factor - 1) / (2._p * compression_factor) +  delay / (1000 * SAMPLING_PERIOD * compression_factor), status)
     if (status /= 0) return
 
     ! split input filename
@@ -557,7 +562,7 @@ subroutine pacs_tod(band, filename, nslices, npointings, nsamples_tot, compressi
     end if
     filename_len = len(filename) / nslices
     do iobs = 1, nslices
-        obs%slice(iobs)%filename = filename((iobs-1)*filename_len+1:iobs*filename_len)
+        obs%slice(iobs)%id = filename((iobs-1)*filename_len+1:iobs*filename_len)
     end do
 
     ! initialise pacs instrument
@@ -612,8 +617,8 @@ subroutine pacs_pointing_matrix(band, nslices, nvalids, npointings, nsamples_tot
 
     use iso_fortran_env,        only : ERROR_UNIT
     use module_fitstools,       only : ft_read_keyword
-    use module_pacsinstrument,  only : PacsInstrument, NDIMS, NVERTICES, NEAREST_NEIGHBOUR, SHARP_EDGES
-    use module_pacsobservation, only : PacsObservation, MaskPolicy
+    use module_pacsinstrument,  only : NEAREST_NEIGHBOUR, SHARP_EDGES, SAMPLING_PERIOD, PacsInstrument
+    use module_observation,     only : Observation
     use module_pointingmatrix,  only : PointingElement
     use module_tamasis,         only : p
     implicit none
@@ -676,13 +681,14 @@ subroutine pacs_pointing_matrix(band, nslices, nvalids, npointings, nsamples_tot
     integer, intent(out)                           :: new_npixels_per_sample
     integer, intent(out)                           :: status
 
-    class(PacsObservation), allocatable :: obs
+    class(Observation), allocatable     :: obs
     class(PacsInstrument), allocatable  :: pacs
     integer                             :: nx, ny, nsamples_expected, method_
 
     ! initialise observations
     allocate(obs)
-    call obs%init_with_variables(time, ra, dec, pa, chop, masked, removed, npointings, compression_factor, delay, status)
+    call obs%init(time, ra, dec, pa, chop, masked, removed, npointings, compression_factor,                                        &
+         (compression_factor - 1) / (2._p * compression_factor) +  delay / (1000 * SAMPLING_PERIOD * compression_factor), status)
     if (status /= 0) return
 
     ! initialise pacs instrument

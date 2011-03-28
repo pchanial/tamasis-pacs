@@ -8,7 +8,7 @@ module module_pacsinstrument
     use module_fitstools,       only : FLEN_VALUE, ft_check_error_cfitsio, ft_close, ft_create_header, ft_open, ft_open_image,     &
                                        ft_read_image, ft_read_keyword, ft_read_keyword_hcss, ft_read_slice, ft_test_extension
     use module_math,            only : DEG2RAD, mInf, pInf, NaN, mean, nint_down, nint_up
-    use module_pacsobservation, only : PacsObservationSlice, PacsObservation
+    use module_observation,     only : Observation
     use module_pointingmatrix,  only : PointingElement, xy2pmatrix, xy2roi, roi2pmatrix
     use module_projection,      only : convex_hull, surface_convex_polygon
     use module_string,          only : strinteger, strlowcase
@@ -21,6 +21,7 @@ module module_pacsinstrument
     public :: NDIMS
     public :: NVERTICES
     public :: NEAREST_NEIGHBOUR, SHARP_EDGES
+    public :: SAMPLING_PERIOD
 
     public :: PacsInstrument
 
@@ -41,7 +42,7 @@ module module_pacsinstrument
     integer, parameter :: NEAREST_NEIGHBOUR = 0
     integer, parameter :: SHARP_EDGES = 1
     integer, parameter :: DISTORTION_DEGREE = 3
-    real(p), parameter :: SAMPLING = 0.024996_p
+    real(p), parameter :: SAMPLING_PERIOD = 0.024996_p
 
     ! these calibration files are taken from HCSS 4.0.70
     character(len=*), parameter :: FILENAME_SAA = 'PCalPhotometer_SubArrayArray_FM_v5.fits'
@@ -552,7 +553,7 @@ contains
     subroutine compute_map_header(this, obs, oversampling, resolution, header, status)
 
         class(PacsInstrument), intent(in)  :: this
-        class(PacsObservation), intent(in) :: obs
+        class(Observation), intent(in)     :: obs
         logical, intent(in)                :: oversampling
         real(p), intent(in)                :: resolution
         character(len=2880), intent(out)   :: header
@@ -594,7 +595,7 @@ contains
     subroutine find_minmax(this, obs, oversampling, xmin, xmax, ymin, ymax)
 
         class(PacsInstrument), intent(in)  :: this
-        class(PacsObservation), intent(in) :: obs
+        class(Observation), intent(in)     :: obs
         logical, intent(in)                :: oversampling
         real(p), intent(out)               :: xmin, xmax, ymin, ymax
 
@@ -614,11 +615,11 @@ contains
         allocate(hull(NDIMS, size(ihull)))
         hull_uv = this%detector_corner(:,ihull)
 
-        do islice = 1, obs%nslices
+        do islice = 1, size(obs%slice)
 
             ! check if it is required to interpolate pointing positions
             if (oversampling) then
-                sampling_factor = this%fine_sampling_factor * obs%slice(islice)%compression_factor
+                sampling_factor = this%fine_sampling_factor * obs%slice(islice)%factor
                 offset = obs%slice(islice)%offset
             else
                 sampling_factor = 1
@@ -631,8 +632,8 @@ contains
 #endif
             do itime = 1, obs%slice(islice)%nsamples * sampling_factor
 
-                isample = (itime - 1) / sampling_factor + 1
-                if (obs%slice(islice)%p(isample)%removed) cycle
+                isample = (itime - 1) / sampling_factor + obs%slice(islice)%first
+                if (obs%pointing(isample)%removed .or. obs%pointing(isample)%masked) cycle
 
                 call obs%get_position_index(islice, itime, sampling_factor, offset, ra, dec, pa, chop)
                 hull = this%uv2yz(hull_uv, this%distortion_yz, chop)
@@ -660,7 +661,7 @@ contains
 
         class(PacsInstrument), intent(in)  :: this
         integer, intent(in)                :: method
-        class(PacsObservation), intent(in) :: obs
+        class(Observation), intent(in)     :: obs
         logical, intent(in)                :: oversampling
         character(len=*), intent(in)       :: header
         integer, intent(in)                :: nx, ny
@@ -712,7 +713,7 @@ contains
     subroutine compute_projection_nearest_neighbour(this, obs, oversampling, nx, ny, pmatrix, npixels_per_sample, out)
 
         class(PacsInstrument), intent(in)  :: this
-        class(PacsObservation), intent(in) :: obs
+        class(Observation), intent(in)     :: obs
         logical, intent(in)                :: oversampling
         integer, intent(in)                :: nx, ny
         type(PointingElement), intent(out) :: pmatrix(:,:,:)
@@ -732,7 +733,7 @@ contains
         out = .false.
 
         ! loop over the observations
-        do islice = 1, obs%nslices
+        do islice = 1, size(obs%slice)
 
             nsamples = obs%slice(islice)%nsamples
             nvalids  = obs%slice(islice)%nvalids
@@ -741,7 +742,7 @@ contains
 
             ! check if it is required to interpolate pointing positions
             if (oversampling) then
-                sampling_factor = this%fine_sampling_factor * obs%slice(islice)%compression_factor
+                sampling_factor = this%fine_sampling_factor * obs%slice(islice)%factor
                 offset = obs%slice(islice)%offset
             else
                 sampling_factor = 1
@@ -750,8 +751,8 @@ contains
 
             allocate (valids(nvalids))
             ivalid = 1
-            do isample = 1, nsamples
-                if (obs%slice(islice)%p(isample)%removed) cycle
+            do isample = obs%slice(islice)%first, obs%slice(islice)%last
+                if (obs%pointing(isample)%removed) cycle
                 valids(ivalid) = isample
                 ivalid = ivalid + 1
             end do
@@ -763,8 +764,13 @@ contains
             ! loop over the samples which have not been removed
             do ivalid = 1, nvalids
                 isample = valids(ivalid)
+                if (obs%pointing(isample)%masked) then
+                    pmatrix(1,(ivalid-1)*sampling_factor+1+dest:ivalid*sampling_factor+dest,:)%pixel = -1
+                    pmatrix(1,(ivalid-1)*sampling_factor+1+dest:ivalid*sampling_factor+dest,:)%weight = 0
+                    cycle
+                end if
                 do ifine = 1, sampling_factor
-                    itime = (isample - 1) * sampling_factor + ifine
+                    itime = (isample - obs%slice(islice)%first) * sampling_factor + ifine
                     call obs%get_position_index(islice, itime, sampling_factor, offset, ra, dec, pa, chop)
                     if (abs(chop-chop_old) > 1.e-2_p) then
                         coords_yz = this%uv2yz(this%detector_center, this%distortion_yz, chop)
@@ -800,7 +806,7 @@ contains
     subroutine compute_projection_sharp_edges(this, obs, oversampling, nx, ny, pmatrix, npixels_per_sample, out)
 
         class(PacsInstrument), intent(in)  :: this
-        class(PacsObservation), intent(in) :: obs
+        class(Observation), intent(in)     :: obs
         logical, intent(in)                :: oversampling
         integer, intent(in)                :: nx, ny
         type(PointingElement), intent(out) :: pmatrix(:,:,:)
@@ -818,7 +824,7 @@ contains
         out = .false.
 
         ! loop over the observations
-        do islice = 1, obs%nslices
+        do islice = 1, size(obs%slice)
 
             nsamples = obs%slice(islice)%nsamples
             nvalids  = obs%slice(islice)%nvalids
@@ -827,7 +833,7 @@ contains
 
             ! check if it is required to interpolate pointing positions
             if (oversampling) then
-                sampling_factor = this%fine_sampling_factor * obs%slice(islice)%compression_factor
+                sampling_factor = this%fine_sampling_factor * obs%slice(islice)%factor
                 offset = obs%slice(islice)%offset
             else
                 sampling_factor = 1
@@ -836,8 +842,8 @@ contains
 
             allocate (valids(nvalids))
             ivalid = 1
-            do isample = 1, nsamples
-                if (obs%slice(islice)%p(isample)%removed) cycle
+            do isample = obs%slice(islice)%first, obs%slice(islice)%last
+                if (obs%pointing(isample)%removed) cycle
                 valids(ivalid) = isample
                 ivalid = ivalid + 1
             end do
@@ -849,8 +855,13 @@ contains
             ! loop over the samples which have not been removed
             do ivalid = 1, nvalids
                 isample = valids(ivalid)
+                if (obs%pointing(isample)%masked) then
+                    pmatrix(:,(ivalid-1)*sampling_factor+1+dest:ivalid*sampling_factor+dest,:)%pixel = -1
+                    pmatrix(:,(ivalid-1)*sampling_factor+1+dest:ivalid*sampling_factor+dest,:)%weight = 0
+                    cycle
+                end if
                 do ifine = 1, sampling_factor
-                    itime = (isample - 1) * sampling_factor + ifine
+                    itime = (isample - obs%slice(islice)%first) * sampling_factor + ifine
                     call obs%get_position_index(islice, itime, sampling_factor, offset, ra, dec, pa, chop)
                     if (abs(chop-chop_old) > 1.e-2_p) then
                         coords_yz = this%uv2yz(this%detector_corner, this%distortion_yz, chop)
@@ -878,16 +889,16 @@ contains
 
     subroutine read(this, obs, selected_masks, signal, mask, status, verbose)
 
-        class(PacsInstrument), intent(in)  :: this
-        class(PacsObservation), intent(in) :: obs
-        character(len=*), intent(in)       :: selected_masks(:)
-        real(p), intent(out)               :: signal(:,:)
-        logical(1), intent(out)            :: mask(:,:)
-        integer, intent(out)               :: status
-        logical, intent(in), optional      :: verbose
+        class(PacsInstrument), intent(in) :: this
+        class(Observation), intent(in)    :: obs
+        character(len=*), intent(in)      :: selected_masks(:)
+        real(p), intent(out)              :: signal(:,:)
+        logical(1), intent(out)           :: mask(:,:)
+        integer, intent(out)              :: status
+        logical, intent(in), optional     :: verbose
 
         integer :: dest
-        integer :: iobs, nobs
+        integer :: islice
         integer :: count_start
         logical :: verbose_
 
@@ -897,11 +908,10 @@ contains
         call system_clock(count_start)
 
         status = 1
-        nobs   = obs%nslices
 
         ! check that the total number of samples in the observations is equal
         ! to the number of samples in the signal and mask arrays
-        if (obs%nvalids /= size(signal,1) .or. obs%nvalids /= size(mask,1)) then
+        if (sum(obs%slice%nvalids) /= size(signal,1) .or. size(signal,1) /= size(mask,1)) then
             write (ERROR_UNIT,'(a)') 'Error: read: invalid dimensions.'
             return
         end if
@@ -911,11 +921,11 @@ contains
 
         ! loop over the PACS observations
         dest = 1
-        do iobs = 1, nobs
-            call this%read_one(obs%slice(iobs), selected_masks, signal(dest:dest+obs%slice(iobs)%nvalids-1,:),                     &
-                               mask(dest:dest+obs%slice(iobs)%nvalids-1,:), status)
+        do islice = 1, size(obs%slice)
+            call this%read_one(obs, islice, selected_masks, signal(dest:dest+obs%slice(islice)%nvalids-1,:),                       &
+                               mask(dest:dest+obs%slice(islice)%nvalids-1,:), status)
             if (status /= 0) return
-            dest = dest + obs%slice(iobs)%nvalids
+            dest = dest + obs%slice(islice)%nvalids
         end do
 
         if (verbose_) then
@@ -928,14 +938,15 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine read_one(this, obs, selected_mask, signal, mask, status)
+    subroutine read_one(this, obs, islice, selected_mask, signal, mask, status)
 
-        class(PacsInstrument), intent(in)       :: this
-        class(PacsObservationSlice), intent(in) :: obs
-        character(len=*), intent(in)            :: selected_mask(:)
-        real(p), intent(out)                    :: signal(:,:)
-        logical*1, intent(out)                  :: mask  (:,:)
-        integer, intent(out)                    :: status
+        class(PacsInstrument), intent(in) :: this
+        class(Observation), intent(in)    :: obs
+        integer, intent(in)               :: islice
+        character(len=*), intent(in)      :: selected_mask(:)
+        real(p), intent(out)              :: signal(:,:)
+        logical*1, intent(out)            :: mask  (:,:)
+        integer, intent(out)              :: status
 
         integer                   :: first, last
         integer                   :: ip, iq
@@ -957,11 +968,11 @@ contains
         ndetectors = size(signal, 2)
 
         ! get first and last valid pointing, to decrease I/O
-        do first = 1, obs%nsamples
-            if (.not. obs%p(first)%removed) exit
+        do first = obs%slice(islice)%first, obs%slice(islice)%last
+            if (.not. obs%pointing(first)%removed) exit
         end do
-        do last = obs%nsamples, 1, -1
-            if (.not. obs%p(last)%removed) exit
+        do last = obs%slice(islice)%last, obs%slice(islice)%first, -1
+            if (.not. obs%pointing(last)%removed) exit
         end do
 
         ! test if all samples are removed in this slice
@@ -971,10 +982,10 @@ contains
         end if
 
         ! set mask from policy
-        mask = spread(pack(obs%p(first:last)%masked, .not. obs%p(first:last)%removed), 2, ndetectors)
+        mask = spread(pack(obs%pointing(first:last)%masked, .not. obs%pointing(first:last)%removed), 2, ndetectors)
 
         ! read signal HDU
-        call ft_open_image(trim(obs%filename) // '[Signal]', unit, 3, signal_shape, status)
+        call ft_open_image(trim(obs%slice(islice)%id) // '[Signal]', unit, 3, signal_shape, status)
         if (status /= 0) return
 
         allocate (mask_shape(size(signal_shape)))
@@ -990,7 +1001,7 @@ contains
             call ft_read_slice(unit, first, last, iq+1, ip+1, signal_shape, signal_, status)
             if (status /= 0) return
 
-            signal(:,idetector) = pack(signal_, .not. obs%p(first:last)%removed)
+            signal(:,idetector) = pack(signal_, .not. obs%pointing(first:last)%removed)
 
         end do
 
@@ -998,7 +1009,7 @@ contains
         if (status /= 0) return
 
         ! get the mask tree
-        call ft_open(trim(obs%filename) // '[MASK]', unit, mask_found, status)
+        call ft_open(trim(obs%slice(islice)%id) // '[MASK]', unit, mask_found, status)
         if (status /= 0 .or. .not. mask_found) return
 
         call ft_read_keyword(unit, 'DSETS___', nmasks, status=status)
@@ -1019,7 +1030,7 @@ contains
         do imask=1, nmasks
 
             call FTMAHD(unit, mask_extension(imask)+1, hdutype, status)
-            if (ft_check_error_cfitsio(status, unit, trim(obs%filename))) return
+            if (ft_check_error_cfitsio(status, unit, trim(obs%slice(islice)%id))) return
 
             call ft_read_keyword(unit, 'EXTNAME', mask_name, status=status)
             if (status /= 0) return
@@ -1032,8 +1043,8 @@ contains
             if (status /= 0) return            
             if (mask_shape(1) /= naxis1) then
                 status = 1
-                write (ERROR_UNIT, '(a,2(i0,a))') "The observation '" // trim(obs%filename) // "', has an incompatible dimension in&
-                      & mask '" // trim(mask_name) // "' (", naxis1, ' instead of ', mask_shape(1), ').'
+                write (ERROR_UNIT, '(a,2(i0,a))') "The observation '" // trim(obs%slice(islice)%id) // "', has an incompatible dime&
+                      &nsion in mask '" // trim(mask_name) // "' (", naxis1, ' instead of ', mask_shape(1), ').'
                 return
             end if
 
@@ -1063,7 +1074,7 @@ contains
 
                 end do
 
-                mask(:,idetector) = mask(:,idetector) .or. pack(mask_, .not. obs%p(first:last)%removed)
+                mask(:,idetector) = mask(:,idetector) .or. pack(mask_, .not. obs%pointing(first:last)%removed)
 
             end do
 

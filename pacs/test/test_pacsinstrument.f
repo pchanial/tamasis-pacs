@@ -3,15 +3,17 @@ program test_pacsinstrument
     use iso_fortran_env,        only : ERROR_UNIT
     use module_fitstools,       only : ft_read_keyword, ft_header2str
     use module_math,            only : mean, neq_real
+    use module_observation,     only : MaskPolicy, Observation
     use module_pacsinstrument
-    use module_pacsobservation, only : PacsObservation, MaskPolicy
+    use module_pacsobservation, only : PacsObservation
     use module_string,          only : strreal
     use module_tamasis,         only : p, POLICY_KEEP, POLICY_MASK, POLICY_REMOVE
     use module_wcs,             only : init_astrometry, ad2xy_gnomonic
     implicit none
 
+    class(Observation), allocatable     :: obs
     class(PacsInstrument), allocatable  :: pacs
-    class(PacsObservation), allocatable :: obs
+    class(PacsObservation), allocatable :: pacsobs
     type(MaskPolicy)                    :: policy
     character(len=*), parameter :: filename(1) = 'pacs/test/data/frames_blue.fits'
     character(len=*), parameter :: filename_header = 'core/test/data/header.fits'
@@ -33,6 +35,11 @@ program test_pacsinstrument
     real(p)                :: distortion_yz(2,3,3,3)
     real(p)                :: responsivity
     real(p)                :: active_fraction
+    real(p)                :: signal_ref(360)
+    logical*1              :: mask_ref(360)
+    real(p), allocatable   :: signal(:,:)
+    logical*1, allocatable :: mask(:,:)
+    integer                :: idetector, first, last
 
     real(p), allocatable   :: a_vect(:), d_vect(:), ad_vect(:,:)
     integer                :: n
@@ -70,6 +77,7 @@ program test_pacsinstrument
 
     call pacs%destroy
 
+    ! test instrument setup, reading of signal & mask
     detector_mask_blue = detector_bad_all
     call pacs%init_with_calfiles('blue', detector_mask_blue, 1, status)
     if (status /= 0) call failure('pacs%init_with_calfiles rem')
@@ -90,15 +98,63 @@ program test_pacsinstrument
     if (any(pacs%pq(:,1+i) /= [16,16])) call failure('pq3 rem')
     if (any(pacs%ij(:,1+i) /= [0,0])) call failure('ij3 rem')
     if (any(pacs%detector_corner(:,i*4+1:i*4+4) /= detector_corner_all(:,:,17,17))) call failure('uv3 rem')
+    call pacs%destroy
     
     ! initialise observation
-    allocate (obs)
-    call obs%init(filename, policy, status)
+    detector_mask_blue = .false.
+    call pacs%init_with_calfiles('blue', detector_mask_blue, 1, status)
+    if (status /= 0) call failure('pacs%init_with_calfiles rem')
+    allocate (pacsobs)
+    call pacsobs%init(filename, policy, status)
     if (status /= 0) call failure('init_pacsobservation')
+    call pacsobs2obs(pacsobs, obs, status)
+    if (status /= 0) call failure('pacsobs2obs')
 
-    allocate(time(obs%nsamples))
-    time = obs%slice(1)%p%time
+    allocate(time(sum(obs%slice%nsamples)))
+    time = obs%pointing%time
     if (size(time) /= 360) call failure('nsamples')
+
+    if (pacsobs%band /= 'blue' .or. pacsobs%slice(1)%observing_mode /= 'prime') call failure('obs%init')
+
+    allocate (signal(pacsobs%slice(1)%nvalids,pacs%ndetectors))
+    allocate (mask  (pacsobs%slice(1)%nvalids,pacs%ndetectors))
+    call pacs%read(obs, ['master'], signal, mask, status)
+    if (status /= 0) call failure('pacs%read')
+
+    ! get a detector that has been hit by a glitch
+    do idetector = 1, pacs%ndetectors
+        if (pacs%pq(1,idetector)+1 == 27.and.pacs%pq(2,idetector)+1 == 64) exit
+    end do
+
+    signal_ref = signal(:,idetector)
+    mask_ref = .false.
+    mask_ref([5,6,7,151]) = .true. ! (27,64)
+    if (any(mask_ref .neqv. mask(:,idetector))) call failure('mask ref')
+    deallocate (mask, signal)
+    
+    do first = 1, 360, 7
+        do last = first, 360, 11
+           obs%pointing%removed = .true.
+           obs%pointing(first:last)%removed = .false.
+           obs%slice(1)%nvalids = last - first + 1
+           allocate(signal(obs%slice(1)%nvalids, pacs%ndetectors))
+           allocate(mask  (obs%slice(1)%nvalids, pacs%ndetectors))
+           call pacs%read(obs, ['master'], signal, mask, status)
+           if (status /= 0) call failure('read_pacsobservation loop')
+           if (any(signal(:,idetector) /= signal_ref(first:last))) call failure('read signal')
+           if (any(mask(:,idetector) .neqv. mask_ref(first:last))) then
+               print *,first, last
+               print *,shape(mask(:,idetector))
+               print *,shape(mask_ref)
+               print *,mask(:,idetector)
+               print *,mask_ref(first:last)
+               call failure('read mask')
+           end if
+           deallocate (signal)
+           deallocate (mask)
+        end do
+    end do
+    obs%pointing%removed = .false.
 
     allocate(yz(ndims, size(pacs%detector_corner,2)))
     allocate(ad(ndims, size(pacs%detector_corner,2)))
@@ -144,8 +200,10 @@ program test_pacsinstrument
     ! minmax(dec) 59.980161       67.110813
 
     call obs%compute_center(ra0, dec0)
-    if (neq_real(ra0,  mean(obs%slice(1)%p%ra), 1.e-8_p) .or. &
-        neq_real(dec0, mean(obs%slice(1)%p%dec), 1.e-8_p)) call failure('compute_center')
+    print *, 'ra0', ra0, mean(obs%pointing%ra)
+    print *, 'dec0', dec0, mean(obs%pointing%dec)
+    if (neq_real(ra0,  mean(obs%pointing%ra), 1.e-8_p) .or. &
+        neq_real(dec0, mean(obs%pointing%dec), 1.e-8_p)) call failure('compute_center')
 
     call pacs%find_minmax(obs, .false., xmin, xmax, ymin, ymax)
     write (*,*) 'Xmin: ', xmin, ', Xmax: ', xmax
@@ -231,6 +289,36 @@ contains
         write (ERROR_UNIT,'(a)'), 'FAILED: ' // errmsg
         stop 1
     end subroutine failure
+
+    subroutine pacsobs2obs(pacsobs, obs, status)
+        class(PacsObservation), intent(in) :: pacsobs
+        class(Observation), intent(out)    :: obs
+        integer, intent(out)               :: status
+        real(p), dimension(pacsobs%nsamples)   :: time, ra, dec, pa, chop
+        logical*1, dimension(pacsobs%nsamples) :: masked, removed
+        integer :: islice, nslices, nsamples_tot, dest1, dest2
+        
+        nslices = size(pacsobs%slice)
+        nsamples_tot = sum(pacsobs%slice%nsamples)
+        dest1 = 1
+        do islice = 1, nslices
+            dest2 = dest1 + pacsobs%slice(islice)%nsamples - 1
+            time   (dest1:dest2) = pacsobs%slice(islice)%p%time
+            ra     (dest1:dest2) = pacsobs%slice(islice)%p%ra
+            dec    (dest1:dest2) = pacsobs%slice(islice)%p%dec
+            pa     (dest1:dest2) = pacsobs%slice(islice)%p%pa
+            chop   (dest1:dest2) = pacsobs%slice(islice)%p%chop
+            masked (dest1:dest2) = pacsobs%slice(islice)%p%masked
+            removed(dest1:dest2) = pacsobs%slice(islice)%p%removed
+            dest1 = dest2 + 1
+        end do
+
+        allocate (obs)
+        call obs%init(time, ra, dec, pa, chop, masked, removed, pacsobs%slice%nsamples, pacsobs%slice%compression_factor,          &
+                      (pacsobs%slice%compression_factor - 1) / (2._p * pacsobs%slice%compression_factor), status)
+        obs%slice%id = pacsobs%slice%filename
+
+    end subroutine pacsobs2obs
 
 end program test_pacsinstrument
 

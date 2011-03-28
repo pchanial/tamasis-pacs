@@ -3,8 +3,9 @@ program test_ngc6946_bpj
     use iso_fortran_env,        only : ERROR_UNIT, OUTPUT_UNIT
     use module_fitstools,       only : ft_read_keyword
     use module_math,            only : pInf, neq_real, sum_kahan
+    use module_observation,     only : MaskPolicy, Observation
     use module_pacsinstrument,  only : NDIMS, NVERTICES, NEAREST_NEIGHBOUR, SHARP_EDGES, PacsInstrument
-    use module_pacsobservation, only : PacsObservation, MaskPolicy
+    use module_pacsobservation, only : PacsObservation
     use module_pointingmatrix,  only : PointingElement, pmatrix_direct, pmatrix_transpose
     use module_preprocessor,    only : subtract_meandim1, divide_vectordim2
     use module_projection,      only : surface_convex_polygon
@@ -14,8 +15,9 @@ program test_ngc6946_bpj
     use omp_lib
     implicit none
 
+    class(Observation), allocatable     :: obs
     class(PacsInstrument), allocatable  :: pacs
-    class(PacsObservation), allocatable :: obs
+    class(PacsObservation), allocatable :: pacsobs
     type(MaskPolicy)                    :: policy
     character(len=*), parameter         :: dir = '/home/pchanial/data/pacs/transpScan/'
     character(len=*), parameter         :: filename(1) = dir // '1342184520_blue_PreparedFrames.fits[12001:16000]'
@@ -39,22 +41,25 @@ program test_ngc6946_bpj
     call system_clock(count0, count_rate, count_max)
 
     ! initialise observation
-    allocate (obs)
-    call obs%init(filename, policy, status, verbose=.true.)
+    allocate (pacsobs)
+    call pacsobs%init(filename, policy, status, verbose=.true.)
     if (status == 104) then
        print *, 'Aborting test: file not found.'
        stop
     end if
     if (status /= 0) call failure('pacsobservation%init')
-    nsamples = obs%slice(1)%nvalids
+    call pacsobs%print()
 
-    call obs%print()
+    call pacsobs2obs(pacsobs, obs, status)
+    if (status /= 0) call failure('pacsobs2obs')
+
+    nsamples = sum(obs%slice%nvalids)
 
     ! initialise pacs instrument
     allocate (pacs)
     detector_mask = .true.
     detector_mask(1:16,17:32) = .false.
-    call pacs%init_with_calfiles(obs%band, detector_mask, 1, status)
+    call pacs%init_with_calfiles(pacsobs%band, detector_mask, 1, status)
     if (status /= 0) call failure('pacs%init_with_calfiles')
 
     ! get header map
@@ -111,7 +116,7 @@ program test_ngc6946_bpj
     !!$omp parallel do default(shared) firstprivate(chop_old) private(ipointing, isample, ra, dec, pa, chop, coords, coords_yz)
     isample = 1
     do ipointing = 1, obs%slice(1)%nsamples
-        if (obs%slice(1)%p(ipointing)%removed) cycle
+        if (obs%pointing(ipointing)%removed) cycle
         call obs%get_position_index(1, ipointing, 1, obs%slice(1)%offset, ra, dec, pa, chop)
         if (abs(chop-chop_old) > 1.e-2_p) then
             coords_yz = pacs%uv2yz(pacs%detector_corner, pacs%distortion_yz, chop)
@@ -176,5 +181,36 @@ contains
         write (ERROR_UNIT,'(a)'), 'FAILED: ' // errmsg
         stop 1
     end subroutine failure
+
+    subroutine pacsobs2obs(pacsobs, obs, status)
+        class(PacsObservation), intent(in) :: pacsobs
+        class(Observation), intent(out)    :: obs
+        integer, intent(out)               :: status
+        real(p), dimension(pacsobs%nsamples)   :: time, ra, dec, pa, chop
+        logical*1, dimension(pacsobs%nsamples) :: masked, removed
+        integer :: islice, nslices, nsamples_tot, dest1, dest2
+        ! delay is the instrument lag wrt the telescope
+        
+        nslices = size(pacsobs%slice)
+        nsamples_tot = sum(pacsobs%slice%nsamples)
+        dest1 = 1
+        do islice = 1, nslices
+            dest2 = dest1 + pacsobs%slice(islice)%nsamples - 1
+            time   (dest1:dest2) = pacsobs%slice(islice)%p%time
+            ra     (dest1:dest2) = pacsobs%slice(islice)%p%ra
+            dec    (dest1:dest2) = pacsobs%slice(islice)%p%dec
+            pa     (dest1:dest2) = pacsobs%slice(islice)%p%pa
+            chop   (dest1:dest2) = pacsobs%slice(islice)%p%chop
+            masked (dest1:dest2) = pacsobs%slice(islice)%p%masked
+            removed(dest1:dest2) = pacsobs%slice(islice)%p%removed
+            dest1 = dest2 + 1
+        end do
+
+        allocate (obs)
+        call obs%init(time, ra, dec, pa, chop, masked, removed, pacsobs%slice%nsamples, pacsobs%slice%compression_factor,          &
+                      (pacsobs%slice%compression_factor - 1) / (2._p * pacsobs%slice%compression_factor), status)
+        obs%slice%id = pacsobs%slice%filename
+
+    end subroutine pacsobs2obs
 
 end program test_ngc6946_bpj
