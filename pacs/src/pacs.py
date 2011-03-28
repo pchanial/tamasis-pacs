@@ -294,10 +294,10 @@ class PacsBase(Observation):
             raise ValueError('Invalid number of dimensions.')
         m = np.ascontiguousarray(self.instrument.detector.removed).view(np.int8)
         n = self.get_ndetectors()
-        output = tmf.pacs_pack(input.view(np.int8).T, n, m.T).T.squeeze()
+        output = tmf.pacs_pack(input.view(np.int8).T, n, m.T).T
         if type(input) == np.ndarray:
-            return output.view(dtype=input.dtype)
-        output = output.view(type=input.__class__, dtype=input.dtype)
+            return output.view(dtype=input.dtype).squeeze()
+        output = output.view(type=input.__class__, dtype=input.dtype).squeeze()
         if hasattr(input, '_unit'):
             output._unit = input._unit
             output._derived_units = input._derived_units.copy()
@@ -318,10 +318,10 @@ class PacsBase(Observation):
         elif input.ndim != 2:
             raise ValueError('Invalid number of dimensions.')
         m = np.ascontiguousarray(self.instrument.detector.removed).view(np.int8)
-        output = tmf.pacs_unpack(input.view(np.int8).T, m.T).T.squeeze()
+        output = tmf.pacs_unpack(input.view(np.int8).T, m.T).T
         if type(input) == np.ndarray:
-            return output.view(dtype=input.dtype)
-        output = output.view(type=input.__class__, dtype=input.dtype)
+            return output.view(dtype=input.dtype).squeeze()
+        output = output.view(type=input.__class__, dtype=input.dtype).squeeze()
         if hasattr(input, '_unit'):
             output._unit = input._unit
             output._derived_units = input._derived_units.copy()
