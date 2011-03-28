@@ -6,6 +6,7 @@ try:
 except:
     print('Warning: Library PyFFTW3 is not installed.')
 
+import gc
 import multiprocessing
 import numpy as np
 import scipy.signal
@@ -239,7 +240,11 @@ class AcquisitionModel(object):
                       str(input.shape).replace(' ','') +  ' = ' + \
                       str(input.dtype.itemsize * input.size / 2.**20) + \
                       ' MiB in ' + self.description + '.')
-            input = input.copy()
+            try:
+                input = input.copy()
+            except MemoryError:
+                gc.collect()
+                input = input.copy()
 
         for k,v in self.attrin:
             setattr(input, k, v)
@@ -313,9 +318,17 @@ class AcquisitionModel(object):
             if type(shapeout[-1]) is tuple and not issubclass(typeout, Tod):
                 typeout = Tod
             if typeout is np.ndarray:
-                output = np.empty(shapeout_flat, self.dtype)
+                try:
+                    output = np.empty(shapeout_flat, self.dtype)
+                except MemoryError:
+                    gc.collect()
+                    output = np.empty(shapeout_flat, self.dtype)
             else:
-                output = typeout.empty(shapeout, dtype=self.dtype)
+                try:
+                    output = typeout.empty(shapeout, dtype=self.dtype)
+                except MemoryError:
+                    gc.collect()
+                    output = typeout.empty(shapeout, dtype=self.dtype)
 
             # validate output
             if type(shapeout[-1]) is tuple:
