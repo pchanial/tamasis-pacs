@@ -173,23 +173,52 @@ subroutine pointing_matrix_mask(pmatrix, mask1d, npixels_per_sample, nsamples, n
     implicit none
 
     !f2py threadsafe
-    !f2py integer*8, dimension(npixels_per_sample*nsamples*ndetectors), intent(inout) :: pmatrix
+    !f2py integer*8, dimension(npixels_per_sample*nsamples*ndetectors), intent(in) :: pmatrix
     !f2py intent(inout)    :: mask1d
     !f2py intent(in)       :: npixels_per_sample
     !f2py intent(in)       :: nsamples
     !f2py intent(in)       :: ndetectors
-    !f2py intent(hide)     :: npixels = size(map1d)
+    !f2py intent(hide)     :: npixels = size(mask1d)
+
+    type(PointingElement), intent(in) :: pmatrix(npixels_per_sample, nsamples, ndetectors)
+    logical*1, intent(inout)          :: mask1d(npixels)
+    integer, intent(in)               :: npixels_per_sample
+    integer, intent(in)               :: nsamples
+    integer, intent(in)               :: ndetectors
+    integer, intent(in)               :: npixels
+
+    call pmatrix_mask(pmatrix, mask1d)
+
+end subroutine pointing_matrix_mask
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine pointing_matrix_pack(pmatrix, mask1d, npixels_per_sample, nsamples, ndetectors, npixels)
+
+    use module_pointingmatrix, only : PointingElement, pmatrix_pack
+    use module_tamasis,        only : p
+    implicit none
+
+    !f2py threadsafe
+    !f2py integer*8, dimension(npixels_per_sample*nsamples*ndetectors), intent(inout) :: pmatrix
+    !f2py intent(in)   :: mask1d
+    !f2py intent(in)   :: npixels_per_sample
+    !f2py intent(in)   :: nsamples
+    !f2py intent(in)   :: ndetectors
+    !f2py intent(hide) :: npixels = size(mask1d)
 
     type(PointingElement), intent(inout) :: pmatrix(npixels_per_sample, nsamples, ndetectors)
-    logical*1, intent(inout)             :: mask1d(npixels)
+    logical*1, intent(in)                :: mask1d(npixels)
     integer, intent(in)                  :: npixels_per_sample
     integer, intent(in)                  :: nsamples
     integer, intent(in)                  :: ndetectors
     integer, intent(in)                  :: npixels
 
-    call pmatrix_mask(pmatrix, mask1d)
+    call pmatrix_pack(pmatrix, mask1d)
 
-end subroutine pointing_matrix_mask
+end subroutine pointing_matrix_pack
 
 
 !-----------------------------------------------------------------------------------------------------------------------------------

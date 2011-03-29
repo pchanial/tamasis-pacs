@@ -15,6 +15,7 @@ module module_pointingmatrix
     public :: pmatrix_transpose
     public :: pmatrix_ptp
     public :: pmatrix_mask
+    public :: pmatrix_pack
     public :: xy2roi
     public :: xy2pmatrix
     public :: roi2pmatrix
@@ -158,6 +159,46 @@ contains
         !$omp end parallel do
 
     end subroutine pmatrix_mask
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine pmatrix_pack(pmatrix, mask)
+        ! True means: not observed
+
+        type(pointingelement), intent(inout) :: pmatrix(:,:,:)
+        logical(1), intent(in)               :: mask(0:)
+
+        integer :: table(lbound(mask,1):ubound(mask,1))
+        integer :: idetector, isample, ipixel, ipacked, npixels, nsamples, ndetectors, pixel
+
+        ! fill a table which contains the packed indices of the non-masked pixels
+        ipacked = 0
+        do ipixel=0, size(mask)-1
+            if (mask(ipixel)) cycle
+            table(ipixel) = ipacked
+            ipacked = ipacked + 1
+        end do
+
+        npixels    = size(pmatrix, 1)
+        nsamples   = size(pmatrix, 2)
+        ndetectors = size(pmatrix, 3)
+
+        !$omp parallel do private(pixel)
+        do idetector = 1, ndetectors
+            do isample = 1, nsamples
+                do ipixel = 1, npixels
+                    pixel = pmatrix(ipixel,isample,idetector)%pixel
+                    if (pixel == -1) exit
+                    if (mask(pixel)) cycle
+                    pmatrix(ipixel,isample,idetector)%pixel = table(pixel)
+                end do
+            end do
+        end do
+        !$omp end parallel do
+
+    end subroutine pmatrix_pack
 
 
     !-------------------------------------------------------------------------------------------------------------------------------

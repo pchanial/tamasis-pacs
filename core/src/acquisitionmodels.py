@@ -922,9 +922,11 @@ class Projection(AcquisitionModelLinear):
     """
 
     def __init__(self, observation, method=None, header=None, resolution=None,
-                 npixels_per_sample=0, oversampling=True, description=None):
+                 npixels_per_sample=0, oversampling=True, packed=False,
+                 description=None):
 
-        self.method, pmatrix, self.header, ndetectors, nsamples, \
+        self.ispacked = packed
+        self.method, pmatrix, self.header, self.ndetectors, nsamples, \
         self.npixels_per_sample, (unitout, unitin), (duout, duin) = \
             observation.get_pointing_matrix(header,
                                             resolution,
@@ -932,15 +934,28 @@ class Projection(AcquisitionModelLinear):
                                             method=method,
                                             oversampling=oversampling)
 
+        self._mask = None
+        self.nsamples_tot = int(np.sum(nsamples))
+        self._pmatrix = pmatrix
+        if self.npixels_per_sample == 0:
+            pmatrix = np.empty(0, dtype=np.int64)
+        self.pmatrix = pmatrix.view([('weight', 'f4'), ('pixel', 'i4')]) \
+                              .view(np.recarray)
+        self.pmatrix.shape = (self.ndetectors, np.sum(nsamples),
+                              self.npixels_per_sample)
+        if packed:
+            tmf.pointing_matrix_pack(self._pmatrix, self.get_mask().view(np.int8).T, self.npixels_per_sample, self.nsamples_tot, self.ndetectors)
+            shapein = (int(np.sum(~self.get_mask())))
+        else:
+            shapein = tuple([self.header['naxis'+str(i+1)] for i in \
+                             reversed(list(range(self.header['naxis'])))])
         attrin = {'header' : self.header}
         if duin is not None:
             attrin['derived_units'] = duin
         attrout = {}
         if duout is not None:
             attrout['derived_units'] = duout
-        shapein = tuple([self.header['naxis'+str(i+1)] \
-                         for i in reversed(list(range(self.header['naxis'])))])
-        shapeout = combine_sliced_shape(ndetectors, nsamples)
+        shapeout = combine_sliced_shape(self.ndetectors, nsamples)
         AcquisitionModelLinear.__init__(self,
                                         cache=True,
                                         description=description,
@@ -952,13 +967,6 @@ class Projection(AcquisitionModelLinear):
                                         typeout=Tod,
                                         unitin=unitin,
                                         unitout=unitout)
-        self._pmatrix = pmatrix
-        if self.npixels_per_sample == 0:
-            pmatrix = np.empty(0, dtype=np.int64)
-        self.pmatrix = pmatrix.view([('weight', 'f4'), ('pixel', 'i4')]) \
-                              .view(np.recarray)
-        self.pmatrix.shape = (ndetectors, np.sum(nsamples),
-                              self.npixels_per_sample)
 
     def direct(self, input, inplace, cachein, cacheout):
         input, output = self.validate_input_direct(input, cachein, cacheout)
@@ -973,18 +981,19 @@ class Projection(AcquisitionModelLinear):
         return output
 
     def get_ptp(self):
-        ndetectors = self.shapeout[0]
-        nsamples = np.sum(self.shapeout[1])
         npixels = np.product(self.shapein)
         return tmf.pointing_matrix_ptp(self._pmatrix, self.npixels_per_sample,
-                                       nsamples, ndetectors, npixels).T
+            self.nsamples_tot, self.ndetectors, npixels).T
 
     def get_mask(self):
-        mask = Map.empty(self.shapein, dtype=np.bool8, header=self.header)
-        tmf.pointing_matrix_mask(self._pmatrix, mask.view(np.int8).T, 
-            self.npixels_per_sample, int(np.sum(self.shapeout[1])),
-            self.shapeout[0])
-        return mask
+        if self._mask is not None:
+            return self._mask
+        shapein = tuple([self.header['naxis'+str(i+1)] for i in \
+                         reversed(list(range(self.header['naxis'])))])
+        self._mask = Map.empty(shapein, dtype=np.bool8, header=self.header)
+        tmf.pointing_matrix_mask(self._pmatrix, self._mask.view(np.int8).T, 
+            self.npixels_per_sample, self.nsamples_tot, self.ndetectors)
+        return self._mask
 
 
 #-------------------------------------------------------------------------------
