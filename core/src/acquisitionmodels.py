@@ -39,6 +39,7 @@ __all__ = [
     'InterpolationLinear',
     'InvNtt',
     'Masking',
+    'Packing',
     'Padding',
     'Projection',
     'Reshaping',
@@ -1194,6 +1195,37 @@ class Unpacking(AcquisitionModelLinear):
     def transpose(self, input, inplace, cachein, cacheout):
         input, output = self.validate_input_transpose(input, cachein, cacheout)
         tmf.unpack_transpose(input.T, self.mask.view(np.int8).T, output.T)
+        return output
+
+
+#-------------------------------------------------------------------------------
+
+
+class Packing(AcquisitionModelLinear):
+    """
+    Convert an nd array in a 1d map, under the control of a mask.
+    The elements for which the mask is True are equal to the field argument.
+    """
+
+    def __init__(self, mask, field=0., description=None):
+        mask = np.array(mask, np.bool8)
+        AcquisitionModelLinear.__init__(self,
+                                        cache=True,
+                                        description=description,
+                                        shapein=mask.shape,
+                                        shapeout=np.sum(mask == 0))
+        self.mask = mask
+        self.field = field
+
+    def direct(self, input, inplace, cachein, cacheout):
+        input, output = self.validate_input_direct(input, cachein, cacheout)
+        tmf.unpack_transpose(input.T, self.mask.view(np.int8).T, output.T)
+        return output
+
+    def transpose(self, input, inplace, cachein, cacheout):
+        input, output = self.validate_input_transpose(input, cachein, cacheout)
+        tmf.unpack_direct(input.T, self.mask.view(np.int8).T, output.T,
+                          self.field)
         return output
 
 

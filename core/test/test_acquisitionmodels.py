@@ -139,6 +139,19 @@ if tod3.shape != tod.shape: raise TestFailure('padding shapeb')
 if any_neq(tod3,tod): raise TestFailure('padding end')
 
 
+#-------------
+# (Un)Packing
+#-------------
+
+p = Packing([False, True, True, False])
+if any_neq(p([1,2,3,4]), [1,4]): raise TestFailure('packing')
+if any_neq(p.T([1,4]), [1,0,0,4]): raise TestFailure('packing.T')
+
+u = Unpacking([False, True, True, False])
+if any_neq(u([1,4]), [1,0,0,4]): raise TestFailure('unpacking')
+if any_neq(u.T([1,2,3,4]), [1,4]): raise TestFailure('unpacking.T')
+
+
 #-----
 # Fft
 #-----
