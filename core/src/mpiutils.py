@@ -23,7 +23,7 @@ def split_observation(comm, detectors, observations):
     # number of detectors, grouped by the number of cpu cores
     ny = int(np.ceil(float(ndetectors) / nthreads))
 
-    # we start with the miminum blocksize and increase it until we find a
+    # we start with the minimum blocksize and increase it until we find a
     # configuration that covers all the observations
     blocksize = int(np.ceil(float(nx * ny) / size))
     while True:
@@ -59,6 +59,6 @@ def split_observation(comm, detectors, observations):
     igood = np.where(~detectors_.ravel())[0]
     detectors_.ravel()[igood[0:idetector.start]] = True
     detectors_.ravel()[igood[idetector.stop:]] = True
-    observations_ = list(observations)
+    observations_ = observations[iobservation]
 
     return detectors_, observations_
