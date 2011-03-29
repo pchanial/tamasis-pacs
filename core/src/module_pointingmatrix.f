@@ -14,6 +14,7 @@ module module_pointingmatrix
     public :: pmatrix_direct
     public :: pmatrix_transpose
     public :: pmatrix_ptp
+    public :: pmatrix_mask
     public :: xy2roi
     public :: xy2pmatrix
     public :: roi2pmatrix
@@ -127,6 +128,36 @@ contains
         !$omp end parallel do
 
     end subroutine pmatrix_ptp
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine pmatrix_mask(pmatrix, mask)
+        ! True means: not observed
+        type(pointingelement), intent(in) :: pmatrix(:,:,:)
+        logical(1), intent(out)           :: mask(0:)
+        integer                           :: idetector, isample, ipixel, npixels, nsamples, ndetectors, pixel
+
+        npixels    = size(pmatrix, 1)
+        nsamples   = size(pmatrix, 2)
+        ndetectors = size(pmatrix, 3)
+
+        mask = .true.
+        !$omp parallel do private(pixel)
+        do idetector = 1, ndetectors
+            do isample = 1, nsamples
+                do ipixel = 1, npixels
+                    pixel = pmatrix(ipixel,isample,idetector)%pixel
+                    if (pixel == -1) exit
+                    if (pmatrix(ipixel,isample,idetector)%weight <= 0) cycle
+                    mask(pixel) = .false.
+                end do
+            end do
+        end do
+        !$omp end parallel do
+
+    end subroutine pmatrix_mask
 
 
     !-------------------------------------------------------------------------------------------------------------------------------

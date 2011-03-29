@@ -37,6 +37,13 @@ if not np.all(tod.mask == tod2.mask): raise TestFailure()
 
 # all observation
 obs = PacsObservation(data_dir+'frames_blue.fits')
+
+# get_mask
+proj = Projection(obs, npixels_per_sample=6)
+o = Tod.ones(proj.shapeout)
+nocoverage = mapper_naive(o, proj).coverage == 0
+if any_neq(nocoverage, proj.get_mask().magnitude): raise TestFailure()
+
 tod = obs.get_tod()
 filename = 'obs-'+str(uuid1())+'.fits'
 try:
@@ -135,3 +142,5 @@ t = proj2(m)
 if any_neq(minmax(t), [0,0]): raise TestFailure()
 t[:] = 1
 if any_neq(minmax(proj2.T(t)), [0,0]): raise TestFailure()
+
+

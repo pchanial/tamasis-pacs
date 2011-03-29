@@ -979,6 +979,13 @@ class Projection(AcquisitionModelLinear):
         return tmf.pointing_matrix_ptp(self._pmatrix, self.npixels_per_sample,
                                        nsamples, ndetectors, npixels).T
 
+    def get_mask(self):
+        mask = Map.empty(self.shapein, dtype=np.bool8, header=self.header)
+        tmf.pointing_matrix_mask(self._pmatrix, mask.view(np.int8).T, 
+            self.npixels_per_sample, int(np.sum(self.shapeout[1])),
+            self.shapeout[0])
+        return mask
+
 
 #-------------------------------------------------------------------------------
 
