@@ -76,6 +76,10 @@ def mapper_naive(tod, model, unit=None):
         return mymap
 
     # make sure that the map unit is compatible with the input unit of the model
+    if len(mymap._unit) == 0:
+        mymap._unit = model.unitin
+        return mymap
+
     if all([u in mymap._unit and mymap._unit[u] == v \
             for u,v in model.unitin.items()]):
         return mymap
