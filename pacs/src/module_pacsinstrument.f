@@ -948,7 +948,7 @@ contains
         logical*1, intent(out)            :: mask  (:,:)
         integer, intent(out)              :: status
 
-        integer                   :: first, last
+        integer                   :: pfirst, plast, sfirst, slast
         integer                   :: ip, iq
         integer                   :: idetector, ndetectors, unit
         integer, allocatable      :: signal_shape(:), mask_shape(:)
@@ -968,21 +968,23 @@ contains
         ndetectors = size(signal, 2)
 
         ! get first and last valid pointing, to decrease I/O
-        do first = obs%slice(islice)%first, obs%slice(islice)%last
-            if (.not. obs%pointing(first)%removed) exit
+        do pfirst = obs%slice(islice)%first, obs%slice(islice)%last
+            if (.not. obs%pointing(pfirst)%removed) exit
         end do
-        do last = obs%slice(islice)%last, obs%slice(islice)%first, -1
-            if (.not. obs%pointing(last)%removed) exit
+        do plast = obs%slice(islice)%last, obs%slice(islice)%first, -1
+            if (.not. obs%pointing(plast)%removed) exit
         end do
 
         ! test if all samples are removed in this slice
-        if (first > last) then
+        if (pfirst > plast) then
             status = 0
             return
         end if
 
-        ! set mask from policy
-        mask = spread(pack(obs%pointing(first:last)%masked, .not. obs%pointing(first:last)%removed), 2, ndetectors)
+        sfirst = pfirst - obs%slice(islice)%first + 1
+        slast  = plast  - obs%slice(islice)%first + 1
+
+        mask = spread(pack(obs%pointing(pfirst:plast)%masked, .not. obs%pointing(pfirst:plast)%removed), 2, ndetectors)
 
         ! read signal HDU
         call ft_open_image(trim(obs%slice(islice)%id) // '[Signal]', unit, 3, signal_shape, status)
@@ -992,16 +994,15 @@ contains
         mask_shape(1)  = (signal_shape(1) - 1) / 32 + 1
         mask_shape(2:) = signal_shape(2:)
 
-        allocate (signal_(last - first + 1), mask_(last - first + 1))
+        allocate (signal_(slast - sfirst + 1), mask_(slast - sfirst + 1))
         do idetector = 1, ndetectors
 
             ip = this%pq(1,idetector)
             iq = this%pq(2,idetector)
-
-            call ft_read_slice(unit, first, last, iq+1, ip+1, signal_shape, signal_, status)
+            call ft_read_slice(unit, sfirst, slast, iq+1, ip+1, signal_shape, signal_, status)
             if (status /= 0) return
 
-            signal(:,idetector) = pack(signal_, .not. obs%pointing(first:last)%removed)
+            signal(:,idetector) = pack(signal_, .not. obs%pointing(pfirst:plast)%removed)
 
         end do
 
@@ -1021,8 +1022,8 @@ contains
             if (status /= 0) return
         end do
 
-        firstcompressed = (first - 1) / 32 + 1
-        lastcompressed  = (last  - 1) / 32 + 1
+        firstcompressed = (sfirst - 1) / 32 + 1
+        lastcompressed  = (slast  - 1) / 32 + 1
         ncompressed     = lastcompressed - firstcompressed + 1
         allocate (maskcompressed(ncompressed))
 
@@ -1065,16 +1066,16 @@ contains
                     maskval = maskcompressed(icompressed-firstcompressed+1)
                     if (maskval == 0) cycle
 
-                    isample = (icompressed-1)*32 - first + 2
+                    isample = (icompressed-1)*32 - sfirst + 2
 
                     ! loop over the bits of a compressed mask byte
-                    do ibit = max(0, first - (icompressed-1)*32 - 1), min(31, last - (icompressed-1)*32 - 1)
+                    do ibit = max(0, sfirst - (icompressed-1)*32 - 1), min(31, slast - (icompressed-1)*32 - 1)
                         mask_(isample+ibit) = btest(maskval,ibit)
                     end do
 
                 end do
 
-                mask(:,idetector) = mask(:,idetector) .or. pack(mask_, .not. obs%pointing(first:last)%removed)
+                mask(:,idetector) = mask(:,idetector) .or. pack(mask_, .not. obs%pointing(pfirst:plast)%removed)
 
             end do
 
