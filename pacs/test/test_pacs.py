@@ -38,16 +38,16 @@ if not np.all(tod.mask == tod2.mask): raise TestFailure()
 # all observation
 obs = PacsObservation(data_dir+'frames_blue.fits')
 
-# get_mask
+# get mask
 proj = Projection(obs, npixels_per_sample=6, oversampling=False)
 o = Tod.ones(proj.shapeout)
 nocoverage = mapper_naive(o, proj).coverage == 0
-if any_neq(nocoverage, proj.get_mask().magnitude): raise TestFailure()
+if any_neq(nocoverage, proj.mask.magnitude): raise TestFailure()
 tod = obs.get_tod()
 
 # packed projection
 proj2 = Projection(obs, npixels_per_sample=6, packed=True, oversampling=False)
-proj3 = proj2 * Unpacking(proj2.get_mask()).T
+proj3 = proj2 * Unpacking(proj2.mask).T
 
 if any_neq(proj.T(tod), proj3.T(tod)): raise TestFailure()
 

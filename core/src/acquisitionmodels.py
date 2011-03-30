@@ -21,6 +21,7 @@ from .numpyutils import _my_isscalar
 from .processing import interpolate_linear
 from .quantity import Quantity, UnitError, _divide_unit, _multiply_unit
 from .utils import diff, diffT, diffTdiff, shift
+from .mpiutils import split_work
 
 __all__ = [
     'AcquisitionModel',
@@ -944,12 +945,18 @@ class Projection(AcquisitionModelLinear):
                               .view(np.recarray)
         self.pmatrix.shape = (self.ndetectors, np.sum(nsamples),
                               self.npixels_per_sample)
+
+        shapein = tuple([self.header['naxis'+str(i+1)] for i in \
+                         reversed(list(range(self.header['naxis'])))])
+        self.mask = Map.empty(shapein, dtype=np.bool8, header=self.header)
+        tmf.pointing_matrix_mask(self._pmatrix, self.mask.view(np.int8).T, 
+            self.npixels_per_sample, self.nsamples_tot, self.ndetectors)
+
         if packed:
-            tmf.pointing_matrix_pack(self._pmatrix, self.get_mask().view(np.int8).T, self.npixels_per_sample, self.nsamples_tot, self.ndetectors)
-            shapein = (int(np.sum(~self.get_mask())))
-        else:
-            shapein = tuple([self.header['naxis'+str(i+1)] for i in \
-                             reversed(list(range(self.header['naxis'])))])
+            tmf.pointing_matrix_pack(self._pmatrix, self.mask.view(np.int8).T,
+                self.npixels_per_sample, self.nsamples_tot, self.ndetectors)
+            shapein = (int(np.sum(~self.mask)))
+
         attrin = {'header' : self.header}
         if duin is not None:
             attrin['derived_units'] = duin
@@ -985,16 +992,6 @@ class Projection(AcquisitionModelLinear):
         npixels = np.product(self.shapein)
         return tmf.pointing_matrix_ptp(self._pmatrix, self.npixels_per_sample,
             self.nsamples_tot, self.ndetectors, npixels).T
-
-    def get_mask(self):
-        if self._mask is not None:
-            return self._mask
-        shapein = tuple([self.header['naxis'+str(i+1)] for i in \
-                         reversed(list(range(self.header['naxis'])))])
-        self._mask = Map.empty(shapein, dtype=np.bool8, header=self.header)
-        tmf.pointing_matrix_mask(self._pmatrix, self._mask.view(np.int8).T, 
-            self.npixels_per_sample, self.nsamples_tot, self.ndetectors)
-        return self._mask
 
 
 #-------------------------------------------------------------------------------
