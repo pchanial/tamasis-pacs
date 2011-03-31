@@ -12,12 +12,6 @@ subroutine pacs_info_instrument_init(filename, nfilenames, band, transparent_mod
     use module_pacsobservation, only : PacsObservationSlice
     implicit none
 
-    !f2py threadsafe
-    !f2py intent(in)              :: filename
-    !f2py intent(in)              :: nfilenames
-    !f2py intent(out)             :: band
-    !f2py intent(out)             :: status
-
     character(len=*), intent(in)  :: filename
     integer, intent(in)           :: nfilenames
     character(len=7), intent(out) :: band
@@ -111,22 +105,6 @@ subroutine pacs_info_instrument(band, nrows, ncolumns, input_active_fraction, de
     use module_tamasis,        only : p
     implicit none
 
-    !f2py threadsafe
-    !f2py intent(in)             :: band
-    !f2py intent(in)             :: nrows
-    !f2py intent(in)             :: ncolumns
-    !f2py intent(in)             :: input_active_fraction
-    !f2py intent(out)            :: detector_bad
-    !f2py intent(out)            :: detector_center
-    !f2py intent(out)            :: detector_corner
-    !f2py intent(out)            :: detector_area
-    !f2py intent(out)            :: distortion_yz
-    !f2py intent(out)            :: flatfield_optical
-    !f2py intent(out)            :: flatfield_detector
-    !f2py intent(out)            :: responsivity
-    !f2py intent(out)            :: output_active_fraction
-    !f2py intent(out)            :: status
-
     character(len=*), intent(in) :: band
     integer, intent(in)          :: nrows, ncolumns
     real(p), intent(in)          :: input_active_fraction
@@ -175,12 +153,6 @@ subroutine pacs_info_observation_init(filename, nfilenames, nsamples, status)
     use module_tamasis,         only : p
     implicit none
 
-    !f2py threadsafe
-    !f2py intent(in)             :: filename
-    !f2py intent(in)             :: nfilenames
-    !f2py intent(out)            :: nsamples(nfilenames)
-    !f2py intent(out)            :: status
-
     character(len=*), intent(in) :: filename
     integer, intent(in)          :: nfilenames
     integer, intent(out)         :: nsamples(nfilenames)
@@ -222,31 +194,21 @@ subroutine pacs_info_observation(filename, nfilenames, policy, nsamples_tot, obs
     use module_tamasis,         only : POLICY_KEEP, POLICY_MASK, POLICY_REMOVE, p
     implicit none
 
-    !f2py threadsafe
-    !f2py intent(in)            :: filename
-    !f2py intent(in)            :: nfilenames
-    !f2py intent(in)            :: policy
-    !f2py intent(in)            :: nsamples_tot
     !f2py character(len=70*nfilenames), intent(out), depend(nfilenames) :: cusmode, unit
-    !f2py intent(out)           :: obsid, compression, ra, dec, cam_angle, scan_angle, scan_length, scan_step
-    !f2py intent(out)           :: scan_nlegs
-    !f2py intent(out)           :: frame_time, frame_ra, frame_dec, frame_pa, frame_chop, frame_info, frame_masked, frame_removed
-    !f2py intent(out)           :: nmasks, mask_activated
     !f2py character(len=70*32*nfilenames), intent(out), depend(nfilenames) :: mask_name
-    !f2py intent(out)           :: status
 
-    character(len=*), intent(in)                    :: filename
-    integer, intent(in)                             :: nfilenames
-    integer, intent(in)                             :: policy(4)
-    integer, intent(in)                             :: nsamples_tot
-    character(len=70*nfilenames), intent(out)       :: cusmode, unit !XXX hack around f2py bug with array of characters
-    real(p), intent(out), dimension(nfilenames)     :: ra, dec, cam_angle, scan_angle, scan_length, scan_step
-    integer, intent(out), dimension(nfilenames)     :: obsid, compression, scan_nlegs, nmasks
-    real(p), intent(out), dimension(nsamples_tot)   :: frame_time, frame_ra, frame_dec, frame_pa, frame_chop, frame_info
-    logical*1, intent(out), dimension(nsamples_tot) :: frame_masked, frame_removed
-    character(len=70*32*nfilenames), intent(out)    :: mask_name
-    logical*1, dimension(32,nfilenames)             :: mask_activated
-    integer, intent(out)                            :: status
+    character(len=*), intent(in)                     :: filename
+    integer, intent(in)                              :: nfilenames
+    integer, intent(in)                              :: policy(4)
+    integer, intent(in)                              :: nsamples_tot
+    character(len=70*nfilenames), intent(out)        :: cusmode, unit !XXX hack around f2py bug with array of characters
+    real(p), intent(out), dimension(nfilenames)      :: ra, dec, cam_angle, scan_angle, scan_length, scan_step
+    integer, intent(out), dimension(nfilenames)      :: obsid, compression, scan_nlegs, nmasks
+    real(p), intent(out), dimension(nsamples_tot)    :: frame_time, frame_ra, frame_dec, frame_pa, frame_chop, frame_info
+    logical*1, intent(out), dimension(nsamples_tot)  :: frame_masked, frame_removed
+    character(len=70*32*nfilenames), intent(out)     :: mask_name
+    logical*1, intent(out), dimension(32,nfilenames) :: mask_activated
+    integer, intent(out)                             :: status
 
     integer, parameter                  :: NMASKS_MAX = 32
     integer, parameter                  :: FLEN_VALUE = 70
@@ -328,10 +290,6 @@ subroutine pacs_read_filter_calibration_ncorrelations(band, ncorrelations, statu
 
     use module_pacsinstrument, only : read_filter_calibration_ncorrelations
     implicit none
-
-    !f2py intent(in)             :: band
-    !f2py intent(out)            :: ncorrelations
-    !f2py intent(out)            :: status
     
     character(len=*), intent(in) :: band
     integer, intent(out)         :: ncorrelations
@@ -352,16 +310,6 @@ subroutine pacs_read_filter_calibration(band, ncorrelations, ndetectors, mask, n
     use module_pacsinstrument, only : read_filter_calibration
     use module_tamasis,        only : p
     implicit none
-
-    !f2py threadsafe
-    !f2py intent(in)             :: band
-    !f2py intent(in)             :: ncorrelations
-    !f2py intent(in)             :: ndetectors
-    !f2py intent(in)             :: mask
-    !f2py intent(hide)           :: nrows = shape(mask,0)
-    !f2py intent(hide)           :: ncolumns = shape(mask,1)
-    !f2py intent(out)            :: data
-    !f2py intent(out)            :: status
 
     character(len=*), intent(in) :: band
     integer, intent(in)          :: ncorrelations
@@ -405,32 +353,6 @@ subroutine pacs_map_header(band, nslices, npointings, nsamples_tot, compression_
     use module_observation,    only : Observation
     use module_tamasis,        only : p
     implicit none
-
-    !f2py threadsafe
-    !f2py intent(in)                               :: band
-    !f2py intent(hide),                            :: nslices=size(npointings)
-    !f2py intent(in)                               :: npointings(nslices)
-    !f2py intent(hide),                            :: nsamples_tot = size(time)
-    !f2py intent(in)                               :: compression_factor(nslices)
-    !f2py intent(in)                               :: delay(nslices)
-    !f2py intent(in)                               :: fine_sampling_factor
-    !f2py intent(in)                               :: oversampling
-    !f2py intent(in)                               :: time(nsamples_tot)
-    !f2py intent(in)                               :: ra(nsamples_tot)
-    !f2py intent(in)                               :: dec(nsamples_tot)
-    !f2py intent(in)                               :: pa(nsamples_tot)
-    !f2py intent(in)                               :: chop(nsamples_tot)
-    !f2py intent(in)                               :: masked(nsamples_tot)
-    !f2py intent(in)                               :: removed(nsamples_tot)
-    !f2py intent(in)                               :: detector_mask(nrows,ncolumns)
-    !f2py intent(hide)                             :: nrows = shape(detector_mask,0)
-    !f2py intent(hide)                             :: ncolumns = shape(detector_mask,1)
-    !f2py intent(in)                               :: detector_bad(nrows,ncolumns)
-    !f2py intent(in)                               :: detector_corner(2,4,nrows,ncolumns)
-    !f2py intent(in)                               :: distortion_yz(2,3,3,3)
-    !f2py intent(in)                               :: resolution
-    !f2py intent(out)                              :: header
-    !f2py intent(out)                              :: status
 
     character(len=*), intent(in)                   :: band
     integer, intent(in)                            :: nslices
@@ -491,36 +413,6 @@ subroutine pacs_tod(band, filename, nslices, npointings, nsamples_tot, compressi
     use module_tamasis,         only : p
     use module_string,          only : strsplit
     implicit none
-
-    !f2py threadsafe
-    !f2py intent(in)                               :: band
-    !f2py intent(in)                               :: filename
-    !f2py intent(hide)                             :: nslices=size(npointings)
-    !f2py intent(in)                               :: npointings(nslices)
-    !f2py intent(hide)                             :: nsamples_tot = size(time)
-    !f2py intent(in)                               :: compression_factor(nslices)
-    !f2py intent(in)                               :: delay(nslices)
-    !f2py intent(in)                               :: fine_sampling_factor
-    !f2py intent(in)                               :: time(nsamples_tot)
-    !f2py intent(in)                               :: ra(nsamples_tot)
-    !f2py intent(in)                               :: dec(nsamples_tot)
-    !f2py intent(in)                               :: pa(nsamples_tot)
-    !f2py intent(in)                               :: chop(nsamples_tot)
-    !f2py intent(in)                               :: masked(nsamples_tot)
-    !f2py intent(in)                               :: removed(nsamples_tot)
-    !f2py intent(in)                               :: detector_mask(nrows,ncolumns)
-    !f2py intent(in)                               :: detector_bad(nrows,ncolumns)
-    !f2py intent(in)                               :: flatfield_detector(nrows,ncolumns)
-    !f2py intent(in)                               :: do_flatfielding
-    !f2py intent(in)                               :: do_subtraction_mean
-    !f2py intent(in)                               :: nvalids
-    !f2py intent(in)                               :: ndetectors
-    !f2py intent(in)                               :: selected_mask
-    !f2py intent(hide)                             :: nrows=shape(detector_mask,0)
-    !f2py intent(hide)                             :: ncolumns=shape(detector_mask,1)
-    !f2py intent(out)                              :: signal(nvalids,ndetectors)
-    !f2py intent(out)                              :: mask(nvalids,ndetectors)
-    !f2py intent(out)                              :: status
 
     character(len=*), intent(in)                   :: band
     character(len=*), intent(in)                   :: filename
@@ -623,37 +515,7 @@ subroutine pacs_pointing_matrix(band, nslices, nvalids, npointings, nsamples_tot
     use module_tamasis,         only : p
     implicit none
 
-    !f2py threadsafe
-    !f2py intent(in)                               :: band
-    !f2py intent(hide),                            :: nslices=size(npointings)
-    !f2py intent(in)                               :: nvalids
-    !f2py intent(in)                               :: npointings(nslices)
-    !f2py intent(hide),                            :: nsamples_tot = size(time)
-    !f2py intent(in)                               :: compression_factor(nslices)
-    !f2py intent(in)                               :: delay(nslices)
-    !f2py intent(in)                               :: fine_sampling_factor
-    !f2py intent(in)                               :: oversampling
-    !f2py intent(in)                               :: time(nsamples_tot)
-    !f2py intent(in)                               :: ra(nsamples_tot)
-    !f2py intent(in)                               :: dec(nsamples_tot)
-    !f2py intent(in)                               :: pa(nsamples_tot)
-    !f2py intent(in)                               :: chop(nsamples_tot)
-    !f2py intent(in)                               :: masked(nsamples_tot)
-    !f2py intent(in)                               :: removed(nsamples_tot)
-    !f2py intent(in)                               :: method
-    !f2py intent(in)                               :: detector_mask(nrows,ncolumns)
-    !f2py intent(hide)                             :: nrows = shape(detector_mask,0)
-    !f2py intent(hide)                             :: ncolumns = shape(detector_mask,1)
-    !f2py intent(in)                               :: ndetectors
-    !f2py intent(in)                               :: detector_center(2,nrows,ncolumns)
-    !f2py intent(in)                               :: detector_corner(2,4,nrows,ncolumns)
-    !f2py intent(in)                               :: detector_area(nrows,ncolumns)
-    !f2py intent(in)                               :: distortion_yz(2,3,3,3)
-    !f2py intent(in)                               :: npixels_per_sample
-    !f2py intent(in)                               :: header
     !f2py integer*8, intent(inout),depend(npixels_per_sample,nvalids,ndetectors) :: pmatrix(npixels_per_sample*nvalids*ndetectors)
-    !f2py intent(out)                              :: new_npixels_per_sample
-    !f2py intent(out)                              :: status
 
     character(len=*), intent(in)                   :: band
     integer, intent(in)                            :: nslices
@@ -751,12 +613,6 @@ end subroutine pacs_pointing_matrix
 
 subroutine pacs_uv2ad(u, v, ncoords, ra, dec, pa, chop, nsamples, distortion_yz, a, d)
 
-    !f2py threadsafe
-    !f2py intent(in)   :: u, v, ra, dec, pa, chop, distortion_yz
-    !f2py intent(hide) :: ncoords = size(u)
-    !f2py intent(hide) :: nsamples = size(ra)
-    !f2py intent(out)  :: a, d
-
     use module_pacsinstrument, only : uv2yz, yz2ad
     use module_tamasis,        only : p
     implicit none
@@ -792,14 +648,6 @@ subroutine pacs_multiplexing_direct(signal, multiplexed, fine_sampling_factor, i
     use module_tamasis,        only : p
     implicit none
 
-    !f2py threadsafe
-    !f2py intent(in)       :: signal
-    !f2py intent(inout)    :: multiplexed
-    !f2py intent(in)       :: fine_sampling_factor
-    !f2py intent(in)       :: ij
-    !f2py intent(hide)     :: nsamples = shape(signal,0)
-    !f2py intent(hide)     :: ndetectors = shape(signal,1)
-
     real(p), intent(in)    :: signal(nsamples, ndetectors)
     integer*8, intent(in)  :: nsamples
     integer, intent(in)    :: ndetectors, fine_sampling_factor, ij(2, ndetectors)
@@ -818,14 +666,6 @@ subroutine pacs_multiplexing_transpose(multiplexed, signal, fine_sampling_factor
     use module_pacsinstrument, only : multiplexing_transpose
     use module_tamasis,        only : p
     implicit none
-
-    !f2py threadsafe
-    !f2py intent(in)       :: multiplexed
-    !f2py intent(inout)    :: signal
-    !f2py intent(in)       :: fine_sampling_factor
-    !f2py intent(in)       :: ij
-    !f2py intent(hide)     :: nsamples = shape(signal,0)
-    !f2py intent(hide)     :: ndetectors = shape(signal,1)
     
     integer*8, intent(in)  :: nsamples
     integer, intent(in)    :: ndetectors, fine_sampling_factor, ij(2, ndetectors)
@@ -843,11 +683,6 @@ end subroutine pacs_multiplexing_transpose
 subroutine pacs_bitmask(mask, nsamples, ndetectors, bitmask)
 
     implicit none
-
-    !f2py intent(in)       :: mask
-    !f2py intent(hide)     :: nsamples = shape(mask,0)
-    !f2py intent(hide)     :: ndetectors = shape(mask,1)
-    !f2py intent(out)      :: bitmask
 
     logical*1, intent(in)  :: mask(nsamples, ndetectors)
     integer, intent(in)    :: nsamples, ndetectors
@@ -877,14 +712,6 @@ subroutine pacs_pack(input, ndata, ncolumns, nrows, ndetectors, mask, output)
 
     use module_tamasis, only : p
     implicit none
-
-    !f2py intent(in)       :: input(ndata,ncolumns,nrows)
-    !f2py intent(hide)     :: ndata=shape(input,0)
-    !f2py intent(hide)     :: ncolumns=shape(input,1)
-    !f2py intent(hide)     :: nrows=shape(input,2)
-    !f2py intent(in)       :: ndetectors
-    !f2py intent(in)       :: mask(ncolumns,nrows)
-    !f2py intent(out)      :: output(ndata,ndetectors)
 
     integer, intent(in)    :: ndata, ncolumns, nrows, ndetectors
     integer*1, intent(in)  :: input(ndata,ncolumns,nrows)
@@ -920,14 +747,6 @@ subroutine pacs_unpack(input, ndata, ndetectors, ncolumns, nrows, mask, output)
 
     use module_tamasis, only : p
     implicit none
-
-    !f2py intent(in)       :: input(ndata,ndetectors)
-    !f2py intent(hide)     :: ndata=shape(input,0)
-    !f2py intent(hide)     :: ndetectors=shape(input,1)
-    !f2py intent(in)       :: ncolumns
-    !f2py intent(in)       :: nrows
-    !f2py intent(in)       :: mask(ncolumns,nrows)
-    !f2py intent(out)      :: output(ndata,ncolumns,nrows)
 
     integer, intent(in)    :: ndata, ndetectors, ncolumns, nrows
     integer*1, intent(in)  :: input(ndata,ndetectors)

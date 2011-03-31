@@ -10,12 +10,6 @@ subroutine madmap1_nslices(invnttfile, ndetectors, nslices, status)
     use module_madcap, only : get_nfilters
     implicit none
 
-    !f2py threadsafe
-    !f2py intent(in)  :: invnttfile
-    !f2py intent(in)  :: ndetectors
-    !f2py intent(out) :: nslices
-    !f2py intent(out) :: status
-
     character(len=*), intent(in) :: invnttfile
     integer, intent(in)          :: ndetectors
     integer, intent(out)         :: nslices
@@ -39,17 +33,6 @@ subroutine madmap1_info(todfile, invnttfile, convert, ndetectors, nslices, npixe
     use module_madcap,   only : read_filter_headers, read_tod_header
     use module_string,   only : strinteger
     implicit none
-
-    !f2py threadsafe
-    !f2py intent(in)  :: todfile
-    !f2py intent(in)  :: invnttfile
-    !f2py intent(in)  :: convert
-    !f2py intent(in)  :: ndetectors
-    !f2py intent(in)  :: nslices
-    !f2py intent(out) :: npixels_per_sample
-    !f2py intent(out) :: nsamples
-    !f2py intent(out) :: ncorrelations
-    !f2py intent(out) :: status
 
     character(len=*), intent(in) :: todfile
     character(len=*), intent(in) :: invnttfile
@@ -121,16 +104,7 @@ subroutine madmap1_read_tod(todfile, invnttfile, convert, npixels_per_sample, ns
     use module_tamasis,        only : p
     implicit none
 
-    !f2py threadsafe
-    !f2py intent(in)               :: todfile
-    !f2py intent(in)               :: invnttfile
-    !f2py intent(in)               :: convert
-    !f2py intent(in)               :: npixels_per_sample
-    !f2py intent(hide)             :: nsamples_tot = shape(tod,0)
-    !f2py intent(hide)             :: ndetectors = shape(tod,1)
-    !f2py intent(inout)            :: tod
     !f2py integer*8, intent(inout) :: pmatrix(npixels_per_sample*nsamples_tot*ndetectors)
-    !f2py intent(out)              :: status
 
     character(len=*), intent(in)         :: todfile
     character(len=*), intent(in)         :: invnttfile
@@ -163,16 +137,6 @@ subroutine madmap1_read_filter(filename, convert, ncorrelations, ndetectors, nsl
     use module_madcap,    only : read_filter
     use module_tamasis,   only : p
     implicit none
-
-    !f2py threadsafe
-    !f2py intent(in)   :: filename
-    !f2py intent(in)   :: convert
-    !f2py intent(in)   :: ncorrelations
-    !f2py intent(in)   :: ndetectors
-    !f2py intent(in)   :: nslices
-    !f2py intent(out)  :: data
-    !f2py intent(out)  :: nsamples
-    !f2py intent(out)  :: status
 
     character(len=*), intent(in) :: filename
     character(len=*), intent(in) :: convert
