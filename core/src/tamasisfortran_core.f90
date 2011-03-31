@@ -1565,7 +1565,7 @@ subroutine mpi_allscatterlocal(input, ninputs, mask, nmasks, output, noutputs, c
     call MPI_Comm_rank(comm, rank, status)
     if (status /= 0) return
 
-    ! before exchanging data, compute the local map bounds of the packed input
+    ! before exchanging data, compute the local map bounds of the packed output
     allocate (a_packed(0:size-1), z_packed(0:size-1))
     a_packed(0) = 1
     z_packed(0) = 0
