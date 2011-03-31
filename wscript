@@ -177,9 +177,6 @@ end program test
     conf.check_cfg(modversion='wcslib')
     check_wcslib_external(conf.env)
 
-    if 'MPI' in libraries:
-        conf.env.LIB_MPI = ['mpi_f90']
-
     conf.env.SHAREDIR = os.path.abspath(conf.env.PYTHONDIR + '/../../../share')
     conf.define(conf.env.FC_NAME, 1)
     conf.define('TAMASIS_DIR', os.path.join(conf.env.SHAREDIR, 'tamasis'))
@@ -223,7 +220,7 @@ def build(bld):
     source = [bld.srcnode.find_node('%s/src/tamasisfortran_%s.f90' % (s,s)) for s in subdirs]
 
     #XXX this should be a Task...
-    cmd = '${F2PY} --fcompiler=${F2PYFCOMPILER} --f90exec=${FC}'
+    cmd = '${F2PY} --fcompiler=${F2PYFCOMPILER} --f90exec=mpif90'
     cmd += ' --f90flags="${FCFLAGS}'
     cmd += ' ${FCFLAGS_OPENMP}"' if 'OPENMP' in libraries else '"'
     cmd += ' --quiet' if bld.options.verbose == 0 else ''
