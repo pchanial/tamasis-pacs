@@ -16,7 +16,8 @@ import tamasisfortran as tmf
 from mpi4py import MPI
 from scipy.sparse.linalg.interface import LinearOperator
 from . import var
-from .datatypes import Map, Tod, combine_sliced_shape, flatten_sliced_shape, validate_sliced_shape
+from .datatypes import Map, Tod, combine_sliced_shape, flatten_sliced_shape, \
+                       validate_sliced_shape
 from .numpyutils import _my_isscalar
 from .processing import interpolate_linear
 from .quantity import Quantity, UnitError, _divide_unit, _multiply_unit
@@ -1620,7 +1621,8 @@ class AllGather(AcquisitionModelLinear):
         input, output = self.validate_input_direct(input, cachein, cacheout)
         s = split_work(var.mpi_comm, self.shapeout[0])
         n = s.stop - s.start
-        var.mpi_comm.Allgatherv([input[0:n], MPI.DOUBLE], [output, (self.counts, self.offsets), MPI.DOUBLE])
+        var.mpi_comm.Allgatherv([input[0:n], MPI.DOUBLE], [output, (self.counts,
+            self.offsets), MPI.DOUBLE])
         return output
 
     def transpose(self, input, inplace, cachein, cacheout):
