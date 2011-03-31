@@ -291,9 +291,9 @@ contains
     end subroutine failure
 
     subroutine pacsobs2obs(pacsobs, obs, status)
-        class(PacsObservation), intent(in) :: pacsobs
-        class(Observation), intent(out)    :: obs
-        integer, intent(out)               :: status
+        class(PacsObservation), intent(in)           :: pacsobs
+        class(Observation), allocatable, intent(out) :: obs
+        integer, intent(out)                         :: status
         real(p), dimension(pacsobs%nsamples)   :: time, ra, dec, pa, chop
         logical*1, dimension(pacsobs%nsamples) :: masked, removed
         integer :: islice, nslices, nsamples_tot, dest1, dest2
