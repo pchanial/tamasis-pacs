@@ -1472,3 +1472,148 @@ subroutine convolution_trexp_transpose(data, nsamples, nslices, tau, nsamples_to
     end do
 
 end subroutine convolution_trexp_transpose
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine mpi_allreducelocal(input, ninputs, mask, nmasks, output, noutputs, op, comm, status)
+    
+    use module_math,    only : mInf, pInf
+    use module_tamasis, only : p
+    implicit none
+ 
+    real(p), intent(in)    :: input(ninputs)
+    logical*1, intent(in)  :: mask(nmasks)
+    real(p), intent(inout) :: output(noutputs)
+    integer, intent(in)    :: ninputs, nmasks, noutputs, op, comm
+    integer, intent(out)   :: status
+
+    integer :: size, root, a, z, iinput, imask
+    real(p) :: input_(noutputs), field
+
+    include 'mpif.h'
+
+    call MPI_Comm_size(comm, size, status)
+    if (status /= 0) return
+
+    select case (op)
+        case (MPI_PROD)
+            field = 1
+        case (MPI_MIN)
+           field = pInf
+        case (MPI_MAX)
+           field = mInf
+        case default
+           field = 0
+    end select
+ 
+    output = 0
+    iinput = 1
+    do root = 0, size - 1
+
+        ! unpack the input under the control of mask
+        a = root * noutputs + 1
+        z = (root + 1) * noutputs
+        do imask = a, z
+            if (imask > nmasks) then
+                input_(imask-a+1:) = field
+                exit
+            end if
+            if (mask(imask)) then
+                input_(imask-a+1) = field
+            else
+                input_(imask-a+1) = input(iinput)
+                iinput = iinput + 1
+            end if
+        end do
+
+        ! reduce on node root
+        call MPI_Reduce(input_, output, noutputs, MPI_DOUBLE_PRECISION, op, root, comm, status)
+        if (status /= 0) return
+
+    end do
+
+end subroutine mpi_allreducelocal
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine mpi_allscatterlocal(input, ninputs, mask, nmasks, output, noutputs, comm, status)
+    
+    use module_tamasis, only : p
+    implicit none
+
+    real(p), intent(in)    :: input(ninputs) ! local image of the distributed map
+    logical*1, intent(in)  :: mask(nmasks)   ! global mask for the locally observed pixels
+    real(p), intent(inout) :: output(noutputs)
+    integer, intent(in)    :: ninputs, nmasks, noutputs, comm
+    integer, intent(out)   :: status
+
+    integer :: a_unpacked, z_unpacked, tag, nrecvs, nsends, mpistatus(6), ioutput, imask
+    integer :: source, dest, dp, rank, size
+    integer, allocatable :: a_packed(:), z_packed(:)
+
+    logical*1 :: maskbuffer(ninputs)
+    real(p)   :: databuffer(min(ninputs,noutputs))
+
+    include 'mpif.h'
+
+    call MPI_Comm_size(comm, size, status)
+    if (status /= 0) return
+    call MPI_Comm_rank(comm, rank, status)
+    if (status /= 0) return
+
+    ! before exchanging data, compute the local map bounds of the packed input
+    allocate (a_packed(0:size-1), z_packed(0:size-1))
+    a_packed(0) = 1
+    z_packed(0) = 0
+    source = 0
+    do
+        do imask = 1, ninputs
+            if (imask > nmasks) exit
+            if (mask(imask + source * ninputs)) cycle
+            z_packed(source) = z_packed(source) + 1
+        end do
+        if (source == size - 1) exit
+        source = source + 1
+        a_packed(source) = z_packed(source-1) + 1
+        z_packed(source) = a_packed(source) - 1
+    end do
+
+    ! loop over the distances between mpi nodes, logically organised in a ring
+    ioutput = 1
+    tag = 99
+    do dp = 0, size - 1
+
+        dest = modulo(rank + dp, size)
+        source = modulo(rank - dp, size)
+
+        ! send mask to 'dest' and receive it from source
+        a_unpacked = min(dest * ninputs + 1, nmasks+1)
+        z_unpacked = min((dest+1) * ninputs, nmasks)
+        call MPI_Sendrecv(mask(a_unpacked:z_unpacked), z_unpacked-a_unpacked+1, MPI_BYTE, dest, tag,                               &
+                          maskbuffer, ninputs, MPI_BYTE, source, tag, comm, mpistatus, status)
+        if (status /= 0) return
+        call MPI_Get_count(mpistatus, MPI_BYTE, nrecvs, status)
+        if (status /= 0) return
+
+        ! pack pixels observed by 'source' from local map of the current processor
+        nsends = 0
+        do imask = 1, nrecvs
+            if (maskbuffer(imask)) cycle
+            nsends = nsends + 1
+            databuffer(nsends) = input(imask)
+        end do
+
+        ! send data to 'source' and receive them from 'dest'
+        call MPI_Sendrecv(databuffer, nsends, MPI_DOUBLE_PRECISION, source, tag + 1, output(a_packed(dest)),                       &
+             z_packed(dest) - a_packed(dest) + 1, MPI_DOUBLE_PRECISION, dest, tag + 1, comm, mpistatus, status)
+        if (status /= 0) return
+        call MPI_Get_count(mpistatus, MPI_DOUBLE_PRECISION, nrecvs, status)
+        if (status /= 0) return
+
+    end do
+
+end subroutine mpi_allscatterlocal

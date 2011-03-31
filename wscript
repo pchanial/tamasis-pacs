@@ -12,7 +12,7 @@ from waflib.Configure import conf
 from waflib.Context import Context
 
 APPNAME = 'tamasis'
-VERSION = '2.5-dev'
+VERSION = '3.0-dev'
 
 top = '.'
 out = 'build'
@@ -22,7 +22,7 @@ out = 'build'
 subdirs = ['core', 'madcap', 'pacs']
 
 # Required libraries
-libraries = ['CFITSIO', 'FFTW3', 'OPENMP', 'WCSLIB']
+libraries = ['CFITSIO', 'FFTW3', 'MPI', 'OPENMP', 'WCSLIB']
 
 # Required Python packages
 required_modules = ['numpy',
@@ -176,6 +176,9 @@ end program test
     conf.check_cfg(package='wcslib',  args=['--libs', '--cflags'])
     conf.check_cfg(modversion='wcslib')
     check_wcslib_external(conf.env)
+
+    if 'MPI' in libraries:
+        conf.env.LIB_MPI = ['mpi_f90']
 
     conf.env.SHAREDIR = os.path.abspath(conf.env.PYTHONDIR + '/../../../share')
     conf.define(conf.env.FC_NAME, 1)

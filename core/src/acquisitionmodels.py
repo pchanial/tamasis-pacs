@@ -26,7 +26,9 @@ from .mpiutils import split_work
 __all__ = [
     'AcquisitionModel',
     'AcquisitionModelLinear',
+    'AllGather',
     'AllReduce',
+    'AllReduceLocal',
     'CircularShift',
     'CompressionAverage',
     'Convolution',
@@ -1597,6 +1599,43 @@ class InterpolationLinear(Square):
 #-------------------------------------------------------------------------------
 
 
+class AllGather(AcquisitionModelLinear):
+
+    def __init__(self, shapeout, **keywords):
+        shapein = list(shapeout)
+        shapein[0] = int(np.ceil(float(shapeout[0]) / var.mpi_comm.Get_size()))
+        shapein = tuple(shapein)
+        self.counts = []
+        self.offsets = [0]
+        for rank in range(var.mpi_comm.Get_size()):
+            s = split_work(var.mpi_comm, shapeout[0], rank=rank)
+            n = (s.stop - s.start) * np.product(shapeout[1:])
+            self.counts.append(n)
+            self.offsets.append(self.offsets[-1] + n)
+        self.offsets.pop()
+        AcquisitionModelLinear.__init__(self, cache=True, shapein=shapein,
+                                        shapeout=shapeout, **keywords)
+
+    def direct(self, input, inplace, cachein, cacheout):
+        input, output = self.validate_input_direct(input, cachein, cacheout)
+        s = split_work(var.mpi_comm, self.shapeout[0])
+        n = s.stop - s.start
+        var.mpi_comm.Allgatherv([input[0:n], MPI.DOUBLE], [output, (self.counts, self.offsets), MPI.DOUBLE])
+        return output
+
+    def transpose(self, input, inplace, cachein, cacheout):
+        input, output = self.validate_input_transpose(input, cachein, cacheout)
+        s = split_work(var.mpi_comm, self.shapeout[0])
+        n = s.stop - s.start
+        output[0:n] = input[s.start:s.stop]
+        if n < self.shapein[0]:
+            output[n:] = 0
+        return output
+
+
+#-------------------------------------------------------------------------------
+
+
 class AllReduce(Square):
 
     def __init__(self, operator=MPI.SUM, **keywords):
@@ -1613,6 +1652,40 @@ class AllReduce(Square):
     def transpose(self, input, inplace, cachein, cacheout):
         output = self.validate_input_inplace(input, inplace)
         return output
+
+
+#-------------------------------------------------------------------------------
+
+
+class AllReduceLocal(AcquisitionModelLinear):
+
+    def __init__(self, mask, operator=MPI.SUM, **keywords):
+        shapein = int(np.sum(~mask))
+        shapeout = list(mask.shape)
+        shapeout[0] = int(np.ceil(float(shapeout[0]) / var.mpi_comm.Get_size()))
+        shapeout = tuple(shapeout)
+        AcquisitionModelLinear.__init__(self, shapein=shapein, cache=True,
+                                        shapeout=shapeout, **keywords)
+        self.mask = mask
+        self.operator = operator
+
+    def direct(self, input, inplace, cachein, cacheout):
+        input, output = self.validate_input_direct(input, cachein, cacheout)
+        status = tmf.mpi_allreducelocal(input.T, self.mask.view(np.int8).T,
+            output.T, self.operator.py2f(), var.mpi_comm.py2f())
+        if status == 0: return output
+        if status < 0:
+            raise RuntimeError('Incompatible mask.')
+        raise MPI.Exception(status)
+
+    def transpose(self, input, inplace, cachein, cacheout):
+        input, output = self.validate_input_transpose(input, cachein, cacheout)
+        status = tmf.mpi_allscatterlocal(input.T, self.mask.view(np.int8).T,
+            output.T, var.mpi_comm.py2f())
+        if status == 0: return output
+        if status < 0:
+            raise RuntimeError('Incompatible sizes.')
+        raise MPI.Exception(status)
 
 
 #-------------------------------------------------------------------------------

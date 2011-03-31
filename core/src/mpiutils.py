@@ -6,13 +6,21 @@ import tamasisfortran as tmf
 
 __all__ = []
 
-def split_observation(comm, detectors, observations):
+def split_work(comm, nglobal, rank=None):
+    size  = comm.Get_size()
+    if rank is None:
+        rank = comm.Get_rank()
+    nlocal = int(np.ceil(float(nglobal) / size))
+    return slice(min(rank * nlocal, nglobal), min((rank + 1) * nlocal, nglobal))
+    
+def split_observation(comm, detectors, observations, rank=None):
 
     size  = comm.Get_size()
     if size == 1:
         return detectors.copy(), list(observations)
 
-    rank = comm.Get_rank()
+    if rank is None:
+        rank = comm.Get_rank()
     nthreads = tmf.info_nthreads()
     ndetectors = np.sum(~detectors)
     nobservations = len(observations)
