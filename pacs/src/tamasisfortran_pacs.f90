@@ -184,10 +184,10 @@ end subroutine pacs_info_observation_init
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine pacs_info_observation(filename, nfilenames, policy, nsamples_tot, obsid, cusmode, compression, unit, ra, dec, cam_angle,&
-                                 scan_angle, scan_length, scan_step, scan_nlegs, frame_time, frame_ra, frame_dec,      &
-                                 frame_pa, frame_chop, frame_info, frame_masked, frame_removed, nmasks, mask_name, mask_activated, &
-                                 status)
+subroutine pacs_info_observation(filename, nfilenames, policy, nsamples_tot, masktime_calblock, obsid, cusmode, compression, unit, &
+                                 ra, dec, cam_angle, scan_angle, scan_length, scan_step, scan_nlegs, frame_time, frame_ra,         &
+                                 frame_dec, frame_pa, frame_chop, frame_info, frame_masked, frame_removed, nmasks, mask_name,      &
+                                 mask_activated, status)
 
     use module_observation,     only : POINTING_INSCAN, POINTING_TURNAROUND, POINTING_OTHER, MaskPolicy
     use module_pacsobservation, only : PacsObservation
@@ -201,6 +201,7 @@ subroutine pacs_info_observation(filename, nfilenames, policy, nsamples_tot, obs
     integer, intent(in)                              :: nfilenames
     integer, intent(in)                              :: policy(4)
     integer, intent(in)                              :: nsamples_tot
+    real(p), intent(in)                              :: masktime_calblock
     character(len=70*nfilenames), intent(out)        :: cusmode, unit !XXX hack around f2py bug with array of characters
     real(p), intent(out), dimension(nfilenames)      :: ra, dec, cam_angle, scan_angle, scan_length, scan_step
     integer, intent(out), dimension(nfilenames)      :: obsid, compression, scan_nlegs, nmasks
@@ -231,7 +232,7 @@ subroutine pacs_info_observation(filename, nfilenames, policy, nsamples_tot, obs
 
     ! read observations
     allocate (obs)
-    call obs%init(filename_, mask_policy, status, verbose=.true.)
+    call obs%init(filename_, mask_policy, status, verbose=.true., masktime_calblock=masktime_calblock)
     if (status /= 0) return
 
     cusmode = ''

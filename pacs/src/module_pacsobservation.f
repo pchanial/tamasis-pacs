@@ -83,17 +83,17 @@ module module_pacsobservation
 contains
 
 
-    subroutine init(this, filename, policy, status, verbose, masklength_calblock)
+    subroutine init(this, filename, policy, status, verbose, masktime_calblock)
 
         class(PacsObservation), intent(inout) :: this
         character(len=*), intent(in)          :: filename(:)
         type(MaskPolicy), intent(in)          :: policy
         integer, intent(out)                  :: status
         logical, intent(in), optional         :: verbose
-        integer, intent(in), optional         :: masklength_calblock
+        real(p), intent(in), optional         :: masktime_calblock
 
-        integer                               :: first, last
-        integer                               :: islice, masklength_calblock_
+        integer                               :: first, last, islice
+        real(p)                               :: masktime_calblock_
         logical                               :: verbose_
 
         ! parameter checking
@@ -109,10 +109,10 @@ contains
             verbose_ = .false.
         end if
 
-        if (present(masklength_calblock)) then
-            masklength_calblock_ = masklength_calblock
+        if (present(masktime_calblock)) then
+            masktime_calblock_ = masktime_calblock
         else
-            masklength_calblock_ = 0
+            masktime_calblock_ = 0
         end if 
 
         ! set number of observations
@@ -128,25 +128,25 @@ contains
             call this%slice(islice)%set_filename(filename(islice), first, last, status)
             if (status /= 0) return
 
-            call this%slice(islice)%set_flags(masklength_calblock_, status)
-            if (status /= 0) return
-
             call this%slice(islice)%set_band(status)
             if (status /= 0) return
                 
+            call this%slice(islice)%set_astrometry(status)
+            if (status /= 0) return
+            
             call this%slice(islice)%set_observing_mode(status)
+            if (status /= 0) return
+
+            call this%slice(islice)%set_sampling_interval(status, verbose_)
+            if (status /= 0) return
+
+            call this%slice(islice)%set_flags(masktime_calblock_, status)
             if (status /= 0) return
 
             call this%slice(islice)%set_mask(status)
             if (status /= 0) return
 
             call this%slice(islice)%set_unit(status)
-            if (status /= 0) return
-
-            call this%slice(islice)%set_astrometry(status)
-            if (status /= 0) return
-            
-            call this%slice(islice)%set_sampling_interval(status, verbose_)
             if (status /= 0) return
 
             call this%slice(islice)%set_policy(this%policy, first, last, status)
@@ -350,7 +350,7 @@ contains
         class(PacsObservationSlice), intent(inout) :: this
         integer, intent(out)                       :: status
 
-        integer                       :: nsamples, unit
+        integer                       :: unit
         character(len=5), allocatable :: bands(:)
         character(len=FLEN_VALUE)     :: camname, blue
         logical                       :: found
@@ -382,11 +382,15 @@ contains
             this%band = 'red'
         end if
 
-        call ft_open_bintable(trim(this%filename) // '[Status]', unit, nsamples, status)
+        call ft_open_bintable(trim(this%filename) // '[Status]', unit, this%nsamples, status)
         if (status /= 0) return
 
-        allocate(bands(nsamples))
-        call ft_read_column(unit, 'BAND', 1, nsamples, bands, status)
+        if (allocated(this%p)) deallocate (this%p)
+        allocate (this%p(this%nsamples))
+        this%p%invalid = .false.
+
+        allocate(bands(this%nsamples))
+        call ft_read_column(unit, 'BAND', 1, this%nsamples, bands, status)
         if (status /= 0) return
 
         call ft_close(unit, status)
@@ -509,16 +513,15 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine set_flags(this, masklength_calblock, status)
+    subroutine set_flags(this, masktime_calblock, status)
 
         class(PacsObservationSlice), intent(inout) :: this
-        integer, intent(in)                        :: masklength_calblock
+        real(p), intent(in)                        :: masktime_calblock
         integer, intent(out)                       :: status
 
         logical(1), allocatable :: inscan(:)
         logical(1), allocatable :: turnaround(:)
-        integer                 :: unit
-        integer                 :: isample, itarget
+        integer                 :: unit, nsamples, isample, itarget, masklength_calblock
         integer*8, allocatable  :: bbid(:)
         real(p), allocatable    :: chop(:)
 
@@ -526,7 +529,7 @@ contains
                                    BBID_TURNAROUND = z'4000', &
                                    BBID_INSCAN = z'cd2'
 
-        call ft_open_bintable(trim(this%filename) // '[Status]', unit, this%nsamples, status)
+        call ft_open_bintable(trim(this%filename) // '[Status]', unit, nsamples, status)
         if (status /= 0) return
 
         allocate (bbid(this%nsamples))
@@ -582,6 +585,7 @@ contains
         end if
         
         ! flag as 'other' the masklength_calblock samples after each calibration blocks
+        masklength_calblock = ceiling(masktime_calblock / this%sampling_interval)
         isample = 0
         a: do 
             isample = isample + 1
@@ -590,9 +594,10 @@ contains
             do
                 isample = isample + 1
                 if (isample > this%nsamples) exit a
-                if (bbid(isample) == BBID_CALIBRATION) cycle
+                if (bbid(isample) /= BBID_CALIBRATION) exit
             end do
-            ! masking
+            print *, 'after calblock:', isample
+            ! we're just past a calibration block, let's mask some samples
             inscan(isample:min(isample+masklength_calblock-1, this%nsamples)) = .false.
             turnaround(isample:min(isample+masklength_calblock-1, this%nsamples)) = .false.
             isample = isample + masklength_calblock - 1
@@ -611,9 +616,6 @@ contains
             end if
         end if
 
-        if (allocated(this%p)) deallocate (this%p)
-        allocate (this%p(this%nsamples))
-        this%p%invalid = .false.
         this%p%inscan = inscan
         this%p%turnaround = turnaround
         this%p%other = .not. inscan .and. .not. turnaround

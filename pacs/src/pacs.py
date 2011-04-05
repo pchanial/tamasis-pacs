@@ -527,7 +527,8 @@ class PacsObservation(PacsBase):
                  policy_bad_detector='mask', reject_bad_line=False,
                  policy_inscan='keep', policy_turnaround='keep',
                  policy_other='remove', policy_invalid='mask',
-                 active_fraction=0, delay=0., comm_tod=None):
+                 active_fraction=0, delay=0., masktime_calblock=None,
+                 comm_tod=None):
         """
         Parameters
         ----------
@@ -559,6 +560,10 @@ class PacsObservation(PacsBase):
         active_fraction: ratio of the geometric and reference detector area
               If set to 0, the value from the calibration file will be used
         delay: instrument clock lag wrt the spacecraft clock, in ms
+        masktime_calblock: float
+              Elapsed time in seconds during which samples after a calibration
+              block are flagged as 'other', similarly to the calibration block
+              itself. Default is 20s for the blue channel, 40s for the red one.
 
         Returns
         -------
@@ -604,12 +609,14 @@ class PacsObservation(PacsBase):
             policy_turnaround, policy_other, policy_invalid), 'Frame Policy')
 
         # store observation information
+        if masktime_calblock is None:
+            masktime_calblock = 40. if band == 'red' else 20.
         obsid, mode, compression_factor, unit, ra, dec, cam_angle, scan_angle, \
             scan_length, scan_step, scan_nlegs, frame_time, frame_ra, \
             frame_dec, frame_pa, frame_chop, frame_info, frame_masked, \
             frame_removed, nmasks, mask_name_flat, mask_activated, status = \
             tmf.pacs_info_observation(filename_, nfilenames, np.array(policy,
-            np.int32),np.sum(nsamples_all))
+            np.int32),np.sum(nsamples_all), masktime_calblock)
         if status != 0: raise RuntimeError()
 
         flen_value = len(unit) // nfilenames
