@@ -401,19 +401,21 @@ end subroutine pacs_map_header
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine pacs_tod(band, filename, nslices, npointings, nsamples_tot, compression_factor, delay, fine_sampling_factor, time, ra,  &
-                    dec, pa, chop, masked, removed, detector_mask, detector_bad, flatfield_detector, do_flatfielding,              &
-                    do_subtraction_mean, nvalids, ndetectors, selected_mask, nrows, ncolumns, signal, mask, status)
-
+subroutine pacs_tod(signal, mask, band, filename, nslices, npointings, nsamples_tot, compression_factor, delay,                    &
+                    fine_sampling_factor, time, ra, dec, pa, chop, masked, removed, detector_mask, detector_bad,                   &
+                    flatfield_detector, do_flatfielding, do_subtraction_mean, nvalids, ndetectors, selected_mask, nrows, ncolumns, &
+                    status)
 
     use iso_fortran_env,        only : ERROR_UNIT
     use module_observation,     only : Observation
     use module_pacsinstrument,  only : SAMPLING_PERIOD, PacsInstrument
-    use module_preprocessor,    only : divide_vectordim2, remove_nan, subtract_meandim1
+    use module_preprocessor,    only : divide_vectordim2, subtract_meandim1
     use module_tamasis,         only : p
     use module_string,          only : strsplit
     implicit none
 
+    real(p), intent(inout)                         :: signal(nvalids, ndetectors)
+    logical*1, intent(inout)                       :: mask(nvalids, ndetectors)
     character(len=*), intent(in)                   :: band
     character(len=*), intent(in)                   :: filename
     integer, intent(in)                            :: nslices
@@ -433,8 +435,6 @@ subroutine pacs_tod(band, filename, nslices, npointings, nsamples_tot, compressi
     integer, intent(in)                            :: nrows
     integer, intent(in)                            :: ncolumns
     character(len=*), intent(in)                   :: selected_mask
-    real(p), intent(out)                           :: signal(nvalids, ndetectors)
-    logical*1, intent(out)                         :: mask(nvalids, ndetectors)
     integer, intent(out)                           :: status
 
     class(Observation), allocatable                :: obs
@@ -492,9 +492,6 @@ subroutine pacs_tod(band, filename, nslices, npointings, nsamples_tot, compressi
             destination = destination + obs%slice(iobs)%nvalids
         end do
     end if
-
-    ! remove NaN
-    call remove_nan(signal, mask)
     
 end subroutine pacs_tod
 

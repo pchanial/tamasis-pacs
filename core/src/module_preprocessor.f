@@ -3,7 +3,7 @@
 !
 module module_preprocessor
 
-    use module_math,    only : NaN, mean, median, sum_kahan
+    use module_math,    only : NaN, mInf, pInf, mean, median, sum_kahan
     use module_sort,    only : histogram, reorder
     use module_tamasis, only : p
     implicit none
@@ -15,7 +15,7 @@ module module_preprocessor
     public :: interpolate_linear
     public :: median_filtering
     public :: multiply_vectordim2
-    public :: remove_nan
+    public :: remove_nonfinite
     public :: subtract_meandim1
     public :: subtract_vectordim2
 
@@ -527,19 +527,27 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
     
     
-    subroutine remove_nan(signal, mask)
+    subroutine remove_nonfinite(signal, mask)
         
-        real(p), intent(inout)   :: signal(:,:)
-        logical*1, intent(inout) :: mask(size(signal,1),size(signal,2))
+        real(p), intent(inout)             :: signal(:)
+        logical*1, intent(inout), optional :: mask(size(signal))
         
-        !$omp parallel workshare
-        where (signal /= signal)
-            signal = 0._p
-            mask   = .true.
-        end where
-        !$omp end parallel workshare
-        
-    end subroutine remove_nan
+        if (present(mask)) then
+            !$omp parallel workshare
+            where (signal /= signal .or. signal == mInf .or. signal == pInf)
+                signal = 0._p
+                mask   = .true.
+            end where
+            !$omp end parallel workshare
+        else
+            !$omp parallel workshare
+            where (signal /= signal .or. signal == mInf .or. signal == pInf)
+                signal = 0._p
+            end where
+            !$omp end parallel workshare
+        end if
+
+    end subroutine remove_nonfinite
 
 
 end module module_preprocessor

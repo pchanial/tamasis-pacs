@@ -6,6 +6,7 @@ try:
 except:
     print('Warning: Library PyFFTW3 is not installed.')
 
+import copy
 import gc
 import multiprocessing
 import numpy as np
@@ -27,9 +28,8 @@ from .mpiutils import split_work
 __all__ = [
     'AcquisitionModel',
     'AcquisitionModelLinear',
-    'AllGather',
-    'AllReduce',
-    'AllReduceLocal',
+    'DistributionGlobal',
+    'DistributionLocal',
     'CircularShift',
     'CompressionAverage',
     'Convolution',
@@ -437,13 +437,13 @@ class AcquisitionModelLinear(AcquisitionModel, LinearOperator):
     def transpose(self, input, inplace, cachein, cacheout):
         raise NotImplementedError()
 
-    def matvec(self, v):
+    def matvec(self, v, inplace=False, cachein=False, cacheout=False):
         v = v.reshape(flatten_sliced_shape(self.shapein))
-        return self.direct(v, False, False, False).ravel()
+        return self.direct(v, inplace, cachein, cacheout).ravel()
 
-    def rmatvec(self, v):
+    def rmatvec(self, v, inplace=False, cachein=False, cacheout=False):
         v = v.reshape(flatten_sliced_shape(self.shapeout))
-        return self.transpose(v, False, False, False).ravel()
+        return self.transpose(v, inplace, cachein, cacheout).ravel()
 
     def dense(self):
         d = np.ndarray(self.shape, dtype=self.dtype)
@@ -451,7 +451,7 @@ class AcquisitionModelLinear(AcquisitionModel, LinearOperator):
         for i in range(self.shape[1]):
             v[:] = 0
             v[i] = 1
-            d[:,i] = self.matvec(v)
+            d[:,i] = self.matvec(v, inplace=True, cachein=True, cacheout=True)
         return d
 
     @property
@@ -533,13 +533,25 @@ class Composite(AcquisitionModel):
         AcquisitionModel.__init__(self)
 
         if all([hasattr(m, 'matvec') for m in self.blocks]):
-            self.matvec = lambda v: \
-                self.direct(v.reshape(flatten_sliced_shape(self.shapein)),
-                            False, False, False).ravel()
+            self.matvec = \
+                lambda v, inplace=False, cachein=False, cacheout=False: \
+                    self.direct(v.reshape(flatten_sliced_shape(self.shapein)),
+                                inplace, cachein, cacheout).ravel()
+            def dense():
+                d = np.ndarray(self.shape, dtype=self.dtype)
+                v = np.zeros(self.shape[1], dtype=var.FLOAT_DTYPE)
+                for i in range(self.shape[1]):
+                    v[:] = 0
+                    v[i] = 1
+                    d[:,i] = self.matvec(v, True, True, True)
+                return d
+            self.dense = dense
+
         if all([hasattr(m, 'rmatvec') for m in self.blocks]):
-            self.rmatvec = lambda v: \
-                self.transpose(v.reshape(flatten_sliced_shape(self.shapeout)),
-                               False, False, False).ravel()
+            self.rmatvec = \
+                lambda v, inplace=False, cachein=False, cacheout=False: \
+                    self.transpose(v.reshape(flatten_sliced_shape(
+                        self.shapeout)), inplace, cachein, cacheout).ravel()
 
     @property
     def dtype(self):
@@ -797,11 +809,9 @@ class Square(AcquisitionModelLinear):
     """
 
     def __init__(self, shapein=None, **keywords):
-        AcquisitionModelLinear.__init__(self, shapein=shapein,
-                                        shapeout=shapein, **keywords)
-
-    def validate_shapeout(self, shapeout):
-        return self.validate_shapein(shapeout)
+        AcquisitionModelLinear.__init__(self, shapein=shapein, shapeout=shapein,
+                                        **keywords)
+        self.validate_shapeout = self.validate_shapein
     
 
 #-------------------------------------------------------------------------------
@@ -810,8 +820,10 @@ class Square(AcquisitionModelLinear):
 class Symmetric(Square):
     """Symmetric operator"""
 
-    def transpose(self, input, inplace, cachein, cacheout):
-        return self.direct(input, inplace, cachein, cacheout)
+    def __init__(self, **keywords):
+        Square.__init__(self, **keywords)
+        self.transpose = self.direct
+        self.rmatvec = self.matvec
 
     @property
     def T(self):
@@ -855,6 +867,12 @@ class Diagonal(Symmetric):
             raise ValueError('The input has an incompatible shape ' + \
                              str(shapein) + '.')
         return shapein
+
+    def matvec(self, v, inplace=False, cachein=False, cacheout=False):
+        shape = list(self.diagonal.shape)
+        shape.append(-1)
+        v = v.reshape(shape)
+        return self.direct(v, inplace, cachein, cacheout).ravel()
 
 
 #-------------------------------------------------------------------------------
@@ -926,10 +944,12 @@ class Projection(AcquisitionModelLinear):
     """
 
     def __init__(self, observation, method=None, header=None, resolution=None,
-                 npixels_per_sample=0, oversampling=True, packed=False,
-                 description=None):
+                 npixels_per_sample=0, oversampling=True, comm_map=None,
+                 packed=False, description=None):
 
-        self.ispacked = packed
+        self.comm_map = comm_map or var.comm_map
+        self.comm_tod = observation.comm_tod
+
         self.method, pmatrix, self.header, self.ndetectors, nsamples, \
         self.npixels_per_sample, (unitout, unitin), (duout, duin) = \
             observation.get_pointing_matrix(header,
@@ -950,14 +970,17 @@ class Projection(AcquisitionModelLinear):
 
         shapein = tuple([self.header['naxis'+str(i+1)] for i in \
                          reversed(list(range(self.header['naxis'])))])
-        self.mask = Map.empty(shapein, dtype=np.bool8, header=self.header)
-        tmf.pointing_matrix_mask(self._pmatrix, self.mask.view(np.int8).T, 
+        mask = Map.empty(shapein, dtype=np.bool8, header=self.header)
+        tmf.pointing_matrix_mask(self._pmatrix, mask.view(np.int8).T, 
             self.npixels_per_sample, self.nsamples_tot, self.ndetectors)
 
-        if packed:
-            tmf.pointing_matrix_pack(self._pmatrix, self.mask.view(np.int8).T,
+        ismapdistributed = self.comm_map.Get_size() > 1
+        istoddistributed = self.comm_tod.Get_size() > 1
+        self.ispacked = packed or ismapdistributed
+        if self.ispacked:
+            tmf.pointing_matrix_pack(self._pmatrix, mask.view(np.int8).T,
                 self.npixels_per_sample, self.nsamples_tot, self.ndetectors)
-            shapein = (int(np.sum(~self.mask)))
+            shapein = (int(np.sum(~mask)))
 
         attrin = {'header' : self.header}
         if duin is not None:
@@ -977,6 +1000,26 @@ class Projection(AcquisitionModelLinear):
                                         typeout=Tod,
                                         unitin=unitin,
                                         unitout=unitout)
+        self.mask = mask
+        if not self.ispacked and not istoddistributed:
+            return
+
+        if self.ispacked:
+            if ismapdistributed:
+                self *= DistributionLocal(self.mask, )
+            else:
+                self *= Packing(self.mask)
+        elif istoddistributed:
+            self *= DistributionGlobal(self.shapein, share=True,
+                                       comm=self.comm_tod)
+        s = self.blocks[0]
+        self.header = s.header
+        self.mask = s.mask
+        self.method = s.method
+        self.ndetectors = s.ndetectors
+        self.npixels_per_sample = s.npixels_per_sample
+        self.nsamples_tot = s.nsamples_tot
+        self.pmatrix = s.pmatrix
 
     def direct(self, input, inplace, cachein, cacheout):
         input, output = self.validate_input_direct(input, cachein, cacheout)
@@ -994,6 +1037,116 @@ class Projection(AcquisitionModelLinear):
         npixels = np.product(self.shapein)
         return tmf.pointing_matrix_ptp(self._pmatrix, self.npixels_per_sample,
             self.nsamples_tot, self.ndetectors, npixels).T
+
+
+#-------------------------------------------------------------------------------
+
+
+class DistributionGlobal(AcquisitionModelLinear):
+    """
+    Distribute a global map to different MPI processes.
+    By default, they are locally distributed, in the sense that an MPI process
+    will only handle a subset of the global map.
+    """
+
+    def __init__(self, shape, share=False, comm=None, **keywords):
+
+        if comm is None:
+            comm = var.comm_map
+        self.comm = comm
+
+        # if local is false, the maps are not distributed
+        if share:
+            def direct(input, inplace, cachein, cacheout):
+                return self.validate_input_inplace(input, inplace)
+            def transpose(input, inplace, cachein, cacheout):
+                output = self.validate_input_inplace(input, inplace)
+                if self.comm.Get_size() > 1:
+                    self.comm.Allreduce(MPI.IN_PLACE, [output, MPI.DOUBLE],
+                                        op=MPI.SUM)
+                return output
+            AcquisitionModelLinear.__init__(self, shapein=shape, typein=Map,
+                                            direct=direct, transpose=transpose,
+                                            cache=False, **keywords)
+            return
+
+        shapeout = list(shape)
+        shapeout[0] = int(np.ceil(float(shape[0]) / comm.Get_size()))
+        shapeout = tuple(shapeout)
+        self.counts = []
+        self.offsets = [0]
+        for rank in range(comm.Get_size()):
+            s = split_work(shape[0], rank=rank, comm=comm)
+            n = (s.stop - s.start) * np.product(shape[1:])
+            self.counts.append(n)
+            self.offsets.append(self.offsets[-1] + n)
+        self.offsets.pop()
+        AcquisitionModelLinear.__init__(self, cache=True, shapein=shape,
+                                        shapeout=shapeout, typein=Map,
+                                        **keywords)
+
+    def direct(self, input, inplace, cachein, cacheout):
+        input, output = self.validate_input_direct(input, cachein, cacheout)
+        s = split_work(self.shapein[0], comm=self.comm)
+        n = s.stop - s.start
+        output[0:n] = input[s.start:s.stop]
+        if n < self.shapein[0]:
+            output[n:] = 0
+        return output
+
+    def transpose(self, input, inplace, cachein, cacheout):
+        input, output = self.validate_input_transpose(input, cachein, cacheout)
+        s = split_work(self.shapein[0], comm=self.comm)
+        n = s.stop - s.start
+        self.comm.Allgatherv([input[0:n], MPI.DOUBLE], [output, (self.counts,
+                             self.offsets), MPI.DOUBLE])
+        return output
+
+
+#-------------------------------------------------------------------------------
+
+
+class DistributionLocal(AcquisitionModelLinear):
+    """
+    Distribute a local map to different MPI processes.
+    """
+
+    def __init__(self, maskout, operator=MPI.SUM, comm=None, **keywords):
+        if comm is None:
+            comm = var.comm_map
+        shapeout = int(np.sum(~maskout))
+        shapein = list(maskout.shape)
+        shapein[0] = int(np.ceil(float(shapein[0]) / comm.Get_size()))
+        shapein = tuple(shapein)
+        AcquisitionModelLinear.__init__(self, cache=True, typein=Map,
+                                        shapein=shapein, shapeout=shapeout,
+                                        **keywords)
+        self.comm = comm
+        self.maskout = maskout
+        self.operator = operator
+        try:
+            self.mask = self.transpose(np.ones(shapeout), True, True, True) == 0
+        except MemoryError:
+            gc.collect()
+            self.mask = self.transpose(np.ones(shapeout), True, True, True) == 0
+
+    def direct(self, input, inplace, cachein, cacheout):
+        input, output = self.validate_input_direct(input, cachein, cacheout)
+        status = tmf.mpi_allscatterlocal(input.T, self.maskout.view(np.int8).T,
+            output.T, self.comm.py2f())
+        if status == 0: return output
+        if status < 0:
+            raise RuntimeError('Incompatible sizes.')
+        raise MPI.Exception(status)
+
+    def transpose(self, input, inplace, cachein, cacheout):
+        input, output = self.validate_input_transpose(input, cachein, cacheout)
+        status = tmf.mpi_allreducelocal(input.T, self.maskout.view(np.int8).T,
+            output.T, self.operator.py2f(), self.comm.py2f())
+        if status == 0: return output
+        if status < 0:
+            raise RuntimeError('Incompatible mask.')
+        raise MPI.Exception(status)
 
 
 #-------------------------------------------------------------------------------
@@ -1160,8 +1313,8 @@ class Masking(Symmetric):
         if self.isscalar:
             return shapein
         if flatten_sliced_shape(shapein[0:self.mask.ndim]) != self.mask.shape:
-            raise ValueError('The input has an incompatible shape ' + \
-                             str(shapein) + '.')
+            raise ValueError('The input has shape ' + str(shapein) + ' incomp' \
+                'atible with that of the mask ' + str(self.mask.shape) + '.')
         return shapein
 
 
@@ -1577,7 +1730,7 @@ class InvNtt(Diagonal):
         Diagonal.__init__(self, tod_filter.T, shapein=tod_filter.T.shape,
                           **keywords)
         self.ncorrelations = ncorrelations
-        self.diagonal /= var.mpi_comm.allreduce(np.max(self.diagonal),
+        self.diagonal /= var.comm_tod.allreduce(np.max(self.diagonal),
                                                 op=MPI.MAX)
 
 
@@ -1600,101 +1753,20 @@ class InterpolationLinear(Square):
 #-------------------------------------------------------------------------------
 
 
-class AllGather(AcquisitionModelLinear):
-
-    def __init__(self, shapeout, **keywords):
-        shapein = list(shapeout)
-        shapein[0] = int(np.ceil(float(shapeout[0]) / var.mpi_comm.Get_size()))
-        shapein = tuple(shapein)
-        self.counts = []
-        self.offsets = [0]
-        for rank in range(var.mpi_comm.Get_size()):
-            s = split_work(var.mpi_comm, shapeout[0], rank=rank)
-            n = (s.stop - s.start) * np.product(shapeout[1:])
-            self.counts.append(n)
-            self.offsets.append(self.offsets[-1] + n)
-        self.offsets.pop()
-        AcquisitionModelLinear.__init__(self, cache=True, shapein=shapein,
-                                        shapeout=shapeout, **keywords)
-
-    def direct(self, input, inplace, cachein, cacheout):
-        input, output = self.validate_input_direct(input, cachein, cacheout)
-        s = split_work(var.mpi_comm, self.shapeout[0])
-        n = s.stop - s.start
-        var.mpi_comm.Allgatherv([input[0:n], MPI.DOUBLE], [output, (self.counts,
-            self.offsets), MPI.DOUBLE])
-        return output
-
-    def transpose(self, input, inplace, cachein, cacheout):
-        input, output = self.validate_input_transpose(input, cachein, cacheout)
-        s = split_work(var.mpi_comm, self.shapeout[0])
-        n = s.stop - s.start
-        output[0:n] = input[s.start:s.stop]
-        if n < self.shapein[0]:
-            output[n:] = 0
-        return output
-
-
-#-------------------------------------------------------------------------------
-
-
-class AllReduce(Square):
-
-    def __init__(self, operator=MPI.SUM, **keywords):
-        Square.__init__(self, **keywords)
-        self.operator = operator
-
-    def direct(self, input, inplace, cachein, cacheout):
-        output = self.validate_input_inplace(input, inplace)
-        if var.mpi_comm.Get_size() > 1:
-            var.mpi_comm.Allreduce(MPI.IN_PLACE, [output, MPI.DOUBLE],
-                                   op=self.operator)
-        return output
-
-    def transpose(self, input, inplace, cachein, cacheout):
-        output = self.validate_input_inplace(input, inplace)
-        return output
-
-
-#-------------------------------------------------------------------------------
-
-
-class AllReduceLocal(AcquisitionModelLinear):
-
-    def __init__(self, mask, operator=MPI.SUM, **keywords):
-        shapein = int(np.sum(~mask))
-        shapeout = list(mask.shape)
-        shapeout[0] = int(np.ceil(float(shapeout[0]) / var.mpi_comm.Get_size()))
-        shapeout = tuple(shapeout)
-        AcquisitionModelLinear.__init__(self, shapein=shapein, cache=True,
-                                        shapeout=shapeout, **keywords)
-        self.mask = mask
-        self.operator = operator
-
-    def direct(self, input, inplace, cachein, cacheout):
-        input, output = self.validate_input_direct(input, cachein, cacheout)
-        status = tmf.mpi_allreducelocal(input.T, self.mask.view(np.int8).T,
-            output.T, self.operator.py2f(), var.mpi_comm.py2f())
-        if status == 0: return output
-        if status < 0:
-            raise RuntimeError('Incompatible mask.')
-        raise MPI.Exception(status)
-
-    def transpose(self, input, inplace, cachein, cacheout):
-        input, output = self.validate_input_transpose(input, cachein, cacheout)
-        status = tmf.mpi_allscatterlocal(input.T, self.mask.view(np.int8).T,
-            output.T, var.mpi_comm.py2f())
-        if status == 0: return output
-        if status < 0:
-            raise RuntimeError('Incompatible sizes.')
-        raise MPI.Exception(status)
-
-
-#-------------------------------------------------------------------------------
-
-
-def asacquisitionmodel(operator, description=None):
+def asacquisitionmodel(operator, shapein=None, shapeout=None, description=None):
     if isinstance(operator, AcquisitionModel):
+        if shapein and operator.shapein and shapein != operator.shapein:
+            raise ValueError('The input shapein ' + str(shapein) + ' is incom' \
+                'patible with that of the input ' + str(operator.shapein) + '.')
+        if shapeout and operator.shapeout and shapeout != operator.shapeout:
+            raise ValueError('The input shapeout ' + str(shapeout) + ' is inco'\
+                'mpatible with that of the input ' + str(operator.shapeout) +  \
+                '.')
+        if shapein and not operator.shapein or \
+           shapeout and not operator.shapeout:
+            operator = copy.copy(operator)
+            operator.shapein = shapein
+            operator.shapeout = shapeout
         return operator
     if _my_isscalar(operator):
         return Scalar(operator)
@@ -1705,8 +1777,8 @@ def asacquisitionmodel(operator, description=None):
                         operator.rmatvec(input)
         model = AcquisitionModelLinear(direct=direct,
                                        transpose=transpose,
-                                       shapein=operator.shape[1],
-                                       shapeout=operator.shape[0],
+                                       shapein=shapein or operator.shape[1],
+                                       shapeout=shapeout or operator.shape[0],
                                        dtype=operator.dtype,
                                        description=description)
         return model
@@ -1718,7 +1790,6 @@ def asacquisitionmodel(operator, description=None):
 
 
 def _toacquisitionmodel(model, cls, description=None):
-    import copy
     if model.__class__ == cls:
         return model
     if description is None:

@@ -729,6 +729,111 @@ end subroutine divide_inplace
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
+subroutine sum(array, n, output)
+
+    use omp_lib,        only : omp_get_max_threads
+    use module_math,    only : sum_kahan
+    use module_tamasis, only : p
+    implicit none
+
+    real(p), intent(in)  :: array(n)
+    integer, intent(in)  :: n
+    real(p), intent(out) :: output
+
+    integer :: nthreads, work, i
+
+    if (n <= 1024) then
+        output = sum_kahan(array)
+        return
+    end if
+
+    output = 0
+
+    nthreads = omp_get_max_threads()
+    work = max(n / nthreads, 1)
+    !$omp parallel do reduction(+:output)
+    do i = 1, min(n, nthreads)
+        output = output + sum_kahan(array(min((i-1)*work+1,n+1):min(i*work,n)))
+    end do
+    !$omp end parallel do
+
+end subroutine sum
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine norm2(array, n, output)
+
+    use omp_lib,        only : omp_get_max_threads
+    use module_math,    only : norm => norm2
+    use module_tamasis, only : p
+    implicit none
+
+    real(p), intent(in)  :: array(n)
+    integer, intent(in)  :: n
+    real(p), intent(out) :: output
+
+    integer :: nthreads, work, i
+
+    if (n <= 1024) then
+        output = norm(array)
+        return
+    end if
+
+    output = 0
+
+    nthreads = omp_get_max_threads()
+    work = max(n / nthreads, 1)
+    !$omp parallel do reduction(+:output)
+    do i = 1, min(n, nthreads)
+        output = output + norm(array(min((i-1)*work+1,n+1):min(i*work,n)))
+    end do
+    !$omp end parallel do
+
+end subroutine norm2
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine dot(array1, array2, n, output)
+
+    use omp_lib,        only : omp_get_max_threads
+    use module_math,    only : d => dot
+    use module_tamasis, only : p
+    implicit none
+
+    real(p), intent(in)  :: array1(n)
+    real(p), intent(in)  :: array2(n)
+    integer, intent(in)  :: n
+    real(p), intent(out) :: output
+
+    integer :: nthreads, work, i, a, z
+
+    if (n <= 1024) then
+        output = d(array1, array2)
+        return
+    end if
+
+    output = 0
+
+    nthreads = omp_get_max_threads()
+    work = max(n / nthreads, 1)
+    !$omp parallel do reduction(+:output)
+    do i = 1, min(n, nthreads)
+        a = min((i-1)*work+1,n+1)
+        z = min(i*work,n)
+        output = output + d(array1(a:z), array2(a:z))
+    end do
+    !$omp end parallel do
+
+end subroutine dot
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
 subroutine diff(array, asize, dim, ashape, arank)
 
     use module_math,    only : diff_fast, diff_slow
@@ -924,20 +1029,36 @@ end subroutine masking
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine remove_nan(signal, mask, nsamples, ndetectors)
+subroutine remove_nonfinite(signal, nsamples)
 
-    use module_preprocessor, only : remove_nan_ => remove_nan
+    use module_preprocessor, only : remove_nonfinite_ => remove_nonfinite
     use module_tamasis,      only : p
     implicit none
 
     integer, intent(in)      :: nsamples
-    integer, intent(in)      :: ndetectors
-    real(p), intent(inout)   :: signal(nsamples, ndetectors)
-    logical*1, intent(inout) :: mask(nsamples, ndetectors)
+    real(p), intent(inout)   :: signal(nsamples)
 
-    call remove_nan_(signal, mask)
+    call remove_nonfinite_(signal)
 
-end subroutine remove_nan
+end subroutine remove_nonfinite
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine remove_nonfinite_mask(signal, mask, nsamples)
+
+    use module_preprocessor, only : remove_nonfinite
+    use module_tamasis,      only : p
+    implicit none
+
+    integer, intent(in)      :: nsamples
+    real(p), intent(inout)   :: signal(nsamples)
+    logical*1, intent(inout) :: mask(nsamples)
+
+    call remove_nonfinite(signal, mask)
+
+end subroutine remove_nonfinite_mask
 
 
 !-----------------------------------------------------------------------------------------------------------------------------------

@@ -5,19 +5,21 @@ import cProfile
 import numpy as np
 import os
 import scipy
+import tamasisfortran as tmf
 import time
 
 from mpi4py import MPI
 from . import var
 from .acquisitionmodels import Addition, Diagonal, DdTdd, Identity, Masking, \
-                               AllReduce, Reshaping
+                               Scalar, asacquisitionmodel
 from .datatypes import Map, Tod, flatten_sliced_shape
 from .quantity import Quantity, UnitError
+from .solvers import cg
 
 
 __all__ = [ 'mapper_naive', 'mapper_ls', 'mapper_rls' ]
 
-def mapper_naive(tod, model, unit=None):
+def mapper_naive(tod, model, unit=None, local_mask=None):
     """
     Returns a naive map, i.e.: map = model.T(tod) / model.T(1)
 
@@ -43,31 +45,28 @@ def mapper_naive(tod, model, unit=None):
     # make sure the input is a surface brightness
     if 'detector' in tod._unit:
         tod = tod.tounit(tod.unit + ' detector / arcsec^2')
-        copy = False
+        inplace = True
     elif 'detector_reference' in tod._unit:
         tod = tod.tounit(tod.unit + ' detector_reference / arcsec^2')
-        copy = False
+        inplace = True
     else:
-        copy = True
+        inplace = False
 
-    model = model * AllReduce().T
-    if tod.mask is not None:
-        model = Masking(tod.mask) * model
+    mask = getattr(tod, 'mask', None)
+    tod = Masking(mask)(tod, inplace=inplace)
 
     # model.T expects a quantity / detector, we hide our units to 
     # prevent a unit validation exception
-    tod_ = tod.view()
-    tod_.unit = ''
+    todunit = tod.unit
+    tod.unit = ''
 
-    mymap = model.T(tod_)
-
-    unity = Tod(tod_, copy=copy)
-    unity[:] = 1.
-    map_weights = model.T(unity, True, True, True)
+    # compute model.T(tod)/model.T(one)
+    mymap = model.T(tod, True, True, False)
+    tod[:] = 1
+    map_weights = model.T(tod, True, True, False)
     old_settings = np.seterr(divide='ignore', invalid='ignore')
-    mymap /= map_weights
-    mymap.unit = tod.unit
-
+    tmf.divide_inplace(mymap.T, map_weights.T)
+    mymap.unit = todunit
     np.seterr(**old_settings)
     mymap.coverage = map_weights
    
@@ -104,25 +103,86 @@ def mapper_naive(tod, model, unit=None):
 #-------------------------------------------------------------------------------
 
 
-def mapper_ls(tod, model, weight=None, unpacking=None, x0=None, tol=1.e-5,
+def mapper_ls(tod, model, invntt=None, weight=None, x0=None, tol=1.e-5,
               maxiter=300, M=None, solver=None, verbose=True, callback=None,
-              profile=None):
+              profile=None, comm_map=None):
 
-    return mapper_rls(tod, model, weight=weight, unpacking=unpacking, hyper=0,
-                      x0=x0, tol=tol, maxiter=maxiter, M=M, solver=solver,
-                      verbose=verbose, callback=callback, profile=profile)
+    tod = _validate_tod(tod, model)
+    if invntt is None:
+        if weight is not None:
+            print
+            print('XXXXXXXX')
+            print('WARNING: mapper_ls: weight keyword is deprecated, use invntt instead')
+            print('XXXXXXXX')
+        invntt = weight
+
+    if invntt is None:
+        invntt = Identity(description='Weight')
+
+    A = model.T * invntt * model
+    b = (model.T * invntt)(tod, inplace=True).ravel()
+    prior = Scalar(0)
+    if M is not None:
+        M = asacquisitionmodel(M, shapein=model.shapein, shapeout=model.shapein)
+
+    return _solver(A, b, tod, model, invntt, prior, hyper=0, x0=x0, tol=tol,
+                   maxiter=maxiter, M=M, solver=solver, verbose=verbose,
+                   callback=callback, profile=profile, comm=comm_map)
 
 
 #-------------------------------------------------------------------------------
 
 
-def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None,
-               tol=1.e-5, maxiter=300, M=None, solver=None, verbose=True,
-               callback=None, profile=None):
+def mapper_rls(tod, model, invntt=None, weight=None, unpacking=None, hyper=1.0,
+               x0=None, tol=1.e-5, maxiter=300, M=None, solver=None,
+               verbose=True, callback=None, profile=None, comm_map=None):
 
+    tod = _validate_tod(tod, model)
+
+    if invntt is None:
+        if weight is not None:
+            print
+            print('XXXXXXXX')
+            print('WARNING: mapper_ls: weight keyword is deprecated, use invntt instead')
+            print('XXXXXXXX')
+        invntt = weight
+
+    if invntt is None:
+        invntt = Identity(description='Weight')
+
+    if comm_map is None:
+        comm_map = var.comm_map
+
+    A = model.T * invntt * model
+
+    hyper = np.asarray(hyper, dtype=var.FLOAT_DTYPE)
+    ntods = tod.size if tod.mask is None else int(np.sum(tod.mask == 0))
+    ntods = var.comm_tod.allreduce(ntods, op=MPI.SUM)
+    nmaps = model.shape[1]
+    prior = Addition([DdTdd(axis=axis, scalar=hyper * ntods / nmaps) \
+                      for axis in range(len(model.shapein))])
+    if hyper != 0 and (comm_map.Get_rank() == 0 or comm_map.Get_size() > 1):
+# commenting this for now, matvec is not updated
+#        A += prior
+        A = A + prior
+
+    b = (model.T * invntt)(tod)
+
+    return _solver(A, b, tod, model, invntt, prior, hyper=hyper, x0=x0, tol=tol,
+                   maxiter=maxiter, M=M, solver=solver, verbose=verbose,
+                   callback=callback, profile=profile, unpacking=unpacking,
+                   comm=comm_map)
+
+
+#-------------------------------------------------------------------------------
+
+
+def _validate_tod(tod, model):
     # make sure that the tod unit is compatible with the model's output unit
+    mask = getattr(tod, 'mask', None)
+    tod = Masking(mask)(tod)
+
     if tod.unit == '':
-        tod = tod.view()
         tod.unit = model.unitout
     else:
         if any([u not in tod._unit or tod._unit[u] != v
@@ -130,61 +190,16 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None,
             return UnitError("The input tod has a unit '" + tod.unit + \
                 "' incompatible with that of the model '" + Quantity(1, 
                 model.unitout).unit + "'.")
+        
+    return tod
 
-    if solver is None:
-        solver = scipy.sparse.linalg.bicgstab
 
-    if weight is None:
-        weight = Identity(description='Weight')
+#-------------------------------------------------------------------------------
 
-    hyper = np.asarray(hyper, dtype=var.FLOAT_DTYPE)
 
-    C = model.T * weight * model
-
-    ntods = tod.size if tod.mask is None else int(np.sum(tod.mask == 0))
-    ntods = var.mpi_comm.allreduce(ntods, op=MPI.SUM)
-    nmaps = model.shape[1]
-    ddTdd = Addition([DdTdd(axis=axis, scalar=hyper * ntods / nmaps) \
-                      for axis in range(len(model.shapein))])
-    if hyper != 0 and var.mpi_comm.Get_rank() == 0:
-        C += ddTdd
-
-    # linear solvers handle vectors. the default unpacking is a reshape
-    shapein = flatten_sliced_shape(model.shapein)
-    reshaping = Reshaping(int(np.product(shapein)), shapein)
-    if unpacking is None:
-        unpacking = reshaping
-
-    if not isinstance(unpacking, Reshaping):
-        C = unpacking.T * C * unpacking
-    C = AllReduce() * C
-
-    if unpacking.shapein is None or len(unpacking.shapein) > 1:
-        unpacking = unpacking * reshaping
-
-    rhs = (AllReduce() * unpacking.T * model.T * weight)(tod)
-
-    if not np.all(np.isfinite(rhs)):
-        raise ValueError('RHS contains not finite values.')
-    if rhs.shape != (C.shape[1],):
-        raise ValueError("Incompatible size for RHS: '" + str(rhs.shape) + \
-                         "' instead of '" + str(C.shape[1]) + "'.")
-
-    # preconditioner
-    if M is not None:
-        if isinstance(M, np.ndarray):
-            M = M.copy()
-            M[~np.isfinite(M)] = np.max(M[np.isfinite(M)])
-            M = Diagonal(M, description='Preconditioner')
-        M = unpacking.T * M * unpacking
-
-    # initial guess
-    if x0 is not None:
-        x0 = unpacking.T(x0)
-        x0[np.isnan(x0)] = 0.
-        if x0.shape != (C.shape[1],):
-            raise ValueError("Incompatible size for x0: '" + str(x0.shape) + \
-                             "' instead of '" + str(C.shape[1]) + "'.")
+def _solver(A, b, tod, model, invntt, prior, hyper=0, x0=None, tol=1.e-5,
+            maxiter=300, M=None, solver=None, verbose=True, callback=None,
+            profile=None, unpacking=None, comm=None):
 
     class PcgCallback():
         def __init__(self):
@@ -197,36 +212,73 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None,
             self.residual = parent_locals['resid']
             if self.residual < tol:
                 self.niterations += 1
-            if verbose and var.mpi_comm.Get_rank() == 0: 
+            if verbose and var.comm_map.Get_rank() == 0: 
                 print('Iteration ' + str(self.niterations) + ': ' + \
                       str(self.residual))
+
+    if isinstance(M, Diagonal):
+        tmf.remove_nonfinite(M.diagonal.T)
+
+    if unpacking is not None:
+        A = unpacking.T * A * unpacking
+        b = unpacking.T(b)
+        if x0 is not None:
+            x = unpacking.T(b)
+        if M is not None:
+            M = unpacking.T * M * unpacking
+
+    b = b.ravel()
+    if not np.all(np.isfinite(b)):
+        raise ValueError('RHS contains not finite values.')
+    if b.size != A.shape[1]:
+        raise ValueError("Incompatible size for RHS: '" + str(b.size) + \
+                         "' instead of '" + str(A.shape[1]) + "'.")
 
     if callback is None:
         callback = PcgCallback()
 
+    if solver is None:
+        solver = cg
+
+    if comm is None:
+        comm = var.comm_map
+
     if var.verbose or profile:
         print('')
         print('Model:')
-        print(C)
+        print(A)
         if M is not None:
             print('Preconditioner:')
             print(M)
 
     time0 = time.time()
     if profile is not None:
+
         def run():
-            solution,info = solver(C, rhs, x0=x0, tol=tol, maxiter=maxiter, M=M)
+            try:
+                solution, info = solver(A, b, x0=x0, tol=tol, maxiter=maxiter,
+                                        M=M, comm=comm)
+            except TypeError:
+                solution, info = solver(A, b, x0=x0, tol=tol, maxiter=maxiter,
+                                        M=M)
             if info < 0:
                 print('Solver failure: info='+str(info))
+
         cProfile.runctx('run()', globals(), locals(), profile+'.prof')
         print('Profile time: '+str(time.time()-time0))
-        os.system('python -m gprof2dot -f pstats -o ' + profile +'.dot ' + profile + '.prof')
+        os.system('python -m gprof2dot -f pstats -o ' + profile +'.dot ' + \
+                  profile + '.prof')
         os.system('dot -Tpng ' + profile + '.dot > ' + profile)
         os.system('rm -f ' + profile + '.prof' + ' ' + profile + '.dot')
         return None
-    else:
-        solution, info = solver(C, rhs, x0=x0, tol=tol, maxiter=maxiter,
-                                callback=callback, M=M)
+
+    try:
+        solution, info = solver(A, b, x0=x0, tol=tol, maxiter=maxiter, M=M,
+                                callback=callback, comm=comm)
+    except TypeError:
+        solution, info = solver(A, b, x0=x0, tol=tol, maxiter=maxiter, M=M,
+                                callback=callback)
+        
 
     time0 = time.time() - time0
     if info < 0:
@@ -237,25 +289,31 @@ def mapper_rls(tod, model, weight=None, unpacking=None, hyper=1.0, x0=None,
         print('Warning: Solver reached maximum number of iterations without r' \
               'eaching tolerance value.')
 
-    output = Map(unpacking(solution, True, True, True), copy=False)
+    if unpacking is not None:
+        solution = unpacking(solution)
+
+    output = Map(solution.reshape(model.shapein), copy=False)
     output.unit = tod.unit + ' ' + (1/Quantity(1, model.unitout)).unit + ' ' + \
                   Quantity(1, model.unitin).unit
 
-    coverage = Map((AllReduce() * model.T)(np.ones(tod.shape),
-                   True, True, True), copy=False)
+    coverage = Map(model.T(np.ones(tod.shape), True, True, True), copy=False)
     output.header = coverage.header
     output.coverage = coverage
 
     delta = model(output, False, False, True) - tod
-    likelihood = delta * weight(delta, True, True, True)
-    likelihood = var.mpi_comm.allreduce(np.sum(likelihood),op=MPI.SUM).magnitude
-    prior = output * ddTdd(output)
-    prior = var.mpi_comm.allreduce(np.sum(prior), op=MPI.SUM).magnitude
+    likelihood = delta * invntt(delta, True, True, True)
+    likelihood = var.comm_tod.allreduce(np.sum(likelihood),op=MPI.SUM).magnitude
+    prior = output * prior(output)
+    prior = var.comm_map.allreduce(np.sum(prior), op=MPI.SUM).magnitude
+
+    ntods = tod.size if tod.mask is None else int(np.sum(tod.mask == 0))
+    ntods = var.comm_tod.allreduce(ntods, op=MPI.SUM)
+
     output.header.update('likeliho', float(likelihood) / ntods)
     output.header.update('criter', float(likelihood + prior) / ntods)
     output.header.update('hyper', float(hyper))
     output.header.update('nsamples', ntods)
-    output.header.update('npixels', nmaps)
+    output.header.update('npixels', model.shape[1])
     output.header.update('time', time0)
     if hasattr(callback, 'niterations'):
         output.header.update('niter', callback.niterations)

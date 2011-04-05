@@ -12,7 +12,7 @@ __all__ = [ 'deglitch_l2std',
             'filter_median',
             'filter_polynomial',
             'interpolate_linear',
-            'remove_nan' ]
+            'remove_nonfinite' ]
 
 def deglitch_l2std(tod, projection, nsigma=5.):
     """
@@ -134,10 +134,10 @@ def interpolate_linear(tod):
 #-------------------------------------------------------------------------------
 
 
-def remove_nan(tod):
+def remove_nonfinite(tod):
     """
     Replace NaN values in a Tod with zeros and update the mask.
     """
     if tod.mask is None:
         tod.mask = np.zeros(tod.shape, np.bool8)
-    tmf.remove_nan(tod.T, tod.mask.view(np.int8).T)
+    tmf.remove_nonfinite_mask(tod.T, tod.mask.view(np.int8).T)

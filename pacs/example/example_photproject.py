@@ -54,7 +54,6 @@ tod.mask = deglitch_l2mad(tod_glitch, projection, nsigma=5.)
 # M y == M H x, M is the mask operator which sets bad samples values to 0
 masking = Masking(tod.mask)
 model = masking * projection
-tod = masking(tod)
 
 # Get the photproject map, which is equal to:
 #    H^T y / H^T 1 (^T is tranpose operator)

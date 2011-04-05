@@ -4,9 +4,10 @@
 import tamasisfortran as tmf
 import var
 from .var import VERSION as __version__
-from .mpiutils import *
 from .numpyutils import *
+from .mpiutils import *
 from .wcsutils import *
+from .solvers import *
 from .quantity import *
 from .datatypes import *
 from .utils import *

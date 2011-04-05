@@ -52,7 +52,7 @@ class PacsBase(Observation):
 
 
     def __init__(self, band, active_fraction, delay, fine_sampling_factor,
-                 policy_bad_detector, reject_bad_line):
+                 policy_bad_detector, reject_bad_line, comm_tod):
 
         """
         Set up the PACS instrument.
@@ -111,8 +111,9 @@ class PacsBase(Observation):
         instrument.distortion_yz = distortion_yz.T.view(dtype=[('y', \
             var.FLOAT_DTYPE), ('z',var.FLOAT_DTYPE)]).view(np.recarray)
         instrument.responsivity = Quantity(responsivity, 'V/Jy')
-
         self.instrument = instrument
+
+        self.comm_tod = comm_tod or var.comm_tod
 
     def get_derived_units(self):
         volt = Quantity(1./self.instrument.responsivity, 'Jy')
@@ -170,7 +171,7 @@ class PacsBase(Observation):
             self.instrument.distortion_yz.base.base.base,
             resolution)
         if status != 0: raise RuntimeError()
-        headers = var.mpi_comm.allgather(_str2fitsheader(header))
+        headers = var.comm_tod.allgather(_str2fitsheader(header))
         return combine_fitsheader(headers)
     get_map_header.__doc__ = Observation.get_map_header.__doc__
     
@@ -406,9 +407,9 @@ class PacsBase(Observation):
         ndetectors = self.get_ndetectors()
         sp = len('Info ')*' '
         unit = 'unknown' if self.slice[0].unit == '' else self.slice[0].unit
-        if var.mpi_comm.Get_size() > 1:
-            mpistr = 'Process '+str(var.mpi_comm.Get_rank()+1) + '/' + \
-                     str(var.mpi_comm.Get_size()) + ', '
+        if var.comm_tod.Get_size() > 1:
+            mpistr = 'Process ' + str(var.comm_tod.Get_rank()+1) + '/' + \
+                     str(var.comm_tod.Get_size()) + ', '
         else:
             mpistr = ''
         
@@ -526,7 +527,7 @@ class PacsObservation(PacsBase):
                  policy_bad_detector='mask', reject_bad_line=False,
                  policy_inscan='keep', policy_turnaround='keep',
                  policy_other='remove', policy_invalid='mask',
-                 active_fraction=0, delay=0.):
+                 active_fraction=0, delay=0., comm_tod=None):
         """
         Parameters
         ----------
@@ -584,12 +585,13 @@ class PacsObservation(PacsBase):
 
         # set up the instrument
         PacsBase.__init__(self, band, active_fraction, delay,
-            fine_sampling_factor, policy_bad_detector, reject_bad_line)
+            fine_sampling_factor, policy_bad_detector, reject_bad_line,
+            comm_tod)
 
         # get work load according to detector policy and MPI process
         self.instrument.detector.removed, filename = _get_workload(band,
             filename, self.instrument.detector.masked, policy_bad_detector,
-            transparent_mode)
+            transparent_mode, self.comm_tod)
         filename_, nfilenames = _files2tmf(filename)
 
         # get the observations and detector mask for the current processor
@@ -760,7 +762,15 @@ class PacsObservation(PacsBase):
 
         sel_masks = ','.join(sorted(sel_masks))
 
-        signal, mask, status = tmf.pacs_tod(
+        ndetectors = self.get_ndetectors()
+        nsamples_tot = int(np.sum(self.get_nsamples()))
+        tod = Tod.empty((ndetectors, nsamples_tot),
+                        mask=np.empty((ndetectors, nsamples_tot), np.bool8),
+                        nsamples=self.get_nsamples(),
+                        unit=self.slice[0].unit,
+                        derived_units=self.get_derived_units()[0])
+
+        status = tmf.pacs_tod(tod.T, tod.mask.view(np.int8).T,
             self.instrument.band,
             _files2tmf(self.slice.filename)[0],
             np.asarray(self.slice.nsamples_all, np.int32),
@@ -779,17 +789,10 @@ class PacsObservation(PacsBase):
             np.asfortranarray(self.instrument.detector.flat_detector),
             flatfielding,
             subtraction_mean,
-            int(np.sum(self.get_nsamples())),
-            self.get_ndetectors(),
             sel_masks)
         if status != 0: raise RuntimeError()
-       
-        tod = Tod(signal.T, 
-                  mask.T,
-                  nsamples=self.get_nsamples(),
-                  unit=self.slice[0].unit,
-                  derived_units=self.get_derived_units()[0],
-                  copy=False)
+
+        tmf.remove_nonfinite_mask(tod.ravel(), tod.mask.view(np.int8).ravel())
 
         if not raw:
             tod.inunit(unit)
@@ -849,7 +852,7 @@ class PacsSimulation(PacsBase):
                  policy_bad_detector='mask', reject_bad_line=False,
                  policy_inscan='keep', policy_turnaround='keep',
                  policy_other='keep', policy_invalid='keep', active_fraction=0,
-                 delay=0.):
+                 delay=0., comm_tod=None):
 
         header = pointing.header.copy() if pointing.header else None
         pointing = pointing.copy()
@@ -899,12 +902,13 @@ class PacsSimulation(PacsBase):
 
         # set up the instrument
         PacsBase.__init__(self, band, active_fraction, delay,
-            fine_sampling_factor, policy_bad_detector, reject_bad_line)
+            fine_sampling_factor, policy_bad_detector, reject_bad_line,
+            comm_tod)
 
         # get work load according to detector policy and MPI process
         self.instrument.detector.removed, filename = _get_workload(band,
             ('simulation',), self.instrument.detector.masked,
-            policy_bad_detector, mode == 'transparent')
+            policy_bad_detector, mode == 'transparent', self.comm_tod)
 
         # store pointing information
         if not hasattr(pointing, 'chop'):
@@ -1314,7 +1318,7 @@ def pacs_compute_delay(obs, tod, model, weight=None, tol_delay=1.e-3,
 #-------------------------------------------------------------------------------
 
 
-def _get_workload(band, slices, detector_masked, policy, transparent):
+def _get_workload(band, slices, detector_masked, policy, transparent, comm):
 
     detector_removed = detector_masked.copy()
     if policy != 'remove':
@@ -1332,7 +1336,7 @@ def _get_workload(band, slices, detector_masked, policy, transparent):
             detector_removed[16:,:]     = True
 
     # distribute the workload over the processors
-    return split_observation(var.mpi_comm, detector_removed, slices)
+    return split_observation(detector_removed, slices, comm=comm)
 
 
 #-------------------------------------------------------------------------------

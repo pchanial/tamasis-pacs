@@ -7,8 +7,8 @@ from tamasis import *
 
 # Specify the Frames observations as FITS files
 path = 'mydir/'
-frames_files = [path+'1342202088_red_level1Frames.fits[1501:17000]',
-                path+'1342202089_red_level1Frames.fits[1501:16500]']
+frames_files = [path+'1342202088_red_level1Frames.fits[1501:7000]',
+                path+'1342202089_red_level1Frames.fits[1501:6500]']
 
 # Setup the instrument and pointings for these files
 # The policy for each read-out can be 'mask', 'remove' or 'keep'
@@ -61,9 +61,6 @@ response = ResponseTruncatedExponential(obs.pack(
 compression = CompressionAverage(obs.slice.compression_factor)
 masking = Masking(tod.mask)
 model = masking * compression * response * projection
-
-# Set tod's masked values to zero
-tod = masking(tod)
 
 # The naive map is given by
 map_naive = mapper_naive(tod, model)

@@ -54,7 +54,6 @@ tod.save('tod_preprocessed.fits')
 compression = CompressionAverage(obs.slice.compression_factor)
 masking = Masking(tod.mask)
 model = masking * compression * projection
-tod = masking(tod)
 
 # The naive map is given by
 map_naive = mapper_naive(tod, model)

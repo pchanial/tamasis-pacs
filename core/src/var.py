@@ -6,7 +6,9 @@ import os
 import tamasisfortran as tmf
 from mpi4py import MPI
 
-mpi_comm = MPI.COMM_WORLD
+comm_tod = MPI.COMM_WORLD
+comm_map = MPI.COMM_SELF
+
 path = os.path.abspath(os.path.dirname(__file__) + '/../../../../share/tamasis')
 verbose = False
 

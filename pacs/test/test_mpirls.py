@@ -2,16 +2,20 @@ import os
 import scipy
 import tamasis
 
+from mpi4py import MPI
 from scipy.sparse.linalg import cgs
 from tamasis import *
 
 class TestFailure(Exception): pass
 
-tamasis.var.verbose = False
+tamasis.var.verbose = True
+tamasis.var.comm_tod = MPI.COMM_WORLD
+tamasis.var.comm_map = MPI.COMM_SELF
+
 profile = None#'test_rls.png'
 data_dir = os.path.dirname(__file__) + '/data/'
-rank = tamasis.var.mpi_comm.Get_rank()
-size = tamasis.var.mpi_comm.Get_size()
+rank = MPI.COMM_WORLD.Get_rank()
+size = MPI.COMM_WORLD.Get_size()
 obs = PacsObservation(filename=data_dir + 'frames_blue.fits',
                       fine_sampling_factor=1)
 obs.pointing.chop[:] = 0
@@ -19,16 +23,15 @@ tod = obs.get_tod(flatfielding=False)
 
 map_ref = Map(data_dir + 'frames_blue_map_rls_cgs_tol1e-6.fits')
 
-telescope    = Identity(description='Telescope PSF')
-projection   = Projection(obs, resolution=3.2, oversampling=False,
-                          npixels_per_sample=6, header=map_ref.header)
+masking_tod  = Masking(tod.mask)
 multiplexing = CompressionAverage(obs.instrument.fine_sampling_factor,
                                   description='Multiplexing')
-crosstalk    = Identity(description='Crosstalk')
-compression  = CompressionAverage(obs.slice.compression_factor)
-masking_tod  = Masking(tod.mask)
+projection   = Projection(obs, resolution=3.2, oversampling=False,
+                          npixels_per_sample=6, header=map_ref.header)
+telescope    = Identity(description='Telescope PSF')
+distribution = DistributionGlobal(projection.mask.shape, share=True)
 
-model = masking_tod * crosstalk * multiplexing * projection * telescope
+model = masking_tod * multiplexing * projection * telescope * distribution
 print(model)
 
 map_naive = mapper_naive(tod, model)

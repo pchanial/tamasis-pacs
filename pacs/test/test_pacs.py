@@ -31,9 +31,8 @@ for field in obs.status.dtype.names:
     status = obs.status[10:20]
     if isinstance(status[field][0], str):
         if np.any(status[field] != status2[field]): raise TestFailure('Status problem with: '+field)
-    elif not np.allclose(status[field], status2[field]): raise TestFailure('Status problem with: '+field)
-if not np.allclose(tod, tod2): raise TestFailure()
-if not np.all(tod.mask == tod2.mask): raise TestFailure()
+    elif any_neq(status[field], status2[field]): raise TestFailure('Status problem with: '+field)
+if any_neq(tod, tod2): raise TestFailure()
 
 # all observation
 obs = PacsObservation(data_dir+'frames_blue.fits')
@@ -47,9 +46,8 @@ tod = obs.get_tod()
 
 # packed projection
 proj2 = Projection(obs, npixels_per_sample=6, packed=True, oversampling=False)
-proj3 = proj2 * Unpacking(proj2.mask).T
 
-if any_neq(proj.T(tod), proj3.T(tod)): raise TestFailure()
+if any_neq(proj.T(tod), proj2.T(tod)): raise TestFailure()
 
 
 filename = 'obs-'+str(uuid1())+'.fits'
@@ -66,9 +64,8 @@ finally:
 for field in obs.status.dtype.names:
     if isinstance(obs.status[field][0], str):
         if np.any(obs.status[field] != status2[field]): raise TestFailure('Status problem with: '+field)
-    elif not np.allclose(obs.status[field], status2[field]): raise TestFailure('Status problem with: '+field)
-if not np.allclose(tod, tod2): raise TestFailure()
-if not np.all(tod.mask == tod2.mask): raise TestFailure()
+    elif any_neq(obs.status[field], status2[field]): raise TestFailure('Status problem with: '+field)
+if any_neq(tod, tod2): raise TestFailure()
 
 telescope    = Identity(description='Telescope PSF')
 projection   = Projection(obs, resolution=3.2, oversampling=False, npixels_per_sample=6)
@@ -92,7 +89,7 @@ header2 = header.copy()
 header2['NAXIS1'] += 500
 header2['CRPIX1'] += 250
 projection2 = Projection(obs, header=header2, oversampling=False)
-map_naive2 = mapper_naive(tod, projection2)
+map_naive2 = mapper_naive(tod, Masking(tod.mask) * projection2)
 map_naive2.inunit('Jy/arcsec^2')
 map_naive3 = map_naive2[:,250:header['NAXIS1']+250]
 if any_neq(map_naive, map_naive3, 2.e-7): raise TestFailure('mapper_naive, with custom header')

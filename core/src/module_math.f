@@ -34,6 +34,8 @@ module module_math
     public :: sigma_clipping
     public :: stddev
     public :: sum_kahan
+    public :: norm2
+    public :: dot
     public :: swap
     public :: eq_real
     public :: neq_real
@@ -202,7 +204,7 @@ contains
         integer                       :: i
 
         if (size(input) == 0) then
-            sum = NaN
+            sum = 0
             return
         end if
 
@@ -216,7 +218,7 @@ contains
                 if (.not. mask(i)) exit
             end do
             if (i > size(input)) then
-                sum = NaN
+                sum = 0
                 return
             end if
         else
@@ -249,7 +251,7 @@ contains
         integer             :: i
 
         if (size(input) == 0) then
-            sum = NaN
+            sum = 0
             return
         end if
 
@@ -275,7 +277,7 @@ contains
         integer             :: i
 
         if (size(input) == 0) then
-            sum = NaN
+            sum = 0
             return
         end if
 
@@ -288,6 +290,67 @@ contains
             sum = t
         end do
     end function sum_kahan_3d
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    function norm2(input) result (sum)
+
+        real(p), intent(in) :: input(:)
+        real(p)             :: sum
+
+        real(p) :: c, t, y
+        integer :: i
+
+        if (size(input) == 0) then
+            sum = 0
+            return
+        end if
+
+        i = 1
+
+        sum = input(i)*input(i)
+        c = 0
+        do i = i+1, size(input)
+            y = input(i)*input(i) - c
+            t = sum + y
+            c = (t - sum) - y
+            sum = t
+        end do
+
+    end function norm2
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    function dot(input1, input2) result (sum)
+
+        real(p), intent(in) :: input1(:)
+        real(p), intent(in) :: input2(:)
+        real(p)             :: sum
+
+        real(p) :: c, t, y
+        integer :: i
+
+        if (size(input1) == 0) then
+            sum = 0
+            return
+        end if
+
+        i = 1
+
+        sum = input1(i)*input2(i)
+        c = 0
+        do i = i+1, size(input1)
+            y = input1(i)*input2(i) - c
+            t = sum + y
+            c = (t - sum) - y
+            sum = t
+        end do
+
+    end function dot
 
 
     !-------------------------------------------------------------------------------------------------------------------------------

@@ -20,11 +20,10 @@ projection   = Projection(obs, resolution=3.2, oversampling=False,
                           npixels_per_sample=6)
 multiplexing = CompressionAverage(obs.instrument.fine_sampling_factor,
                                   description='Multiplexing')
-crosstalk    = Identity(description='Crosstalk')
 compression  = CompressionAverage(obs.slice.compression_factor)
 masking_tod  = Masking(tod.mask)
 
-model = masking_tod * crosstalk * multiplexing * projection * telescope
+model = masking_tod * multiplexing * projection * telescope
 print(model)
 
 # iterative map, taking all map pixels

@@ -3,18 +3,53 @@
 #
 import numpy as np
 import tamasisfortran as tmf
+from . import var
+from mpi4py import MPI
 
 __all__ = []
 
-def split_work(comm, nglobal, rank=None):
+def sum(array, comm=None):
+    """Parallelised sum"""
+    array = np.ascontiguousarray(array)
+    if comm is None:
+        comm = MPI.COMM_WORLD
+    output = np.array(tmf.sum(array.T))
+    comm.Allreduce(MPI.IN_PLACE, [output, MPI.DOUBLE], op=MPI.SUM)
+    return float(output)
+
+def norm2(array, comm=None):
+    """Parallelised Squared euclidian norm"""
+    array = np.ascontiguousarray(array)
+    if comm is None:
+        comm = MPI.COMM_WORLD
+    output = np.array(tmf.norm2(array.T))
+    comm.Allreduce(MPI.IN_PLACE, [output, MPI.DOUBLE], op=MPI.SUM)
+    return float(output)
+
+def dot(array1, array2, comm=None):
+    """Parallelised dot product"""
+    array1 = np.ascontiguousarray(array1)
+    array2 = np.ascontiguousarray(array2)
+    if comm is None:
+        comm = MPI.COMM_WORLD
+    output = np.array(tmf.dot(array1.T, array2.T))
+    comm.Allreduce(MPI.IN_PLACE, [output, MPI.DOUBLE], op=MPI.SUM)
+    return float(output)
+
+def split_work(nglobal, rank=None, comm=None):
+    if comm is None:
+        comm = MPI.COMM_WORLD
     size  = comm.Get_size()
     if rank is None:
         rank = comm.Get_rank()
     nlocal = int(np.ceil(float(nglobal) / size))
     return slice(min(rank * nlocal, nglobal), min((rank + 1) * nlocal, nglobal))
     
-def split_observation(comm, detectors, observations, rank=None):
+def split_observation(detectors, observations, rank=None, comm=None):
 
+    if comm is None:
+        comm = MPI.COMM_WORLD
+    
     size  = comm.Get_size()
     if size == 1:
         return detectors.copy(), list(observations)

@@ -4,6 +4,8 @@
 import numpy as np
 import pyfits
 import re
+
+from . import var
 from tamasis.core import *
 from tamasis.observations import *
 
@@ -12,7 +14,7 @@ __all__ = [ 'MadMap1Observation' ]
 class MadMap1Observation(Observation):
     """Class for the handling of an observation in the MADMAP1 format"""
     def __init__(self, todfile, invnttfile, mapmaskfile, convert, ndetectors,
-                 missing_value=None):
+                 missing_value=None, comm_tod=None):
 
         # Get information from files
         nslices, status = tmf.madmap1_nslices(invnttfile, ndetectors)
@@ -66,6 +68,12 @@ class MadMap1Observation(Observation):
         # Store pointing information
         self.pointing = np.recarray(np.sum(nsamples), [('removed', np.bool_)])
         self.pointing.removed = False
+
+        # Store communicator information
+        self.comm_tod = comm_tod or var.comm_tod
+        if self.comm_tod.Get_size() > 1:
+            raise NotImplementedError('The parallelisation of the TOD is not ' \
+                                      'implemented')
 
     def get_pointing_matrix(self, header, resolution, npixels_per_sample,
                             method=None, oversampling=False):

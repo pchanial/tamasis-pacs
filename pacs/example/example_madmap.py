@@ -57,23 +57,22 @@ projection = Projection(obs,
                         oversampling=False)
 masking = Masking(tod.mask)
 model = masking * projection
-tod = masking(tod)
 
 # The naive map is given by
 map_naive = mapper_naive(tod, model)
 
 # Get the filter operator N^-1
 length = np.asarray(2**np.ceil(np.log2(np.array(tod.nsamples) + 200)), dtype='int')
-invNtt = InvNtt(length, obs.get_filter_uncorrelated())
+invntt = InvNtt(length, obs.get_filter_uncorrelated())
 fft = FftHalfComplex(length)
 padding = Padding(left=invNtt.ncorrelations, right=length-tod.nsamples-invNtt.ncorrelations)
-weight = padding.T * fft.T * invNtt * fft * padding
+invntt = padding.T * fft.T * invntt * fft * padding
 
 # The MADmap map is obtained by minimising the criterion
 # J(x) = ||y-Hx||^2, ||.||^2 being the N^-1 norm
 # it is equivalent to solving the equation H^T N^-1 H x = H^T N^-1 y
 map_madmap = mapper_ls(tod, model,
-                       weight=weight,
+                       invntt=invntt,
                        M=1/map_naive.coverage,
                        unpacking=Unpacking(map_naive.coverage==0),
                        tol=1.e-5)
