@@ -588,6 +588,7 @@ contains
         masklength_calblock = ceiling(masktime_calblock / this%sampling_interval)
         isample = 0
         a: do 
+
             isample = isample + 1
             if (isample > this%nsamples) exit
             if (bbid(isample) /= BBID_CALIBRATION) cycle
@@ -596,7 +597,6 @@ contains
                 if (isample > this%nsamples) exit a
                 if (bbid(isample) /= BBID_CALIBRATION) exit
             end do
-            print *, 'after calblock:', isample
             ! we're just past a calibration block, let's mask some samples
             inscan(isample:min(isample+masklength_calblock-1, this%nsamples)) = .false.
             turnaround(isample:min(isample+masklength_calblock-1, this%nsamples)) = .false.
