@@ -173,6 +173,12 @@ end program test
             msg              = "Checking for 'lapack'",
             use              = ['LAPACK'])
 
+    conf.check_cc(fragment    = 'program test\nuse mpi\nend program test',
+                  features    = 'fc fcprogram',
+                  msg         = 'Checking for MPI fortran module',
+                  define_name = 'HAVE_MPI_MODULE',
+                  mandatory   = False)
+
     conf.check_cfg(package='wcslib',  args=['--libs', '--cflags'])
     conf.check_cfg(modversion='wcslib')
     check_wcslib_external(conf.env)
@@ -220,6 +226,7 @@ def build(bld):
     source = [bld.srcnode.find_node('%s/src/tamasisfortran_%s.f90' % (s,s)) for s in subdirs]
 
     #XXX this should be a Task...
+    os.putenv('OMPI_FC', 'ifort')
     cmd = '${F2PY} --fcompiler=${F2PYFCOMPILER} --f90exec=mpif90'
     cmd += ' --f90flags="${FCFLAGS}'
     cmd += ' ${FCFLAGS_OPENMP}"' if 'OPENMP' in libraries else '"'

@@ -1310,7 +1310,9 @@ subroutine mpi_allreducelocal(input, ninputs, mask, nmasks, output, noutputs, op
     
     use module_math,    only : mInf, pInf
     use module_tamasis, only : p
+#ifdef HAVE_MPI_MODULE 
     use mpi
+#endif
     implicit none
  
     real(p), intent(in)    :: input(ninputs)
@@ -1321,6 +1323,10 @@ subroutine mpi_allreducelocal(input, ninputs, mask, nmasks, output, noutputs, op
 
     integer :: size, root, a, z, iinput, imask
     real(p) :: input_(noutputs), field
+
+#ifndef HAVE_MPI_MODULE
+    include 'mpif.h'
+#endif
 
     call MPI_Comm_size(comm, size, status)
     if (status /= 0) return
@@ -1371,7 +1377,9 @@ end subroutine mpi_allreducelocal
 subroutine mpi_allscatterlocal(input, ninputs, mask, nmasks, output, noutputs, comm, status)
     
     use module_tamasis, only : p
+#ifdef HAVE_MPI_MODULE
     use mpi
+#endif
     implicit none
 
     real(p), intent(in)    :: input(ninputs) ! local image of the distributed map
@@ -1386,6 +1394,10 @@ subroutine mpi_allscatterlocal(input, ninputs, mask, nmasks, output, noutputs, c
 
     logical*1 :: maskbuffer(ninputs)
     real(p)   :: databuffer(min(ninputs,noutputs))
+
+#ifndef HAVE_MPI_MODULE
+    include 'mpif.h'
+#endif
 
     call MPI_Comm_size(comm, size, status)
     if (status /= 0) return
