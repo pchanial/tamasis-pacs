@@ -127,7 +127,13 @@ contains
         residuals = input - m
 
         ! compute mean deviation
-        if (present(meandev)) meandev = sum_kahan(abs(residuals), mask) / nsamples
+        if (present(meandev)) then
+            if (nsamples == 0) then
+                meandev = NaN
+            else
+                meandev = sum_kahan(abs(residuals), mask) / nsamples
+            end if
+        end if
 
         ! compute variance
         if (nsamples <= 1) then
@@ -143,7 +149,7 @@ contains
 
         ! compute skewness
         if (present(skewness)) then
-            if (sdev == 0) then
+            if (nsamples == 0 .or. sdev == 0) then
                 skewness = NaN
             else
                 skewness = sum_kahan(residuals**3, mask) / (nsamples * sdev**3)
@@ -152,7 +158,7 @@ contains
 
         ! compute kurtosis
         if (present(kurtosis)) then
-            if (sdev == 0) then
+            if (nsamples == 0 .or. sdev == 0) then
                 kurtosis = NaN
             else
                 kurtosis = sum_kahan(residuals**4, mask) / (nsamples * sdev**4) - 3
