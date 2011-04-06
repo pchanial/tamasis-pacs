@@ -40,7 +40,6 @@ if any_neq(mlocal2, mlocal): raise TestFailure()
 mlocal[:] = rank + 1
 mlocalpacked = proj_local(mlocal)
 mlocalunpacked = packing.T(mlocalpacked)
-mlocalunpacked.save('mlocalunpacked' + str(rank) + '.fits')
 
 pb = False
 for irank in range(size):
