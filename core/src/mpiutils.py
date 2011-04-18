@@ -17,6 +17,10 @@ def sum(array, comm=None):
     comm.Allreduce(MPI.IN_PLACE, [output, MPI.DOUBLE], op=MPI.SUM)
     return float(output)
 
+
+#-------------------------------------------------------------------------------
+
+
 def norm2(array, comm=None):
     """Parallelised Squared euclidian norm"""
     array = np.ascontiguousarray(array)
@@ -25,6 +29,10 @@ def norm2(array, comm=None):
     output = np.array(tmf.norm2(array.T))
     comm.Allreduce(MPI.IN_PLACE, [output, MPI.DOUBLE], op=MPI.SUM)
     return float(output)
+
+
+#-------------------------------------------------------------------------------
+
 
 def dot(array1, array2, comm=None):
     """Parallelised dot product"""
@@ -36,6 +44,10 @@ def dot(array1, array2, comm=None):
     comm.Allreduce(MPI.IN_PLACE, [output, MPI.DOUBLE], op=MPI.SUM)
     return float(output)
 
+
+#-------------------------------------------------------------------------------
+
+
 def split_work(nglobal, rank=None, comm=None):
     if comm is None:
         comm = MPI.COMM_WORLD
@@ -45,6 +57,10 @@ def split_work(nglobal, rank=None, comm=None):
     nlocal = int(np.ceil(float(nglobal) / size))
     return slice(min(rank * nlocal, nglobal), min((rank + 1) * nlocal, nglobal))
     
+
+#-------------------------------------------------------------------------------
+
+
 def split_observation(detectors, observations, rank=None, comm=None):
 
     if comm is None:
