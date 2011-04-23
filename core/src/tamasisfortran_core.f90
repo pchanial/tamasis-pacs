@@ -836,7 +836,7 @@ end subroutine dot
 
 subroutine diff(array, asize, dim, ashape, arank)
 
-    use module_math,    only : diff_fast, diff_slow
+    use module_math,    only : diff_fast, diff_medium
     use module_tamasis, only : p
     implicit none
 
@@ -861,7 +861,7 @@ subroutine diff(array, asize, dim, ashape, arank)
     if (dim == 1) then
         call diff_fast(array(1), ndiff, nslow)
     else
-        call diff_slow(array(1), nfast, ndiff, nslow)
+        call diff_medium(array(1), nfast, ndiff, nslow)
     end if
 
 end subroutine diff
@@ -872,7 +872,7 @@ end subroutine diff
 
 subroutine diffT(array, asize, dim, ashape, arank)
 
-    use module_math,    only : diffT_fast, diffT_slow
+    use module_math,    only : diffT_fast, diffT_medium
     use module_tamasis, only : p
     implicit none
 
@@ -897,7 +897,7 @@ subroutine diffT(array, asize, dim, ashape, arank)
     if (dim == 1) then
         call diffT_fast(array(1), ndiff, nslow)
     else
-        call diffT_slow(array(1), nfast, ndiff, nslow)
+        call diffT_medium(array(1), nfast, ndiff, nslow)
     end if
 
 end subroutine diffT
@@ -908,7 +908,7 @@ end subroutine diffT
 
 subroutine diffTdiff(array, asize, dim, ashape, arank, scalar)
 
-    use module_math,    only : diffTdiff_fast, diffTdiff_slow
+    use module_math,    only : diffTdiff_fast, diffTdiff_medium
     use module_tamasis, only : p
     implicit none
 
@@ -934,7 +934,7 @@ subroutine diffTdiff(array, asize, dim, ashape, arank, scalar)
     if (dim == 1) then
         call diffTdiff_fast(array(1), ndiff, nslow, scalar)
     else
-        call diffTdiff_slow(array(1), nfast, ndiff, nslow, scalar)
+        call diffTdiff_medium(array(1), nfast, ndiff, nslow, scalar)
     end if
 
 end subroutine diffTdiff
@@ -945,7 +945,7 @@ end subroutine diffTdiff
 
 subroutine shift(array, asize, dim, ashape, arank, offset, offsetsize)
 
-    use module_math,    only : shift_fast, shift_slow
+    use module_math,    only : shift_fast, shift_medium
     use module_tamasis, only : p
     implicit none
 
@@ -972,7 +972,7 @@ subroutine shift(array, asize, dim, ashape, arank, offset, offsetsize)
     if (dim == 1) then
         call shift_fast(array(1), nshift, nslow, offset)
     else
-        call shift_slow(array(1), nfast, nshift, nslow, offset)
+        call shift_medium(array(1), nfast, nshift, nslow, offset)
     end if
 
 end subroutine shift

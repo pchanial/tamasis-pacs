@@ -40,13 +40,13 @@ module module_math
     public :: eq_real
     public :: neq_real
     public :: diff_fast
-    public :: diff_slow
+    public :: diff_medium
     public :: diffT_fast
-    public :: diffT_slow
+    public :: diffT_medium
     public :: diffTdiff_fast
-    public :: diffTdiff_slow
+    public :: diffTdiff_medium
     public :: shift_fast
-    public :: shift_slow
+    public :: shift_medium
 
     interface distance
         module procedure distance_1d, distance_2d, distance_3d
@@ -943,7 +943,7 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine diff_slow(array, m, n, o)
+    subroutine diff_medium(array, m, n, o)
 
         integer, intent(in)    :: m, n, o
         real(p), intent(inout) :: array(m,n,o)
@@ -965,7 +965,7 @@ contains
         end do
         !$omp end parallel do
 
-    end subroutine diff_slow
+    end subroutine diff_medium
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
@@ -993,7 +993,7 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine diffT_slow(array, m, n, o)
+    subroutine diffT_medium(array, m, n, o)
 
         integer, intent(in)    :: m, n, o
         real(p), intent(inout) :: array(m,n,o)
@@ -1014,7 +1014,7 @@ contains
         end do
         !$omp end parallel do
 
-    end subroutine diffT_slow
+    end subroutine diffT_medium
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
@@ -1062,7 +1062,7 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine diffTdiff_slow(array, m, n, o, scalar)
+    subroutine diffTdiff_medium(array, m, n, o, scalar)
 
         use module_tamasis,  only : p
         implicit none
@@ -1105,7 +1105,7 @@ contains
         end do
         !$omp end parallel do
 
-    end subroutine diffTdiff_slow
+    end subroutine diffTdiff_medium
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
@@ -1143,7 +1143,7 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine shift_slow(array, m, n, o, offset)
+    subroutine shift_medium(array, m, n, o, offset)
 
         integer, intent(in)    :: m, n, o
         real(p), intent(inout) :: array(m,n,o)
@@ -1169,7 +1169,7 @@ contains
         end do
         !$omp end parallel do
 
-    end subroutine shift_slow
+    end subroutine shift_medium
 
 
 end module module_math
