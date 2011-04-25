@@ -10,6 +10,8 @@ import tamasisfortran as tmf
 import scipy.signal
 
 from matplotlib import pyplot
+from mpi4py import MPI
+
 from . import var
 from .numpyutils import _my_isscalar
 from .wcsutils import angle_lonlat, barycenter_lonlat
@@ -289,7 +291,7 @@ def aperture_circular(shape, diameter, origin=None, resolution=1.):
 #-------------------------------------------------------------------------------
 
 
-def diff(array, axis=0):
+def diff(array, axis=0, comm=None):
     """
     Inplace discrete difference
     """
@@ -304,25 +306,34 @@ def diff(array, axis=0):
     if axis < 0:
         raise ValueError("Invalid negative axis '" + str(axis) + "'.")
 
-    rank = array.ndim
+    if comm is None:
+        comm = MPI.COMM_WORLD
+
+    ndim = array.ndim
     
-    if rank == 0:
+    if ndim == 0:
         array.shape = (1,)
         array[:] = 0
         array.shape = ()
         return
 
-    if axis >= rank:
+    if axis >= ndim:
         raise ValueError("Invalid axis '" + str(axis) + "'. Expected value is" \
-                         ' less than ' + str(rank-1) + '.')
+                         ' less than ' + str(ndim-1) + '.')
 
-    tmf.diff(array.T, rank-axis, np.asarray(array.T.shape))
+    if axis != 0 or comm.Get_size() == 1:
+        tmf.diff(array.T, ndim-axis, np.asarray(array.T.shape))
+        return
 
-    
+    status = tmf.diff_mpi(array.T, ndim-axis, np.asarray(array.T.shape),
+                          comm.py2f())
+    if status != 0: raise RuntimeError()
+
+
 #-------------------------------------------------------------------------------
 
 
-def diffT(array, axis=0):
+def diffT(array, axis=0, comm=None):
     """
     Inplace discrete difference transpose
     """
@@ -337,25 +348,33 @@ def diffT(array, axis=0):
     if axis < 0:
         raise ValueError("Invalid negative axis '" + str(axis) + "'.")
 
-    rank = array.ndim
+    if comm is None:
+        comm = MPI.COMM_WORLD
 
-    if rank == 0:
+    ndim = array.ndim
+
+    if ndim == 0:
         array.shape = (1,)
         array[:] = 0
         array.shape = ()
         return
 
-    if axis >= rank:
+    if axis >= ndim:
         raise ValueError("Invalid axis '" + str(axis) + "'. Expected value is" \
-                         ' less than ' + str(rank-1) + '.')
+                         ' less than ' + str(ndim-1) + '.')
 
-    tmf.difft(array.T, rank-axis, np.asarray(array.T.shape))
+    if axis != 0 or comm.Get_size() == 1:
+        tmf.difft(array.T, ndim-axis, np.asarray(array.T.shape))
+        return
 
+    status = tmf.difft_mpi(array.T, ndim-axis, np.asarray(array.T.shape),
+                          comm.py2f())
+    if status != 0: raise RuntimeError()
     
 #-------------------------------------------------------------------------------
 
 
-def diffTdiff(array, axis=0, scalar=1.):
+def diffTdiff(array, axis=0, scalar=1., comm=None):
     """
     Inplace discrete difference transpose times discrete difference
     """
@@ -370,22 +389,32 @@ def diffTdiff(array, axis=0, scalar=1.):
     if axis < 0:
         raise ValueError("Invalid negative axis '" + str(axis) + "'.")
 
-    rank = array.ndim
+    if comm is None:
+        comm = MPI.COMM_WORLD
+
+    scalar = np.asarray(scalar, var.FLOAT_DTYPE)
+    ndim = array.ndim
     
-    if rank == 0:
+    if ndim == 0:
         array.shape = (1,)
         array[:] = 0
         array.shape = ()
         return
     
-    if axis >= rank:
+    if axis >= ndim:
         raise ValueError("Invalid axis '" + str(axis) + "'. Expected value is" \
-                         ' less than ' + str(rank) + '.')
+                         ' less than ' + str(ndim) + '.')
 
-    tmf.difftdiff(array.T, rank-axis, np.asarray(array.T.shape),
-                  np.asarray(scalar, dtype=var.FLOAT_DTYPE))
+    if axis != 0 or comm.Get_size() == 1:
+        tmf.difftdiff(array.T, ndim-axis, np.asarray(array.T.shape), scalar)
 
-    
+        return
+
+    status = tmf.difftdiff_mpi(array.T, ndim-axis, np.asarray(array.T.shape),
+                               scalar, comm.py2f())
+    if status != 0: raise RuntimeError()
+
+
 #-------------------------------------------------------------------------------
 
 

@@ -885,21 +885,22 @@ class DiscreteDifference(Square):
     Calculate the nth order discrete difference along given axis.
     """
 
-    def __init__(self, n=1, axis=0, **keywords):
+    def __init__(self, n=1, axis=0, comm=None, **keywords):
         Square.__init__(self, **keywords)
         self.n = n
         self.axis = axis
+        self.comm = comm or var.comm_map
 
     def direct(self, input, inplace, cachein, cacheout):
         output = self.validate_input_inplace(input, inplace)
         for i in range(self.n):
-            diff(output, self.axis)
+            diff(output, self.axis, comm=self.comm)
         return output
 
     def transpose(self, input, inplace, cachein, cacheout):
         output = self.validate_input_inplace(input, inplace)
         for i in range(self.n):
-            diffT(output, self.axis)
+            diffT(output, self.axis, comm=self.comm)
         return output        
 
 
@@ -909,16 +910,18 @@ class DiscreteDifference(Square):
 class DdTdd(Symmetric):
     """Calculate operator dX.T dX along a given axis."""
 
-    def __init__(self, axis=0, scalar=1., description=None, **keywords):
+    def __init__(self, axis=0, scalar=1., description=None, comm=None,
+                 **keywords):
         if description is None and scalar != 1.:
             description = str(scalar) + ' DdTdd'
         Symmetric.__init__(self, **keywords)
         self.axis = axis
         self.scalar = scalar
+        self.comm = comm or var.comm_map
 
     def direct(self, input, inplace, cachein, cacheout):
         output = self.validate_input_inplace(input, inplace)
-        diffTdiff(output, self.axis, self.scalar)
+        diffTdiff(output, self.axis, self.scalar, comm=self.comm)
         return output
 
    

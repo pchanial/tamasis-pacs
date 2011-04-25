@@ -846,17 +846,11 @@ subroutine diff(array, asize, dim, ashape, arank)
     integer, intent(in)    :: arank
     integer*8, intent(in)  :: ashape(arank)
 
-    integer :: idim, nfast, ndiff, nslow
+    integer :: nfast, ndiff, nslow
 
-    nfast = 1
-    nslow = 1
-    do idim = 1, dim-1
-        nfast = nfast * ashape(idim)
-    end do
+    nfast = product(ashape(1:dim-1))
     ndiff = ashape(dim)
-    do idim = dim+1, arank
-        nslow = nslow * ashape(idim)
-    end do
+    nslow = product(ashape(dim+1:arank))
 
     if (dim == 1) then
         call diff_fast(array(1), ndiff, nslow)
@@ -865,6 +859,56 @@ subroutine diff(array, asize, dim, ashape, arank)
     end if
 
 end subroutine diff
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine diff_mpi(array, asize, dim, ashape, arank, comm, status)
+
+    use module_math,    only : diff_fast, diff_medium, diff_slow
+    use module_tamasis, only : p
+#ifdef HAVE_MPI_MODULE
+    use mpi
+#endif
+    implicit none
+
+    integer*8, intent(in)  :: asize
+    real(p), intent(inout) :: array(asize)
+    integer, intent(in)    :: dim
+    integer, intent(in)    :: arank
+    integer*8, intent(in)  :: ashape(arank)
+    integer, intent(in)    :: comm
+    integer, intent(out)   :: status
+
+    integer                :: rank, size, nfast, ndiff, nslow, mpistatus(6)
+    real(p), allocatable   :: boundary(:)
+
+#ifndef HAVE_MPI_MODULE
+    include 'mpif.h'
+#endif
+
+    nfast = product(ashape(1:dim-1))
+    ndiff = ashape(dim)
+    nslow = product(ashape(dim+1:arank))
+
+    if (dim == arank) then
+        call MPI_Comm_rank(comm, rank, status)
+        if (status /= 0) return
+        call MPI_Comm_size(comm, size, status)
+        if (status /= 0) return
+        allocate (boundary(nfast))
+        call MPI_Sendrecv(array(1:nfast), nfast, MPI_DOUBLE_PRECISION, modulo(rank-1, size), 0,                                    &
+                          boundary, nfast, MPI_DOUBLE_PRECISION, modulo(rank+1, size), 0, comm, mpistatus, status)
+        if (status /= 0) return
+        call diff_slow(array(1), nfast, ndiff, boundary, rank == size - 1)
+    else if (dim > 1) then
+        call diff_medium(array(1), nfast, ndiff, nslow)
+    else
+        call diff_fast(array(1), ndiff, nslow)
+    end if
+
+end subroutine diff_mpi
 
 
 !-----------------------------------------------------------------------------------------------------------------------------------
@@ -882,17 +926,11 @@ subroutine diffT(array, asize, dim, ashape, arank)
     integer, intent(in)    :: arank
     integer*8, intent(in)  :: ashape(arank)
 
-    integer :: idim, nfast, ndiff, nslow
+    integer :: nfast, ndiff, nslow
 
-    nfast = 1
-    nslow = 1
-    do idim = 1, dim-1
-        nfast = nfast * ashape(idim)
-    end do
+    nfast = product(ashape(1:dim-1))
     ndiff = ashape(dim)
-    do idim = dim+1, arank
-        nslow = nslow * ashape(idim)
-    end do
+    nslow = product(ashape(dim+1:arank))
 
     if (dim == 1) then
         call diffT_fast(array(1), ndiff, nslow)
@@ -901,6 +939,56 @@ subroutine diffT(array, asize, dim, ashape, arank)
     end if
 
 end subroutine diffT
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine diffT_mpi(array, asize, dim, ashape, arank, comm, status)
+
+    use module_math,    only : diffT_fast, diffT_medium, diffT_slow
+    use module_tamasis, only : p
+#ifdef HAVE_MPI_MODULE
+    use mpi
+#endif
+    implicit none
+
+    integer*8, intent(in)  :: asize
+    real(p), intent(inout) :: array(asize)
+    integer, intent(in)    :: dim
+    integer, intent(in)    :: arank
+    integer*8, intent(in)  :: ashape(arank)
+    integer, intent(in)    :: comm
+    integer, intent(out)   :: status
+
+    integer                :: rank, size, nfast, ndiff, nslow, mpistatus(6)
+    real(p), allocatable   :: boundary(:)
+
+#ifndef HAVE_MPI_MODULE
+    include 'mpif.h'
+#endif
+
+    nfast = product(ashape(1:dim-1))
+    ndiff = ashape(dim)
+    nslow = product(ashape(dim+1:arank))
+
+    if (dim == arank) then
+        call MPI_Comm_rank(comm, rank, status)
+        if (status /= 0) return
+        call MPI_Comm_size(comm, size, status)
+        if (status /= 0) return
+        allocate (boundary(nfast))
+        call MPI_Sendrecv(array(asize-nfast+1:asize), nfast, MPI_DOUBLE_PRECISION, modulo(rank+1, size), 0,                        &
+                          boundary, nfast, MPI_DOUBLE_PRECISION, modulo(rank-1, size), 0, comm, mpistatus, status)
+        if (status /= 0) return
+        call diffT_slow(array(1), nfast, ndiff, boundary, rank == 0, rank == size - 1)
+    else if (dim > 1) then
+        call diffT_medium(array(1), nfast, ndiff, nslow)
+    else
+        call diffT_fast(array(1), ndiff, nslow)
+    end if
+
+end subroutine difft_mpi
 
 
 !-----------------------------------------------------------------------------------------------------------------------------------
@@ -919,17 +1007,11 @@ subroutine diffTdiff(array, asize, dim, ashape, arank, scalar)
     integer*8, intent(in)  :: ashape(arank)
     real(p), intent(in)    :: scalar
 
-    integer :: idim, nfast, ndiff, nslow
+    integer :: nfast, ndiff, nslow
 
-    nfast = 1
-    nslow = 1
-    do idim = 1, dim-1
-        nfast = nfast * ashape(idim)
-    end do
+    nfast = product(ashape(1:dim-1))
     ndiff = ashape(dim)
-    do idim = dim+1, arank
-        nslow = nslow * ashape(idim)
-    end do
+    nslow = product(ashape(dim+1:arank))
 
     if (dim == 1) then
         call diffTdiff_fast(array(1), ndiff, nslow, scalar)
@@ -938,6 +1020,60 @@ subroutine diffTdiff(array, asize, dim, ashape, arank, scalar)
     end if
 
 end subroutine diffTdiff
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine diffTdiff_mpi(array, asize, dim, ashape, arank, scalar, comm, status)
+
+    use module_math,    only : diffTdiff_fast, diffTdiff_medium, diffTdiff_slow
+    use module_tamasis, only : p
+#ifdef HAVE_MPI_MODULE
+    use mpi
+#endif
+    implicit none
+
+    integer*8, intent(in)  :: asize
+    real(p), intent(inout) :: array(asize)
+    integer, intent(in)    :: dim
+    integer, intent(in)    :: arank
+    integer*8, intent(in)  :: ashape(arank)
+    real(p), intent(in)    :: scalar
+    integer, intent(in)    :: comm
+    integer, intent(out)   :: status
+
+    integer                :: rank, size, nfast, ndiff, nslow, mpistatus(6)
+    real(p), allocatable   :: boundary1(:), boundary2(:)
+
+#ifndef HAVE_MPI_MODULE
+    include 'mpif.h'
+#endif
+
+    nfast = product(ashape(1:dim-1))
+    ndiff = ashape(dim)
+    nslow = product(ashape(dim+1:arank))
+
+    if (dim == arank) then
+        call MPI_Comm_rank(comm, rank, status)
+        if (status /= 0) return
+        call MPI_Comm_size(comm, size, status)
+        if (status /= 0) return
+        allocate (boundary1(nfast), boundary2(nfast))
+        call MPI_Sendrecv(array(asize-nfast+1:asize), nfast, MPI_DOUBLE_PRECISION, modulo(rank+1, size), 0,                        &
+                          boundary1, nfast, MPI_DOUBLE_PRECISION, modulo(rank-1, size), 0, comm, mpistatus, status)
+        if (status /= 0) return
+        call MPI_Sendrecv(array(1:nfast), nfast, MPI_DOUBLE_PRECISION, modulo(rank-1, size), 0,                                    &
+                          boundary2, nfast, MPI_DOUBLE_PRECISION, modulo(rank+1, size), 0, comm, mpistatus, status)
+        if (status /= 0) return
+        call diffTdiff_slow(array(1), nfast, ndiff, scalar, boundary1, boundary2, rank == 0, rank == size - 1)
+    else if (dim > 1) then
+        call diffTdiff_medium(array(1), nfast, ndiff, nslow, scalar)
+    else
+        call diffTdiff_fast(array(1), ndiff, nslow, scalar)
+    end if
+
+end subroutine difftdiff_mpi
 
 
 !-----------------------------------------------------------------------------------------------------------------------------------
@@ -957,17 +1093,11 @@ subroutine shift(array, asize, dim, ashape, arank, offset, offsetsize)
     integer, intent(in)    :: offsetsize
     integer, intent(in)    :: offset(offsetsize)
 
-    integer :: idim, nfast, nshift, nslow
+    integer :: nfast, nshift, nslow
 
-    nfast = 1
-    nslow = 1
-    do idim = 1, dim-1
-        nfast = nfast * ashape(idim)
-    end do
+    nfast = product(ashape(1:dim-1))
     nshift = ashape(dim)
-    do idim = dim+1, arank
-        nslow = nslow * ashape(idim)
-    end do
+    nslow = product(ashape(dim+1:arank))
 
     if (dim == 1) then
         call shift_fast(array(1), nshift, nslow, offset)

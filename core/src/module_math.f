@@ -41,10 +41,13 @@ module module_math
     public :: neq_real
     public :: diff_fast
     public :: diff_medium
+    public :: diff_slow
     public :: diffT_fast
     public :: diffT_medium
+    public :: diffT_slow
     public :: diffTdiff_fast
     public :: diffTdiff_medium
+    public :: diffTdiff_slow
     public :: shift_fast
     public :: shift_medium
 
@@ -928,6 +931,11 @@ contains
 
         integer :: i, j
 
+        if (m <= 1) then
+            array = 0
+            return
+        end if
+
         !$omp parallel do private(i,j)
         do j = 1, n
             do i = 1, m-1
@@ -951,6 +959,11 @@ contains
         integer, parameter     :: block = 4096
         integer                :: i, j, k, a, z
 
+        if (n <= 1) then
+            array = 0
+            return
+        end if
+
         !$omp parallel do private(i,j,k,a,z)
         do k = 1, o
             ! block computation to avoid cache exhaustion
@@ -971,12 +984,54 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
+    subroutine diff_slow(array, m, n, boundary, islastrank)
+
+        integer, intent(in)           :: m, n
+        real(p), intent(inout)        :: array(m,n)
+        real(p), intent(in), optional :: boundary(m)
+        logical, intent(in), optional :: islastrank
+
+        integer, parameter :: block = 4096
+        integer            :: i, j, a, z
+        logical            :: islastrank_
+
+        if (n == 0) return
+
+        islastrank_ = .true.
+        if (present(islastrank)) islastrank_ = islastrank
+
+        !$omp parallel do private(i,j,a,z)
+        do i = 1, (m-1) / block + 1
+            a = (i-1) * block + 1
+            z = min(m, i * block)
+            do j = 1, n - 1
+                array(a:z,j) = array(a:z,j) - array(a:z,j+1)
+            end do
+            if (present(boundary) .and. .not. islastrank_) then
+                array(a:z,n) = array(a:z,n) - boundary(a:z)
+            else
+                array(a:z,n) = 0
+            end if
+        end do
+        !$omp end parallel do
+
+    end subroutine diff_slow
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
     subroutine diffT_fast(array, m, n)
 
         real(p), intent(inout) :: array(m,n)
         integer, intent(in)    :: m, n
 
         integer :: i, j
+
+        if (m <= 1) then
+            array = 0
+            return
+        end if
 
         !$omp parallel do private(i,j)
         do j = 1, n
@@ -1001,6 +1056,11 @@ contains
         integer, parameter     :: block = 4096
         integer                :: i, j, k, a, z
 
+        if (n <= 1) then
+            array = 0
+            return
+        end if
+
         !$omp parallel do private(i,j,k,a,z)
         do k = 1, o
             do i = 1, (m-1) / block + 1
@@ -1020,6 +1080,64 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
+    subroutine diffT_slow(array, m, n, boundary, isfirstrank, islastrank)
+
+        integer, intent(in)           :: m, n
+        real(p), intent(inout)        :: array(m,n)
+        real(p), intent(in), optional :: boundary(m)
+        logical, intent(in), optional :: isfirstrank
+        logical, intent(in), optional :: islastrank
+
+        integer, parameter :: block = 4096
+        integer            :: i, j, a, z
+        logical            :: isfirstrank_, islastrank_
+
+        if (n == 0) return
+
+        isfirstrank_ = .true.
+        islastrank_ = .true.
+        if (present(isfirstrank)) isfirstrank_ = isfirstrank
+        if (present(islastrank)) islastrank_ = islastrank
+
+        if (n == 1 .and. isfirstrank_ .and. islastrank_) then
+            array = 0
+            return
+        end if
+
+        !$omp parallel do private(i,j,a,z)
+        do i = 1, (m-1) / block + 1
+            a = (i-1) * block + 1
+            z = min(m, i * block)
+            if (n == 1) then
+                if (isfirstrank_) then
+                    continue
+                else if (islastrank_) then
+                    array(a:z,1) = -boundary(a:z)
+                else
+                    array(a:z,1) = array(a:z,1) - boundary(a:z)
+                end if
+                cycle
+            end if                    
+            if (islastrank_) then
+                array(a:z,n) = -array(a:z,n-1)
+            else
+                array(a:z,n) = array(a:z,n) - array(a:z,n-1)
+            end if
+            do j = n-1, 2, -1
+                array(a:z,j) = array(a:z,j) - array(a:z,j-1)
+            end do
+            if (.not. isfirstrank_) then
+                array(a:z,1) = array(a:z,1) - boundary(a:z)
+            end if
+        end do
+        !$omp end parallel do
+
+    end subroutine diffT_slow
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
     subroutine diffTdiff_fast(array, m, n, scalar)
 
         use module_tamasis,  only : p
@@ -1032,7 +1150,7 @@ contains
         integer :: i, j
         real(p) :: v, w, s
 
-        if (m == 1) then
+        if (m <= 1) then
             array = 0
             return
         end if
@@ -1075,7 +1193,7 @@ contains
         integer :: h, i, j, k, a, z
         real(p) :: w, v(block), s
         
-        if (n == 1) then
+        if (n <= 1) then
             array = 0
             return
         end if
@@ -1106,6 +1224,79 @@ contains
         !$omp end parallel do
 
     end subroutine diffTdiff_medium
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine diffTdiff_slow(array, m, n, scalar, boundary1, boundary2, isfirstrank, islastrank)
+
+        integer, intent(in)           :: m, n
+        real(p), intent(inout)        :: array(m,n)
+        real(p), intent(in), optional :: scalar
+        real(p), intent(in), optional :: boundary1(m), boundary2(m)
+        logical, intent(in), optional :: isfirstrank
+        logical, intent(in), optional :: islastrank
+
+        integer, parameter :: block = 4096
+        integer            :: h, i, j, a, z
+        logical            :: isfirstrank_, islastrank_
+        real(p)            :: w, v(block), s
+
+        if (n == 0) return
+
+        if (present(scalar)) then
+            s = scalar
+        else
+            s = 1._p
+        end if
+
+        isfirstrank_ = .true.
+        islastrank_ = .true.
+        if (present(isfirstrank)) isfirstrank_ = isfirstrank
+        if (present(islastrank)) islastrank_ = islastrank
+
+        if (n == 1 .and. isfirstrank_ .and. islastrank_) then
+            array = 0
+            return
+        end if
+
+        !$omp parallel do private(i,j,a,z,v,w)
+        do i = 1, (m-1) / block + 1
+            a = (i-1) * block + 1
+            z = min(i * block, m)
+            if (n == 1) then
+                if (isfirstrank_) then
+                    array(a:z,1) = s * (array(a:z,1) - boundary2(a:z))
+                else if (islastrank_) then
+                    array(a:z,1) = s * (array(a:z,1) - boundary1(a:z))
+                else
+                    array(a:z,1) = s * (2 * array(a:z,1) - boundary1(a:z) - boundary2(a:z))
+                end if
+                cycle
+            end if
+            v(1:z-a+1) = array(a:z,1)
+            if (isfirstrank_) then
+                array(a:z,1) = s * (v(1:z-a+1) - array(a:z,2))
+            else
+                array(a:z,1) = s * (2 * v(1:z-a+1) - boundary1(a:z) - array(a:z,2))
+            end if
+            do j = 2, n-1
+                do h = a, z
+                    w = array(h,j)
+                    array(h,j) = s * (2 * w - v(h-a+1) - array(h,j+1))
+                    v(h-a+1) = w
+                end  do
+            end do
+            if (islastrank_) then
+                array(a:z,n) = s * (array(a:z,n) - v(1:z-a+1))
+            else
+                array(a:z,n) = s * (2 * array(a:z,n) - v(1:z-a+1) - boundary2(a:z))
+            end if
+        end do
+        !$omp end parallel do
+
+    end subroutine diffTdiff_slow
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
