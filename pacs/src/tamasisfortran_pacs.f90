@@ -47,7 +47,7 @@ subroutine pacs_info_instrument_init(filename, nfilenames, band, transparent_mod
         call ft_read_keyword_hcss(unit, 'blue', blue, found, status)
         if (status /= 0) return
         if (.not. found) then
-            call ft_read_keyword(unit, 'FILTER', blue, status=status)
+            call ft_read_keyword(unit, 'FILTER', blue, found, status=status)
             if (status /= 0) return
         end if
 
@@ -60,7 +60,7 @@ subroutine pacs_info_instrument_init(filename, nfilenames, band, transparent_mod
         if (camname == 'Blue Photometer') then
             if (blue == 'blue1' .or. blue == 'blue70um') then
                 band_ = 'blue'
-            else if (blue == 'blue2' .or. blue == 'blue100um') then
+            else if (blue == 'blue2' .or. blue == 'green100um') then
                 band_ = 'green'
             else
                 write (ERROR_UNIT, '(a)') "Error: Invalid blue camera identifier '" // trim(blue) // "' in file '" //              &
