@@ -31,7 +31,7 @@ map_ls_ref = mapper_ls(tod_ref, model_ref, tol=tol, maxiter=maxiter,
                        solver=solver, M=Diagonal(1/map_naive_ref.coverage))
 header_ref = map_naive_ref.header
 
-# LS map, local map is not sliced
+# LS map, not sliced
 tamasis.var.comm_tod = MPI.COMM_WORLD
 tamasis.var.comm_map = MPI.COMM_SELF
 obs = PacsObservation(data_dir + 'frames_blue.fits')
@@ -43,11 +43,11 @@ proj = Projection(obs, oversampling=False, npixels_per_sample=6,
 #                                 comm=MPI.COMM_WORLD)
 model = masking * proj
 
-map_naive_global1 = mapper_naive(tod, model, unit='Jy/arcsec^2')
-map_ls_global1 = mapper_ls(tod, model, tol=tol, maxiter=maxiter, solver=solver,
-                           M=Diagonal(1/map_naive_ref.coverage))
+map_naive_g1 = mapper_naive(tod, model, unit='Jy/arcsec^2')
+map_ls_g1 = mapper_ls(tod, model, tol=tol, maxiter=maxiter, solver=solver,
+                      M=Diagonal(1/map_naive_ref.coverage))
 
-# LS map, local map is sliced
+# LS map, sliced
 tamasis.var.comm_tod = MPI.COMM_WORLD
 tamasis.var.comm_map = MPI.COMM_WORLD
 proj = Projection(obs, oversampling=False, npixels_per_sample=6,
@@ -58,26 +58,26 @@ map_naive_local = mapper_naive(tod, model, unit='Jy/arcsec^2')
 map_ls_local = mapper_ls(tod, model, tol=tol, maxiter=maxiter, solver=solver,
                          M=Diagonal(1/map_naive_local.coverage))
 proj_global = DistributionGlobal(proj.mask.shape)
-map_naive_global2 = proj_global.T(map_naive_local)
-map_ls_global2 = proj_global.T(map_ls_local)
+map_naive_g2 = proj_global.T(map_naive_local)
+map_ls_g2 = proj_global.T(map_ls_local)
 
-# LS map, unknown is the same for all processor and is distributed as local maps
+# LS map, same for all processor and distributed as local maps
 tamasis.var.comm_tod = MPI.COMM_WORLD
 tamasis.var.comm_map = MPI.COMM_SELF
 model = masking * proj * proj_global
-map_naive_global3 = mapper_naive(tod, model, unit='Jy/arcsec^2')
-map_ls_global3 = mapper_ls(tod, model, tol=tol, maxiter=maxiter, solver=solver,
-                           M=Diagonal(1/map_naive_ref.coverage),
-                           comm_map=MPI.COMM_SELF)
+map_naive_g3 = mapper_naive(tod, model, unit='Jy/arcsec^2')
+map_ls_g3 = mapper_ls(tod, model, tol=tol, maxiter=maxiter, solver=solver,
+                      M=Diagonal(1/map_naive_ref.coverage),
+                      comm_map=MPI.COMM_SELF)
 
-if any_neq(map_naive_ref, map_naive_global1.magnitude, mtol): raise TestFailure()
-if any_neq(map_naive_ref, map_naive_global2.magnitude, mtol): raise TestFailure()
-if any_neq(map_naive_ref, map_naive_global3.magnitude, mtol): raise TestFailure()
+if any_neq(map_naive_ref, map_naive_g1.magnitude, mtol): raise TestFailure()
+if any_neq(map_naive_ref, map_naive_g2.magnitude, mtol): raise TestFailure()
+if any_neq(map_naive_ref, map_naive_g3.magnitude, mtol): raise TestFailure()
 
-if any_neq(map_naive_ref.coverage, map_naive_global1.coverage): raise TestFailure()
-if any_neq(map_naive_ref.coverage, map_naive_global2.coverage): raise TestFailure()
-if any_neq(map_naive_ref.coverage, map_naive_global3.coverage.magnitude): raise TestFailure()
+if any_neq(map_naive_ref.coverage, map_naive_g1.coverage): raise TestFailure()
+if any_neq(map_naive_ref.coverage, map_naive_g2.coverage): raise TestFailure()
+if any_neq(map_naive_ref.coverage, map_naive_g3.coverage.magnitude): raise TestFailure()
 
-if any_neq(map_ls_ref, map_ls_global1.magnitude, mtol): raise TestFailure()
-if any_neq(map_ls_ref, map_ls_global2.magnitude, mtol): raise TestFailure()
-if any_neq(map_ls_ref, map_ls_global3.magnitude, mtol): raise TestFailure()
+if any_neq(map_ls_ref, map_ls_g1.magnitude, mtol): raise TestFailure()
+if any_neq(map_ls_ref, map_ls_g2.magnitude, mtol): raise TestFailure()
+if any_neq(map_ls_ref, map_ls_g3.magnitude, mtol): raise TestFailure()

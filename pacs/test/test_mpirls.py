@@ -1,57 +1,84 @@
+import numpy as np
 import os
-import scipy
 import tamasis
-
-from mpi4py import MPI
-from scipy.sparse.linalg import cgs
 from tamasis import *
+from mpi4py import MPI
+
+
+import scipy
+#solver = scipy.sparse.linalg.bicgstab
+solver = tamasis.solvers.cg
+tol = 1.e-3
+mtol = 1.e-8
+maxiter = 100
+hyper = 1.
 
 class TestFailure(Exception): pass
 
+rank = MPI.COMM_WORLD.Get_rank()
 tamasis.var.verbose = True
-tamasis.var.comm_tod = MPI.COMM_WORLD
-tamasis.var.comm_map = MPI.COMM_SELF
-
 profile = None#'test_rls.png'
 data_dir = os.path.dirname(__file__) + '/data/'
-rank = MPI.COMM_WORLD.Get_rank()
-size = MPI.COMM_WORLD.Get_size()
-obs = PacsObservation(filename=data_dir + 'frames_blue.fits',
-                      fine_sampling_factor=1)
-obs.pointing.chop[:] = 0
+
+header_ref = create_fitsheader((97,108), cdelt=3.2/3600,
+                               crval=(245.998427916727,61.5147650744551))
+
+# no communication for the reference map
+tamasis.var.comm_tod = MPI.COMM_SELF
+tamasis.var.comm_map = MPI.COMM_SELF
+obs_ref = PacsObservation(data_dir + 'frames_blue.fits')
+tod_ref = obs_ref.get_tod(flatfielding=False)
+model_ref = Masking(tod_ref.mask) * \
+            Projection(obs_ref, oversampling=False, npixels_per_sample=6,
+                       header=header_ref)
+map_naive_ref = mapper_naive(tod_ref, model_ref, unit='Jy/arcsec^2')
+map_rls_ref = mapper_rls(tod_ref, model_ref, tol=tol, maxiter=maxiter,
+                         solver=solver, hyper=hyper)
+
+# LS map, not sliced
+tamasis.var.comm_tod = MPI.COMM_WORLD
+tamasis.var.comm_map = MPI.COMM_SELF
+obs = PacsObservation(data_dir + 'frames_blue.fits')
 tod = obs.get_tod(flatfielding=False)
+masking = Masking(tod.mask)
+proj = Projection(obs, oversampling=False, npixels_per_sample=6,
+                  header=header_ref)
+model = masking * proj
 
-map_ref = Map(data_dir + 'frames_blue_map_rls_cgs_tol1e-6.fits')
+map_naive_g1 = mapper_naive(tod, model, unit='Jy/arcsec^2')
+map_rls_g1 = mapper_rls(tod, model, tol=tol, maxiter=maxiter, solver=solver,
+                        hyper=hyper)
 
-masking_tod  = Masking(tod.mask)
-multiplexing = CompressionAverage(obs.instrument.fine_sampling_factor,
-                                  description='Multiplexing')
-projection   = Projection(obs, resolution=3.2, oversampling=False,
-                          npixels_per_sample=6, header=map_ref.header)
-telescope    = Identity(description='Telescope PSF')
-distribution = DistributionGlobal(projection.mask.shape, share=True)
+# LS map, sliced
+tamasis.var.comm_tod = MPI.COMM_WORLD
+tamasis.var.comm_map = MPI.COMM_WORLD
+proj = Projection(obs, oversampling=False, npixels_per_sample=6,
+                  header=header_ref)
+model = masking * proj
 
-model = masking_tod * multiplexing * projection * telescope * distribution
-print(model)
+map_naive_local = mapper_naive(tod, model, unit='Jy/arcsec^2')
+map_rls_local = mapper_rls(tod, model, tol=tol, maxiter=maxiter, solver=solver,
+                           hyper=hyper)
+proj_global = DistributionGlobal(proj.mask.shape)
+map_naive_g2 = proj_global.T(map_naive_local)
+map_rls_g2 = proj_global.T(map_rls_local)
 
-map_naive = mapper_naive(tod, model)
-map_naive_ref = Map(data_dir + 'frames_blue_map_naive.fits')
-if any_neq(map_naive, map_naive_ref, 1.e-8): raise TestFailure()
+# LS map, same for all processor and distributed as local maps
+tamasis.var.comm_tod = MPI.COMM_WORLD
+tamasis.var.comm_map = MPI.COMM_SELF
+model = masking * proj * proj_global
+map_naive_g3 = mapper_naive(tod, model, unit='Jy/arcsec^2')
+map_rls_g3 = mapper_rls(tod, model, tol=tol, maxiter=maxiter, solver=solver,
+                        comm_map=MPI.COMM_SELF, hyper=hyper)
 
-# iterative map, including all map pixels
-class Callback():
-    def __init__(self):
-        self.niterations = 0
-    def __call__(self, x):
-        self.niterations += 1
+if any_neq(map_naive_ref, map_naive_g1.magnitude, mtol): raise TestFailure()
+if any_neq(map_naive_ref, map_naive_g2.magnitude, mtol): raise TestFailure()
+if any_neq(map_naive_ref, map_naive_g3.magnitude, mtol): raise TestFailure()
 
-map_iter = mapper_rls(tod, model, hyper=1., tol=1.e-6, profile=profile,
-                      callback=None if tamasis.var.verbose else Callback(),
-                      maxiter=10 if profile else 1000, solver=cgs)
+if any_neq(map_naive_ref.coverage, map_naive_g1.coverage): raise TestFailure()
+if any_neq(map_naive_ref.coverage, map_naive_g2.coverage): raise TestFailure()
+if any_neq(map_naive_ref.coverage, map_naive_g3.coverage.magnitude): raise TestFailure()
 
-if profile is None:
-    print 'Elapsed time: ' + str(map_iter.header['TIME'])
-    if map_iter.header['NITER'] > 121:
-        raise TestFailure()
-
-if any_neq(map_ref, map_iter, 1.e-8): raise TestFailure()
+if any_neq(map_rls_ref, map_rls_g1.magnitude, mtol): raise TestFailure()
+if any_neq(map_rls_ref, map_rls_g2.magnitude, mtol): raise TestFailure()
+if any_neq(map_rls_ref, map_rls_g3.magnitude, mtol): raise TestFailure()
