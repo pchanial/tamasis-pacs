@@ -6,9 +6,9 @@ import numpy as np
 from tamasis import *
 
 # Specify the Frames observations as FITS files
-path = 'mydir/'
-frames_files = [path+'1342202088_red_level1Frames.fits[1501:7000]',
-                path+'1342202089_red_level1Frames.fits[1501:6500]']
+path = os.getenv('PACS_DATA')+'transpScan/'
+frames_files = [path+'1342185454_red_PreparedFrames.fits[10001:]',
+                path+'1342185455_red_PreparedFrames.fits[10001:]']
 
 # Setup the instrument and pointings for these files
 # The policy for each read-out can be 'mask', 'remove' or 'keep'
@@ -21,7 +21,7 @@ obs = PacsObservation(frames_files,
 # Read the Time Ordered Data: the signal and mask
 tod = obs.get_tod(flatfielding=False,
                   subtraction_mean=True,
-		  masks='badpixels, blindpixels, nonscience, sa_badpix, saturation, saturation_high, saturation_low, uncleanchop')
+		  masks='saturation')
 
 # Get the projection matrix used for the map-level deglitching
 # 'oversampling=False' means that the acquisition model will not
@@ -57,7 +57,7 @@ projection = Projection(obs,
                         method='sharp',
                         npixels_per_sample=5)
 response = ResponseTruncatedExponential(obs.pack(
-    obs.instrument.detector_time_constant) / obs.SAMPLING_PERIOD)
+    obs.instrument.detector.time_constant) / obs.SAMPLING_PERIOD)
 compression = CompressionAverage(obs.slice.compression_factor)
 masking = Masking(tod.mask)
 model = masking * compression * response * projection
@@ -66,18 +66,18 @@ model = masking * compression * response * projection
 map_naive = mapper_naive(tod, model)
 
 length = np.asarray(2**np.ceil(np.log2(np.array(tod.nsamples) + 200)), dtype='int')
-invNtt = InvNtt(length, obs.get_filter_uncorrelated())
+invntt = InvNtt(length, obs.get_filter_uncorrelated())
 fft = FftHalfComplex(length)
-padding = Padding(left=invNtt.ncorrelations, right=length-tod.nsamples-invNtt.ncorrelations)
-weight = padding.T * fft.T * invNtt * fft * padding
+padding = Padding(left=invntt.ncorrelations, right=length-tod.nsamples-invntt.ncorrelations)
+invntt = padding.T * fft.T * invntt * fft * padding
 
 # The regularised least square map is obtained by minimising the criterion
 # J(x) = ||y-Hx||^2 + hyper ||Dx||^2, the first ||.||^2 being the N^-1 norm
 # it is equivalent to solving the equation (H^T H + hyper D^T D ) x = H^T y
-hyper = 1
+hyper = 0.1
 map_tamasis = mapper_rls(tod, model,
-                         weight=weight,
-                         unpacking=Unpacking(map_naive.coverage==0),
+                         invntt=invntt,
+                         unpacking=Unpacking(projection.mask),
                          tol=1.e-5,
                          hyper=hyper)
 

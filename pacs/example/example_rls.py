@@ -19,8 +19,7 @@ obs = PacsObservation(frames_files,
 
 # Read the Time Ordered Data: the signal and mask
 tod = obs.get_tod(flatfielding=True,
-                  subtraction_mean=True,
-                  unit='Jy/detector')
+                  subtraction_mean=True)
 
 # Get the projection matrix used for the map-level deglitching
 # 'oversampling=False' means that the acquisition model will not
@@ -55,15 +54,14 @@ compression = CompressionAverage(obs.slice.compression_factor)
 masking = Masking(tod.mask)
 model = masking * compression * projection
 
-# The naive map is given by
-map_naive = mapper_naive(tod, model)
-
 # The regularised least square map is obtained by minimising the criterion
-# J(x) = ||y-Hx||^2 + hyper ||Dx||^2, the first ||.||^2 being the N^-1 norm
+# J(x) = ||y-Hx||^2 + hyper ||Dx||^2, the first ||.||^2 being euclidian norm
 # it is equivalent to solving the equation (H^T H + hyper D^T D ) x = H^T y
-hyper = 0.001
+hyper = 0.1
 map_rls = mapper_rls(tod, model,
-                     unpacking=Unpacking(map_naive.coverage==0),
+                     unpacking=Unpacking(projection.mask),
                      tol=1.e-6,
                      hyper=hyper)
 map_rls.save('map_rls.fits')
+
+
