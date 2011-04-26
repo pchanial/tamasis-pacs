@@ -103,9 +103,9 @@ def mapper_naive(tod, model, unit=None, local_mask=None):
 #-------------------------------------------------------------------------------
 
 
-def mapper_ls(tod, model, invntt=None, weight=None, x0=None, tol=1.e-5,
-              maxiter=300, M=None, solver=None, verbose=True, callback=None,
-              profile=None, comm_map=None):
+def mapper_ls(tod, model, invntt=None, weight=None, unpacking=None, x0=None,
+              tol=1.e-5, maxiter=300, M=None, solver=None, verbose=True,
+              callback=None, profile=None, comm_map=None):
 
     tod = _validate_tod(tod, model)
     if invntt is None:
@@ -120,14 +120,15 @@ def mapper_ls(tod, model, invntt=None, weight=None, x0=None, tol=1.e-5,
         invntt = Identity(description='Weight')
 
     A = model.T * invntt * model
-    b = (model.T * invntt)(tod, inplace=True).ravel()
+    b = (model.T * invntt)(tod, inplace=True)
     prior = Scalar(0)
     if M is not None:
         M = asacquisitionmodel(M, shapein=model.shapein, shapeout=model.shapein)
 
     return _solver(A, b, tod, model, invntt, prior, hyper=0, x0=x0, tol=tol,
                    maxiter=maxiter, M=M, solver=solver, verbose=verbose,
-                   callback=callback, profile=profile, comm=comm_map)
+                   callback=callback, profile=profile, unpacking=unpacking,
+                   comm=comm_map)
 
 
 #-------------------------------------------------------------------------------
