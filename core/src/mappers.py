@@ -158,9 +158,10 @@ def mapper_rls(tod, model, invntt=None, weight=None, unpacking=None, hyper=1.0,
     hyper = np.asarray(hyper, dtype=var.FLOAT_DTYPE)
     ntods = tod.size if tod.mask is None else int(np.sum(tod.mask == 0))
     ntods = var.comm_tod.allreduce(ntods, op=MPI.SUM)
-    nmaps = model.shape[1]
-    prior = Addition([DdTdd(axis=axis, scalar=hyper * ntods / nmaps) \
-                      for axis in range(len(model.shapein))])
+    nmaps = model.shape[1] * comm_map.Get_size()
+
+    prior = Addition([DdTdd(axis=axis, scalar=hyper * ntods / nmaps,
+        comm=comm_map) for axis in range(len(model.shapein))])
     if hyper != 0 and (comm_map.Get_rank() == 0 or comm_map.Get_size() > 1):
 # commenting this for now, matvec is not updated
 #        A += prior
