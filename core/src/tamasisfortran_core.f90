@@ -740,7 +740,7 @@ subroutine sum(array, n, output)
     integer, intent(in)  :: n
     real(p), intent(out) :: output
 
-    integer :: nthreads, work, i
+    integer :: nthreads, work, i, a, z
 
     if (n <= 1024) then
         output = sum_kahan(array)
@@ -748,50 +748,17 @@ subroutine sum(array, n, output)
     end if
 
     output = 0
-
     nthreads = omp_get_max_threads()
     work = max(n / nthreads, 1)
-    !$omp parallel do reduction(+:output)
+    !$omp parallel do reduction(+:output) private(a,z)
     do i = 1, min(n, nthreads)
-        output = output + sum_kahan(array(min((i-1)*work+1,n+1):min(i*work,n)))
+        a = min((i-1)*work+1,n+1)
+        z = min(i*work,n)
+        output = output + sum_kahan(array(a:z))
     end do
     !$omp end parallel do
 
 end subroutine sum
-
-
-!-----------------------------------------------------------------------------------------------------------------------------------
-
-
-subroutine norm2(array, n, output)
-
-    use omp_lib,        only : omp_get_max_threads
-    use module_math,    only : norm => norm2
-    use module_tamasis, only : p
-    implicit none
-
-    real(p), intent(in)  :: array(n)
-    integer, intent(in)  :: n
-    real(p), intent(out) :: output
-
-    integer :: nthreads, work, i
-
-    if (n <= 1024) then
-        output = norm(array)
-        return
-    end if
-
-    output = 0
-
-    nthreads = omp_get_max_threads()
-    work = max(n / nthreads, 1)
-    !$omp parallel do reduction(+:output)
-    do i = 1, min(n, nthreads)
-        output = output + norm(array(min((i-1)*work+1,n+1):min(i*work,n)))
-    end do
-    !$omp end parallel do
-
-end subroutine norm2
 
 
 !-----------------------------------------------------------------------------------------------------------------------------------
@@ -817,10 +784,9 @@ subroutine dot(array1, array2, n, output)
     end if
 
     output = 0
-
     nthreads = omp_get_max_threads()
     work = max(n / nthreads, 1)
-    !$omp parallel do reduction(+:output)
+    !$omp parallel do reduction(+:output) private(a,z)
     do i = 1, min(n, nthreads)
         a = min((i-1)*work+1,n+1)
         z = min(i*work,n)
@@ -829,6 +795,347 @@ subroutine dot(array1, array2, n, output)
     !$omp end parallel do
 
 end subroutine dot
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine norm_l1(array, n, comm, output)
+
+    use omp_lib,        only : omp_get_max_threads
+    use module_math,    only : norm => norm_l1
+    use module_tamasis, only : p
+#ifdef HAVE_MPI_MODULE
+    use mpi
+#endif
+    implicit none
+
+    real(p), intent(in)  :: array(n)
+    integer, intent(in)  :: n
+    integer, intent(in)  :: comm
+    real(p), intent(out) :: output
+
+    integer :: nthreads, work, i, a, z, status
+
+#ifndef HAVE_MPI_MODULE
+    include 'mpif.h'
+#endif
+
+    if (n <= 1024) then
+        output = norm(array)
+    else
+        output = 0
+        nthreads = omp_get_max_threads()
+        work = max(n / nthreads, 1)
+        !$omp parallel do reduction(+:output) private(a,z)
+        do i = 1, min(n, nthreads)
+            a = min((i-1)*work+1,n+1)
+            z = min(i*work,n)
+            output = output + norm(array(a:z))
+        end do
+        !$omp end parallel do
+    end if
+
+    call MPI_Allreduce(MPI_IN_PLACE, output, 1, MPI_DOUBLE_PRECISION, MPI_SUM, comm, status)
+
+end subroutine norm_l1
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine dnorm_l1(array, n, output)
+
+    use module_tamasis, only : p
+    implicit none
+
+    real(p), intent(in)    :: array(n)
+    integer, intent(in)    :: n
+    real(p), intent(inout) :: output(n)
+
+    !$omp parallel workshare
+    output = sign(1._p, array)
+    !$omp end parallel workshare
+
+end subroutine dnorm_l1
+
+    
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine dnorm_l2(array, n, comm, output)
+
+    use module_tamasis, only : p
+    implicit none
+
+    real(p), intent(in)    :: array(n)
+    integer, intent(in)    :: n
+    integer, intent(in)    :: comm
+    real(p), intent(inout) :: output(n)
+
+    external :: norm2
+    real(p)  :: a
+
+    call norm2(array, n, comm, a)
+    a = a ** (-0.5_p)
+    !$omp parallel workshare
+    output = sign(abs(array) * a, array)
+    !$omp end parallel workshare
+
+end subroutine dnorm_l2
+
+    
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine dnorm_lp(array, n, lp, comm, output)
+
+    use module_tamasis, only : p
+    implicit none
+
+    real(p), intent(in)    :: array(n)
+    integer, intent(in)    :: n
+    real(p), intent(in)    :: lp
+    integer, intent(in)    :: comm
+    real(p), intent(inout) :: output(n)
+
+    external :: normp
+    real(p)  :: a
+
+    call normp(array, n, lp, comm, a)
+    a = a ** (1 / lp - 1)
+    !$omp parallel workshare
+    output = sign(abs(array) ** (lp - 1) * a, array)
+    !$omp end parallel workshare
+
+end subroutine dnorm_lp
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine norm_linf(array, n, comm, output)
+
+    use module_tamasis, only : p
+#ifdef HAVE_MPI_MODULE
+    use mpi
+#endif
+    implicit none
+
+    real(p), intent(in)  :: array(n)
+    integer, intent(in)  :: n
+    integer, intent(in)  :: comm
+    real(p), intent(out) :: output
+
+    integer :: status
+
+#ifndef HAVE_MPI_MODULE
+    include 'mpif.h'
+#endif
+
+    output = maxval(abs(array))
+    call MPI_Allreduce(MPI_IN_PLACE, output, 1, MPI_DOUBLE_PRECISION, MPI_MAX, comm, status)
+
+end subroutine norm_linf
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine norm_huber(array, n, delta, comm, output)
+
+    use omp_lib,        only : omp_get_max_threads
+    use module_math,    only : norm => norm_huber
+    use module_tamasis, only : p
+#ifdef HAVE_MPI_MODULE
+    use mpi
+#endif
+    implicit none
+
+    real(p), intent(in)  :: array(n)
+    integer, intent(in)  :: n
+    real(p), intent(in)  :: delta
+    integer, intent(in)  :: comm
+    real(p), intent(out) :: output
+
+    integer :: nthreads, work, i, a, z, status
+
+#ifndef HAVE_MPI_MODULE
+    include 'mpif.h'
+#endif
+
+    if (n <= 1024) then
+        output = norm(array, delta)
+    else
+        output = 0
+        nthreads = omp_get_max_threads()
+        work = max(n / nthreads, 1)
+        !$omp parallel do reduction(+:output) private(a,z)
+        do i = 1, min(n, nthreads)
+            a = min((i-1)*work+1,n+1)
+            z = min(i*work,n)
+            output = output + norm(array(a:z), delta)
+        end do
+        !$omp end parallel do
+    end if
+
+    call MPI_Allreduce(MPI_IN_PLACE, output, 1, MPI_DOUBLE_PRECISION, MPI_SUM, comm, status)
+
+end subroutine norm_huber
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine dnorm_huber(array, n, delta, output)
+
+    use module_tamasis, only : p
+    implicit none
+
+    real(p), intent(in)    :: array(n)
+    integer, intent(in)    :: n
+    real(p), intent(in)    :: delta
+    real(p), intent(inout) :: output(n)
+
+    !$omp parallel workshare
+    where (array >= delta)
+        output = 2 * delta
+    elsewhere (array <= -delta)
+        output = - 2 * delta
+    elsewhere
+        output = 2 * array
+    end where
+    !$omp end parallel workshare
+
+end subroutine dnorm_huber
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine norm2(array, n, comm, output)
+
+    use omp_lib,        only : omp_get_max_threads
+    use module_math,    only : norm => norm2
+    use module_tamasis, only : p
+#ifdef HAVE_MPI_MODULE
+    use mpi
+#endif
+    implicit none
+
+    real(p), intent(in)  :: array(n)
+    integer, intent(in)  :: n
+    integer, intent(in)  :: comm
+    real(p), intent(out) :: output
+
+    integer :: nthreads, work, i, a, z, status
+
+#ifndef HAVE_MPI_MODULE
+    include 'mpif.h'
+#endif
+
+    if (n <= 1024) then
+        output = norm(array)
+    else
+        output = 0
+        nthreads = omp_get_max_threads()
+        work = max(n / nthreads, 1)
+        !$omp parallel do reduction(+:output) private(a,z)
+        do i = 1, min(n, nthreads)
+            a = min((i-1)*work+1,n+1)
+            z = min(i*work,n)
+            output = output + norm(array(a:z))
+        end do
+        !$omp end parallel do
+    end if
+
+    call MPI_Allreduce(MPI_IN_PLACE, output, 1, MPI_DOUBLE_PRECISION, MPI_SUM, comm, status)
+
+end subroutine norm2
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine dnorm2(array, n, output)
+
+    use module_tamasis, only : p
+    implicit none
+
+    real(p), intent(in)    :: array(n)
+    integer, intent(in)    :: n
+    real(p), intent(inout) :: output(n)
+
+    !$omp parallel workshare
+    output = 2 * array
+    !$omp end parallel workshare
+
+end subroutine dnorm2
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine normp(array, n, lp, comm, output)
+
+    use omp_lib,        only : omp_get_max_threads
+    use module_math,    only : norm => normp
+    use module_tamasis, only : p
+#ifdef HAVE_MPI_MODULE
+    use mpi
+#endif
+    implicit none
+
+    real(p), intent(in)  :: array(n)
+    integer, intent(in)  :: n
+    real(p), intent(in)  :: lp
+    integer, intent(in)  :: comm
+    real(p), intent(out) :: output
+
+    integer :: nthreads, work, i, a, z, status
+
+#ifndef HAVE_MPI_MODULE
+    include 'mpif.h'
+#endif
+
+    if (n <= 1024) then
+        output = norm(array, lp)
+    else
+        output = 0
+        nthreads = omp_get_max_threads()
+        work = max(n / nthreads, 1)
+        !$omp parallel do reduction(+:output) private(a,z)
+        do i = 1, min(n, nthreads)
+            a = min((i-1)*work+1,n+1)
+            z = min(i*work,n)
+            output = output + norm(array(a:z), lp)
+        end do
+        !$omp end parallel do
+    end if
+
+    call MPI_Allreduce(MPI_IN_PLACE, output, 1, MPI_DOUBLE_PRECISION, MPI_SUM, comm, status)
+
+end subroutine normp
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine dnormp(array, n, lp, output)
+
+    use module_tamasis, only : p
+    implicit none
+
+    real(p), intent(in)    :: array(n)
+    integer, intent(in)    :: n
+    real(p), intent(in)    :: lp
+    real(p), intent(inout) :: output(n)
+
+    !$omp parallel workshare
+    output = lp * sign(abs(array) ** (lp - 1._p), array)
+    !$omp end parallel workshare
+
+end subroutine dnormp
 
 
 !-----------------------------------------------------------------------------------------------------------------------------------

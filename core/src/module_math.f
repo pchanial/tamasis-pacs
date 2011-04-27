@@ -34,7 +34,10 @@ module module_math
     public :: sigma_clipping
     public :: stddev
     public :: sum_kahan
+    public :: norm_l1
+    public :: norm_huber
     public :: norm2
+    public :: normp
     public :: dot
     public :: swap
     public :: eq_real
@@ -304,6 +307,75 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
+    function norm_l1(input) result (sum)
+
+        real(p), intent(in) :: input(:)
+        real(p)             :: sum
+
+        real(p) :: c, t, y
+        integer :: i
+
+        if (size(input) == 0) then
+            sum = 0
+            return
+        end if
+
+        sum = abs(input(1))
+        c = 0
+        do i = 2, size(input)
+            y = abs(input(i)) - c
+            t = sum + y
+            c = (t - sum) - y
+            sum = t
+        end do
+
+    end function norm_l1
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    function norm_huber(input, delta) result (sum)
+
+        real(p), intent(in) :: input(:)
+        real(p), intent(in) :: delta
+        real(p)             :: sum
+
+        real(p) :: c, t, y, a, b
+        integer :: i
+
+        if (size(input) == 0) then
+            sum = 0
+            return
+        end if
+
+        a = 2 * delta
+        b = -delta**2
+
+        if (abs(input(1)) < delta) then
+            sum = input(1) ** 2
+        else
+            sum = a * abs(input(1)) + b
+        end if
+
+        c = 0
+        do i = 2, size(input)
+            if (abs(input(i)) < delta) then
+                y = input(i) ** 2 - c
+            else
+                y = a * abs(input(i)) + b - c
+            end if
+            t = sum + y
+            c = (t - sum) - y
+            sum = t
+        end do
+
+    end function norm_huber
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
     function norm2(input) result (sum)
 
         real(p), intent(in) :: input(:)
@@ -317,11 +389,9 @@ contains
             return
         end if
 
-        i = 1
-
-        sum = input(i)*input(i)
+        sum = input(1)*input(1)
         c = 0
-        do i = i+1, size(input)
+        do i = 2, size(input)
             y = input(i)*input(i) - c
             t = sum + y
             c = (t - sum) - y
@@ -329,6 +399,35 @@ contains
         end do
 
     end function norm2
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    function normp(input, lp) result (sum)
+
+        real(p), intent(in) :: input(:)
+        real(p), intent(in) :: lp
+        real(p)             :: sum
+
+        real(p) :: c, t, y
+        integer :: i
+
+        if (size(input) == 0) then
+            sum = 0
+            return
+        end if
+
+        sum = abs(input(1))**lp
+        c = 0
+        do i = 2, size(input)
+            y = abs(input(i))**lp - c
+            t = sum + y
+            c = (t - sum) - y
+            sum = t
+        end do
+
+    end function normp
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
@@ -348,11 +447,9 @@ contains
             return
         end if
 
-        i = 1
-
-        sum = input1(i)*input2(i)
+        sum = input1(1)*input2(1)
         c = 0
-        do i = i+1, size(input1)
+        do i = 2, size(input1)
             y = input1(i)*input2(i) - c
             t = sum + y
             c = (t - sum) - y
