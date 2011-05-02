@@ -1171,9 +1171,9 @@ contains
         real(p), intent(in) :: cd(2,2), crval1, crval2, crpix1, crpix2
         character(len=2880), intent(out) :: header
 
-        character(len=*), parameter :: format_dbl = "(a8,'= ',g22.15)"
+        character(len=*), parameter :: format_dbl = "(a8,'= ',g20.13)"
         character(len=*), parameter :: format_int = "(a8,'= ',i22)"
-        character(len=*), parameter :: format_str = "(a8,'= ',a22)"
+        character(len=*), parameter :: format_str = "(a8,'= ',a20)"
 
         header = ' '
         header(0*80+1:1*80) = 'SIMPLE  =                      T / Fits standard'
