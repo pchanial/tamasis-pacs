@@ -1478,6 +1478,8 @@ def _write_status(obs, filename, fitskw=None):
 
     if fitskw is not None:
         for k, v in fitskw.items():
+            if len(k) > 8:
+                k = 'HIERARCH ' + k
             if isinstance(v, tuple):
                 if len(v) != 2:
                     raise ValueError('A tuple input for fitskw must have two e'\
