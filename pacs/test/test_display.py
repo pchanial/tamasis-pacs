@@ -17,7 +17,7 @@ if not all(map(os.path.exists, datafile)):
     exit(0)
 
 pacs = PacsObservation([datafile[0]+'[6065:20000]', datafile[1]+'[6066:20001]'],
-                       fine_sampling_factor=1, masktime_calblock=0.)
+                       fine_sampling_factor=1, calblock_extension_time=0.)
 
 telescope    = Identity(description='Telescope PSF')
 projection   = Projection(pacs, resolution=3.2, npixels_per_sample=5)
