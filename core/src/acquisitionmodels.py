@@ -885,7 +885,7 @@ class DiscreteDifference(Square):
     Calculate the nth order discrete difference along given axis.
     """
 
-    def __init__(self, n=1, axis=0, comm=None, **keywords):
+    def __init__(self, axis=0, n=1, comm=None, **keywords):
         Square.__init__(self, **keywords)
         self.n = n
         self.axis = axis
