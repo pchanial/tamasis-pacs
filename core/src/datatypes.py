@@ -144,7 +144,7 @@ class FitsArray(Quantity):
     def tofile(self, fid, sep='', format='%s'):
         super(FitsArray,self).tofile(fid, sep, format)
 
-    def save(self, filename, fitskw={}):
+    def save(self, filename, fitskw=None):
         """Save a FitsArray instance to a fits file given a filename
        
         If the same file already exist it overwrites it.
@@ -158,9 +158,18 @@ class FitsArray(Quantity):
         if len(self._unit) != 0:
             header.update('BUNIT', self.unit)
 
-        for k,v in fitskw.items():
-            if hasattr(self, k):
-                header.update(v, str(getattr(self, k)))
+        if fitskw is not None:
+            for k, v in fitskw.items():
+                if isinstance(v, tuple):
+                    if len(v) != 2:
+                        raise ValueError('A tuple input for fitskw must have t'\
+                                         'wo elements (value, comment).')
+                    v, c = v
+                else:
+                    c = None
+                v = v if isinstance(v, (str, int, long, float, complex, bool,
+                    np.floating, np.integer, np.complexfloating)) else repr(v)
+                header.update(k, v, c)
 
         if np.rank(self) == 0:
             value = self.reshape((1,))
@@ -480,8 +489,11 @@ class Map(FitsArray):
         pyplot.show()
         return annim
 
-    def save(self, filename):
-        FitsArray.save(self, filename, fitskw={'origin':'DISPORIG'})
+    def save(self, filename, fitskw=None):
+        fitskw = fitskw or {}
+        if 'DISPORIG' not in [k.upper() for k in fitskw.keys()]:
+            fitskw['DISPORIG'] = (self.origin, 'Map display convention')
+        FitsArray.save(self, filename, fitskw=fitskw)
         if self.error is not None:
             header = create_fitsheader(fromdata=self.error, extname='Error')
             pyfits.append(filename, self.error, header)
@@ -683,12 +695,14 @@ class Tod(FitsArray):
             output += ' in ' + str(nslices) + ' slices ('+strsamples+')'
         return output + ']'
 
-    def save(self, filename):
-        FitsArray.save(self, filename, fitskw={'nsamples':'NSAMPLES'})
-        if self.mask is None:
-            return
-        header = create_fitsheader(fromdata=self.mask, extname='Mask')
-        pyfits.append(filename, self.mask.view(np.uint8), header)
+    def save(self, filename, fitskw=None):
+        fitskw = fitskw or {}
+        if 'NSAMPLES' not in [k.upper() for k in fitskw.keys()]:
+            fitskw['NSAMPLES'] = (self.nsamples, 'Number of samples per slice')
+        FitsArray.save(self, filename, fitskw=fitskw)
+        if self.mask is not None:
+            header = create_fitsheader(fromdata=self.mask, extname='Mask')
+            pyfits.append(filename, self.mask.view(np.uint8), header)
         _save_derived_units(filename, self.derived_units)
 
 

@@ -356,7 +356,7 @@ class PacsBase(Observation):
             .distortion_yz.base.base.base)
         return ra.squeeze(), dec.squeeze()
 
-    def save(self, filename, tod):
+    def save(self, filename, tod, fitskw={}):
         
         if np.rank(tod) != 3:
             tod = self.unpack(tod)
@@ -367,7 +367,7 @@ class PacsBase(Observation):
                 str(tod.shape[-1]) + "' incompatible with that of this observ" \
                 "ation '" + str(nsamples) + "'.")
 
-        _write_status(self, filename)
+        _write_status(self, filename, fitskw=fitskw)
 
         if tod.header is None:
             header = create_fitsheader(fromdata=tod, extname='Signal')
@@ -1402,7 +1402,7 @@ def _write_mask(obs, mask, filename):
 
 #-------------------------------------------------------------------------------
 
-def _write_status(obs, filename):
+def _write_status(obs, filename, fitskw=None):
 
     s = obs.slice[0]
 
@@ -1475,6 +1475,19 @@ def _write_status(obs, filename):
         cc('HIERARCH key.META_7', 'mapScanNumLegs'),
         cc('HIERARCH key.META_8', 'blue'),
     ])
+
+    if fitskw is not None:
+        for k, v in fitskw.items():
+            if isinstance(v, tuple):
+                if len(v) != 2:
+                    raise ValueError('A tuple input for fitskw must have two e'\
+                                     'lements (value, comment).')
+                v, c = v
+            else:
+                c = None
+            v = v if isinstance(v, (str, int, long, float, complex, bool,
+                  np.floating, np.integer, np.complexfloating)) else repr(v)
+            header.update(k, v, c)
 
     hdu = pyfits.PrimaryHDU(None, header)
     fits.append(hdu)
