@@ -27,6 +27,7 @@ __all__ = [
     'hs',
     'phasemask_fourquadrant',
     'plot_scan',
+    'plot_tod',
     'profile',
     'psd2',
 ]
@@ -213,6 +214,35 @@ def plot_scan(input, map=None, title=None, new_figure=True, linewidth=2, **kw):
     pyplot.show()
     plot_scan_(ra, dec, nsamples, image, linewidth=linewidth, **kw)
     return image
+
+
+#-------------------------------------------------------------------------------
+
+
+def plot_tod(tod, mask=None, **kw):
+    """Plot the signal timelines in a Tod and show masked samples.
+
+    Plotting every detector timelines may be time consuming, so it is
+    recommended to use this method on one or few detectors like this:
+    >>> plot_tod(tod[idetector])
+    """
+    if mask is None:
+        mask = getattr(tod, 'mask', None)
+
+    ndetectors = int(np.product(tod.shape[0:-1]))
+    tod = tod.view().reshape((ndetectors, -1))
+    mask = mask.view().reshape((ndetectors, -1))
+    for idetector in range(ndetectors):
+        pyplot.plot(tod[idetector], **kw)
+        if mask is not None:
+            index=np.where(mask[idetector])
+            pyplot.plot(index, tod[idetector,index],'ro')
+    unit = getattr(tod, 'unit', '')
+    if unit:
+        pyplot.ylabel('Signal [' + unit + ']')
+    else:
+        pytplot.ylabel('Signal')
+    pyplot.xlabel('Time sample')
 
 
 #-------------------------------------------------------------------------------
