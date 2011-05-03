@@ -7,8 +7,6 @@ from   matplotlib.pyplot import clim, figure, plot, show, ioff
 from   tamasis import *
 
 tamasis.var.verbose = False
-do_plot = True
-ioff()
 
 datadir  = os.getenv('PACS_DATA', '')+'/transpScan/'
 datafile = [datadir+'1342184598_blue_PreparedFrames.fits',
@@ -36,42 +34,19 @@ tod40Hz = pacs.get_tod()
 tod40Hz_filtered = filter_polynomial(tod40Hz, 6)
 drift = tod40Hz - tod40Hz_filtered
 
-idetector=5
-if do_plot:
-    figure()
-    plot(tod40Hz[idetector,:])
-    plot(drift[idetector,:],'r')
-    show()
-
-tod40Hz = tod40Hz_filtered
-
-tod40Hz = filter_median(tod40Hz, 10000)
-
-mask_before = tod40Hz.mask.copy('a')
+tod40Hz = filter_median(tod40Hz_filtered, 10000)
 
 # second level deglitching
 tod40Hz.mask = deglitch_l2mad(tod40Hz, projection)
 
-if do_plot:
-    figure()
-    plot(tod40Hz[idetector,:])
-    index=np.where(tod40Hz.mask[idetector,:])
-    plot(index,tod40Hz[idetector,index],'ro')
-    show()
+idetector=5
+plot_tod((tod40Hz+drift)[idetector])
+plot(drift[idetector], 'r')
 
 masking   = Masking(tod40Hz.mask)
 model40Hz = masking * projection
 map_naive40Hz = mapper_naive(tod40Hz, model40Hz)
 
-if do_plot:
-    map_naive40Hz.imshow()
-    # clim doesn't work anymore with AnnotatedImage
-    #clim(-0.00002,0.00002)
-
-# compressed TOD
-tod = compression(tod40Hz)
-print(tod)
-
-# naive map
-map_naive = mapper_naive(tod, model)
-
+map_naive40Hz.imshow()
+# clim doesn't work anymore with AnnotatedImage
+#clim(-0.00002,0.00002)
