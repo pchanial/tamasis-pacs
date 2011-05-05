@@ -180,6 +180,7 @@ def mapper_rls(tod, model, invntt=None, weight=None, unpacking=None, hyper=1.0,
 
 def mapper_nl(tod, model, unpacking=None, Ds=[], hypers=[], norms=[], dnorms=[],
               comms=[], x0=None, tol=1.e-6, maxiter=300, solver=None,
+              descent_method='pr',
               verbose=True, callback=None, profile=None):
 
     ndims = len(model.shapein)
@@ -212,25 +213,24 @@ def mapper_nl(tod, model, unpacking=None, Ds=[], hypers=[], norms=[], dnorms=[],
     tod = _validate_tod(tod, model)
     y = tod.magnitude.ravel()
 
-    def criterion(x, gradient=False):
+    def criterion(x, gradient=None):
         x = unpacking(x)
         rs = [model * x - y] + [D * x for D in Ds]
         Js = [h * norm(r,c) for h, norm, r, c in zip(hypers, norms, rs, comms)]
-        if not gradient:
+        if gradient is None:
             return Js
-        g = sum([h * M.T * dnorm(r,comm=c) for h, M, dnorm, r, c in zip(hypers,
-            [model] + Ds, dnorms, rs, comms)])
-        ng = norm2(g, var.comm_map)
-        return Js, g, ng
+        gradient[:] = sum([ h * M.T * dnorm(r,comm=c) for h, M, dnorm, r, c in \
+                            zip(hypers, [model] + Ds, dnorms, rs, comms)])
+        return Js
 
-    def quadratic_optimal_step(d, g):
+    def quadratic_optimal_step(d, r):
         d = unpacking(d)
-        g = unpacking(g)
-        a = -.5 * dot(d.T, g, comm=var.comm_map) / sum([ h * n(M * d, c) \
+        r = unpacking(r)
+        a = 0.5 * dot(d.T, r, comm=var.comm_map) / sum([ h * n(M * d, c) \
             for h, n, M, c in zip(hypers, norms, [model] + Ds, comms)])
         return a
 
-    x = nlcg(criterion, model.shape[1], linesearch=quadratic_optimal_step, maxiter=maxiter, tol=tol)
+    x = nlcg(criterion, model.shape[1], linesearch=quadratic_optimal_step, descent_method=descent_method, maxiter=maxiter, tol=tol, comm=var.comm_map)
 
     x = unpacking(x)
     x.shape = model.shapein

@@ -54,7 +54,10 @@ def cg(A, b, x0, tol=1.e-5, maxiter=300, callback=None, M=None, comm=None):
     delta0 = dot(r, d, comm)
     deltaNew = delta0
 
-    for i in range(maxiter):
+    if rank == 0:
+        print('Iteration\tResiduals')
+
+    for i in xrange(maxiter):
         if epsilon <= maxRelError:
             break
         
@@ -68,8 +71,7 @@ def cg(A, b, x0, tol=1.e-5, maxiter=300, callback=None, M=None, comm=None):
 
         qnorm = np.sqrt(norm2(q, comm))
         if rank == 0:
-            print("Iteration %s \tepsilon = %s \tJ(x) = %s." % (str(i+1),
-                  str(np.sqrt(epsilon)), str(qnorm)))
+            print("%s\t%s" % (str(i+1).rjust(9), repr(np.sqrt(epsilon))))
 
         if epsilon < minEpsilon:
             xfinal[:] = x
@@ -105,8 +107,8 @@ def cg(A, b, x0, tol=1.e-5, maxiter=300, callback=None, M=None, comm=None):
 
     return xfinal, 0
 
-def nlcg(criterion, n, linesearch, tol=1e-6, x0=None, maxiter=300,
-         callback=None):
+def nlcg(criterion, n, linesearch, M=None, tol=1e-6, x0=None, maxiter=300,
+         callback=None, descent_method='pr', comm=None):
     """Non-linear conjugate gradient
     
     Parameters
@@ -117,20 +119,36 @@ def nlcg(criterion, n, linesearch, tol=1e-6, x0=None, maxiter=300,
         size of criterion input vector
     linesearch : function
         line search function, minimising the criterion along a descent
+    
     x0 : vector
-        initial guess
-    maxiter : integer
-        maximum number of iterations.
+        initial guess for the solution
+    descent_method : string
+        method for the descent vector update. Available methods are 
+            - 'fs' (Fletcher-Reeves)
+            - 'pr' (Polak-Ribiere)
+            - 'hs' (Hestenes-Stiefel)
     callback : function
         callback function, called after each iteration
+    tol : float
+        Relative tolerance to achieve before terminating.
+    maxiter : integer
+        Maximum number of iterations.  Iteration will stop after maxiter
+        steps even if the specified tolerance has not been achieved.
+    M : {sparse matrix, dense matrix, LinearOperator}
+        Preconditioner for A.  The preconditioner should approximate the
+        inverse of A.  Effective preconditioning dramatically improves the
+        rate of convergence, which implies that fewer iterations are needed
+        to reach a given error tolerance.
+    callback : function
+        User-supplied function to call after each iteration.  It is called
+        as callback(x), where xk is the current solution vector.
+    comm : MPI communicator
 
     Returns
     --------
     x : solution
 
     """
-    if callback is None:
-        callback = CallbackFactory(verbose=True, criterion=True)
 
     # first guess
     if x0 is None:
@@ -138,75 +156,80 @@ def nlcg(criterion, n, linesearch, tol=1e-6, x0=None, maxiter=300,
     else:
         x = x0.flatten()
 
+    if M is None:
+        M = lambda x : x
+
+    # initialise gradient and its conjugate
+    r = np.empty(n)
+    s = np.empty(n)
+    d = np.empty(n)
+
+    if comm is None:
+        comm = MPI.COMM_WORLD
+
+    rank = comm.Get_rank()
+
     # tolerance
-    Js, g, ng = criterion(x, gradient=True)
+    Js = criterion(x, gradient=r)
     J = sum(Js)
+    r[:] = -r
+    s[:] = M(r)
+    d[:] = s
+    delta_new = dot(r, d, comm)
+    delta_0 = delta_new
     Jnorm = J
-    resid = 2 * tol
+    resid = np.sqrt(delta_new/delta_0)
 
-    # maxiter
-    if maxiter is None:
-        maxiter = x.size
-    iter_ = 0
+    iteration = 0
 
-    while iter_ < maxiter and resid > tol:
-        iter_ += 1
+    if rank == 0:
+        print('Iteration\tResiduals\tCriterion')
 
-        # descent direction
-        if (iter_  % 10) == 1:
-            d = - g
-        else:
-            b = ng / ng_old
-            d = - g + b * d
-        ng_old = ng
+    while iteration < maxiter and resid > tol:
+        iteration += 1
 
         # step
-        a = linesearch(d, g)
+        a = linesearch(d, r)
 
         # update
         x += a * d
 
-        # criterion
-        J_old = J
-        Js, g, ng = criterion(x, gradient=True)
+        # criterion and gradient at new position
+        Js = criterion(x, gradient=r)
         J = sum(Js)
-        resid = (J_old - J) / Jnorm
-        callback(x)
+        r[:] = -r
 
-    # define output
-    if resid > tol:
-        info = resid
-    else:
-        info = 0
+        delta_old = delta_new
+        if descent_method in ('pr', 'hs'):
+            delta_mid = dot(r, s, comm)
+        s[:] = M(r)
+        delta_new = dot(r, s, comm)
 
-    return x#, info
-
-# To create callback functions
-class CallbackFactory():
-    def __init__(self, verbose=False, criterion=False):
-        self.iter_ = []
-        self.resid = []
-        if criterion:
-            self.criterion = []
+        # descent direction
+        if descent_method == 'fr':
+            b = delta_new / delta_old
+        elif descent_method == 'pr':
+            b = (delta_new - delta_mid) / delta_old
+        elif descent_method == 'hs':
+            b = (delta_new - delta_mid) / (delta_mid - delta_old)
         else:
-            self.criterion = False
-        self.verbose = verbose
-    def __call__(self, x):
-        import inspect
-        parent_locals = inspect.stack()[1][0].f_locals
-        self.iter_.append(parent_locals['iter_'])
-        self.resid.append(parent_locals['resid'])
-        if self.criterion is not False:
-            self.criterion.append(parent_locals['J'])
-        if self.verbose:
-            # print header at first iteartion
-            if len(self.iter_) == 1:
-                header = 'Iteration \t Residual'
-                if self.criterion is not False:
-                    header += '\t Criterion'
-                    print(header)
-            # print status
-            report = "\t%i \t %e" % (self.iter_[-1], self.resid[-1])
-            if self.criterion is not False:
-                report += '\t %e' % (self.criterion[-1])
-            print(report)
+            raise ValueError("The descent update method must be 'fs' (Fletcher"\
+                "-Reeves), 'pr' (Polak-Ribiere) or 'hs' (Hestenes-Stiefel).")
+
+        if (iteration  % 50) == 1 or b <= 0:
+            d[:] = s # reset to steepest descent
+        else:
+            d[:] = s + b * d
+
+        resid = np.sqrt(delta_new/delta_0)
+
+        if rank == 0:
+            Jstr = repr(J)
+            if len(Js) > 1:
+                Jstr += ' ' + str(Js)
+            print("%s\t%s\t%s" % (str(iteration).rjust(9), str(resid), Jstr))
+        
+        if callback is not None:
+            callback(x)
+
+    return x
