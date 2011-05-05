@@ -6,6 +6,7 @@ import numpy as np
 import tamasisfortran as tmf
 from . import var
 from mpi4py import MPI
+from scipy.sparse.linalg import aslinearoperator
 
 __all__ = []
 
@@ -187,7 +188,7 @@ def dnorm_huber(delta):
         tmf.dnorm_huber(array.T, delta, out.T)
         return out
     return dnorm
-
+        
 
 #-------------------------------------------------------------------------------
 
@@ -236,6 +237,41 @@ def dnormp(p):
             out = np.empty(array.shape)
         tmf.dnormp(array.T, p, out.T)
         return out
+    return dnorm
+
+
+#-------------------------------------------------------------------------------
+
+
+def norm2_ellipsoid(A):
+    """Ellipsoid norm
+
+    Returns x^T A x, where A is a definite positive symmetric matrix
+    """
+    A = aslinearoperator(A)
+    def norm(x, comm=None):
+        if comm is None:
+            comm = MPI.COMM_WORLD
+        return dot(x, A.matvec(x.ravel()), comm=comm)
+    return norm
+
+
+#-------------------------------------------------------------------------------
+
+
+def dnorm2_ellipsoid(A):
+    """Derivative of the ellipsoid norm
+
+    Returns 2 * A x, where A is a definite positive symmetric matrix
+    """
+    A = aslinearoperator(A)
+    def dnorm(x, out=None, comm=None):
+        if comm is None:
+            comm = MPI.COMM_WORLD
+        result = 2 * A.matvec(x.ravel())
+        if out is not None:
+            out[:] = result
+        return result
     return dnorm
 
 
