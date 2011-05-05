@@ -10,14 +10,13 @@ import time
 
 from mpi4py import MPI
 from . import var
-from .acquisitionmodels import Addition, Diagonal, DdTdd, Identity, Masking, \
-                               Scalar, asacquisitionmodel
+from .acquisitionmodels import Addition, DdTdd, Diagonal, DiscreteDifference, \
+    Identity, Masking, Scalar, asacquisitionmodel
 from .datatypes import Map, Tod, flatten_sliced_shape
+from .mpiutils import dot, norm2, dnorm2
 from .quantity import Quantity, UnitError
-from .solvers import cg
+from .solvers import cg, nlcg
 
-
-__all__ = [ 'mapper_naive', 'mapper_ls', 'mapper_rls' ]
 
 def mapper_naive(tod, model, unit=None, local_mask=None):
     """
@@ -174,6 +173,68 @@ def mapper_rls(tod, model, invntt=None, weight=None, unpacking=None, hyper=1.0,
                    maxiter=maxiter, M=M, solver=solver, verbose=verbose,
                    callback=callback, profile=profile, unpacking=unpacking,
                    comm=comm_map)
+
+
+#-------------------------------------------------------------------------------
+
+
+def mapper_nl(tod, model, unpacking=None, Ds=[], hypers=[], norms=[], dnorms=[],
+              comms=[], x0=None, tol=1.e-6, maxiter=300, solver=None,
+              verbose=True, callback=None, profile=None):
+
+    ndims = len(model.shapein)
+
+    if np.isscalar(hypers):
+        hypers = ndims * [hypers]
+
+    nterms = len(hypers) + 1
+
+    if len(norms) == 0:
+        norms = nterms * [norm2]
+        dnorms = nterms * [dnorm2]
+
+    if len(comms) == 0:
+        comms = [var.comm_tod] + (nterms - 1) * [var.comm_map]
+
+    hypers = np.asarray(hypers, dtype=var.FLOAT_DTYPE)
+    ntods = var.comm_tod.allreduce(tod.size, op=MPI.SUM)
+    nmaps = model.shape[1] * var.comm_map.Get_size()
+    hypers /= nmaps
+    hypers = np.hstack([1./ntods, hypers]) * ntods #XXX remove me !
+    
+    if len(Ds) == 0:
+        Ds = [ DiscreteDifference(axis=axis, shapein=model.shapein,
+               comm=var.comm_map) for axis in range(nterms-1) ]
+
+    if unpacking is None:
+        unpacking = lambda x: x
+
+    tod = _validate_tod(tod, model)
+    y = tod.magnitude.ravel()
+
+    def criterion(x, gradient=False):
+        x = unpacking(x)
+        rs = [model * x - y] + [D * x for D in Ds]
+        Js = [h * norm(r,c) for h, norm, r, c in zip(hypers, norms, rs, comms)]
+        if not gradient:
+            return Js
+        g = sum([h * M.T * dnorm(r,comm=c) for h, M, dnorm, r, c in zip(hypers,
+            [model] + Ds, dnorms, rs, comms)])
+        ng = norm2(g, var.comm_map)
+        return Js, g, ng
+
+    def quadratic_optimal_step(d, g):
+        d = unpacking(d)
+        g = unpacking(g)
+        a = -.5 * dot(d.T, g, comm=var.comm_map) / sum([ h * n(M * d, c) \
+            for h, n, M, c in zip(hypers, norms, [model] + Ds, comms)])
+        return a
+
+    x = nlcg(criterion, model.shape[1], linesearch=quadratic_optimal_step, maxiter=maxiter, tol=tol)
+
+    x = unpacking(x)
+    x.shape = model.shapein
+    return x
 
 
 #-------------------------------------------------------------------------------
