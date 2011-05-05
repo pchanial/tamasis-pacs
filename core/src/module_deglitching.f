@@ -67,6 +67,7 @@ contains
 
         allocate (map(0:npixels_per_frame-1,ntimes))
 
+        ! compute the mini-maps for each time sample
         !$omp parallel do
         do itime=1, ntimes
             call backprojection_weighted_roi(pmatrix, nx, timeline, mask, itime, map(:,itime), roi(:,:,itime))
