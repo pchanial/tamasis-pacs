@@ -13,7 +13,7 @@ from .acquisitionmodels import Identity, asacquisitionmodel
 __all__ = []
 
 def cg(A, b, x0, tol=1.e-5, maxiter=300, callback=None, M=None, comm=None):
-    """OpenMPI/MPI hybrid conjugate gradient solver"""
+    """OpenMPI/MPI hybrid conjugate gradient solver with preconditioning."""
 
     if comm is None:
         comm = MPI.COMM_WORLD
@@ -107,10 +107,10 @@ def cg(A, b, x0, tol=1.e-5, maxiter=300, callback=None, M=None, comm=None):
 
     return xfinal, 0
 
-def nlcg(criterion, n, linesearch, M=None, tol=1e-6, x0=None, maxiter=300,
-         callback=None, descent_method='pr', comm=None):
-    """Non-linear conjugate gradient
-    
+def nlcg(criterion, n, linesearch, descent_method='pr', x0=None, M=None,
+         tol=1.e-6, maxiter=500, callback=None, comm=None):
+    """Non-linear conjugate gradient with preconditioning.
+
     Parameters
     ----------
     criterion : function
@@ -141,7 +141,7 @@ def nlcg(criterion, n, linesearch, M=None, tol=1e-6, x0=None, maxiter=300,
         to reach a given error tolerance.
     callback : function
         User-supplied function to call after each iteration.  It is called
-        as callback(x), where xk is the current solution vector.
+        as callback(x), where x is the current solution vector.
     comm : MPI communicator
 
     Returns
@@ -156,8 +156,10 @@ def nlcg(criterion, n, linesearch, M=None, tol=1e-6, x0=None, maxiter=300,
     else:
         x = x0.flatten()
 
-    if M is None:
-        M = lambda x : x
+    # check preconditioner
+    if M is not None:
+        if not hasattr(M, 'matvec'):
+            raise TypeError('The preconditioner is not a linear operator.')
 
     # initialise gradient and its conjugate
     r = np.empty(n)
@@ -173,7 +175,10 @@ def nlcg(criterion, n, linesearch, M=None, tol=1e-6, x0=None, maxiter=300,
     Js = criterion(x, gradient=r)
     J = sum(Js)
     r[:] = -r
-    s[:] = M(r)
+    if M is not None:
+        s[:] = M.matvec(r)
+    else:
+        s[:] = r
     d[:] = s
     delta_new = dot(r, d, comm)
     delta_0 = delta_new
@@ -202,7 +207,10 @@ def nlcg(criterion, n, linesearch, M=None, tol=1e-6, x0=None, maxiter=300,
         delta_old = delta_new
         if descent_method in ('pr', 'hs'):
             delta_mid = dot(r, s, comm)
-        s[:] = M(r)
+        if M is not None:
+            s[:] = M.matvec(r)
+        else:
+            s[:] = r
         delta_new = dot(r, s, comm)
 
         # descent direction

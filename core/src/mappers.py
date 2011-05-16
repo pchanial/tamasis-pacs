@@ -8,6 +8,7 @@ import scipy
 import tamasisfortran as tmf
 import time
 
+from copy import copy
 from mpi4py import MPI
 from . import var
 from .acquisitionmodels import Addition, DdTdd, Diagonal, DiscreteDifference, \
@@ -180,7 +181,7 @@ def mapper_rls(tod, model, invntt=None, weight=None, unpacking=None, hyper=1.0,
 
 def mapper_nl(tod, model, unpacking=None, Ds=[], hypers=[], norms=[], dnorms=[],
               comms=[], x0=None, tol=1.e-6, maxiter=300, solver=None,
-              descent_method='pr',
+              descent_method='pr', M=None,
               verbose=True, callback=None, profile=None):
 
     ndims = len(model.shapein)
@@ -197,11 +198,17 @@ def mapper_nl(tod, model, unpacking=None, Ds=[], hypers=[], norms=[], dnorms=[],
     if len(comms) == 0:
         comms = [var.comm_tod] + (nterms - 1) * [var.comm_map]
 
+    if isinstance(M, Diagonal):
+        notfinite = ~np.isfinite(M.diagonal)
+        if np.any(notfinite):
+            M = copy(M)
+            M.diagonal[notfinite] = 0
+
     hypers = np.asarray(hypers, dtype=var.FLOAT_DTYPE)
     ntods = var.comm_tod.allreduce(tod.size, op=MPI.SUM)
     nmaps = model.shape[1] * var.comm_map.Get_size()
     hypers /= nmaps
-    hypers = np.hstack([1./ntods, hypers]) * ntods #XXX remove me !
+    hypers = np.hstack([1./ntods, hypers])
     
     if len(Ds) == 0:
         Ds = [ DiscreteDifference(axis=axis, shapein=model.shapein,
@@ -226,11 +233,11 @@ def mapper_nl(tod, model, unpacking=None, Ds=[], hypers=[], norms=[], dnorms=[],
     def quadratic_optimal_step(d, r):
         d = unpacking(d)
         r = unpacking(r)
-        a = 0.5 * dot(d.T, r, comm=var.comm_map) / sum([ h * n(M * d, c) \
+        a = 0.5 * dot(d, r, comm=var.comm_map) / sum([ h * n(M * d, c) \
             for h, n, M, c in zip(hypers, norms, [model] + Ds, comms)])
         return a
 
-    x = nlcg(criterion, model.shape[1], linesearch=quadratic_optimal_step, descent_method=descent_method, maxiter=maxiter, tol=tol, comm=var.comm_map)
+    x = nlcg(criterion, model.shape[1], linesearch=quadratic_optimal_step, descent_method=descent_method, maxiter=maxiter, tol=tol, comm=var.comm_map, M=M)
 
     x = unpacking(x)
     x.shape = model.shapein
