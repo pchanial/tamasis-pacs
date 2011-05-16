@@ -30,6 +30,7 @@ __all__ = [ 'PacsObservation',
             'pacs_preprocess' ]
 
 CALIBFILE_DTC = var.path + '/pacs/PCalPhotometer_PhotTimeConstant_FM_v2.fits'
+CALIBFILE_STD = var.path + '/pacs/PCalPhotometer_Stddev_Tamasis_v1.fits'
 
 class PacsBase(Observation):
 
@@ -286,6 +287,26 @@ class PacsBase(Observation):
         compression = CompressionAverage(self.slice.compression_factor/4)
         result = compression(result)
         return result
+
+    def get_detector_stddev(self, length=0):
+        """Returns detector's standard deviation from calibration file"""
+        file = pyfits.open(CALIBFILE_STD)
+        lengths = file[0].data
+        stddevs = file[self.instrument.band].data
+        if length == 0:
+            return self.pack(stddevs[...,-1])
+        if length < lengths[0]:
+            raise ValueError('The value of the median filtering length should '\
+                             'be greater than ' + str(lengths[0]) + '.')
+        i = 1
+        while i < len(lengths) - 2 and length >= lengths[i]:
+            i += 1
+        d = (np.log(length) - np.log(lengths[i-1])) / \
+            (np.log(lengths[i]) - np.log(lengths[i-1]))
+        s = np.minimum((1-d) * stddevs[...,i-1] + d * stddevs[...,i],
+                       stddevs[...,-1])
+        s[np.isnan(s)] = np.inf
+        return self.pack(s)
 
     def pack(self, input):
         input = np.array(input, order='c', copy=False, subok=True)
