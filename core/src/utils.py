@@ -231,7 +231,8 @@ def plot_tod(tod, mask=None, **kw):
 
     ndetectors = int(np.product(tod.shape[0:-1]))
     tod = tod.view().reshape((ndetectors, -1))
-    mask = mask.view().reshape((ndetectors, -1))
+    if mask is not None:
+        mask = mask.view().reshape((ndetectors, -1))
     for idetector in range(ndetectors):
         pyplot.plot(tod[idetector], **kw)
         if mask is not None:
