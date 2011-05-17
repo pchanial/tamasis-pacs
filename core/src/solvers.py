@@ -7,7 +7,7 @@ from mpi4py import MPI
 from scipy.sparse.linalg import aslinearoperator
 
 from . import var
-from .mpiutils import norm2, dot
+from .linalg import dot, norm2
 from .acquisitionmodels import Identity, asacquisitionmodel
 
 __all__ = []
@@ -40,18 +40,18 @@ def cg(A, b, x0, tol=1.e-5, maxiter=300, callback=None, M=None, comm=None):
     else:
         x[:] = x0.ravel()
 
-    norm = norm2(b, comm)
+    norm = norm2(b, comm=comm)
     if norm == 0:
         return xfinal
     norm = 1./norm
 
     r[:] = b
     r -= A.matvec(x)
-    epsilon = norm * norm2(r, comm)
+    epsilon = norm * norm2(r, comm=comm)
     minEpsilon = epsilon
 
     d = M.matvec(r)
-    delta0 = dot(r, d, comm)
+    delta0 = dot(r, d, comm=comm)
     deltaNew = delta0
 
     if rank == 0:
@@ -64,12 +64,12 @@ def cg(A, b, x0, tol=1.e-5, maxiter=300, callback=None, M=None, comm=None):
         q = d.copy()
         q = A.matvec(q, True, True, True)
 
-        alpha = deltaNew / dot(d, q, comm)
+        alpha = deltaNew / dot(d, q, comm=comm)
         x += alpha * d
         r -= alpha * q
-        epsilon = norm * norm2(r, comm)
+        epsilon = norm * norm2(r, comm=comm)
 
-        qnorm = np.sqrt(norm2(q, comm))
+        qnorm = np.sqrt(norm2(q, comm=comm))
         if rank == 0:
             print("%s\t%s" % (str(i+1).rjust(9), repr(np.sqrt(epsilon))))
 
@@ -82,7 +82,7 @@ def cg(A, b, x0, tol=1.e-5, maxiter=300, callback=None, M=None, comm=None):
 
         deltaOld = deltaNew
 
-        deltaNew = dot(r, s, comm)
+        deltaNew = dot(r, s, comm=comm)
         beta = deltaNew / deltaOld
         d *= beta
         d += s
@@ -103,7 +103,7 @@ def cg(A, b, x0, tol=1.e-5, maxiter=300, callback=None, M=None, comm=None):
     if callback is not None:
         callback.niterations = i+1
         callback.residual = minEpsilon
-        callback.criterion = np.sqrt(norm2(q-b, comm))
+        callback.criterion = np.sqrt(norm2(q-b, comm=comm))
 
     return xfinal, 0
 
@@ -180,7 +180,7 @@ def nlcg(criterion, n, linesearch, descent_method='pr', x0=None, M=None,
     else:
         s[:] = r
     d[:] = s
-    delta_new = dot(r, d, comm)
+    delta_new = dot(r, d, comm=comm)
     delta_0 = delta_new
     Jnorm = J
     resid = np.sqrt(delta_new/delta_0)
@@ -206,12 +206,12 @@ def nlcg(criterion, n, linesearch, descent_method='pr', x0=None, M=None,
 
         delta_old = delta_new
         if descent_method in ('pr', 'hs'):
-            delta_mid = dot(r, s, comm)
+            delta_mid = dot(r, s, comm=comm)
         if M is not None:
             s[:] = M.matvec(r)
         else:
             s[:] = r
-        delta_new = dot(r, s, comm)
+        delta_new = dot(r, s, comm=comm)
 
         # descent direction
         if descent_method == 'fr':

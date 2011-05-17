@@ -5,6 +5,7 @@ import tamasisfortran as tmf
 import var
 from .var import VERSION as __version__
 from .numpyutils import *
+from .linalg import *
 from .mpiutils import *
 from .wcsutils import *
 from .solvers import *

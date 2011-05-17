@@ -14,7 +14,7 @@ from . import var
 from .acquisitionmodels import Addition, DdTdd, Diagonal, DiscreteDifference, \
     Identity, Masking, Scalar, asacquisitionmodel
 from .datatypes import Map, Tod, flatten_sliced_shape
-from .mpiutils import dot, norm2, dnorm2
+from .linalg import dot, norm2
 from .quantity import Quantity, UnitError
 from .solvers import cg, nlcg
 
@@ -179,10 +179,9 @@ def mapper_rls(tod, model, invntt=None, weight=None, unpacking=None, hyper=1.0,
 #-------------------------------------------------------------------------------
 
 
-def mapper_nl(tod, model, unpacking=None, Ds=[], hypers=[], norms=[], dnorms=[],
-              comms=[], x0=None, tol=1.e-6, maxiter=300, solver=None,
-              descent_method='pr', M=None,
-              verbose=True, callback=None, profile=None):
+def mapper_nl(tod, model, unpacking=None, Ds=[], hypers=[], norms=[], comms=[],
+              x0=None, tol=1.e-6, maxiter=300, solver=None, descent_method='pr',
+              M=None, verbose=True, callback=None, profile=None):
 
     ndims = len(model.shapein)
 
@@ -193,7 +192,6 @@ def mapper_nl(tod, model, unpacking=None, Ds=[], hypers=[], norms=[], dnorms=[],
 
     if len(norms) == 0:
         norms = nterms * [norm2]
-        dnorms = nterms * [dnorm2]
 
     if len(comms) == 0:
         comms = [var.comm_tod] + (nterms - 1) * [var.comm_map]
@@ -222,18 +220,18 @@ def mapper_nl(tod, model, unpacking=None, Ds=[], hypers=[], norms=[], dnorms=[],
 
     def criterion(x, gradient=None):
         x = unpacking(x)
-        rs = [model * x - y] + [D * x for D in Ds]
-        Js = [h * norm(r,c) for h, norm, r, c in zip(hypers, norms, rs, comms)]
+        rs = [ model * x - y] + [D * x for D in Ds ]
+        Js = [ h * n(r,comm=c) for h, n, r, c in zip(hypers, norms, rs, comms) ]
         if gradient is None:
             return Js
-        gradient[:] = sum([ h * M.T * dnorm(r,comm=c) for h, M, dnorm, r, c in \
-                            zip(hypers, [model] + Ds, dnorms, rs, comms)])
+        gradient[:] = sum([ h * M.T * n.D(r,comm=c) for h, M, n, r, c in \
+                            zip(hypers, [model] + Ds, norms, rs, comms)])
         return Js
 
     def quadratic_optimal_step(d, r):
         d = unpacking(d)
         r = unpacking(r)
-        a = 0.5 * dot(d, r, comm=var.comm_map) / sum([ h * n(M * d, c) \
+        a = 0.5 * dot(d, r, comm=var.comm_map) / sum([ h * n(M * d, comm=c) \
             for h, n, M, c in zip(hypers, norms, [model] + Ds, comms)])
         return a
 
