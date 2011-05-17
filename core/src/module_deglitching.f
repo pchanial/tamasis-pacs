@@ -5,7 +5,7 @@ module module_deglitching
 
     use module_math,           only : moment, mad, sigma_clipping
     use module_pointingmatrix, only : pointingelement, backprojection_weighted_roi
-    use module_string,         only : strinteger, strternary
+    use module_string,         only : strreal, strternary
     use module_tamasis,        only : p, info_time
     implicit none
     private
@@ -155,8 +155,8 @@ contains
         deallocate (map)
 
         if (verbose_) then
-            call info_time('Deglitching (' // strternary(use_mad, 'mad','std') // ')', count_start,                                &
-                           '(number of flagged samples: ' // strinteger(count(mask)-nbads) // ')')
+            call info_time('Deglitching (' // strternary(use_mad, 'mad', 'std') // ')', count_start,                               &
+                           '(flagged samples: ' // strreal(real(count(mask) - nbads, p) / (size(mask) - nbads) * 100, 5) // '%)')
         end if
 
     end subroutine deglitch_l2b
