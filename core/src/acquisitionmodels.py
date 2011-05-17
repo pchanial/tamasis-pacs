@@ -361,8 +361,7 @@ class AcquisitionModel(object):
         return Composition([other, self])
 
     def __imul__(self, other):
-        _toacquisitionmodel(self, Composition)
-        self *= other
+        _tocompositemodel(self, Composition, [copy.copy(self), other])
         return self
 
     def __add__(self, other):
@@ -372,8 +371,7 @@ class AcquisitionModel(object):
         return Addition([other, self])
 
     def __iadd__(self, other):
-        _toacquisitionmodel(self, Addition)
-        self += other
+        _tocompositemodel(self, Addition, [copy.copy(self), other])
         return self
 
     def __sub__(self, other):
@@ -383,8 +381,7 @@ class AcquisitionModel(object):
         return Addition([other, -self])
 
     def __isub__(self, other):
-        _toacquisitionmodel(self, Addition)
-        self -= other
+        _tocompositemodel(self, Addition, [copy.copy(self), -other])
         return self
 
     def __neg__(self):
@@ -518,11 +515,8 @@ class Composite(AcquisitionModel):
 
     def __init__(self, models):
 
-        self.blocks = []
-
-        if len(models) == 0:
-            models = [models]
         models = [ asacquisitionmodel(m) for m in models ]
+        self.blocks = []
 
         for model in models:
             if isinstance(model, self.__class__):
@@ -1719,13 +1713,12 @@ class InvNtt(AcquisitionModelLinear):
 
     def __init__(self, obs, **keywords):
         nsamples = obs.get_nsamples()
-        length = np.asarray(2**np.ceil(np.log2(np.array(nsamples) + 200)), dtype='int')                                                            
+        length = np.asarray(2**np.ceil(np.log2(np.array(nsamples) + 200)), dtype=int)
         invntt = self._get_diagonal(length, obs.get_filter_uncorrelated())
         fft = FftHalfComplex(length)
-        padding = Padding(left=invntt.ncorrelations, right=length-nsamples-invntt.ncorrelations)
-        self.__class__ = Composition
-        self.description = invntt.description
-        self.blocks = [ padding.T, fft.T, invntt, fft, padding ]
+        padding = Padding(left=invntt.ncorrelations, right=length-nsamples- \
+                          invntt.ncorrelations)
+        _tocompositemodel(self, Composition, [ padding.T, fft.T, invntt, fft, padding ])
 
     def _get_diagonal(self, nsamples, filter, **keywords):
         nsamples = np.asarray(nsamples)
@@ -1799,17 +1792,11 @@ def asacquisitionmodel(operator, shapein=None, shapeout=None, description=None):
 #-------------------------------------------------------------------------------
 
 
-def _toacquisitionmodel(model, cls, description=None):
+def _tocompositemodel(model, cls, models):
     if model.__class__ == cls:
         return model
-    if description is None:
-        description = cls.__name__
-    model2 = copy.copy(model)
     model.__class__ = cls
-    for key in model.__dict__:
-        model.__dict__[key] = None
-    model.description = description
-    model.blocks = [model2]
+    model.__init__(models)
 
 
 #-------------------------------------------------------------------------------
