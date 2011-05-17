@@ -30,7 +30,7 @@ tod = obs.get_tod(flatfielding=False,
 projection = Projection(obs,
                         method='sharp',
                         oversampling=False,
-                        npixels_per_sample=6)
+                        npixels_per_sample=5)
 
 # Remove low frequency drifts. The specified window length is the
 # number of samples used to compute the median (unlike HCSS, where
@@ -65,18 +65,12 @@ model = masking * compression * response * projection
 # The naive map is given by
 map_naive = mapper_naive(tod, model)
 
-length = np.asarray(2**np.ceil(np.log2(np.array(tod.nsamples) + 200)), dtype='int')
-invntt = InvNtt(length, obs.get_filter_uncorrelated())
-fft = FftHalfComplex(length)
-padding = Padding(left=invntt.ncorrelations, right=length-tod.nsamples-invntt.ncorrelations)
-invntt = padding.T * fft.T * invntt * fft * padding
-
 # The regularised least square map is obtained by minimising the criterion
 # J(x) = ||y-Hx||^2 + hyper ||Dx||^2, the first ||.||^2 being the N^-1 norm
 # it is equivalent to solving the equation (H^T H + hyper D^T D ) x = H^T y
 hyper = 0.1
 map_tamasis = mapper_rls(tod, model,
-                         invntt=invntt,
+                         invntt=InvNtt(obs),
                          unpacking=Unpacking(projection.mask),
                          tol=1.e-5,
                          hyper=hyper)

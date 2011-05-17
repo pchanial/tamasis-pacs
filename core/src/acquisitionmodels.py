@@ -1654,11 +1654,9 @@ class FftHalfComplex(Square):
 
     def __init__(self, nsamples, **keywords):
         Square.__init__(self, typein=Tod, **keywords)
-        self.nsamples_array = np.array(nsamples, ndmin=1, dtype='int64')
-        self.nsamples = tuple(self.nsamples_array)
-        self.nsamples_tot = np.sum(self.nsamples_array)
-        self.forward_plan = np.empty(self.nsamples_array.size, dtype='int64')
-        self.backward_plan = np.empty(self.nsamples_array.size,dtype='int64')
+        self.nsamples = tuple(np.array(nsamples, ndmin=1, dtype=int))
+        self.forward_plan = np.empty(len(self.nsamples), dtype=int)
+        self.backward_plan = np.empty(len(self.nsamples), dtype=int)
         for i, n in enumerate(self.nsamples):
             tarray = np.empty(n, dtype=var.FLOAT_DTYPE)
             farray = np.empty(n, dtype=var.FLOAT_DTYPE)
@@ -1675,14 +1673,14 @@ class FftHalfComplex(Square):
         output = self.validate_input_inplace(input, inplace)
         output_ = _smart_reshape(output, (np.product(input.shape[:-1]),
                                  input.shape[-1]))
-        tmf.fft_plan(output_.T, self.nsamples_array, self.forward_plan)
+        tmf.fft_plan(output_.T, np.array(self.nsamples), self.forward_plan)
         return output
 
     def transpose(self, input, inplace, cachein, cacheout):
         output = self.validate_input_inplace(input, inplace)
         output_ = _smart_reshape(output, (np.product(input.shape[:-1]), 
                                  input.shape[-1]))
-        tmf.fft_plan(output_.T, self.nsamples_array, self.backward_plan)
+        tmf.fft_plan(output_.T, np.array(self.nsamples), self.backward_plan)
         dest = 0
         for n in self.nsamples:
             output_[:,dest:dest+n] /= n
@@ -1693,7 +1691,7 @@ class FftHalfComplex(Square):
         if shape is None:
             return None
         nsamples = shape[-1]
-        if nsamples != self.nsamples and nsamples != self.nsamples_tot:
+        if nsamples != self.nsamples and nsamples != sum(self.nsamples):
             raise ValidationError("Invalid FFT size '" + str(nsamples) + \
                                   "' instead of '"+str(self.nsamples)+"'.")
         return combine_sliced_shape(shape[0:-1], self.nsamples)
@@ -1717,9 +1715,19 @@ class Convolution(Symmetric):
 #-------------------------------------------------------------------------------
 
 
-class InvNtt(Diagonal):
+class InvNtt(AcquisitionModelLinear):
 
-    def __init__(self, nsamples, filter, **keywords):
+    def __init__(self, obs, **keywords):
+        nsamples = obs.get_nsamples()
+        length = np.asarray(2**np.ceil(np.log2(np.array(nsamples) + 200)), dtype='int')                                                            
+        invntt = self._get_diagonal(length, obs.get_filter_uncorrelated())
+        fft = FftHalfComplex(length)
+        padding = Padding(left=invntt.ncorrelations, right=length-nsamples-invntt.ncorrelations)
+        self.__class__ = Composition
+        self.description = invntt.description
+        self.blocks = [ padding.T, fft.T, invntt, fft, padding ]
+
+    def _get_diagonal(self, nsamples, filter, **keywords):
         nsamples = np.asarray(nsamples)
         ndetectors = filter.shape[-2]
         ncorrelations = filter.shape[-1] - 1
@@ -1730,11 +1738,10 @@ class InvNtt(Diagonal):
             tmf.fft_filter_uncorrelated(filter.T, np.asarray(nsamples, 
                                         dtype=np.int32), np.sum(nsamples))
         if status != 0: raise RuntimeError()
-        Diagonal.__init__(self, tod_filter.T, shapein=tod_filter.T.shape,
-                          **keywords)
-        self.ncorrelations = ncorrelations
-        self.diagonal /= var.comm_tod.allreduce(np.max(self.diagonal),
-                                                op=MPI.MAX)
+        d = Diagonal(tod_filter.T, shapein=tod_filter.T.shape, **keywords)
+        d.diagonal /= var.comm_tod.allreduce(np.max(d.diagonal), op=MPI.MAX)
+        d.ncorrelations = ncorrelations
+        return d
 
 
 #-------------------------------------------------------------------------------
