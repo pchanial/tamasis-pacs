@@ -149,7 +149,7 @@ subroutine pointing_matrix_mask(pmatrix, mask1d, npixels_per_sample, nsamples, n
     type(PointingElement), intent(in) :: pmatrix(npixels_per_sample, nsamples, ndetectors)
     logical*1, intent(inout)          :: mask1d(npixels)
     integer, intent(in)               :: npixels_per_sample
-    integer, intent(in)               :: nsamples
+    integer*8, intent(in)             :: nsamples
     integer, intent(in)               :: ndetectors
     integer, intent(in)               :: npixels
 
@@ -172,7 +172,7 @@ subroutine pointing_matrix_pack(pmatrix, mask1d, npixels_per_sample, nsamples, n
     type(PointingElement), intent(inout) :: pmatrix(npixels_per_sample, nsamples, ndetectors)
     logical*1, intent(in)                :: mask1d(npixels)
     integer, intent(in)                  :: npixels_per_sample
-    integer, intent(in)                  :: nsamples
+    integer*8, intent(in)                :: nsamples
     integer, intent(in)                  :: ndetectors
     integer, intent(in)                  :: npixels
 
