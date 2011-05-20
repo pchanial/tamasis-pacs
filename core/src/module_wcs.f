@@ -321,7 +321,7 @@ contains
         call cd_info(astr%cd, cdelt, rot)
 
         if (astr%ctype(1) == 'RA---TAN' .and. astr%ctype(2) == 'DEC--TAN') then
-            if (neq_real(abs(cdelt(1)), abs(cdelt(2)))) then
+            if (neq_real(abs(cdelt(1)), abs(cdelt(2)), 1.e-7_p)) then
                 write (ERROR_UNIT,'(a)') 'The scaling of a map with inhomogeneous CDELT is not implemented.'
                 status = 1
                 return
