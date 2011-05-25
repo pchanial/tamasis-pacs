@@ -6,6 +6,8 @@ import numpy as np
 from tamasis import *
 
 # Specify the Frames observations as FITS files
+# The optional brackets can be used to remove the beginning or the end of an
+# an observation
 path = os.getenv('PACS_DATA')+'transpScan/'
 frames_files = [path+'1342185454_red_PreparedFrames.fits[10001:]',
                 path+'1342185455_red_PreparedFrames.fits[10001:]']
@@ -32,22 +34,42 @@ projection = Projection(obs,
                         oversampling=False,
                         npixels_per_sample=5)
 
-# Remove low frequency drifts. The specified window length is the
-# number of samples used to compute the median (unlike HCSS, where
-# half the length should be specified).
-# If these are all masked, an interpolated value will be computed 
-# once the whole filtered timeline is computed.
-hpf_length = 10000
-tod = filter_median(tod, hpf_length)
-
 # Map-level deglitching using the MAD (median absolute deviation to
 # the mean). We highpass filter the Tod using a short filtering 
 # window, to remove the low-frequency offsets
 tod_glitch = filter_median(tod, 100)
 tod.mask = deglitch_l2mad(tod_glitch, projection, nsigma=25.)
 
-# save the Tod as a FITS file
+# Inspect that the glitches have correctly been removed in the timeline of
+# detector #100
+plot_tod(tod[100])
+
+# Backproject the Tod's mask on a map, to ensure that glitches are uniformly
+# distributed, i.e. that the bright sources have not been impacted
+projection.T(tod.mask-tod_glitch.mask).imshow()
+
+# Remove low frequency drifts. The specified window length is the
+# number of samples used to compute the median (unlike HCSS, where
+# half the length should be specified).
+# If these are all masked, an interpolated value will be computed 
+# once the whole filtered timeline is computed.
+hpf_length = 1000
+tod = filter_median(tod, hpf_length)
+
+# Remove very low frequency drifts
+tod = filter_polynomial(tod, 3)
+
+# Inspect the tod by displaying the Tod as an image: X for time and Y for
+# the detector number. In the following a example a stride of 10 is used
+# to display one sample out of 10, because the display is memory intensive
+tod[::10].imshow()
+
+# Save the Tod as a FITS file
 tod.save('tod_preprocessed.fits')
+
+# Save the Observation and the Tod as a FITS file, that can later be read
+# as a PacsObservation
+obs.save('obs_preprocessed.fits', tod)
 
 # We solve the equation y = H x, where y is the Tod, x the unknown map
 # and H the acquisition model.
@@ -55,6 +77,7 @@ tod.save('tod_preprocessed.fits')
 # M y == M H x, M is the mask operator which sets bad samples values to 0
 projection = Projection(obs,
                         method='sharp',
+                        resolution=3.2,
                         npixels_per_sample=5)
 response = ResponseTruncatedExponential(obs.pack(
     obs.instrument.detector.time_constant) / obs.SAMPLING_PERIOD)
@@ -64,6 +87,9 @@ model = masking * compression * response * projection
 
 # The naive map is given by
 map_naive = mapper_naive(tod, model)
+
+# Inspect the naive map
+ds9(map_naive)
 
 # The regularised least square map is obtained by minimising the criterion
 # J(x) = ||y-Hx||^2 + hyper ||Dx||^2, the first ||.||^2 being the N^-1 norm
