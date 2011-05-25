@@ -37,8 +37,7 @@ map_nl = mapper_nl(tod, model, hypers=2*[1.],
                    callback=None if tamasis.var.verbose else Callback(),
                    )
 
-if profile is None:
-    print 'Elapsed time: ' + str(map_nl.header['TIME']) + \
-        ' after ' + str(map_nl.header['NITER']) + ' iterations.'
-#    if map_nl.header['NITER'] > 48:
-#        raise TestFailure()
+print 'Elapsed time: ' + str(map_nl.header['TIME']) + ' after ' + \
+    str(map_nl.header['NITER']) + ' iterations.'
+#if map_nl.header['NITER'] > 48:
+#    raise TestFailure()
