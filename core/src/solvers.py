@@ -18,8 +18,6 @@ def cg(A, b, x0, tol=1.e-5, maxiter=300, callback=None, M=None, comm=None):
     if comm is None:
         comm = MPI.COMM_WORLD
 
-    rank = comm.Get_rank()
-
     A = asacquisitionmodel(A)
     if M is None:
         M = Identity()
@@ -54,10 +52,7 @@ def cg(A, b, x0, tol=1.e-5, maxiter=300, callback=None, M=None, comm=None):
     delta0 = dot(r, d, comm=comm)
     deltaNew = delta0
 
-    if rank == 0:
-        print('Iteration\tResiduals')
-
-    for i in xrange(maxiter):
+    for iter_ in xrange(maxiter):
         if epsilon <= maxRelError:
             break
         
@@ -69,14 +64,15 @@ def cg(A, b, x0, tol=1.e-5, maxiter=300, callback=None, M=None, comm=None):
         r -= alpha * q
         epsilon = norm * norm2(r, comm=comm)
 
-        qnorm = np.sqrt(norm2(q, comm=comm))
-        if rank == 0:
-            print("%s\t%s" % (str(i+1).rjust(9), repr(np.sqrt(epsilon))))
+        if callback is not None:
+            resid = np.sqrt(epsilon)
+            callback(x)
 
         if epsilon < minEpsilon:
             xfinal[:] = x
             minEpsilon = epsilon
 
+        qnorm = np.sqrt(norm2(q, comm=comm))
         s = r.copy()
         s = M.matvec(s, True, True, True)
 
@@ -87,25 +83,10 @@ def cg(A, b, x0, tol=1.e-5, maxiter=300, callback=None, M=None, comm=None):
         d *= beta
         d += s
     
-    if rank == 0:
-        if minEpsilon > maxRelError:
-            print("ccPCG terminated without reaching specified tolerance")
-            print("after %s iterations.\n" % str(i+1))
-        else:
-            print("ccPCG terminated after reaching specified tolerance\n")
-            print("in %s iterations.\n" % str(i+1))
-
     minEpsilon  = np.sqrt(minEpsilon)
     maxRelError = np.sqrt(maxRelError)
-    print("Relative error is %s, " % str(minEpsilon))
-    print("requested relative error is %s.\n" % str(maxRelError))
 
-    if callback is not None:
-        callback.niterations = i+1
-        callback.residual = minEpsilon
-        callback.criterion = np.sqrt(norm2(q-b, comm=comm))
-
-    return xfinal, 0
+    return xfinal, int(minEpsilon > maxRelError)
 
 def nlcg(criterion, n, linesearch, descent_method='pr', x0=None, M=None,
          tol=1.e-6, maxiter=500, callback=None, comm=None):
@@ -127,8 +108,6 @@ def nlcg(criterion, n, linesearch, descent_method='pr', x0=None, M=None,
             - 'fs' (Fletcher-Reeves)
             - 'pr' (Polak-Ribiere)
             - 'hs' (Hestenes-Stiefel)
-    callback : function
-        callback function, called after each iteration
     tol : float
         Relative tolerance to achieve before terminating.
     maxiter : integer
@@ -185,13 +164,10 @@ def nlcg(criterion, n, linesearch, descent_method='pr', x0=None, M=None,
     Jnorm = J
     resid = np.sqrt(delta_new/delta_0)
 
-    iteration = 0
+    iter_ = 0
 
-    if rank == 0:
-        print('Iteration\tResiduals\tCriterion')
-
-    while iteration < maxiter and resid > tol:
-        iteration += 1
+    while iter_ < maxiter and resid > tol:
+        iter_ += 1
 
         # step
         a = linesearch(d, r)
@@ -224,19 +200,13 @@ def nlcg(criterion, n, linesearch, descent_method='pr', x0=None, M=None,
             raise ValueError("The descent update method must be 'fs' (Fletcher"\
                 "-Reeves), 'pr' (Polak-Ribiere) or 'hs' (Hestenes-Stiefel).")
 
-        if (iteration  % 50) == 1 or b <= 0:
+        if (iter_  % 50) == 1 or b <= 0:
             d[:] = s # reset to steepest descent
         else:
             d[:] = s + b * d
 
         resid = np.sqrt(delta_new/delta_0)
 
-        if rank == 0:
-            Jstr = repr(J)
-            if len(Js) > 1:
-                Jstr += ' ' + str(Js)
-            print("%s\t%s\t%s" % (str(iteration).rjust(9), str(resid), Jstr))
-        
         if callback is not None:
             callback(x)
 

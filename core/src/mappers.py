@@ -14,7 +14,7 @@ from . import var
 from .acquisitionmodels import Addition, DdTdd, Diagonal, DiscreteDifference, \
     Identity, Masking, Scalar, asacquisitionmodel
 from .datatypes import Map, Tod, flatten_sliced_shape
-from .linalg import dot, norm2
+from .linalg import dot, norm2, norm2_ellipsoid
 from .quantity import Quantity, UnitError
 from .solvers import cg, nlcg
 
@@ -103,66 +103,54 @@ def mapper_naive(tod, model, unit=None, local_mask=None):
 #-------------------------------------------------------------------------------
 
 
-def mapper_ls(tod, model, invntt=None, weight=None, unpacking=None, x0=None,
-              tol=1.e-5, maxiter=300, M=None, solver=None, verbose=True,
-              callback=None, profile=None, comm_map=None):
+def mapper_ls(tod, model, invntt=None, unpacking=None, x0=None, tol=1.e-5,
+              maxiter=300, M=None, solver=None, verbose=True, callback=None,
+              criterion=True, profile=None, comm_map=None):
 
     tod = _validate_tod(tod, model)
-    if invntt is None:
-        if weight is not None:
-            print
-            print('XXXXXXXX')
-            print('WARNING: mapper_ls: weight keyword is deprecated, use invntt instead')
-            print('XXXXXXXX')
-        invntt = weight
 
     if invntt is None:
-        invntt = Identity(description='Weight')
+        invntt = Identity()
 
     A = model.T * invntt * model
     b = (model.T * invntt)(tod, inplace=True)
-    prior = Scalar(0)
     if M is not None:
         M = asacquisitionmodel(M, shapein=model.shapein, shapeout=model.shapein)
 
-    return _solver(A, b, tod, model, invntt, prior, hyper=0, x0=x0, tol=tol,
+    return _solver(A, b, tod, model, invntt, hyper=0, x0=x0, tol=tol,
                    maxiter=maxiter, M=M, solver=solver, verbose=verbose,
-                   callback=callback, profile=profile, unpacking=unpacking,
-                   comm=comm_map)
+                   callback=callback, criterion=criterion, profile=profile,
+                   unpacking=unpacking, comm_map=comm_map)
 
 
 #-------------------------------------------------------------------------------
 
 
-def mapper_rls(tod, model, invntt=None, weight=None, unpacking=None, hyper=1.0,
-               x0=None, tol=1.e-5, maxiter=300, M=None, solver=None,
-               verbose=True, callback=None, profile=None, comm_map=None):
+def mapper_rls(tod, model, invntt=None, unpacking=None, hyper=1.0, x0=None,
+               tol=1.e-5, maxiter=300, M=None, solver=None, verbose=True,
+               callback=None, criterion=True, profile=None, comm_map=None):
 
     tod = _validate_tod(tod, model)
 
     if invntt is None:
-        if weight is not None:
-            print
-            print('XXXXXXXX')
-            print('WARNING: mapper_ls: weight keyword is deprecated, use invntt instead')
-            print('XXXXXXXX')
-        invntt = weight
-
-    if invntt is None:
-        invntt = Identity(description='Weight')
+        invntt = Identity()
 
     if comm_map is None:
         comm_map = var.comm_map
 
     A = model.T * invntt * model
 
-    hyper = np.asarray(hyper, dtype=var.FLOAT_DTYPE)
-    ntods = tod.size if tod.mask is None else int(np.sum(tod.mask == 0))
+    hyper = float(hyper)
+    ntods = int(np.sum(~tod.mask)) if getattr(tod, 'mask', None) is not None \
+            else tod.size
     ntods = var.comm_tod.allreduce(ntods, op=MPI.SUM)
-    nmaps = model.shape[1] * comm_map.Get_size()
+    nmaps = A.shape[1] * comm_map.Get_size()
 
+    npriors = len(model.shapein)
+    priors = [ DiscreteDifference(axis=axis, shapein=model.shapein,
+               comm=var.comm_map) for axis in range(npriors) ]
     prior = Addition([DdTdd(axis=axis, scalar=hyper * ntods / nmaps,
-        comm=comm_map) for axis in range(len(model.shapein))])
+        comm=comm_map) for axis in range(npriors)])
     if hyper != 0 and (comm_map.Get_rank() == 0 or comm_map.Get_size() > 1):
 # commenting this for now, matvec is not updated
 #        A += prior
@@ -170,76 +158,110 @@ def mapper_rls(tod, model, invntt=None, weight=None, unpacking=None, hyper=1.0,
 
     b = (model.T * invntt)(tod)
 
-    return _solver(A, b, tod, model, invntt, prior, hyper=hyper, x0=x0, tol=tol,
-                   maxiter=maxiter, M=M, solver=solver, verbose=verbose,
-                   callback=callback, profile=profile, unpacking=unpacking,
-                   comm=comm_map)
+    return _solver(A, b, tod, model, invntt, hyper=hyper, priors=priors, x0=x0,
+                   tol=tol, maxiter=maxiter, M=M, solver=solver,
+                   verbose=verbose, callback=callback, criterion=criterion,
+                   profile=profile, unpacking=unpacking, comm_map=comm_map)
 
 
 #-------------------------------------------------------------------------------
 
 
-def mapper_nl(tod, model, unpacking=None, Ds=[], hypers=[], norms=[], comms=[],
-              x0=None, tol=1.e-6, maxiter=300, solver=None, descent_method='pr',
-              M=None, verbose=True, callback=None, profile=None):
+def mapper_nl(tod, model, unpacking=None, priors=[], hypers=[], norms=[],
+              comms=[], x0=None, tol=1.e-6, maxiter=300, solver=None,
+              descent_method='pr', M=None, verbose=True, callback=None,
+              criterion=True, profile=None):
 
-    ndims = len(model.shapein)
+    if len(priors) == 0 and len(hypers) != 0:
+        npriors = len(model.shapein)
+        priors = [ DiscreteDifference(axis=axis, shapein=model.shapein,
+                   comm=var.comm_map) for axis in range(npriors) ]
+    else:
+        npriors = len(priors)
 
     if np.isscalar(hypers):
-        hypers = ndims * [hypers]
-
-    nterms = len(hypers) + 1
+        hypers = npriors * [hypers]
+    elif npriors != len(hypers):
+        raise ValueError('There should be one hyperparameter per prior.')
 
     if len(norms) == 0:
-        norms = nterms * [norm2]
+        norms = (npriors+1) * [norm2]
 
     if len(comms) == 0:
-        comms = [var.comm_tod] + (nterms - 1) * [var.comm_map]
+        comms = [var.comm_tod] + npriors * [var.comm_map]
 
     if isinstance(M, Diagonal):
-        notfinite = ~np.isfinite(M.diagonal)
-        if np.any(notfinite):
-            M = copy(M)
-            M.diagonal[notfinite] = 0
+        tmf.remove_nonfinite(M.diagonal.T)
 
     hypers = np.asarray(hypers, dtype=var.FLOAT_DTYPE)
-    ntods = var.comm_tod.allreduce(tod.size, op=MPI.SUM)
+    ntods = int(np.sum(~tod.mask)) if getattr(tod, 'mask', None) is not None \
+            else tod.size
+    ntods = var.comm_tod.allreduce(ntods, op=MPI.SUM)
     nmaps = model.shape[1] * var.comm_map.Get_size()
     hypers /= nmaps
     hypers = np.hstack([1./ntods, hypers])
     
-    if len(Ds) == 0:
-        Ds = [ DiscreteDifference(axis=axis, shapein=model.shapein,
-               comm=var.comm_map) for axis in range(nterms-1) ]
-
-    if unpacking is None:
-        unpacking = lambda x: x
-
     tod = _validate_tod(tod, model)
-    y = tod.magnitude.ravel()
+    y = tod.view(np.ndarray).ravel()
 
-    def criterion(x, gradient=None):
-        x = unpacking(x)
-        rs = [ model * x - y] + [D * x for D in Ds ]
-        Js = [ h * n(r,comm=c) for h, n, r, c in zip(hypers, norms, rs, comms) ]
-        if gradient is None:
+    if criterion:
+        def criter(x, gradient=None):
+            if unpacking is not None:
+                x = unpacking.matvec(x)
+            rs = [ model * x - y] + [p * x for p in priors ]
+            Js = [ h * n(r,comm=c) for h, n, r, c in zip(hypers, norms, rs,
+                   comms) ]
+            if gradient is None:
+                return Js
+            gradient[:] = sum([h * M.T * n.D(r,comm=c) for h, M, n, r, c in \
+                               zip(hypers, [model] + priors, norms, rs, comms)])
             return Js
-        gradient[:] = sum([ h * M.T * n.D(r,comm=c) for h, M, n, r, c in \
-                            zip(hypers, [model] + Ds, norms, rs, comms)])
-        return Js
+    else:
+        raise NotImplementedError()
+        criter = None
 
     def quadratic_optimal_step(d, r):
-        d = unpacking(d)
-        r = unpacking(r)
+        if unpacking is not None:
+            d = unpacking.matvec(d)
+            r = unpacking.matvec(r)
         a = 0.5 * dot(d, r, comm=var.comm_map) / sum([ h * n(M * d, comm=c) \
-            for h, n, M, c in zip(hypers, norms, [model] + Ds, comms)])
+            for h, n, M, c in zip(hypers, norms, [model] + priors, comms)])
         return a
 
-    x = nlcg(criterion, model.shape[1], linesearch=quadratic_optimal_step, descent_method=descent_method, maxiter=maxiter, tol=tol, comm=var.comm_map, M=M)
+    if callback is None:
+        callback = CgCallback(verbose=verbose, criterion=criter)
+    
+    time0 = time.time()
 
-    x = unpacking(x)
-    x.shape = model.shapein
-    return x
+    solution = nlcg(criter, model.shape[1], M=M, descent_method=descent_method,
+                    linesearch=quadratic_optimal_step, maxiter=maxiter, tol=tol,
+                    callback=callback, comm=var.comm_map)
+
+    time0 = time.time() - time0
+    Js = criter(solution)
+
+    if unpacking is not None:
+        solution = unpacking(solution)
+    output = Map(solution.reshape(model.shapein), copy=False)
+    output.unit = tod.unit + ' ' + (1/Quantity(1, model.unitout)).unit + ' ' + \
+                  Quantity(1, model.unitin).unit
+    coverage = Map(model.T(np.ones(tod.shape), True, True, True), copy=False)
+    output.coverage = coverage
+    output.header = coverage.header
+    output.header.update('likeliho', Js[0])
+    output.header.update('criter', sum(Js))
+    output.header.update('hyper', str(hypers))
+    output.header.update('nsamples', ntods)
+    output.header.update('npixels', model.shape[1])
+    output.header.update('time', time0)
+    if hasattr(callback, 'niterations'):
+        output.header.update('niter', callback.niterations)
+    output.header.update('maxiter', maxiter)
+    if hasattr(callback, 'residual'):
+        output.header.update('residual', callback.residual)
+    output.header.update('tol', tol)
+    output.header.update('solver', 'nlcg')
+    return output
 
 
 #-------------------------------------------------------------------------------
@@ -265,24 +287,11 @@ def _validate_tod(tod, model):
 #-------------------------------------------------------------------------------
 
 
-def _solver(A, b, tod, model, invntt, prior, hyper=0, x0=None, tol=1.e-5,
+def _solver(A, b, tod, model, invntt, priors=[], hyper=0, x0=None, tol=1.e-5,
             maxiter=300, M=None, solver=None, verbose=True, callback=None,
-            profile=None, unpacking=None, comm=None):
+            criterion=True, profile=None, unpacking=None, comm_map=None):
 
-    class PcgCallback():
-        def __init__(self):
-            self.niterations = 0
-            self.residual = 0.
-        def __call__(self, x):
-            import inspect
-            parent_locals = inspect.stack()[1][0].f_locals
-            self.niterations = parent_locals['iter_'] - 1
-            self.residual = parent_locals['resid']
-            if self.residual < tol:
-                self.niterations += 1
-            if verbose and var.comm_map.Get_rank() == 0: 
-                print('Iteration ' + str(self.niterations) + ': ' + \
-                      str(self.residual))
+    npriors = len(priors)
 
     if isinstance(M, Diagonal):
         tmf.remove_nonfinite(M.diagonal.T)
@@ -302,14 +311,35 @@ def _solver(A, b, tod, model, invntt, prior, hyper=0, x0=None, tol=1.e-5,
         raise ValueError("Incompatible size for RHS: '" + str(b.size) + \
                          "' instead of '" + str(A.shape[1]) + "'.")
 
+    if comm_map is None:
+        comm_map = var.comm_map
+
+    ntods = int(np.sum(~tod.mask)) if getattr(tod, 'mask', None) is not None \
+            else tod.size
+    ntods = var.comm_tod.allreduce(ntods, op=MPI.SUM)
+
+    if hyper != 0:
+        hc = np.hstack([1., npriors * [hyper]]) / ntods
+    else:
+        hc = [ 1. / ntods ]
+    norms = [norm2_ellipsoid(invntt)] + npriors * [norm2]
+    comms = [var.comm_tod] + npriors * [comm_map]
+    def criter(x):
+        if unpacking is not None:
+            x = unpacking * x
+        rs = [model * x - tod.view(np.ndarray).ravel() ] + \
+             [ p * x for p in priors]
+        Js = [h * n(r,comm=c) for h, n, r, c in zip(hc, norms, rs, comms)]
+        return Js
+
     if callback is None:
-        callback = PcgCallback()
+        if comm_map.Get_rank() == 0 and verbose:
+            print('Iteration\tResiduals' + ('\tCriterion' if criterion else ''))
+        callback = CgCallback(verbose=verbose, criterion=criter if criterion \
+            else None)
 
     if solver is None:
         solver = cg
-
-    if comm is None:
-        comm = var.comm_map
 
     if var.verbose or profile:
         print('')
@@ -325,7 +355,7 @@ def _solver(A, b, tod, model, invntt, prior, hyper=0, x0=None, tol=1.e-5,
         def run():
             try:
                 solution, info = solver(A, b, x0=x0, tol=tol, maxiter=maxiter,
-                                        M=M, comm=comm)
+                                        M=M, comm=comm_map)
             except TypeError:
                 solution, info = solver(A, b, x0=x0, tol=tol, maxiter=maxiter,
                                         M=M)
@@ -342,7 +372,7 @@ def _solver(A, b, tod, model, invntt, prior, hyper=0, x0=None, tol=1.e-5,
 
     try:
         solution, info = solver(A, b, x0=x0, tol=tol, maxiter=maxiter, M=M,
-                                callback=callback, comm=comm)
+                                callback=callback, comm=comm_map)
     except TypeError:
         solution, info = solver(A, b, x0=x0, tol=tol, maxiter=maxiter, M=M,
                                 callback=callback)
@@ -355,33 +385,25 @@ def _solver(A, b, tod, model, invntt, prior, hyper=0, x0=None, tol=1.e-5,
 
     if info > 0:
         print('Warning: Solver reached maximum number of iterations without r' \
-              'eaching tolerance value.')
+              'eaching specified tolerance.')
+
+    Js = criter(solution)
 
     if unpacking is not None:
         solution = unpacking(solution)
 
     output = Map(solution.reshape(model.shapein), copy=False)
+
     output.unit = tod.unit + ' ' + (1/Quantity(1, model.unitout)).unit + ' ' + \
                   Quantity(1, model.unitin).unit
-
     coverage = Map(model.T(np.ones(tod.shape), True, True, True), copy=False)
-    output.header = coverage.header
     output.coverage = coverage
-
-    delta = model(output, False, False, True) - tod
-    likelihood = delta * invntt(delta, True, True, True)
-    likelihood = var.comm_tod.allreduce(np.sum(likelihood),op=MPI.SUM).magnitude
-    prior = output * prior(output)
-    prior = var.comm_map.allreduce(np.sum(prior), op=MPI.SUM).magnitude
-
-    ntods = tod.size if tod.mask is None else int(np.sum(tod.mask == 0))
-    ntods = var.comm_tod.allreduce(ntods, op=MPI.SUM)
-
-    output.header.update('likeliho', float(likelihood) / ntods)
-    output.header.update('criter', float(likelihood + prior) / ntods)
-    output.header.update('hyper', float(hyper))
+    output.header = coverage.header
+    output.header.update('likeliho', Js[0])
+    output.header.update('criter', sum(Js))
+    output.header.update('hyper', hyper)
     output.header.update('nsamples', ntods)
-    output.header.update('npixels', model.shape[1])
+    output.header.update('npixels', A.shape[1])
     output.header.update('time', time0)
     if hasattr(callback, 'niterations'):
         output.header.update('niter', callback.niterations)
@@ -392,3 +414,31 @@ def _solver(A, b, tod, model, invntt, prior, hyper=0, x0=None, tol=1.e-5,
     output.header.update('solver', solver.__name__)
 
     return output
+
+class CgCallback():
+    def __init__(self, verbose=True, criterion=None, comm=None):
+        self.niterations = 0
+        self.residual = 0.
+        self.verbose = verbose
+        self.criterion = criterion
+        self.comm = comm or MPI.COMM_WORLD
+    def __call__(self, x):
+        import inspect
+        parent_locals = inspect.stack()[1][0].f_locals
+        self.niterations = parent_locals['iter_'] - 1
+        self.residual = parent_locals['resid']
+        if self.niterations == 0 and self.comm.Get_rank() == 0:
+            print('Iteration\tResiduals' + ('\tCriterion' if self.criterion \
+                  else ''))
+        if self.verbose: 
+            if self.criterion is not None:
+                Js = self.criterion(x)
+                Jstr = repr(sum(Js))
+                if len(Js) > 1:
+                    Jstr += ' ' + str(Js)
+            else:
+                Jstr = ''
+            if self.comm.Get_rank() == 0:
+                print("%s\t%s\t%s" % (str(self.niterations).rjust(9),
+                                      str(self.residual), Jstr))
+

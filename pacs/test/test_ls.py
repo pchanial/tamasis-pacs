@@ -49,6 +49,8 @@ map_iter2 = mapper_ls(tod, model,
                       callback=Callback(),
                       solver=scipy.sparse.linalg.bicgstab,
                       profile=profile)
+
+print('Elapsed time:', map_iter2.header['TIME'])
 if profile is None:
     print(map_iter2.header['time'])
     if map_iter2.header['NITER'] > 11:

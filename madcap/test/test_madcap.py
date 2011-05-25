@@ -14,9 +14,6 @@ obs = MadMap1Observation(path+'todSpirePsw_be', path+'invnttSpirePsw_be',
 obs.instrument.name = 'SPIRE/PSW'
 
 tod = obs.get_tod(unit='Jy/beam')
-invNtt = InvNtt(len(tod.nsamples)*(1024,), obs.get_filter_uncorrelated())
-fft = FftHalfComplex(len(tod.nsamples)*(1024,))
-padding = Padding(left=invNtt.ncorrelations, right=1024-np.array(tod.nsamples)-invNtt.ncorrelations)
 projection = Projection(obs)
 packing = Unpacking(obs.info.mapmask, field=np.nan).T
 
@@ -42,8 +39,8 @@ if np.any(~np.isfinite(M.diagonal)):
 
 def callback(x):
     pass
-
-map_lsw2_packed = mapper_ls(tod, projection, padding.T * fft.T * invNtt * fft * padding, tol=1.e-7, M=M, callback=callback)
+#callback=None
+map_lsw2_packed = mapper_ls(tod, projection, invntt=InvNtt(obs), tol=1.e-7, M=M, callback=callback, criterion=False)
 print 'Elapsed time:', map_lsw2_packed.header['TIME']
 
 map_lsw2 = packing.T(map_lsw2_packed)
