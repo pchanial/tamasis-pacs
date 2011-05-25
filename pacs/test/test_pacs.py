@@ -46,9 +46,7 @@ tod = obs.get_tod()
 
 # packed projection
 proj2 = Projection(obs, npixels_per_sample=6, packed=True, oversampling=False)
-
-if any_neq(proj.T(tod), proj2.T(tod)): raise TestFailure()
-
+if any_neq(proj.T(tod), proj2.T(tod), 1.e-12): raise TestFailure()
 
 filename = 'obs-'+str(uuid1())+'.fits'
 try:
