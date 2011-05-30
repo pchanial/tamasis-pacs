@@ -36,6 +36,7 @@ if any_neq(tod, tod2): raise TestFailure()
 
 # all observation
 obs = PacsObservation(data_dir+'frames_blue.fits')
+obs.pointing.chop[:] = 0
 
 # get mask
 proj = Projection(obs, npixels_per_sample=6, oversampling=False)
