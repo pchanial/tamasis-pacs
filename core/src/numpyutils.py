@@ -138,7 +138,7 @@ def get_attributes(obj):
             for slot in cls.__dict__.get('__slots__', ()):
                 if hasattr(obj, slot):
                     attributes.append(slot)
-    return attributes
+    return sorted(attributes)
 
 
 #-------------------------------------------------------------------------------
