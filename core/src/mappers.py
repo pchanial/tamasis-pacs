@@ -91,7 +91,7 @@ def mapper_naive(tod, model, unit=None, local_mask=None):
             try:
                 mymap.inunit(newunit)
                 return mymap
-            except:
+            except UnitError:
                 pass
     
     print("Warning: cannot set naive map to a unit compatible with that of th" \
