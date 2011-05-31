@@ -41,7 +41,6 @@ module module_fitstools
 
     integer, private, parameter :: GROUP = 1
     integer, private, parameter :: NULLVAL = 0
-    integer, private, parameter :: BUFFERSIZE = 1024
 
     integer, parameter :: FLEN_KEYWORD = 71
     integer, parameter :: FLEN_CARD    = 80
@@ -723,7 +722,7 @@ contains
                 call ftgpvb(unit, GROUP, firstpix, imageshape(1), NULLVAL, output(:,j,k), anynull, status)
                 if (ft_check_error_cfitsio(status, unit, filename)) return
 
-                firstpix = firstpix + BUFFERSIZE
+                firstpix = firstpix + imageshape(1)
 
             end do
         end do
