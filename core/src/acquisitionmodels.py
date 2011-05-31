@@ -1821,7 +1821,7 @@ def _is_scientific_dtype(dtype):
 
 
 def _propagate_attributes(input, output):
-    """Copy over attributes form input to output"""
+    """Copy over attributes from input to output"""
 
     # get common base class
     cls = input.__class__
@@ -1834,11 +1834,14 @@ def _propagate_attributes(input, output):
         output._unit = input._unit
         output._derived_units = input._derived_units
         return
-    # copy over slots
-    while cls != np.ndarray:            
-        for a in input.view(cls).__slots__:
-            setattr(output, a, getattr(input, a))
-        cls = cls.__base__
+
+    if not hasattr(input, '__dict__'):
+        return
+
+    # copy over attributes
+    for k, v in input.__dict__.items():
+        setattr(output, k, v)
+
 
 #-------------------------------------------------------------------------------
 
