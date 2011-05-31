@@ -97,8 +97,8 @@ for obj in objs:
 for obj in objs:
     obj2 = obj.__class__(obj, copy=True)
     for k in get_attributes(obj):
-        if (k in ['_unit', '_derived_units', 'origin', 'nsamples']) is not \
-           (id(getattr(obj, k)) == id(getattr(obj2, k))):
+        if (k in ['_unit', '_derived_units', 'comm', 'shape_global', 'origin',
+            'nsamples']) is not (id(getattr(obj, k)) == id(getattr(obj2, k))):
             print k, id(getattr(obj, k)), id(getattr(obj2, k))
 
 b = FitsArray(a, unit=u, derived_units=du, header=h)
@@ -113,8 +113,8 @@ for obj in objs:
 for obj in objs:
     obj2 = obj.__class__(obj, copy=True)
     for k in get_attributes(obj):
-        if (k in ['_unit', '_derived_units', 'origin', 'nsamples']) is not \
-           (id(getattr(obj, k)) == id(getattr(obj2, k))):
+        if (k in ['_unit', '_derived_units', 'comm', 'shape_global', 'origin',
+            'nsamples']) is not (id(getattr(obj, k)) == id(getattr(obj2, k))):
             print k, id(getattr(obj, k)), id(getattr(obj2, k))
 
 tod = Tod((2,))
@@ -252,7 +252,7 @@ class MAP(Map):
         self.info = 'info'
 
 m = MAP(np.ones(3))
-if get_attributes(m) != ['info', 'coverage', 'error', 'origin', '_header', '_unit', '_derived_units']: raise TestFailure()
+if get_attributes(m) != ['_derived_units', '_header', '_unit','comm', 'coverage', 'error', 'info', 'origin', 'shape_global']: raise TestFailure()
 
 # test pickling
 a = np.ones((4,3))

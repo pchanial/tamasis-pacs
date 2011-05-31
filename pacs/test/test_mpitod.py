@@ -34,7 +34,7 @@ model = masking_tod * multiplexing * projection * telescope
 print(model)
 
 map_naive = mapper_naive(tod, model)
-map_naive_ref = Map(data_dir + 'frames_blue_map_naive.fits')
+map_naive_ref = Map(data_dir+'../../../core/test/data/frames_blue_map_naive.fits')
 if any_neq(map_naive, map_naive_ref, 1.e-8): raise TestFailure()
 
 # iterative map, including all map pixels

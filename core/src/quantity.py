@@ -6,6 +6,7 @@ import re
 import tamasisfortran as tmf
 
 from . import var
+from mpi4py import MPI
 from numpyutils import get_attributes
 
 __all__ = ['Quantity', 'UnitError', 'units']
@@ -205,8 +206,6 @@ class Quantity(np.ndarray):
     >>> print(Quantity(1, 'krouf').SI)
     0.5 broug^2
     """
-
-    __slots__ = ('_unit','_derived_units')
 
     def __new__(cls, data, unit=None, derived_units=None, dtype=None, copy=True, order='C', subok=False, ndmin=0):
 
@@ -557,7 +556,7 @@ ities of different units may have changed operands to common unit '" + \
     
     def __setstate__(self,state):
         ndarray_state, subclass_state = state
-        np.ndarray.__setstate__(self,ndarray_state)        
+        np.ndarray.__setstate__(self, ndarray_state)        
         for k, v in subclass_state.items():
             setattr(self, k, v)
 

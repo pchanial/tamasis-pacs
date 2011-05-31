@@ -11,8 +11,9 @@ rank = MPI.COMM_WORLD.Get_rank()
 size = MPI.COMM_WORLD.Get_size()
 tamasis.var.comm_tod = MPI.COMM_WORLD
 tamasis.var.comm_map = MPI.COMM_WORLD
+tamasis.var.verbose = True
 
-map_ref = Map(data_dir + 'frames_blue_map_naive.fits')
+map_ref = Map(data_dir + '../../../core/test/data/frames_blue_map_naive.fits')
 obs = PacsObservation(data_dir + 'frames_blue.fits')
 tod = obs.get_tod(flatfielding=False)
 

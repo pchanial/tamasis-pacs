@@ -91,7 +91,7 @@ projection2 = Projection(obs, header=header2, oversampling=False)
 map_naive2 = mapper_naive(tod, Masking(tod.mask) * projection2)
 map_naive2.inunit('Jy/arcsec^2')
 map_naive3 = map_naive2[:,250:header['NAXIS1']+250]
-if any_neq(map_naive, map_naive3, 2.e-7): raise TestFailure('mapper_naive, with custom header')
+if any_neq(map_naive, map_naive3.magnitude, 2.e-7): raise TestFailure('mapper_naive, with custom header')
 
 # test compatibility with photproject
 tod = obs.get_tod('Jy/arcsec^2', flatfielding=False, subtraction_mean=False)
@@ -103,7 +103,7 @@ std_ref = np.std(map_ref[40:60,40:60])
 relerror = abs(std_naive-std_ref) / std_ref
 if relerror > 0.025: raise TestFailure('Tncompatibility with HCSS photproject: ' + str(relerror*100)+'%.')
 
-map_naive_ref = Map(data_dir + 'frames_blue_map_naive.fits')
+map_naive_ref = Map(data_dir + '../../../core/test/data/frames_blue_map_naive.fits')
 obs = PacsObservation(data_dir + 'frames_blue.fits')
 obs.pointing.chop[:] = 0
 projection = Projection(obs, header=map_naive_ref.header, oversampling=False, npixels_per_sample=6)

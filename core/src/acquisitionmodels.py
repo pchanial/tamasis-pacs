@@ -1078,9 +1078,11 @@ class DistributionGlobal(AcquisitionModelLinear):
             self.counts.append(n)
             self.offsets.append(self.offsets[-1] + n)
         self.offsets.pop()
+        attrin = { 'comm':MPI.COMM_SELF, 'shape_global':shape }
+        attrout = { 'comm':self.comm, 'shape_global':shape }
         AcquisitionModelLinear.__init__(self, cache=True, shapein=shape,
-                                        shapeout=shapeout, typein=Map,
-                                        **keywords)
+            shapeout=shapeout, attrin=attrin, attrout=attrout, typein=Map,
+            **keywords)
 
     def direct(self, input, inplace, cachein, cacheout):
         input, output = self.validate_input_direct(input, cachein, cacheout)
@@ -1111,13 +1113,14 @@ class DistributionLocal(AcquisitionModelLinear):
     def __init__(self, maskout, operator=MPI.SUM, comm=None, **keywords):
         if comm is None:
             comm = var.comm_map
-        shapeout = int(np.sum(~maskout))
+        shapeout = (int(np.sum(~maskout)),)
         shapein = list(maskout.shape)
         shapein[0] = int(np.ceil(float(shapein[0]) / comm.Get_size()))
         shapein = tuple(shapein)
+        attrin = { 'comm':comm, 'shape_global':maskout.shape }
+        attrout = { 'comm':MPI.COMM_SELF, 'shape_global':shapeout}
         AcquisitionModelLinear.__init__(self, cache=True, typein=Map,
-                                        shapein=shapein, shapeout=shapeout,
-                                        **keywords)
+            shapein=shapein, shapeout=shapeout, attrin=attrin, **keywords)
         self.comm = comm
         self.maskout = maskout
         self.operator = operator
