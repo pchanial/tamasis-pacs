@@ -729,6 +729,200 @@ end subroutine divide_inplace
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
+subroutine round_rtz(array, n)
+
+    use module_tamasis, only : p
+    implicit none
+
+    real(p), intent(inout) :: array(n)
+    integer, intent(in)    :: n
+
+    !$omp parallel workshare
+    array = aint(array)
+    !$omp end parallel workshare
+
+end subroutine round_rtz
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine round_rti(array, n)
+
+    use module_tamasis, only : p
+    implicit none
+
+    real(p), intent(inout) :: array(n)
+    integer, intent(in)    :: n
+
+    !$omp parallel workshare
+    array = sign(real(ceiling(abs(array)), p), array)
+    !$omp end parallel workshare
+
+end subroutine round_rti
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine round_rtmi(array, n)
+
+    use module_tamasis, only : p
+    implicit none
+
+    real(p), intent(inout) :: array(n)
+    integer, intent(in)    :: n
+
+    !$omp parallel workshare
+    array = floor(array)
+    !$omp end parallel workshare
+
+end subroutine round_rtmi
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine round_rtpi(array, n)
+
+    use module_tamasis, only : p
+    implicit none
+
+    real(p), intent(inout) :: array(n)
+    integer, intent(in)    :: n
+
+    !$omp parallel workshare
+    array = ceiling(array)
+    !$omp end parallel workshare
+
+end subroutine round_rtpi
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine round_rhtz(array, n)
+
+    use module_tamasis, only : p
+    implicit none
+
+    real(p), intent(inout) :: array(n)
+    integer, intent(in)    :: n
+
+    integer :: i
+    real(p) :: x
+
+    !$omp parallel do
+    do i = 1, n
+        x = anint(array(i))
+        if (abs(x-array(i)) ==  0.5_p) then
+            x = x - sign(1._p, array(i))
+        end if
+        array(i) = x
+    end do
+    !$omp end parallel do
+
+end subroutine round_rhtz
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine round_rhti(array, n)
+
+    use module_tamasis, only : p
+    implicit none
+
+    real(p), intent(inout) :: array(n)
+    integer, intent(in)    :: n
+
+    !$omp parallel workshare
+    array = anint(array)
+    !$omp end parallel workshare
+
+end subroutine round_rhti
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine round_rhtmi(array, n)
+
+    use module_math,    only : nint_down
+    use module_tamasis, only : p
+    implicit none
+
+    real(p), intent(inout) :: array(n)
+    integer, intent(in)    :: n
+
+    !$omp parallel workshare
+    array = nint_down(array)
+    !$omp end parallel workshare
+
+end subroutine round_rhtmi
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine round_rhtpi(array, n)
+
+    use module_math,    only : nint_up
+    use module_tamasis, only : p
+    implicit none
+
+    real(p), intent(inout) :: array(n)
+    integer, intent(in)    :: n
+
+    !$omp parallel workshare
+    array = nint_up(array)
+    !$omp end parallel workshare
+
+end subroutine round_rhtpi
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine round_rhs(array, n)
+
+    use module_tamasis, only : p
+    implicit none
+
+    real(p), intent(inout) :: array(n)
+    integer, intent(in)    :: n
+
+    integer                :: i, s, clock
+    integer, allocatable   :: seed(:)
+    real(p)                :: x, rnd
+
+    ! initialise the random seed
+    call random_seed(size=s)
+    allocate(seed(s))
+    call system_clock(count=clock)
+    seed = clock + 37 * [ (i - 1, i = 1, s) ]
+    call random_seed(put=seed)
+    deallocate(seed)
+
+    !$omp parallel do
+    do i = 1, n
+        x = anint(array(i))
+        if (abs(x-array(i)) == 0.5_p) then
+            call random_number(rnd)
+            if (rnd >= 0.5_p) then
+                x = x - sign(1._p, array(i))
+            end if
+        end if
+        array(i) = x
+    end do
+    !$omp end parallel do
+
+end subroutine round_rhs
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
 subroutine sum(array, n, output)
 
     use omp_lib,        only : omp_get_max_threads

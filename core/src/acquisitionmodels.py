@@ -49,6 +49,7 @@ __all__ = [
     'Projection',
     'Reshaping',
     'ResponseTruncatedExponential',
+    'Rounding',
     'Scalar',
     'Shift',
     'Unpacking',
@@ -908,6 +909,49 @@ class Offset(AcquisitionModel, Square):
         shape.append(-1)
         v = v.reshape(shape)
         return self.direct(v, inplace, cachein, cacheout).ravel()
+
+
+#-------------------------------------------------------------------------------
+
+
+class Rounding(AcquisitionModel, Square):
+    """Rounding operator.
+    
+    The rounding method may be one of the following:
+        - rtz : round towards zero (truncation)
+        - rti : round towards infinity
+        - rtmi : round towards minus infinity (floor)
+        - rtpi : round towards positive infinity (ceil)
+        - rhtz : round half towards zero
+        - rhti : round half towards infinity (numpy's round, fortran's nint)
+        - rhtmi : round half towards minus infinity
+        - rhtpi : round half towards positive infinity
+        - rhs : round half stochastically
+    """
+
+
+    def __init__(self, method='rhti', **keywords):
+        AcquisitionModel.__init__(self, **keywords)
+        Square.__init__(self, **keywords)
+        method = method.lower()
+        table = {'rtz'   : tmf.round_rtz,
+                 'rti'   : tmf.round_rti,
+                 'rtmi'  : tmf.round_rtmi,
+                 'rtpi'  : tmf.round_rtpi,
+                 'rhtz'  : tmf.round_rhtz,
+                 'rhti'  : tmf.round_rhti,
+                 'rhtmi' : tmf.round_rhtmi,
+                 'rhtpi' : tmf.round_rhtpi,
+                 'rhs'   : tmf.round_rhs}
+        if method not in table:
+            raise ValueError('The rounding method must be one of the following'\
+                ': ' + ','.join("'" + k + "'" for k in table.keys()) + '.')
+        self.round = table[method]
+
+    def direct(self, input, inplace, cachein, cacheout):
+        output = self.validate_input_inplace(input, inplace)
+        self.round(output)
+        return output
 
 
 #-------------------------------------------------------------------------------

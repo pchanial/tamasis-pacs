@@ -345,3 +345,29 @@ for axis in range(2,4):
 for axis in range(3,4):
     shift = Shift(np.random.random_integers(-2,2,(3,4,5)), axis=axis, shapein=(3,4,5,6))
     if any_neq(shift.dense().T, shift.T.dense()): raise TestFailure()
+
+#----------
+# Rounding
+#----------
+a=np.array([-3,-2.6,-2.5,-2.4,0,0.2,0.5,0.9,1])
+r = Rounding('rtz')
+if any_neq(r(a), [-3, -2, -2, -2, 0, 0, 0, 0, 1]): raise TestFailure()
+r = Rounding('rti')
+if any_neq(r(a), [-3, -3, -3, -3, 0, 1, 1, 1, 1]): raise TestFailure()
+r = Rounding('rtmi')
+if any_neq(r(a), [-3, -3, -3, -3, 0, 0, 0, 0, 1]): raise TestFailure()
+r = Rounding('rtpi')
+if any_neq(r(a), [-3, -2, -2, -2, 0, 1, 1, 1, 1]): raise TestFailure()
+r = Rounding('rhtz')
+if any_neq(r(a), [-3, -3, -2, -2, 0, 0, 0, 1, 1]): raise TestFailure()
+r = Rounding('rhti')
+if any_neq(r(a), [-3, -3, -3, -2, 0, 0, 1, 1, 1]): raise TestFailure()
+r = Rounding('rhtmi')
+if any_neq(r(a), [-3, -3, -3, -2, 0, 0, 0, 1, 1]): raise TestFailure()
+r = Rounding('rhtpi')
+if any_neq(r(a), [-3, -3, -2, -2, 0, 0, 1, 1, 1]): raise TestFailure()
+r = Rounding('rhs')
+mask = np.array([True,True,False,True,True,True,False,True,True], dtype=np.bool)
+if any_neq(r(a)[mask], [-3,-3,-2,0,0,1,1]): raise TestFailure()
+if r(a)[2] not in (-3,-2): raise TestFailure()
+if r(a)[-3] not in (0,1): raise TestFailure()
