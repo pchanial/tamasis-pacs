@@ -120,9 +120,9 @@ def combine_fitsheader(headers, cdelt=None, pa=None):
 #-------------------------------------------------------------------------------
 
 
-def create_fitsheader(naxis=None, fromdata=None, extname=None, crval=(0.,0.),
-                      crpix=None, ctype=('RA---TAN','DEC--TAN'), cunit='deg',
-                      cd=None, cdelt=None, pa=None, equinox=2000.):
+def create_fitsheader(naxis=None, dtype=None, fromdata=None, extname=None,
+                      crval=(0.,0.), crpix=None, ctype=('RA---TAN','DEC--TAN'),
+                      cunit='deg', cd=None, cdelt=None, pa=None, equinox=2000.):
     """
     Helper to create a FITS header.
 
@@ -130,6 +130,8 @@ def create_fitsheader(naxis=None, fromdata=None, extname=None, crval=(0.,0.),
     ----------
     naxis : array, optional
         (NAXIS1,NAXIS2,...) tuple, which specifies the data dimensions.
+    dtype : data-type, optional
+        Desired data type for the data stored in the FITS file
     fromdata : array_like, optional
         An array from which the dimensions and typewill be extracted. Note
         that following the FITS convention, the dimension along X is the
@@ -170,13 +172,17 @@ def create_fitsheader(naxis=None, fromdata=None, extname=None, crval=(0.,0.),
                              'd.')
         if isinstance(naxis, np.ndarray) and naxis.size > 8:
             raise ValueError('First argument is naxis=(NAXIS1,NAXIS2,...)')
-
-        typename = 'float64'
+        if dtype is not None:
+            typename = dtype.name
+        else:
+            typename = 'float64'
     else:
         array = fromdata
         if not isinstance(array, np.ndarray):
             raise TypeError('The input is not an ndarray.')
         naxis = tuple(reversed(array.shape))
+        if dtype is not None:
+            array = arrays.astype(dtype)
         if array.dtype.itemsize == 1:
             typename = 'uint8'
         elif array.dtype.names is not None:
