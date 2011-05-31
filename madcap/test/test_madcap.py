@@ -34,7 +34,7 @@ packing = Unpacking(obs.info.mapmask).T
 #print('Elapsed time: ' + str(map_rlsw1.header['time']))
 
 M = Diagonal(packing(1/map_naive.coverage))
-if np.any(~np.isfinite(M.diagonal)):
+if np.any(~np.isfinite(M.data)):
     raise TestFailure()
 
 def callback(x):

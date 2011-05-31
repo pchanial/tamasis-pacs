@@ -43,6 +43,7 @@ __all__ = [
     'InterpolationLinear',
     'InvNtt',
     'Masking',
+    'Offset',
     'Packing',
     'Padding',
     'Projection',
@@ -793,7 +794,7 @@ class Composition(Composite):
 #-------------------------------------------------------------------------------
 
 
-class Square(AcquisitionModelLinear):
+class Square(object):
     """
     Square operator
     
@@ -803,18 +804,18 @@ class Square(AcquisitionModelLinear):
     """
 
     def __init__(self, shapein=None, **keywords):
-        AcquisitionModelLinear.__init__(self, shapein=shapein, shapeout=shapein,
-                                        **keywords)
+        self.shapeout = shapein
         self.validate_shapeout = self.validate_shapein
     
 
 #-------------------------------------------------------------------------------
 
 
-class Symmetric(Square):
+class Symmetric(AcquisitionModelLinear, Square):
     """Symmetric operator"""
 
     def __init__(self, **keywords):
+        AcquisitionModelLinear.__init__(self, **keywords)
         Square.__init__(self, **keywords)
         self.transpose = self.direct
         self.rmatvec = self.matvec
@@ -841,14 +842,14 @@ class Diagonal(Symmetric):
                             order='c')
         Symmetric.__init__(self, dtype=diagonal.dtype, **keywords)
         self.isscalar = diagonal.ndim == 0
-        self.diagonal = np.array(diagonal, ndmin=1, copy=False)
+        self.data = np.array(diagonal, ndmin=1, copy=False)
 
     def direct(self, input, inplace, cachein, cacheout):
         output = self.validate_input_inplace(input, inplace)
         if self.dtype == var.FLOAT_DTYPE:
-            tmf.multiply_inplace(output.T, self.diagonal.T)
+            tmf.multiply_inplace(output.T, self.data.T)
         else:
-            output.T[:] *= self.diagonal.T
+            output.T[:] *= self.data.T
         return output
 
     def validate_shapein(self, shapein):
@@ -856,14 +857,54 @@ class Diagonal(Symmetric):
             return self.shapein
         if self.isscalar:
             return shapein
-        if flatten_sliced_shape(shapein[0:self.diagonal.ndim]) != \
-           self.diagonal.shape:
+        if flatten_sliced_shape(shapein[0:self.data.ndim]) != self.data.shape:
             raise ValueError('The input has an incompatible shape ' + \
                              str(shapein) + '.')
         return shapein
 
     def matvec(self, v, inplace=False, cachein=False, cacheout=False):
-        shape = list(self.diagonal.shape)
+        shape = list(self.data.shape)
+        shape.append(-1)
+        v = v.reshape(shape)
+        return self.direct(v, inplace, cachein, cacheout).ravel()
+
+
+class Offset(AcquisitionModel, Square):
+    """
+    Offset operator.
+
+    Add an offset to the input. The input of an Offset instance can be of rank
+    greater than the specified diagonal array, in which case the latter is
+    broadcast along the fast dimensions. This operator is not linear.
+    """
+    def __init__(self, offset, **keywords):
+        offset = np.array(offset, dtype=var.get_default_dtype(offset),
+                          order='c')
+        AcquisitionModel.__init__(self, dtype=offset.dtype, **keywords)
+        Square.__init__(self, **keywords)
+        self.isscalar = offset.ndim == 0
+        self.data = np.array(offset, ndmin=1, copy=False)
+
+    def direct(self, input, inplace, cachein, cacheout):
+        output = self.validate_input_inplace(input, inplace)
+        if self.dtype == var.FLOAT_DTYPE:
+            tmf.add_inplace(output.T, self.data.T)
+        else:
+            output.T[:] += self.data.T
+        return output
+
+    def validate_shapein(self, shapein):
+        if shapein is None:
+            return self.shapein
+        if self.isscalar:
+            return shapein
+        if flatten_sliced_shape(shapein[0:self.data.ndim]) != self.data.shape:
+            raise ValueError('The input has an incompatible shape ' + \
+                             str(shapein) + '.')
+        return shapein
+
+    def matvec(self, v, inplace=False, cachein=False, cacheout=False):
+        shape = list(self.data.shape)
         shape.append(-1)
         v = v.reshape(shape)
         return self.direct(v, inplace, cachein, cacheout).ravel()
@@ -872,7 +913,7 @@ class Diagonal(Symmetric):
 #-------------------------------------------------------------------------------
 
 
-class DiscreteDifference(Square):
+class DiscreteDifference(AcquisitionModelLinear, Square):
     """
     Discrete difference operator.
 
@@ -880,6 +921,7 @@ class DiscreteDifference(Square):
     """
 
     def __init__(self, axis=0, n=1, comm=None, **keywords):
+        AcquisitionModelLinear.__init__(self, **keywords)
         Square.__init__(self, **keywords)
         self.n = n
         self.axis = axis
@@ -1277,7 +1319,7 @@ class Scalar(Diagonal):
        
     def __str__(self):
         return super(self.__class__, self).__str__()+' (' + \
-               str(self.diagonal) + ')'
+               str(self.data) + ')'
     
 
 #-------------------------------------------------------------------------------
@@ -1422,7 +1464,7 @@ class Reshaping(AcquisitionModelLinear):
 #-------------------------------------------------------------------------------
 
 
-class ResponseTruncatedExponential(Square):
+class ResponseTruncatedExponential(AcquisitionModelLinear, Square):
     """
     ResponseTruncatedExponential(tau)
 
@@ -1438,7 +1480,8 @@ class ResponseTruncatedExponential(Square):
     def __init__(self, tau, **keywords):
         """
         """
-        Square.__init__(self, typein=Tod, **keywords)
+        AcquisitionModelLinear.__init__(self, typein=Tod, **keywords)
+        Square.__init__(self, **keywords)
         if hasattr(tau, 'SI'):
             tau = tau.SI
             if tau.unit != '':
@@ -1550,9 +1593,10 @@ class Padding(AcquisitionModelLinear):
 #-------------------------------------------------------------------------------
 
 
-class Shift(Square):
+class Shift(AcquisitionModelLinear, Square):
 
     def __init__(self, n, axis=None, **keywords):
+        AcquisitionModelLinear.__init__(self, **keywords)
         Square.__init__(self, **keywords)
         if axis is None:
             if not isinstance(n, (list, tuple, np.ndarray)):
@@ -1583,9 +1627,10 @@ class Shift(Square):
 #-------------------------------------------------------------------------------
 
 
-class CircularShift(Square):
+class CircularShift(AcquisitionModelLinear, Square):
     
     def __init__(self, n, axis=None, **keywords):
+        AcquisitionModelLinear.__init__(self, **keywords)
         Square.__init__(self, **keywords)
         if _my_isscalar(n):
             n = (n,)
@@ -1610,14 +1655,15 @@ class CircularShift(Square):
 #-------------------------------------------------------------------------------
 
 
-class Fft(Square):
+class Fft(AcquisitionModelLinear, Square):
     """
     Performs complex fft
     """
 
     def __init__(self, shape, flags=['estimate'], **keywords):
-        Square.__init__(self, shapein=shape, dtype=var.COMPLEX_DTYPE,
-                        **keywords)
+        AcquisitionModelLinear.__init__(self, shapein=shape,
+            dtype=var.COMPLEX_DTYPE, **keywords)
+        Square.__init__(self, **keywords)
         if fftw3.planning.lib_threads is None:
             nthreads = 1
         else:
@@ -1644,13 +1690,14 @@ class Fft(Square):
 #-------------------------------------------------------------------------------
 
 
-class FftHalfComplex(Square):
+class FftHalfComplex(AcquisitionModelLinear, Square):
     """
     Performs real-to-half-complex fft
     """
 
     def __init__(self, nsamples, **keywords):
-        Square.__init__(self, typein=Tod, **keywords)
+        AcquisitionModelLinear.__init__(self, typein=Tod, **keywords)
+        Square.__init__(self, **keywords)
         self.nsamples = tuple(np.array(nsamples, ndmin=1, dtype=int))
         self.forward_plan = np.empty(len(self.nsamples), dtype=int)
         self.backward_plan = np.empty(len(self.nsamples), dtype=int)
@@ -1735,7 +1782,7 @@ class InvNtt(AcquisitionModelLinear):
                                         dtype=np.int32), np.sum(nsamples))
         if status != 0: raise RuntimeError()
         d = Diagonal(tod_filter.T, shapein=tod_filter.T.shape, **keywords)
-        d.diagonal /= var.comm_tod.allreduce(np.max(d.diagonal), op=MPI.MAX)
+        d.data /= var.comm_tod.allreduce(np.max(d.data), op=MPI.MAX)
         d.ncorrelations = ncorrelations
         return d
 
@@ -1743,10 +1790,11 @@ class InvNtt(AcquisitionModelLinear):
 #-------------------------------------------------------------------------------
 
 
-class InterpolationLinear(Square):
+class InterpolationLinear(AcquisitionModelLinear, Square):
 
     def __init__(self, mask, **keywords):
-        Square.__init__(self, attrin={'mask' : mask}, **keywords)
+        AcquisitionModelLinear.__init__(self, attrin={'mask':mask}, **keywords)
+        Square.__init__(self, **keywords)
         self.mask = mask
 
     def direct(self, input, inplace, cachein, cacheout):

@@ -191,7 +191,7 @@ def mapper_nl(tod, model, unpacking=None, priors=[], hypers=[], norms=[],
         comms = [var.comm_tod] + npriors * [var.comm_map]
 
     if isinstance(M, Diagonal):
-        tmf.remove_nonfinite(M.diagonal.T)
+        tmf.remove_nonfinite(M.data.T)
 
     hypers = np.asarray(hypers, dtype=var.FLOAT_DTYPE)
     ntods = int(np.sum(~tod.mask)) if getattr(tod, 'mask', None) is not None \
@@ -294,7 +294,7 @@ def _solver(A, b, tod, model, invntt, priors=[], hyper=0, x0=None, tol=1.e-5,
     npriors = len(priors)
 
     if isinstance(M, Diagonal):
-        tmf.remove_nonfinite(M.diagonal.T)
+        tmf.remove_nonfinite(M.data.T)
 
     if unpacking is not None:
         A = unpacking.T * A * unpacking
