@@ -1,6 +1,8 @@
 # Copyrights 2010-2011 Pierre Chanial
 # All rights reserved
 #
+from __future__ import division
+
 import kapteyn.maputils
 import matplotlib
 import matplotlib.pyplot as pyplot
@@ -36,8 +38,10 @@ class DistributedArray(np.ndarray):
         if shape_global is None and comm.Get_size() > 1:
             raise ValueError('The global shape of the local array is not speci'\
                              'fied.')
+        data = data.view(cls)
         data.shape_global = shape_global or data.shape
         data.comm = comm
+        return data
 
     def __array_finalize__(self, array):
         if array is None:
@@ -79,7 +83,7 @@ class DistributedArray(np.ndarray):
         output.__array_finalize__(self)
         t = MPI.BYTE.Create_contiguous(self.dtype.itemsize)
         t.Commit()
-        self.comm.Allgatherv([self.view(np.byte)[0:n], t], [output.view(np.byte), (counts, offsets), t])
+        self.comm.Allgatherv([self[0:n], t], [output.view(np.byte), (counts, offsets), t])
 
         for a in attr:
             i = getattr(self, a, None)
@@ -93,6 +97,33 @@ class DistributedArray(np.ndarray):
             
         output.comm = MPI.COMM_SELF
 
+        return output
+
+    def tolocal(self, comm=MPI.COMM_WORLD):
+        """Scatter a global image into local ones."""
+        if hasattr(self, 'shape_global') and self.shape != self.shape_global or\
+           hasattr(self, 'comm') and self.comm.Get_size() > 1:
+            raise ValueError('This array is not a global image.')
+
+        order = 'f' if np.isfortran(self) else 'c'
+        if hasattr(self, 'empty'):
+            output = self.empty(self.shape, dtype=self.dtype, order=order,
+                                comm=comm)
+        else:
+            shape = split_shape(self.shape, comm)
+            output = np.empty(shape, dtype=self.dtype, order=order)
+            output = DistributedArray.__new__(DistributedArray, output,
+                                              self.shape, comm)
+        if hasattr(self, '__dict__'):
+            for k,v in self.__dict__.items():
+                setattr(output, k, v)
+        output.comm = comm
+
+        s = split_work(self.shape[0], comm=comm)
+        n = s.stop - s.start
+        output[0:n] = self[s.start:s.stop]
+        if n < output.shape[0]:
+            output[n:] = 0
         return output
 
 
@@ -143,7 +174,7 @@ class FitsArray(DistributedArray, Quantity):
         # get a new FitsArray instance (or a subclass if subok is True)
         result = Quantity.__new__(cls, data, unit, derived_units, dtype, copy,
                                   order, True, ndmin)
-        DistributedArray.__new__(cls, result, shape_global, comm)
+        result = DistributedArray.__new__(cls, result, shape_global, comm)
         if not subok and result.__class__ is not cls:
             result = result.view(cls)
 
@@ -607,6 +638,15 @@ class Map(FitsArray):
     def toglobal(self):
         return DistributedArray.toglobal(self, attr=('coverage', 'error'))
 
+    def tolocal(self, comm=MPI.COMM_WORLD):
+        output = DistributedArray.tolocal(self, comm)
+        tolocal = DistributedArray.__dict__['tolocal']
+        if self.coverage is not None:
+            output.coverage = tolocal(self.coverage, comm)
+        if self.error is not None:
+            output.error = tolocal(self.error, comm)
+        return output
+
 
 #-------------------------------------------------------------------------------
 
@@ -822,6 +862,13 @@ class Tod(FitsArray):
 
     def toglobal(self):
         return DistributedArray.toglobal(self, attr=('mask',))
+
+    def tolocal(self, comm=MPI.COMM_WORLD):
+        output = DistributedArray.tolocal(self, comm)
+        if self.mask is not None:
+            tolocal = DistributedArray.__dict__['tolocal']
+            output.mask = tolocal(self.mask, comm)
+        return output
 
 
 #-------------------------------------------------------------------------------
