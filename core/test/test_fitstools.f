@@ -145,9 +145,13 @@ program test_fitstools
     image = 0
     image(1,2) = 1
     call ft_write_image('/tmp/test_fitstools.fits', image, header, status)
-    if (status /= 0) call failure('ft_write_image')
+    if (status /= 0) then
+        call cleanup
+        call failure('ft_write_image')
+    end if
 
     call ft_read_image('/tmp/test_fitstools.fits', image_, status)
+    call cleanup
     if (status /= 0) call failure('ft_read_image')
     if (any(shape(image) /= shape(image_))) call failure('ft_read_image shape')
     if (any(image /= image_)) call failure('ft_read_image comparison')
@@ -340,5 +344,10 @@ contains
         write (ERROR_UNIT,'(a)'), 'FAILED: ' // errmsg
         stop 1
     end subroutine failure
+
+    subroutine cleanup
+        open (unit=10, file='/tmp/test_fitstools.fits')
+        close (10, status='delete')
+    end subroutine cleanup
 
 end program test_fitstools
