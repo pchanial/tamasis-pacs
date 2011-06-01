@@ -1254,6 +1254,9 @@ def pacs_create_scan(ra0, dec0, cam_angle=0., scan_angle=0., scan_length=30.,
     return scan
 
 
+#-------------------------------------------------------------------------------
+
+
 def pacs_get_psf(band, resolution, kind='calibration'):
     """
     Return gaussian, airy or calibration PSFs
@@ -1295,7 +1298,7 @@ def pacs_get_psf(band, resolution, kind='calibration'):
 #-------------------------------------------------------------------------------
 
 
-def pacs_compute_delay(obs, tod, model, weight=None, tol_delay=1.e-3,
+def pacs_compute_delay(obs, tod, model, invntt=None, tol_delay=1.e-3,
                        tol_mapper=1.e-3, hyper=1., brack=(-60.,-30.,0.),
                        full_output=False):
     
@@ -1307,7 +1310,7 @@ def pacs_compute_delay(obs, tod, model, weight=None, tol_delay=1.e-3,
     obs : PacsObservation
     tod : Tod
     model : acquisition model
-    weight : N^-1 operator
+    invntt : N^-1 operator
     tol_delay : float
         Relative error in delay acceptable for convergence.
     tol_mapper : float
@@ -1364,7 +1367,7 @@ def pacs_compute_delay(obs, tod, model, weight=None, tol_delay=1.e-3,
         obs.slice[0].delay = delay
         model = func_model(obs, tod, model)
         print('\nDelay: ' + str(delay) + 'ms...')
-        map_rls = mapper_rls(tod, model, weight=invntt, tol=tol, hyper=hyper)
+        map_rls = mapper_rls(tod, model, invntt=invntt, tol=tol, hyper=hyper)
         criterion = map_rls.header['criter']
         delays.append(delay)
         criteria.append(criterion)
