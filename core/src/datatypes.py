@@ -38,7 +38,8 @@ class DistributedArray(np.ndarray):
         if shape_global is None and comm.Get_size() > 1:
             raise ValueError('The global shape of the local array is not speci'\
                              'fied.')
-        data = data.view(cls)
+        if not isinstance(data, DistributedArray):
+            data = data.view(cls)
         data.shape_global = shape_global or data.shape
         data.comm = comm
         return data
