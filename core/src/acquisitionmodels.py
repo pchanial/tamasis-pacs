@@ -31,6 +31,7 @@ __all__ = [
     'DistributionGlobal',
     'DistributionLocal',
     'CircularShift',
+    'Clip',
     'CompressionAverage',
     'Convolution',
     'DdTdd',
@@ -43,6 +44,8 @@ __all__ = [
     'InterpolationLinear',
     'InvNtt',
     'Masking',
+    'Maximum',
+    'Minimum',
     'Offset',
     'Packing',
     'Padding',
@@ -53,6 +56,7 @@ __all__ = [
     'Scalar',
     'Shift',
     'Unpacking',
+    'acquisitionmodel_factory',
     'asacquisitionmodel',
 ]
 
@@ -1846,6 +1850,49 @@ class InterpolationLinear(AcquisitionModelLinear, Square):
 
     def transpose(self, input, inplace, cachein, cacheout):
         raise NotImplementedError()
+
+
+#-------------------------------------------------------------------------------
+
+
+def acquisitionmodel_factory(direct, transpose=None, description=None, **keywords):
+    """Creates an AcquisitionModel from a function"""
+    description = description or direct.__name__
+    if description == '<lambda>':
+        description = ''
+
+    if transpose is None:
+        a = AcquisitionModel(description=description, **keywords)
+    else:
+        a = AcquisitionModelLinear(description=description, **keywords)
+
+    def d(input, inplace, cachein, cacheout):
+        output = a.validate_input_inplace(input, inplace)
+        return direct(output)
+    a.direct = d
+    if transpose is None:
+        return a
+
+    def t(input, inplace, cachein, cacheout):
+        output = a.validate_input_inplace(input, inplace)
+        return transpose(output)
+    a.transpose = t
+    return a
+
+def Clip(vmin, vmax, description=None, **keywords):
+    description = description or self.__name__.title()
+    return acquisitionmodel_factory(lambda x: np.clip(x, vmin, vmax),
+                                    description=description, **keywords)
+
+def Maximum(value, description=None, **keywords):
+    description = description or self.__name__.title()
+    return acquisitionmodel_factory(lambda x: np.maximum(x, value),
+                                    description=description, **keywords)
+
+def Minimum(value, description=None, **keywords):
+    description = description or self.__name__.title()
+    return acquisitionmodel_factory(lambda x: np.minimum(x, value),
+                                    description=description, **keywords)
 
 
 #-------------------------------------------------------------------------------
