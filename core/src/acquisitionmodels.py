@@ -933,7 +933,6 @@ class Rounding(AcquisitionModel, Square):
         - rhs : round half stochastically
     """
 
-
     def __init__(self, method='rhti', **keywords):
         AcquisitionModel.__init__(self, **keywords)
         Square.__init__(self, **keywords)
@@ -1880,18 +1879,18 @@ def acquisitionmodel_factory(direct, transpose=None, description=None, **keyword
     return a
 
 def Clip(vmin, vmax, description=None, **keywords):
-    description = description or self.__name__.title()
-    return acquisitionmodel_factory(lambda x: np.clip(x, vmin, vmax),
+    description = description or 'Clip'
+    return acquisitionmodel_factory(lambda x: np.clip(x, vmin, vmax, out=x),
                                     description=description, **keywords)
 
 def Maximum(value, description=None, **keywords):
-    description = description or self.__name__.title()
-    return acquisitionmodel_factory(lambda x: np.maximum(x, value),
+    description = description or 'Maximum'
+    return acquisitionmodel_factory(lambda x: np.maximum(x, value, out=x),
                                     description=description, **keywords)
 
 def Minimum(value, description=None, **keywords):
-    description = description or self.__name__.title()
-    return acquisitionmodel_factory(lambda x: np.minimum(x, value),
+    description = description or 'Minimum'
+    return acquisitionmodel_factory(lambda x: np.minimum(x, value, out=x),
                                     description=description, **keywords)
 
 
