@@ -23,6 +23,8 @@ from tamasis.wcsutils import combine_fitsheader
 
 __all__ = [ 'PacsObservation',
             'PacsSimulation',
+            'PacsConversionAdu',
+            'PacsConversionVolts',
             'pacs_create_scan',
             'pacs_compute_delay',
             'pacs_get_psf',
@@ -30,6 +32,7 @@ __all__ = [ 'PacsObservation',
             'pacs_preprocess' ]
 
 CALIBFILE_DTC = var.path + '/pacs/PCalPhotometer_PhotTimeConstant_FM_v2.fits'
+CALIBFILE_GAI = var.path + '/pacs/PCalPhotometer_Gain_FM_v1.fits'
 CALIBFILE_STD = var.path + '/pacs/PCalPhotometer_Stddev_Tamasis_v1.fits'
 
 class PacsBase(Observation):
@@ -112,6 +115,14 @@ class PacsBase(Observation):
         instrument.distortion_yz = distortion_yz.T.view(dtype=[('y', \
             var.FLOAT_DTYPE), ('z',var.FLOAT_DTYPE)]).view(np.recarray)
         instrument.responsivity = Quantity(responsivity, 'V/Jy')
+        fits = pyfits.open(CALIBFILE_GAI)
+        v = fits['photGain'].data
+        instrument.adu_converter_gain = {'low':v[0], 'high':v[1],
+                                         'nominal':v[2]}
+        v = fits['photOffset'].data
+        instrument.adu_converter_offset = {'direct':v[0], 'ddcs':v[1]}
+        instrument.adu_converter_min = {'direct':0, 'ddcs':-32768}
+        instrument.adu_converter_max = {'direct':65535, 'ddcs':32767}
         self.instrument = instrument
 
         self.comm_tod = comm_tod or var.comm_tod
@@ -1085,6 +1096,41 @@ class PacsMultiplexing(AcquisitionModelLinear):
         shapein = list(shapeout)
         shapein[1] = shapein[1] * self.fine_sampling_factor
         return tuple(shapein)
+
+
+#-------------------------------------------------------------------------------
+
+
+def PacsConversionAdu(obs, gain='nominal', offset='direct'):
+    """
+    Returns the operator which converts PACS timelines from Volts to ADU.
+    """
+    if gain not in obs.instrument.adu_converter_gain:
+        raise ValueError("Invalid gain. Expected values are 'low', 'high' or '"\
+                         "'nominal'.")
+    if offset not in obs.instrument.adu_converter_offset:
+        raise ValueError("Invalid offset. Expected values are 'direct' or 'ddc"\
+                         "s'.")
+
+    g = obs.instrument.adu_converter_gain[gain]
+    o = obs.instrument.adu_converter_offset[offset]
+    a = obs.instrument.adu_converter_min[offset]
+    z = obs.instrument.adu_converter_max[offset]
+
+    return np.product([
+        Clip(a, z, description='ADU converter saturation'),
+        Rounding(description='ADU converter rounding'),
+        Offset(o, description='ADU converter offset'),
+        Scalar(1/g, description='ADU converter gain')])
+
+
+#-------------------------------------------------------------------------------
+
+
+def PacsConversionVolts(obs):
+    """Jy-to-Volts conversion."""
+    return Scalar(obs.instrument.responsivity / obs.instrument.active_fraction,
+                  description='Jy-to-Volts conversion')
 
 
 #-------------------------------------------------------------------------------
