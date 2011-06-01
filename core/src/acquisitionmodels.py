@@ -1089,7 +1089,7 @@ class Projection(AcquisitionModelLinear):
 
         if self.ispacked:
             if ismapdistributed:
-                self *= DistributionLocal(self.mask, )
+                self *= DistributionLocal(self.mask)
             else:
                 self *= Packing(self.mask)
         elif istoddistributed:
