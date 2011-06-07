@@ -337,10 +337,14 @@ class test_mpi(BuildContext):
     fun = 'test_mpi_fun'
 
 def test_mpi_fun(bld):
+    import tamasis as tm
     for subdir in subdirs:
         files = bld.path.ant_glob(subdir+'/test/test_mpi*.py')
+        ncores = [ 1, 2 ]
+        if tm.tmf.info_nthreads() > 2:
+            ncore += [ 4 ]
         for file in files:
-            for n in [1, 2, 4]:
+            for n in ncores:
                 bld(rule='export OMP_NUM_THREADS=1; mpirun -n ' + str(n) + \
                     ' ${PYTHON} ' + file.abspath() + (' > /dev/null' \
                 if bld.options.verbose == 0 else '') + '; unset OMP' \
