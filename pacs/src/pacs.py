@@ -34,7 +34,7 @@ __all__ = [ 'PacsObservation',
 CALIBFILE_DTC = var.path + '/pacs/PCalPhotometer_PhotTimeConstant_FM_v2.fits'
 CALIBFILE_GAI = var.path + '/pacs/PCalPhotometer_Gain_FM_v1.fits'
 CALIBFILE_STD = var.path + '/pacs/PCalPhotometer_Stddev_Tamasis_v1.fits'
-CALIBFILE_INV = [var.path + '/pacs/PCalPhotometer_Invntt{}_FM_v1.fits' \
+CALIBFILE_INV = [var.path + '/pacs/PCalPhotometer_Invntt{0}_FM_v1.fits' \
                  .format(b) for b in ('BS', 'BL', 'Red')]
 
 class PacsBase(Observation):
@@ -150,7 +150,8 @@ class PacsBase(Observation):
         """
         
         if filename is None:
-            filename = CALIBFILE_INV[{'blue':0,'green':1,'red':2}[self.band]]
+            filename = CALIBFILE_INV[{'blue':0,'green':1,'red':2}
+                                     [self.instrument.band]]
 
         ncorrelations = pyfits.open(filename)[1].header['NAXIS1'] - 1
 
