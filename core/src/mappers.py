@@ -1,6 +1,8 @@
 # Copyrights 2010-2011 Pierre Chanial
 # All rights reserved
 #
+from __future__ import division
+
 import cProfile
 import numpy as np
 import os
@@ -140,7 +142,6 @@ def mapper_rls(tod, model, invntt=None, unpacking=None, hyper=1.0, x0=None,
 
     A = model.T * invntt * model
 
-    hyper = float(hyper)
     ntods = int(np.sum(~tod.mask)) if getattr(tod, 'mask', None) is not None \
             else tod.size
     ntods = var.comm_tod.allreduce(ntods, op=MPI.SUM)
@@ -199,7 +200,7 @@ def mapper_nl(tod, model, unpacking=None, priors=[], hypers=[], norms=[],
     ntods = var.comm_tod.allreduce(ntods, op=MPI.SUM)
     nmaps = model.shape[1] * var.comm_map.Get_size()
     hypers /= nmaps
-    hypers = np.hstack([1./ntods, hypers])
+    hypers = np.hstack([1/ntods, hypers])
     
     tod = _validate_tod(tod, model)
     y = tod.view(np.ndarray).ravel()
@@ -220,13 +221,14 @@ def mapper_nl(tod, model, unpacking=None, priors=[], hypers=[], norms=[],
         raise NotImplementedError()
         criter = None
 
-    def quadratic_optimal_step(d, r):
+    def quadratic_optimal_step(d, x, f, g):
         if unpacking is not None:
             d = unpacking.matvec(d)
-            r = unpacking.matvec(r)
-        a = 0.5 * dot(d, r, comm=var.comm_map) / sum([ h * n(M * d, comm=c) \
+            g = unpacking.matvec(g)
+        a = - 0.5 * dot(d, g, comm=var.comm_map) / sum([ h * n(M * d, comm=c) \
             for h, n, M, c in zip(hypers, norms, [model] + priors, comms)])
-        return a
+        x += a * d
+        return criter(x, gradient=g)
 
     if callback is None:
         callback = CgCallback(verbose=verbose, criterion=criter)
@@ -319,9 +321,9 @@ def _solver(A, b, tod, model, invntt, priors=[], hyper=0, x0=None, tol=1.e-5,
     ntods = var.comm_tod.allreduce(ntods, op=MPI.SUM)
 
     if hyper != 0:
-        hc = np.hstack([1., npriors * [hyper]]) / ntods
+        hc = np.hstack([1, npriors * [hyper]]) / ntods
     else:
-        hc = [ 1. / ntods ]
+        hc = [ 1 / ntods ]
     norms = [norm2_ellipsoid(invntt)] + npriors * [norm2]
     comms = [var.comm_tod] + npriors * [comm_map]
     def criter(x):

@@ -1,4 +1,5 @@
 # Copyrights 2010-2011 Pierre Chanial
+from __future__ import division
 
 import numpy as np
 import tamasisfortran as tmf
@@ -41,11 +42,10 @@ def cg(A, b, x0, tol=1.e-5, maxiter=300, callback=None, M=None, comm=None):
     norm = norm2(b, comm=comm)
     if norm == 0:
         return xfinal
-    norm = 1./norm
 
     r[:] = b
     r -= A.matvec(x)
-    epsilon = norm * norm2(r, comm=comm)
+    epsilon = norm2(r, comm=comm) / norm
     minEpsilon = epsilon
 
     d = M.matvec(r)
@@ -62,7 +62,7 @@ def cg(A, b, x0, tol=1.e-5, maxiter=300, callback=None, M=None, comm=None):
         alpha = deltaNew / dot(d, q, comm=comm)
         x += alpha * d
         r -= alpha * q
-        epsilon = norm * norm2(r, comm=comm)
+        epsilon = norm2(r, comm=comm) / norm
 
         if callback is not None:
             resid = np.sqrt(epsilon)
@@ -141,7 +141,7 @@ def nlcg(criterion, n, linesearch, descent_method='pr', x0=None, M=None,
             raise TypeError('The preconditioner is not a linear operator.')
 
     # initialise gradient and its conjugate
-    r = np.empty(n)
+    g = np.empty(n)
     s = np.empty(n)
     d = np.empty(n)
 
@@ -151,15 +151,14 @@ def nlcg(criterion, n, linesearch, descent_method='pr', x0=None, M=None,
     rank = comm.Get_rank()
 
     # tolerance
-    Js = criterion(x, gradient=r)
-    J = sum(Js)
-    r[:] = -r
+    Js = criterion(x, gradient=g)
+    J = np.array(sum(Js))
     if M is not None:
-        s[:] = M.matvec(r)
+        s[:] = M.matvec(g)
     else:
-        s[:] = r
+        s[:] = g
     d[:] = s
-    delta_new = dot(r, d, comm=comm)
+    delta_new = dot(g, d, comm=comm)
     delta_0 = delta_new
     Jnorm = J
     resid = np.sqrt(delta_new/delta_0)
@@ -169,25 +168,18 @@ def nlcg(criterion, n, linesearch, descent_method='pr', x0=None, M=None,
     while iter_ < maxiter and resid > tol:
         iter_ += 1
 
-        # step
-        a = linesearch(d, r)
-
-        # update
-        x += a * d
-
-        # criterion and gradient at new position
-        Js = criterion(x, gradient=r)
+        # update position and gradient
+        Js = linesearch(d, x, J, g)
         J = sum(Js)
-        r[:] = -r
 
         delta_old = delta_new
         if descent_method in ('pr', 'hs'):
-            delta_mid = dot(r, s, comm=comm)
+            delta_mid = dot(g, s, comm=comm)
         if M is not None:
-            s[:] = M.matvec(r)
+            s[:] = M.matvec(g)
         else:
-            s[:] = r
-        delta_new = dot(r, s, comm=comm)
+            s[:] = g
+        delta_new = dot(g, s, comm=comm)
 
         # descent direction
         if descent_method == 'fr':
