@@ -244,25 +244,31 @@ def mapper_nl(tod, model, unpacking=None, priors=[], hypers=[], norms=[],
 
     if unpacking is not None:
         solution = unpacking(solution)
-    output = Map(solution.reshape(model.shapein), copy=False)
-    output.unit = tod.unit + ' ' + (1/Quantity(1, model.unitout)).unit + ' ' + \
-                  Quantity(1, model.unitin).unit
     coverage = Map(model.T(np.ones(tod.shape), True, True, True), copy=False)
-    output.coverage = coverage
-    output.header = coverage.header
-    output.header.update('likeliho', Js[0])
-    output.header.update('criter', sum(Js))
-    output.header.update('hyper', str(hypers))
-    output.header.update('nsamples', ntods)
-    output.header.update('npixels', model.shape[1])
-    output.header.update('time', time0)
+    header = coverage.header
+    header.update('likeliho', Js[0])
+    header.update('criter', sum(Js))
+    header.update('hyper', str(hypers))
+    header.update('nsamples', ntods)
+    header.update('npixels', model.shape[1])
+    header.update('time', time0)
     if hasattr(callback, 'niterations'):
-        output.header.update('niter', callback.niterations)
-    output.header.update('maxiter', maxiter)
+        header.update('niter', callback.niterations)
+    header.update('maxiter', maxiter)
     if hasattr(callback, 'residual'):
-        output.header.update('residual', callback.residual)
-    output.header.update('tol', tol)
-    output.header.update('solver', 'nlcg')
+        header.update('residual', callback.residual)
+    header.update('tol', tol)
+    header.update('solver', 'nlcg')
+
+    output = Map(solution.reshape(model.shapein),
+                 header=header,
+                 coverage=coverage,
+                 unit=tod.unit + ' ' + (1/Quantity(1, model.unitout)).unit + \
+                      ' ' + Quantity(1, model.unitin).unit,
+                 comm=coverage.comm,
+                 shape_global=coverage.shape_global,
+                 copy=False)
+
     return output
 
 
@@ -394,26 +400,30 @@ def _solver(A, b, tod, model, invntt, priors=[], hyper=0, x0=None, tol=1.e-5,
     if unpacking is not None:
         solution = unpacking(solution)
 
-    output = Map(solution.reshape(model.shapein), copy=False)
-
-    output.unit = tod.unit + ' ' + (1/Quantity(1, model.unitout)).unit + ' ' + \
-                  Quantity(1, model.unitin).unit
     coverage = Map(model.T(np.ones(tod.shape), True, True, True), copy=False)
-    output.coverage = coverage
-    output.header = coverage.header
-    output.header.update('likeliho', Js[0])
-    output.header.update('criter', sum(Js))
-    output.header.update('hyper', hyper)
-    output.header.update('nsamples', ntods)
-    output.header.update('npixels', A.shape[1])
-    output.header.update('time', time0)
+    header = coverage.header
+    header.update('likeliho', Js[0])
+    header.update('criter', sum(Js))
+    header.update('hyper', hyper)
+    header.update('nsamples', ntods)
+    header.update('npixels', A.shape[1])
+    header.update('time', time0)
     if hasattr(callback, 'niterations'):
-        output.header.update('niter', callback.niterations)
-    output.header.update('maxiter', maxiter)
+        header.update('niter', callback.niterations)
+    header.update('maxiter', maxiter)
     if hasattr(callback, 'residual'):
-        output.header.update('residual', callback.residual)
-    output.header.update('tol', tol)
-    output.header.update('solver', solver.__name__)
+        header.update('residual', callback.residual)
+    header.update('tol', tol)
+    header.update('solver', solver.__name__)
+
+    output = Map(solution.reshape(model.shapein),
+                 header=header,
+                 coverage=coverage,
+                 unit=tod.unit + ' ' + (1/Quantity(1, model.unitout)).unit + \
+                      ' ' + Quantity(1, model.unitin).unit,
+                 comm=coverage.comm,
+                 shape_global=coverage.shape_global,
+                 copy=False)
 
     return output
 
