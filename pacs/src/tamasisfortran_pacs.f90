@@ -287,32 +287,15 @@ end subroutine pacs_info_observation
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine pacs_read_filter_calibration_ncorrelations(band, ncorrelations, status)
-
-    use module_pacsinstrument, only : read_filter_calibration_ncorrelations
-    implicit none
-    
-    character(len=*), intent(in) :: band
-    integer, intent(out)         :: ncorrelations
-    integer, intent(out)         :: status
-    
-    ncorrelations = read_filter_calibration_ncorrelations(band, status)
-
-end subroutine pacs_read_filter_calibration_ncorrelations
-
-
-!-----------------------------------------------------------------------------------------------------------------------------------
-
-
-subroutine pacs_read_filter_calibration(band, ncorrelations, ndetectors, mask, nrows, ncolumns, data, status)
+subroutine pacs_read_filter_uncorrelated(filename, ncorrelations, ndetectors, mask, nrows, ncolumns, data, status)
 
     use iso_fortran_env,       only : ERROR_UNIT
     use module_filtering,      only : FilterUncorrelated
-    use module_pacsinstrument, only : read_filter_calibration
+    use module_pacsinstrument, only : read_filter_uncorrelated
     use module_tamasis,        only : p
     implicit none
 
-    character(len=*), intent(in) :: band
+    character(len=*), intent(in) :: filename
     integer, intent(in)          :: ncorrelations
     integer, intent(in)          :: ndetectors
     logical*1, intent(in)        :: mask(nrows,ncolumns)
@@ -323,7 +306,7 @@ subroutine pacs_read_filter_calibration(band, ncorrelations, ndetectors, mask, n
 
     type(FilterUncorrelated)     :: filter
 
-    call read_filter_calibration(band, mask, filter, status)
+    call read_filter_uncorrelated(filename, mask, filter, status)
     if (status /= 0) return
 
     if (filter%ndetectors /= ndetectors) then
@@ -340,7 +323,7 @@ subroutine pacs_read_filter_calibration(band, ncorrelations, ndetectors, mask, n
 
     data = filter%data
 
-end subroutine pacs_read_filter_calibration
+end subroutine pacs_read_filter_uncorrelated
 
 
 !-----------------------------------------------------------------------------------------------------------------------------------

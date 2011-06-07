@@ -29,9 +29,7 @@ module module_pacsinstrument
     public :: multiplexing_direct
     public :: multiplexing_transpose
     public :: read_calibration_files
-    public :: read_filter_calibration_ncorrelations
-    public :: read_filter_calibration
-    public :: read_filter_filename
+    public :: read_filter_uncorrelated
     public :: uv2yz
     public :: yz2ad
 
@@ -1094,67 +1092,7 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    function read_filter_calibration_ncorrelations(band, status) result (ncorrelations)
-
-        character(len=*), intent(in) :: band
-        integer, intent(out)         :: status
-        integer                      :: ncorrelations
-
-        integer           :: unit
-        character(len=70) :: comment
-
-        select case (band)
-            case ('blue')
-                call ft_open(get_calfile(FILENAME_IB), unit, status)
-            case ('green')
-                call ft_open(get_calfile(FILENAME_IG), unit, status)
-            case ('red')
-                call ft_open(get_calfile(FILENAME_IR), unit, status)
-            case default
-                status = 1
-                write (ERROR_UNIT,'(a)') "READ_FILTER_CALIBRATION_NCORRELATIONS: invalid band: '" // band // "'."
-        end select
-        if (status /= 0) return
-
-        call ftgkyj(unit, 'NAXIS1', ncorrelations, comment, status)
-        if (ft_check_error_cfitsio(status, unit)) return
-
-        ncorrelations = ncorrelations - 1
-
-        call ft_close(unit, status)
-
-    end function read_filter_calibration_ncorrelations
-
-
-    !-------------------------------------------------------------------------------------------------------------------------------
-
-
-    subroutine read_filter_calibration(band, mask, filter, status)
-
-        character(len=*), intent(in)          :: band
-        logical*1, intent(in)                 :: mask(:,:)
-        type(FilterUncorrelated), intent(out) :: filter
-        integer, intent(out)                  :: status
-
-        select case (band)
-        case ('blue')
-            call read_filter_filename(get_calfile(FILENAME_IB), mask, filter, status)
-        case ('green')
-            call read_filter_filename(get_calfile(FILENAME_IG), mask, filter, status)
-        case ('red')
-            call read_filter_filename(get_calfile(FILENAME_IR), mask, filter, status)
-        case default
-            status = 1
-            write (ERROR_UNIT,'(a)') "READ_FILTER_CALIBRATION: invalid band: '" // band // "'."
-        end select
-
-    end subroutine read_filter_calibration
-
-
-    !-------------------------------------------------------------------------------------------------------------------------------
-
-
-    subroutine read_filter_filename(filename, mask, filter, status)
+    subroutine read_filter_uncorrelated(filename, mask, filter, status)
 
         character(len=*), intent(in)          :: filename
         logical*1, intent(in)                 :: mask(:,:)
@@ -1198,7 +1136,7 @@ contains
             end do
         end do
 
-    end subroutine read_filter_filename
+    end subroutine read_filter_uncorrelated
 
 
     !-------------------------------------------------------------------------------------------------------------------------------

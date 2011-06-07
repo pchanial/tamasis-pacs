@@ -128,7 +128,7 @@ class MadMap1Observation(Observation):
             tod.unit = unit
         return tod
 
-    def get_filter_uncorrelated(self):
+    def get_filter_uncorrelated(self, **keywords):
         """
         Method to get the invNtt for uncorrelated detectors.
         """

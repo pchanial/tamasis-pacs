@@ -1808,14 +1808,16 @@ class Convolution(Symmetric):
 
 class InvNtt(AcquisitionModelLinear):
 
-    def __init__(self, obs, **keywords):
+    def __init__(self, obs, filename=None, **keywords):
         nsamples = obs.get_nsamples()
-        length = np.asarray(2**np.ceil(np.log2(np.array(nsamples) + 200)), dtype=int)
-        invntt = self._get_diagonal(length, obs.get_filter_uncorrelated())
+        length = np.asarray(2**np.ceil(np.log2(np.array(nsamples) + 200)), int)
+        invntt = self._get_diagonal(length, obs.get_filter_uncorrelated(
+                                    filename=filename, **keywords))
         fft = FftHalfComplex(length)
-        padding = Padding(left=invntt.ncorrelations, right=length-nsamples- \
+        padding = Padding(left=invntt.ncorrelations, right=length - nsamples - \
                           invntt.ncorrelations)
-        _tocompositemodel(self, Composition, [ padding.T, fft.T, invntt, fft, padding ])
+        _tocompositemodel(self, Composition,
+                          [ padding.T, fft.T, invntt, fft, padding ])
 
     def _get_diagonal(self, nsamples, filter, **keywords):
         nsamples = np.asarray(nsamples)
