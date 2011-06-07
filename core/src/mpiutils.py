@@ -131,7 +131,6 @@ def write_fits(filename, data, header, shape_global, extension, comm,
                extname=None):
     """Write local images into a FITS file"""
 
-    print comm, shape_global
     if comm is None:
         comm = MPI.COMM_SELF
 
