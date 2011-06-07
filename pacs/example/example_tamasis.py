@@ -38,11 +38,11 @@ projection = Projection(obs,
 # the mean). We highpass filter the Tod using a short filtering 
 # window, to remove the low-frequency offsets
 tod_glitch = filter_median(tod, 100)
-tod.mask = deglitch_l2mad(tod_glitch, projection, nsigma=25.)
+tod.mask = deglitch_l2mad(tod_glitch, projection, nsigma=20.)
 
 # Inspect that the glitches have correctly been removed in the timeline of
-# detector #100
-plot_tod(tod[100])
+# detector #40
+plot_tod(tod[40])
 
 # Backproject the Tod's mask on a map, to ensure that glitches are uniformly
 # distributed, i.e. that the bright sources have not been impacted
