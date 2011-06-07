@@ -1,6 +1,7 @@
 # Copyrights 2010-2011 Pierre Chanial
 # All rights reserved
 #
+from __future__ import division
 import numpy as np
 import re
 import tamasisfortran as tmf
@@ -289,7 +290,6 @@ ities of different units may have changed operands to common unit '" + \
 
         ufunc = context[0]
         args = context[1]
-
         if ufunc in (np.add, np.subtract, np.maximum, np.minimum):
             if self is not array:
                 # self has highest __array_priority__
@@ -314,6 +314,10 @@ ities of different units may have changed operands to common unit '" + \
         elif ufunc in (np.multiply, np.vdot):
             units = _get_units(args)
             array._unit = _multiply_unit(units[0], units[1])
+
+        elif ufunc in (np.floor_divide, np.true_divide):
+            units = _get_units(args)
+            array._unit = _divide_unit(units[0], units[1])
 
         elif ufunc is np.divide:
             units = _get_units(args)
@@ -703,10 +707,10 @@ units_table = {
     'sr'     : None,
 
     # angle
-    "'"      : Quantity(1., 'arcmin'), 
-    '"'      : Quantity(1., 'arcsec'),
-    'arcmin' : Quantity(1./60., 'deg'), 
-    'arcsec' : Quantity(1./3600., 'deg'),
+    "'"      : Quantity(1, 'arcmin'), 
+    '"'      : Quantity(1, 'arcsec'),
+    'arcmin' : Quantity(1/60., 'deg'), 
+    'arcsec' : Quantity(1/3600., 'deg'),
     'deg'    : Quantity(np.pi/180., 'rad'),
 
     # flux_densities
@@ -735,10 +739,10 @@ units_table = {
     # pressure
     'atm'    : Quantity(101325., 'Pa'),
     'bar'    : Quantity(1e5, 'Pa'),
-    'mmHg'   : Quantity(1./760, 'atm'),
+    'mmHg'   : Quantity(1/760, 'atm'),
     'cmHg'   : Quantity(10, 'mmHg'),
-    'Pa'     : Quantity(1., 'kg / m / s^2'),
-    'Torr'   : Quantity(1., 'mmHg'),
+    'Pa'     : Quantity(1, 'kg / m / s^2'),
+    'Torr'   : Quantity(1, 'mmHg'),
     
     # resistivity
     'Ohm'    : Quantity(1., 'V/A'),
