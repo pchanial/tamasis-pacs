@@ -342,7 +342,7 @@ def test_mpi_fun(bld):
         files = bld.path.ant_glob(subdir+'/test/test_mpi*.py')
         ncores = [ 1, 2 ]
         if tm.tmf.info_nthreads() > 2:
-            ncore += [ 4 ]
+            ncores += [ 4 ]
         for file in files:
             for n in ncores:
                 bld(rule='export OMP_NUM_THREADS=1; mpirun -n ' + str(n) + \
