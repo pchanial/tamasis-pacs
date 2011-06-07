@@ -198,6 +198,14 @@ class FitsArray(DistributedArray, Quantity):
         DistributedArray.__array_finalize__(self, array)
         self._header = getattr(array, '_header', None)
 
+    def __getitem__(self, key):
+        item = super(Quantity, self).__getitem__(key)
+        if not isinstance(item, self.__class__):
+            return item
+        item.shape_global = item.shape
+        item.comm = MPI.COMM_SELF
+        return item
+
     def __getattr__(self, name):
         if self.dtype.names is None or name not in self.dtype.names:
             raise AttributeError("'" + self.__class__.__name__ + "' object ha" \
@@ -541,11 +549,9 @@ class Map(FitsArray):
         self.origin = getattr(array, 'origin', 'lower')
 
     def __getitem__(self, key):
-        item = super(Quantity, self).__getitem__(key)
+        item = super(Map, self).__getitem__(key)
         if not isinstance(item, Map):
             return item
-        self.shape_global = None
-        self.comm = None
         if item.coverage is not None:
             item.coverage = item.coverage[key]
         if item.error is not None:
@@ -740,11 +746,9 @@ class Tod(FitsArray):
                         else (self.shape[-1],))
 
     def __getitem__(self, key):
-        item = super(Quantity, self).__getitem__(key)
+        item = super(Tod, self).__getitem__(key)
         if not isinstance(item, Tod):
             return item
-        self.shape_global = None
-        self.comm = None
         if item.mask is not None:
             item.mask = item.mask[key]
         if not isinstance(key, tuple):
