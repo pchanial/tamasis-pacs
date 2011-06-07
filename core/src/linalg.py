@@ -39,9 +39,9 @@ class Function:
         self.__call__ = f
         if df is not None:
             self.D = Function(df)
-    def __call__(x, out=None, comm=None):
+    def __call__(x, out=None, inwork=[], outwork=[], comm=None):
         raise NotImplementedError()
-    def D(x, out=None, comm=None):
+    def D(x, out=None, inwork=[], outwork=[], comm=None):
         raise NotImplementedError()
 
 
@@ -93,7 +93,7 @@ def gradient(f):
 
 #-------------------------------------------------------------------------------
 
-def f(x, out=None, comm=None):
+def f(x, out=None, inwork=None, outwork=None, comm=None):
     """Parallelised L-1 norm"""
     x = np.ascontiguousarray(x)
     if out is None:
@@ -103,7 +103,7 @@ def f(x, out=None, comm=None):
     out.flat = tmf.norm_l1(x.T, comm.py2f())
     return float(out)
 
-def df(x, out=None, comm=None):
+def df(x, out=None, inwork=None, outwork=None, comm=None):
     x = np.ascontiguousarray(x)
     if out is None:
         out = np.empty(x.shape)
@@ -115,7 +115,7 @@ norm_l1 = Function(f, df)
 #-------------------------------------------------------------------------------
 
 
-def f(x, out=None, comm=None):
+def f(x, out=None, inwork=None, outwork=None, comm=None):
     """Parallelised euclidian norm"""
     x = np.array(x, copy=False, order='c', dtype=var.FLOAT_DTYPE)
     if out is None:
@@ -125,7 +125,7 @@ def f(x, out=None, comm=None):
     out.flat = np.sqrt(tmf.norm2(x.T, comm.py2f()))
     return float(out)
 
-def df(x, out=None, comm=None):
+def df(x, out=None, inwork=None, outwork=None, comm=None):
     x = np.array(x, copy=False, order='c', dtype=var.FLOAT_DTYPE)
     if out is None:
         out = np.empty(x.shape)
@@ -143,7 +143,7 @@ norm_l2 = Function(f, df)
 class norm_lp(Function):
     """Parallelised L-p norm"""
     def __init__(self, p):
-        def f(x, out=None, comm=None):
+        def f(x, out=None, inwork=None, outwork=None, comm=None):
             x = np.array(x, copy=False, order='c', dtype=var.FLOAT_DTYPE)
             if out is None:
                 out = np.empty(())
@@ -151,7 +151,7 @@ class norm_lp(Function):
                 comm = MPI.COMM_WORLD
             out.flat = tmf.normp(x.T, p, comm.py2f())**(1./p)
             return float(out)
-        def df(x, out=None, comm=None):
+        def df(x, out=None, inwork=None, outwork=None, comm=None):
             x = np.array(x, copy=False, order='c', dtype=var.FLOAT_DTYPE)
             if out is None:
                 out = np.empty(x.shape)
@@ -166,7 +166,7 @@ class norm_lp(Function):
 #-------------------------------------------------------------------------------
 
 
-def f(x, out=None, comm=None):
+def f(x, out=None, inwork=None, outwork=None, comm=None):
     """Parallelised L-inf norm"""
     x = np.array(x, copy=False, order='c', dtype=var.FLOAT_DTYPE)
     if out is None:
@@ -191,7 +191,7 @@ class norm_huber(Function):
             self.__call__ = norm2.__call__
             self.D = norm2.D
             return
-        def f(x, out=None, comm=None):
+        def f(x, out=None, inwork=None, outwork=None, comm=None):
             x = np.array(x, copy=False, order='c', dtype=var.FLOAT_DTYPE)
             if out is None:
                 out = np.empty(())
@@ -199,7 +199,7 @@ class norm_huber(Function):
                 comm = MPI.COMM_WORLD
             out.flat = tmf.norm_huber(x.T, delta, comm.py2f())
             return float(out)
-        def df(x, out=None, comm=None):
+        def df(x, out=None, inwork=None, outwork=None, comm=None):
             x = np.array(x, copy=False, order='c', dtype=var.FLOAT_DTYPE)
             if out is None:
                 out = np.empty(x.shape)
@@ -213,7 +213,7 @@ class norm_huber(Function):
 #-------------------------------------------------------------------------------
 
 
-def f(x, out=None, comm=None):
+def f(x, out=None, inwork=None, outwork=None, comm=None):
     """Parallelised squared euclidian norm"""
     x = np.array(x, copy=False, order='c', dtype=var.FLOAT_DTYPE)
     if out is None:
@@ -223,7 +223,7 @@ def f(x, out=None, comm=None):
     out.flat = tmf.norm2(x.T, comm.py2f())
     return float(out)
 
-def df(x, out=None, comm=None):
+def df(x, out=None, inwork=None, outwork=None, comm=None):
     x = np.array(x, copy=False, order='c', dtype=var.FLOAT_DTYPE)
     if out is None:
         out = np.empty(x.shape)
@@ -239,7 +239,7 @@ norm2 = Function(f, df)
 class normp(Function):
     """Parallelised L-p norm"""
     def __init__(self, p):
-        def f(x, out=None, comm=None):
+        def f(x, out=None, inwork=None, outwork=None, comm=None):
             x = np.array(x, copy=False, order='c', dtype=var.FLOAT_DTYPE)
             if out is None:
                 out = np.empty(())
@@ -247,7 +247,7 @@ class normp(Function):
                 comm = MPI.COMM_WORLD
             out.flat = tmf.normp(x.T, p, comm.py2f())
             return float(out)
-        def df(x, out=None, comm=None):
+        def df(x, out=None, inwork=None, outwork=None, comm=None):
             x = np.array(x, copy=False, order='c', dtype=var.FLOAT_DTYPE)
             if out is None:
                 out = np.empty(x.shape)
@@ -267,20 +267,33 @@ class norm2_ellipsoid(Function):
     """
     def __init__(self, A):
         A = aslinearoperator(A)
-        def f(x, out=None, comm=None):
+        def f(x, out=None, inwork=None, outwork=None, comm=None):
             if out is None:
                 out = np.empty(())
             if comm is None:
                 comm = MPI.COMM_WORLD
-            out.flat = dot(x, A.matvec(x.ravel()), comm=comm)
+            
+            if outwork is not None:
+                if len(outwork) == 0:
+                    outwork.append(A.matvec(x.ravel()))
+                else:
+                    outwork[0][:] = A.matvec(x.ravel())
+                Ax = outwork[0]
+            else:
+                Ax = A.matvec(x.ravel())
+            out.flat = dot(x, Ax, comm=comm)
             return float(out)
-        def df(x, out=None, comm=None):
+        def df(x, out=None, inwork=None, outwork=None, comm=None):
             if comm is None:
                 comm = MPI.COMM_WORLD
-            result = 2 * A.matvec(x.ravel())
+            if inwork is not None:
+                Ax = inwork[0]
+            else:
+                Ax = A.matvec(x.ravel())
             if out is not None:
-                out[:] = result
-            return result
+                out[:] = 2 * Ax
+                return out
+            return 2 * Ax
         self.__call__ = f
         self.D = Function(df)
 
