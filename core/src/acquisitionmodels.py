@@ -306,10 +306,6 @@ class AcquisitionModel(object):
         if do_cacheout and cacheout is not None and \
            shapeout_flat == cacheout.shape and cacheout.dtype == input.dtype:
             output = cacheout
-            if type(shapeout[-1]) is tuple:
-                if not isinstance(output, Tod):
-                    output = output.view(Tod)
-                output.nsamples = shapeout[-1]
 
         else:
 
@@ -341,17 +337,14 @@ class AcquisitionModel(object):
                     gc.collect()
                     output = np.empty(shapeout_flat, self.dtype)
 
-            # validate output
-            if type(shapeout[-1]) is tuple:
-                output = Tod(output, nsamples=shapeout[-1], copy=False)
-            _propagate_attributes(input, output)
-            _validate_output_unit(input, output, unitin, unitout)
-            for k,v in attrout.items():
-                setattr(output, k, v)
-
             # store output
             if do_cacheout:
                 set_cacheout(output)
+
+        if type(shapeout[-1]) is tuple:
+            output = Tod(output, nsamples=shapeout[-1], copy=False)
+
+        _propagate_attributes(input, output, unitin, unitout, attrout)
 
         return input, output
 
@@ -1962,22 +1955,30 @@ def _is_scientific_dtype(dtype):
 #-------------------------------------------------------------------------------
 
 
-def _propagate_attributes(input, output):
+def _propagate_attributes(input, output, unitin, unitout, attrout):
     """Copy over attributes from input to output"""
 
     # if the arguments do not have the same shape, only copy the units
     if input.shape != output.shape:
-        if hasattr(input, '_unit'):
+        try:
             setattr(output, '_unit', input._unit)
-        if hasattr(input, '_derived_units'):
+        except:
+            pass
+        try:
             setattr(output, '_derived_units', input._derived_units)
-        return
+        except:
+            pass
 
-    if not hasattr(input, '__dict__'):
-        return
+    elif hasattr(input, '__dict__'):
 
-    # copy over attributes
-    for k, v in input.__dict__.items():
+        # copy over input's attributes
+        for k, v in input.__dict__.items():
+            setattr(output, k, v)
+
+    _validate_output_unit(input, output, unitin, unitout)
+
+    # copy over operator's attributes
+    for k,v in attrout.items():
         setattr(output, k, v)
 
 
