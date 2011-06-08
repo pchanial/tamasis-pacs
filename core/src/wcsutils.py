@@ -180,7 +180,8 @@ def create_fitsheader(naxis=None, dtype=None, fromdata=None, extname=None,
         array = fromdata
         if not isinstance(array, np.ndarray):
             raise TypeError('The input is not an ndarray.')
-        naxis = tuple(reversed(array.shape))
+        if naxis is None:
+            naxis = tuple(reversed(array.shape))
         if dtype is not None:
             array = arrays.astype(dtype)
         if array.dtype.itemsize == 1:
