@@ -132,7 +132,10 @@ class FitsArray(DistributedArray, Quantity):
 
     def __new__(cls, data, header=None, unit=None, derived_units=None,
                 dtype=None, copy=True, order='C', subok=False, ndmin=0,
-                shape_global=None, comm=MPI.COMM_SELF):
+                shape_global=None, comm=None):
+
+        comm = comm or getattr(data, 'comm', MPI.COMM_SELF)
+        shape_global = shape_global or getattr(data, 'shape_global', None)
 
         if type(data) is str:
             ihdu = 0
@@ -168,9 +171,6 @@ class FitsArray(DistributedArray, Quantity):
                 comm.Barrier()
             except KeyError:
                 pass
-
-        else:
-            shape_global = shape_global or getattr(data, 'shape_global', None)
 
         # get a new FitsArray instance (or a subclass if subok is True)
         result = Quantity.__new__(cls, data, unit, derived_units, dtype, copy,
@@ -496,8 +496,7 @@ class Map(FitsArray):
     """
     def __new__(cls, data,  header=None, unit=None, derived_units=None,
                 coverage=None, error=None, origin=None, dtype=None, copy=True,
-                order='C', subok=False, ndmin=0, shape_global=None,
-                comm=MPI.COMM_SELF):
+                order='C', subok=False, ndmin=0, shape_global=None, comm=None):
 
         # get a new Map instance (or a subclass if subok is True)
         result = FitsArray.__new__(cls, data, header, unit, derived_units,
@@ -662,7 +661,7 @@ class Tod(FitsArray):
 
     def __new__(cls, data, mask=None, nsamples=None, header=None, unit=None,
                 derived_units=None, dtype=None, copy=True, order='C',
-                subok=False, ndmin=0, shape_global=None, comm=MPI.COMM_SELF):
+                subok=False, ndmin=0, shape_global=None, comm=None):
 
         # get a new Tod instance (or a subclass if subok is True)
         result = FitsArray.__new__(cls, data, header, unit, derived_units,
