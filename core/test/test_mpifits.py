@@ -19,13 +19,13 @@ map_ref = pyfits.open(filename)[0].data
 
 ref = Map(filename, comm=MPI.COMM_SELF)
 local = Map(filename, comm=MPI.COMM_WORLD)
+local2 = ref.tolocal()
 
-if local.shape[0] != int(np.ceil(ref.shape[0] / size)):
-    raise TestFailure()
+if local.shape[0] != int(np.ceil(ref.shape[0] / size)): raise TestFailure()
+if any_neq(local, local2): raise TestFailure()
 
-m = local.toglobal()
-if any_neq(ref, m):
-    raise TestFailure()
+ref2 = local.toglobal()
+if any_neq(ref, ref2): raise TestFailure()
 
 if rank == 0:
     filename2 = 'test-'+str(uuid1())+'.fits'
