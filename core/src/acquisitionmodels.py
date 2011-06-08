@@ -328,18 +328,18 @@ class AcquisitionModel(object):
                 typeout = input.__class__
             if type(shapeout[-1]) is tuple and not issubclass(typeout, Tod):
                 typeout = Tod
-            if typeout is np.ndarray:
+            if hasattr(typeout, 'empty'):
                 try:
-                    output = np.empty(shapeout_flat, self.dtype)
+                    output = typeout.empty(shapeout, dtype=self.dtype)
                 except MemoryError:
                     gc.collect()
-                    output = np.empty(shapeout_flat, self.dtype)
+                    output = typeout.empty(shapeout, dtype=self.dtype)
             else:
                 try:
-                    output = typeout.empty(shapeout, dtype=self.dtype)
+                    output = np.empty(shapeout_flat, self.dtype)
                 except MemoryError:
                     gc.collect()
-                    output = typeout.empty(shapeout, dtype=self.dtype)
+                    output = np.empty(shapeout_flat, self.dtype)
 
             # validate output
             if type(shapeout[-1]) is tuple:
@@ -1044,7 +1044,6 @@ class Projection(AcquisitionModelLinear):
                                             method=method,
                                             oversampling=oversampling)
 
-        self._mask = None
         self.nsamples_tot = int(np.sum(nsamples))
         self._pmatrix = pmatrix
         if self.npixels_per_sample == 0:
@@ -1054,8 +1053,8 @@ class Projection(AcquisitionModelLinear):
         self.pmatrix.shape = (self.ndetectors, np.sum(nsamples),
                               self.npixels_per_sample)
 
-        shapein = tuple([self.header['naxis'+str(i+1)] for i in \
-                         reversed(list(range(self.header['naxis'])))])
+        shapein = tuple([self.header['NAXIS'+str(i+1)] for i in \
+                         range(self.header['NAXIS'])])[::-1]
         mask = Map.empty(shapein, dtype=np.bool8, header=self.header)
         tmf.pointing_matrix_mask(self._pmatrix, mask.view(np.int8).T, 
             self.npixels_per_sample, self.nsamples_tot, self.ndetectors)
@@ -1966,16 +1965,12 @@ def _is_scientific_dtype(dtype):
 def _propagate_attributes(input, output):
     """Copy over attributes from input to output"""
 
-    # get common base class
-    cls = input.__class__
-    while not issubclass(type(output), cls):
-        cls = cls.__base__
     # if the arguments do not have the same shape, only copy the units
     if input.shape != output.shape:
-        if cls == np.ndarray:
-            return
-        output._unit = input._unit
-        output._derived_units = input._derived_units
+        if hasattr(input, '_unit'):
+            setattr(output, '_unit', input._unit)
+        if hasattr(input, '_derived_units'):
+            setattr(output, '_derived_units', input._derived_units)
         return
 
     if not hasattr(input, '__dict__'):
@@ -2011,10 +2006,9 @@ def _validate_input_unit(input, expected):
         return
     for u,v in expected.items():
         if u not in input._unit or input._unit[u] != v:
-            raise ValidationError("The input unit '" + input.unit + \
-                                  "' is incompatible with the required unit '"+\
-                                  Quantity(1, expected).unit + "'.")
-    return
+            unit = Quantity(1, expected).unit
+            raise ValidationError("The input unit '" + input.unit + "' is inco"\
+                "mpatible with the required unit '" + unit + "'.")
 
 
 #-------------------------------------------------------------------------------
