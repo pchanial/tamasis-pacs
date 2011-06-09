@@ -673,7 +673,7 @@ class PacsObservation(PacsBase):
         # 'mask_name' and 'mask_activated' would be scalar in slice:
         nmasks_max = max(nmasks_max, 2)
 
-        mask_name = np.ndarray((nfilenames, nmasks_max), 'S'+str(mask_len_max))
+        mask_name = np.zeros((nfilenames, nmasks_max), 'S'+str(mask_len_max))
         mask_activated = mask_activated.T
         for ifile in range(nfilenames):
             for imask in range(nmasks[ifile]):
