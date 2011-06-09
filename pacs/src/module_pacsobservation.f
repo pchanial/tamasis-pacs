@@ -613,7 +613,8 @@ contains
         isample = this%nsamples + 1
         do
             isample = isample - 1
-            if (isample == 0 .or. bbid(isample) == BBID_CALIBRATION) exit
+            if (isample == 0) exit
+            if (bbid(isample) == BBID_CALIBRATION) exit
         end do
         if (isample > 0) then
             if (all(.not. inscan(isample+1:))) then
