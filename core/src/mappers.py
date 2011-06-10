@@ -16,9 +16,9 @@ from . import var
 from .acquisitionmodels import Addition, DdTdd, Diagonal, DiscreteDifference, \
     Identity, Masking, Scalar, asacquisitionmodel
 from .datatypes import Map, Tod, flatten_sliced_shape
-from .linalg import dot, norm2, norm2_ellipsoid
+from .linalg import Function, dot, norm2, norm2_ellipsoid
 from .quantity import Quantity, UnitError
-from .solvers import cg, nlcg
+from .solvers import cg, nlcg, QuadraticStep
 
 
 def mapper_naive(tod, model, unit=None, local_mask=None):
@@ -170,8 +170,8 @@ def mapper_rls(tod, model, invntt=None, unpacking=None, hyper=1.0, x0=None,
 
 def mapper_nl(tod, model, unpacking=None, priors=[], hypers=[], norms=[],
               comms=[], x0=None, tol=1.e-6, maxiter=300, solver=None,
-              descent_method='pr', M=None, verbose=True, callback=None,
-              criterion=True, profile=None):
+              linesearch=None, descent_method='pr', M=None, verbose=True,
+              callback=None, profile=None):
 
     if len(priors) == 0 and len(hypers) != 0:
         npriors = len(model.shapein)
@@ -205,42 +205,41 @@ def mapper_nl(tod, model, unpacking=None, priors=[], hypers=[], norms=[],
     tod = _validate_tod(tod, model)
     y = tod.view(np.ndarray).ravel()
 
-    if criterion:
-        def criter(x, gradient=None):
+    class ObjectiveFunction(Function):
+        def __init__(self):
+            pass
+        def __call__(self, x, inwork=None, outwork=None, out=None):
+            outwork = self.set_outwork(outwork, self.get_work(x))
+            return self.set_out(out, [ h * n(r,comm=c) for h, n, r, c in \
+                zip(hypers, norms, outwork, comms) ])
+        def D(self, x, inwork=None, outwork=None, out=None):
+            inwork = self.get_work(x, inwork)
+            return self.set_out(out, sum([h * M.T * n.D(r,comm=c) for h, M, n,
+                r, c in zip(hypers, [model] + priors, norms, inwork, comms)]))
+        def get_work(self, x, work=None):
+            if work is not None:
+                return work
             if unpacking is not None:
                 x = unpacking.matvec(x)
-            rs = [ model * x - y] + [p * x for p in priors ]
-            Js = [ h * n(r,comm=c) for h, n, r, c in zip(hypers, norms, rs,
-                   comms) ]
-            if gradient is None:
-                return Js
-            gradient[:] = sum([h * M.T * n.D(r,comm=c) for h, M, n, r, c in \
-                               zip(hypers, [model] + priors, norms, rs, comms)])
-            return Js
-    else:
-        raise NotImplementedError()
-        criter = None
+            return [ model * x - y] + [p * x for p in priors ]
 
-    def quadratic_optimal_step(d, x, f, g):
-        if unpacking is not None:
-            d = unpacking.matvec(d)
-            g = unpacking.matvec(g)
-        a = - 0.5 * dot(d, g, comm=var.comm_map) / sum([ h * n(M * d, comm=c) \
-            for h, n, M, c in zip(hypers, norms, [model] + priors, comms)])
-        x += a * d
-        return criter(x, gradient=g)
+    objfunc = ObjectiveFunction()
+
+    if linesearch is None:
+        linesearch = QuadraticStep(hypers, norms, [model] + priors, comms,
+                                   unpacking, var.comm_map)
 
     if callback is None:
-        callback = CgCallback(verbose=verbose, criterion=criter)
+        callback = CgCallback(verbose=verbose)
     
     time0 = time.time()
 
-    solution = nlcg(criter, model.shape[1], M=M, descent_method=descent_method,
-                    linesearch=quadratic_optimal_step, maxiter=maxiter, tol=tol,
+    solution = nlcg(objfunc, model.shape[1], M=M, maxiter=maxiter, tol=tol,
+                    descent_method=descent_method,  linesearch=linesearch,
                     callback=callback, comm=var.comm_map)
 
     time0 = time.time() - time0
-    Js = criter(solution)
+    Js = objfunc(solution)
 
     if unpacking is not None:
         solution = unpacking(solution)
@@ -343,7 +342,7 @@ def _solver(A, b, tod, model, invntt, priors=[], hyper=0, x0=None, tol=1.e-5,
     if callback is None:
         if comm_map.Get_rank() == 0 and verbose:
             print('Iteration\tResiduals' + ('\tCriterion' if criterion else ''))
-        callback = CgCallback(verbose=verbose, criterion=criter if criterion \
+        callback = CgCallback(verbose=verbose, objfunc=criter if criterion \
             else None)
 
     if solver is None:
@@ -428,29 +427,47 @@ def _solver(A, b, tod, model, invntt, priors=[], hyper=0, x0=None, tol=1.e-5,
     return output
 
 class CgCallback():
-    def __init__(self, verbose=True, criterion=None, comm=None):
+    def __init__(self, verbose=True, objfunc=None, comm=None):
         self.niterations = 0
         self.residual = 0.
         self.verbose = verbose
-        self.criterion = criterion
+        self.objfunc = objfunc
         self.comm = comm or MPI.COMM_WORLD
     def __call__(self, x):
         import inspect
-        parent_locals = inspect.stack()[1][0].f_locals
-        self.niterations = parent_locals['iter_'] - 1
-        self.residual = parent_locals['resid']
+        plocals = inspect.stack()[1][0].f_locals
+        self.niterations = plocals['iter_'] - 1
+        self.residual = plocals['resid']
         if self.niterations == 0 and self.comm.Get_rank() == 0:
-            print('Iteration\tResiduals' + ('\tCriterion' if self.criterion \
-                  else ''))
+            docriterion = self.objfunc is not None or 'info' in plocals and \
+                isinstance(plocals['info'], dict) and 'terms' in plocals['info']
+            if MPI.COMM_WORLD.Get_rank() == 0:
+                print('Iteration\tResiduals' + ('\tCriterion' if docriterion \
+                      else ''))
         if self.verbose: 
-            if self.criterion is not None:
-                Js = self.criterion(x)
+            if 'info' in plocals and isinstance(plocals['info'], dict):
+                info = plocals['info']
+                Js = info['terms'] if 'terms' in info else None
+                niterls = info['niterations'] if 'niterations' in info else 0
+            else:
+                Js = None
+                niterls = 0
+
+            if Js is None and self.objfunc is not None:
+                Js = self.objfunc(x)
+
+            if Js is None:
+                Jstr = ''
+            else:
                 Jstr = repr(sum(Js))
                 if len(Js) > 1:
                     Jstr += ' ' + str(Js)
-            else:
-                Jstr = ''
+
             if self.comm.Get_rank() == 0:
-                print("%s\t%s\t%s" % (str(self.niterations).rjust(9),
-                                      str(self.residual), Jstr))
+                if niterls < 1:
+                    print("%s\t%s\t%s" % (str(self.niterations).rjust(9),
+                                          str(self.residual), Jstr))
+                else:
+                    print("%s (%s)\t%s\t%s" % (str(self.niterations).rjust(9),
+                         str(niterls), str(self.residual), Jstr))
 
