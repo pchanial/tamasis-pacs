@@ -39,10 +39,29 @@ class Function:
         self.__call__ = f
         if df is not None:
             self.D = Function(df)
-    def __call__(x, out=None, inwork=[], outwork=[], comm=None):
+    def __call__(x, out=None, inwork=None, outwork=None, comm=None):
         raise NotImplementedError()
-    def D(x, out=None, inwork=[], outwork=[], comm=None):
+    def D(x, out=None, inwork=None, outwork=None, comm=None):
         raise NotImplementedError()
+    def set_out(self, out, value):
+        if out is not None:
+            if isinstance(value, (list, tuple)):
+                if out.size != value[0].size:
+                    raise ValueError('Incompatible size.')
+                out.flat = sum(value)
+            else:
+                if out.size != value.size:
+                    raise ValueError('Incompatible size.')
+                out.flat = value
+        return value
+    def set_outwork(self, outwork, value):
+        if outwork is None:
+            return value
+        for i in xrange(len(outwork)):
+            outwork.pop()
+        outwork.extend(value)
+        return outwork
+        
 
 
 #-------------------------------------------------------------------------------
