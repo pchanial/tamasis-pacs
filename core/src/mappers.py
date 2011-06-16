@@ -149,7 +149,7 @@ def mapper_rls(tod, model, invntt=None, unpacking=None, hyper=1.0, x0=None,
 
     npriors = len(model.shapein)
     priors = [ DiscreteDifference(axis=axis, shapein=model.shapein,
-               comm=var.comm_map) for axis in range(npriors) ]
+               comm=comm_map) for axis in range(npriors) ]
     prior = Addition([DdTdd(axis=axis, scalar=hyper * ntods / nmaps,
         comm=comm_map) for axis in range(npriors)])
     if hyper != 0 and (comm_map.Get_rank() == 0 or comm_map.Get_size() > 1):
