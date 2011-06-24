@@ -343,9 +343,7 @@ def diff(array, axis=0, comm=None):
     ndim = array.ndim
     
     if ndim == 0:
-        array.shape = (1,)
-        array[:] = 0
-        array.shape = ()
+        array.flat = 0
         return
 
     if axis >= ndim:
@@ -385,9 +383,7 @@ def diffT(array, axis=0, comm=None):
     ndim = array.ndim
 
     if ndim == 0:
-        array.shape = (1,)
-        array[:] = 0
-        array.shape = ()
+        array.flat = 0
         return
 
     if axis >= ndim:
@@ -427,9 +423,7 @@ def diffTdiff(array, axis=0, scalar=1., comm=None):
     ndim = array.ndim
     
     if ndim == 0:
-        array.shape = (1,)
-        array[:] = 0
-        array.shape = ()
+        array.flat = 0
         return
     
     if axis >= ndim:
