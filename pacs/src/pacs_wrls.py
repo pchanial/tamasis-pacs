@@ -11,7 +11,6 @@ long_options = ["help", "verbose", "filenames="]
 
 def main():
     import os, sys, getopt, ConfigParser, time
-    from tamasis.pacs_processing import tamasis_mapper_invntt
     # parse command line arguments
     try:
         opts, args = getopt.getopt(sys.argv[1:], options, long_options)
@@ -105,12 +104,76 @@ def main():
     # store results into the Data subdirectory as expected by sumatra
     output_file = "Data/map" + fname + '_' + date + '.fits'
     # run tamasis mapper
-    tamasis_mapper_invntt(data_file_list, output_file, keywords, verbose=verbose)
+    pipeline_wrls(data_file_list, output_file, keywords, verbose=verbose)
+
+def pipeline_wrls(filenames, output_file, keywords, verbose=False):
+    """
+    Perform regularized least-square inversion of state of the art
+    PACS model.  The PACS model includes tod mask, compression,
+    response, projection and noise covariance (invntt).
+    Processing steps are as follows :
+    
+        - define PacsObservation instance
+        - mask first scanlines to avoid drift
+        - get Time Ordered Data (get_tod)
+        - 2nd level deglitching (with standard projector and tod median
+            filtering with a  narrow window)
+        - median filtering
+        - define projection
+        - perform inversion on model
+        - save file
+
+    Arguments
+    ---------
+    filenames: list of strings
+        List of data filenames.
+    output_file : string
+        Name of the output fits file.
+    keywords: dict
+        Dictionary containing options for all steps as dictionary.
+    verbose: boolean (default False)
+        Set verbosity.
+
+    Returns
+    -------
+    Returns nothing. Save result as a fits file.
+    """
+    from scipy.sparse.linalg import cgs
+    import tamasis as tm
+    # verbosity
+    keywords["mapper_rls"]["verbose"] = verbose
+    # define observation
+    obs = tm.PacsObservation(filenames, **keywords["PacsObservation"])
+    # extra masking
+    step_scanline_masking(obs, **keywords["scanline_masking"])
+    # get data
+    tod = obs.get_tod(**keywords["get_tod"])
+    # degltiching
+    step_deglitching(obs, tod, **keywords["degltiching"])
+    # median filtering
+    tod = tm.filter_median(tod, **keywords["filter_median"])
+    # define projector
+    projection = tm.Projection(obs, **keywords["Projection"])
+    # build instrument model
+    response = tm.ResponseTruncatedExponential(obs.pack(
+            obs.instrument.detector.time_constant) / obs.SAMPLING_PERIOD)
+    compression = tm.CompressionAverage(obs.slice.compression_factor)
+    masking = tm.Masking(tod.mask)
+    model = masking * compression * response * projection
+    # set tod masked values to zero
+    tod = masking(tod)
+    # N^-1 operator
+    invntt = tm.InvNtt(obs)
+    # perform map-making inversion
+    map_rls = tm.mapper_rls(tod, model, invntt=invntt, solver=cgs,
+                            **keywords["mapper_rls"])
+    # save
+    map_rls.save(output_file)
 
 def usage():
     print(__usage__)
 
-__usage__ = """Usage: tamasis_invntt [options] [config_file]
+__usage__ = """Usage: pacs_wrls [options] [config_file]
 
 Use tamasis regularized least-square map-making routine with madmap
 noise model.

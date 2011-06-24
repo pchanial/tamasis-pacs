@@ -12,7 +12,6 @@ long_options = ["help", "verbose", "filenames="]
 
 def main():
     import os, sys, getopt, ConfigParser, time
-    from tamasis.pacs_processing import tamasis_mapper_rls
     # parse command line arguments
     try:
         opts, args = getopt.getopt(sys.argv[1:], options, long_options)
@@ -97,12 +96,62 @@ def main():
     # store results into the Data subdirectory as expected by sumatra
     output_file = "Data/map" + fname + '_' + date + '.fits'
     # run tamasis mapper
-    tamasis_mapper_rls(data_file_list, output_file, keywords, verbose=verbose)
+    pipeline_rls(data_file_list, output_file, keywords, verbose=verbose)
+
+
+def pipeline_rls(filenames, output_file, keywords, verbose=False):
+    """
+    Perform regularized least-square inversion of a simple model (tod
+    mask and projection). Processing steps are as follows :
+    
+        - define PacsObservation instance
+        - get Time Ordered Data (get_tod)
+        - define projection
+        - perform inversion on model
+        - save file
+
+    Arguments
+    ---------
+    filenames: list of strings
+        List of data filenames.
+    output_file : string
+        Name of the output fits file.
+    keywords: dict
+        Dictionary containing options for all steps as dictionary.
+    verbose: boolean (default False)
+        Set verbosity.
+
+    Returns
+    -------
+    Returns nothing. Save result as a fits file.
+    """
+    from scipy.sparse.linalg import cgs
+    import tamasis as tm
+    # verbosity
+    keywords["mapper_rls"]["verbose"] = verbose
+    # define observation
+    obs_keys = keywords.get("PacsObservation", {})
+    obs = tm.PacsObservation(filenames, **obs_keys)
+    # get data
+    tod_keys = keywords.get("get_tod", {})
+    tod = obs.get_tod(**tod_keys)
+    # define projector
+    proj_keys = keywords.get("Projection", {})
+    projection = tm.Projection(obs, **proj_keys)
+    # define mask
+    masking_tod  = tm.Masking(tod.mask)
+    # define full model
+    model = masking_tod * projection
+    # perform map-making inversion
+    mapper_keys = keywords.get("mapper_rls", {})
+    map_rls = tm.mapper_rls(tod, model, solver=cgs, **mapper_keys)
+    # save
+    map_rls.save(output_file)
 
 def usage():
     print(__usage__)
 
-__usage__ = """Usage: tamasis_rls [options] [config_file]
+__usage__ = """Usage: pacs_rls [options] [config_file]
 
 Use tamasis regularized least-square map-making routine
 using the configuration [filename]
