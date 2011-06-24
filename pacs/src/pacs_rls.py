@@ -7,8 +7,8 @@ Author: Nicolas Barbey
 """
 
 
-options = "hvf:"
-long_options = ["help", "verbose", "filenames="]
+options = "hvf:o:"
+long_options = ["help", "verbose", "filenames=", "output="]
 
 def main():
     import os, sys, getopt, ConfigParser, time
