@@ -27,7 +27,9 @@ __all__ = [ 'PacsObservation',
             'pacs_compute_delay',
             'pacs_get_psf',
             'pacs_plot_scan',
-            'pacs_preprocess' ]
+            'pacs_preprocess',
+            'step_scanline_masking',
+            'step_deglitching']
 
 CALIBFILE_DTC = var.path + '/pacs/PCalPhotometer_PhotTimeConstant_FM_v2.fits'
 CALIBFILE_STD = var.path + '/pacs/PCalPhotometer_Stddev_Tamasis_v1.fits'
