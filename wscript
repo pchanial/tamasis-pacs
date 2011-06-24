@@ -245,7 +245,9 @@ def build(bld):
         use=libraries)
 
     # Installation
-    bld.install_files('${PYTHONDIR}/tamasis', bld.srcnode.ant_glob('*/src/*py') + ['tamasisfortran.so'])
+    pyfiles = bld.srcnode.ant_glob('*/src/*py')
+    bld.install_files('${PYTHONDIR}/tamasis', pyfiles + ['tamasisfortran.so'])
+
     for subdir in subdirs:
         node = bld.srcnode.find_node(subdir+'/data')
         if node is not None:
@@ -253,7 +255,11 @@ def build(bld):
         node = bld.srcnode.find_node(subdir+'/example')
         if node is not None:
             bld.install_files('${SHAREDIR}/tamasis/'+subdir, node.ant_glob('*'))
+
     bld.install_files('${LIBDIR}/jython/tamasishcss', bld.srcnode.ant_glob('pacs/hcss/tamasishcss/*py'))
+
+    execfiles = [f for f in pyfiles if os.access(f.abspath(), os.X_OK)]
+    bld.install_files('${BINDIR}', execfiles)
 
 
         
