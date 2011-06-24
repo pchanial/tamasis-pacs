@@ -11,7 +11,7 @@ long_options = ["help", "verbose", "filenames="]
 
 def main():
     import os, sys, getopt, ConfigParser, time
-    from tamasis.pacs.processing import tamasis_mapper_invntt
+    from tamasis.pacs_processing import tamasis_mapper_invntt
     # parse command line arguments
     try:
         opts, args = getopt.getopt(sys.argv[1:], options, long_options)
