@@ -6,8 +6,8 @@ state-of-the-art PACS instrument model.
 Author: Nicolas Barbey
 """
 
-options = "hvf:"
-long_options = ["help", "verbose", "filenames="]
+options = "hvf:o:"
+long_options = ["help", "verbose", "filenames=", "output="]
 
 def main():
     import os, sys, getopt, ConfigParser, time
@@ -103,6 +103,10 @@ def main():
     fname = ".".join(filename.split(".")[:-1])
     # store results into the Data subdirectory as expected by sumatra
     output_file = "Data/map" + fname + '_' + date + '.fits'
+    # if output argument is passed, override config file value.
+    for o, a in opts:
+        if o in ("-o", "--output"):
+            output_file = a
     # run tamasis mapper
     pipeline_wrls(data_file_list, output_file, keywords, verbose=verbose)
 
@@ -145,11 +149,11 @@ def pipeline_wrls(filenames, output_file, keywords, verbose=False):
     # define observation
     obs = tm.PacsObservation(filenames, **keywords["PacsObservation"])
     # extra masking
-    step_scanline_masking(obs, **keywords["scanline_masking"])
+    tm.step_scanline_masking(obs, **keywords["scanline_masking"])
     # get data
     tod = obs.get_tod(**keywords["get_tod"])
     # degltiching
-    step_deglitching(obs, tod, **keywords["degltiching"])
+    tm.step_deglitching(obs, tod, **keywords["degltiching"])
     # median filtering
     tod = tm.filter_median(tod, **keywords["filter_median"])
     # define projector
@@ -187,6 +191,7 @@ Options:
   -h, --help        Show this help message and exit.
   -v, --verbose     Print status messages to std output.
   -f, --filenames   Overrides filenames config file value.
+  -o, --output      Overrides output default value.
 """
 
 # to call from command line

@@ -95,6 +95,10 @@ def main():
     fname = ".".join(filename.split(".")[:-1])
     # store results into the Data subdirectory as expected by sumatra
     output_file = "Data/map" + fname + '_' + date + '.fits'
+    # if output argument is passed, override config file value.
+    for o, a in opts:
+        if o in ("-o", "--output"):
+            output_file = a
     # run tamasis mapper
     pipeline_rls(data_file_list, output_file, keywords, verbose=verbose)
 
@@ -165,6 +169,7 @@ Options:
   -h, --help        Show this help message and exit
   -v, --verbose     Print status messages to std output.
   -f, --filenames   Overrides filenames config file value.
+  -o, --output      Overrides output default value.
 """
 
 # to call from command line
