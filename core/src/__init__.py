@@ -4,7 +4,6 @@
 from .core import *
 from .madcap import *
 from .pacs import *
-from .pacs_processing import *
 
 del acquisitionmodels, datatypes, mappers, numpyutils, observations, processing, quantity, tamasisfortran
 del core, madcap, pacs
