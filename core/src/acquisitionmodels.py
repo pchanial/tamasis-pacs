@@ -55,6 +55,7 @@ __all__ = [
     'Rounding',
     'Scalar',
     'Shift',
+    'SqrtInvNtt',
     'Unpacking',
     'acquisitionmodel_factory',
     'asacquisitionmodel',
@@ -1823,9 +1824,22 @@ class InvNtt(AcquisitionModelLinear):
                                         dtype=np.int32), np.sum(nsamples))
         if status != 0: raise RuntimeError()
         d = Diagonal(tod_filter.T, shapein=tod_filter.T.shape, **keywords)
+        d = np.maximum(d, 0)
         d.data /= var.comm_tod.allreduce(np.max(d.data), op=MPI.MAX)
         d.ncorrelations = ncorrelations
         return d
+
+
+#-------------------------------------------------------------------------------
+
+
+class SqrtInvNtt(InvNtt):
+    def __init__(self, *args, **kw):
+        invntt = InvNtt(*args, **kw)
+        _tocompositemodel(self, Composition, invntt.blocks)
+        data = self.blocks[2].data
+        data[:] = np.sqrt(data)
+        #np.sqrt(data, out=data) does not work with numpy 1.5
 
 
 #-------------------------------------------------------------------------------
