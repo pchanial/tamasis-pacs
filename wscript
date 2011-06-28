@@ -249,7 +249,7 @@ def build(bld):
     pyfiles = [f for f in files if not os.access(f.abspath(), os.X_OK)]
     execfiles = [f for f in files if os.access(f.abspath(), os.X_OK)]
     bld.install_files('${PYTHONDIR}/tamasis', pyfiles + ['tamasisfortran.so'])
-    bld.install_files('${PYTHONDIR}/tamasis', execfiles, chmod=755)
+    bld.install_files('${PYTHONDIR}/tamasis', execfiles, chmod=0o755)
 
     for f in execfiles:
         bf = os.path.basename(f.abspath())
