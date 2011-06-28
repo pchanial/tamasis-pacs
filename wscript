@@ -245,8 +245,16 @@ def build(bld):
         use=libraries)
 
     # Installation
-    pyfiles = bld.srcnode.ant_glob('*/src/*py')
+    files = bld.srcnode.ant_glob('*/src/*py')
+    pyfiles = [f for f in files if not os.access(f.abspath(), os.X_OK)]
+    execfiles = [f for f in files if os.access(f.abspath(), os.X_OK)]
     bld.install_files('${PYTHONDIR}/tamasis', pyfiles + ['tamasisfortran.so'])
+    bld.install_files('${PYTHONDIR}/tamasis', execfiles, chmod=755)
+
+    for f in execfiles:
+        bf = os.path.basename(f.abspath())
+        bld.symlink_as('${BINDIR}/' + bf.replace('.py', ''),
+                       bld.env['PYTHONDIR']+'/tamasis/' + bf)
 
     for subdir in subdirs:
         node = bld.srcnode.find_node(subdir+'/src')
@@ -261,9 +269,6 @@ def build(bld):
             bld.install_files('${SHAREDIR}/tamasis/'+subdir, node.ant_glob('*'))
 
     bld.install_files('${LIBDIR}/jython/tamasishcss', bld.srcnode.ant_glob('pacs/hcss/tamasishcss/*py'))
-
-    execfiles = [f for f in pyfiles if os.access(f.abspath(), os.X_OK)]
-    bld.install_files('${BINDIR}', execfiles)
 
 
         
