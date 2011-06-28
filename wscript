@@ -249,6 +249,10 @@ def build(bld):
     bld.install_files('${PYTHONDIR}/tamasis', pyfiles + ['tamasisfortran.so'])
 
     for subdir in subdirs:
+        node = bld.srcnode.find_node(subdir+'/src')
+        if node is not None:
+            bld.install_files('${SHAREDIR}/tamasis/'+subdir,
+                              node.ant_glob('*.cfg'))
         node = bld.srcnode.find_node(subdir+'/data')
         if node is not None:
             bld.install_files('${SHAREDIR}/tamasis/'+subdir, node.ant_glob('*'))
