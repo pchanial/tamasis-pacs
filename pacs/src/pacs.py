@@ -29,7 +29,9 @@ __all__ = [ 'PacsObservation',
             'pacs_compute_delay',
             'pacs_get_psf',
             'pacs_plot_scan',
-            'pacs_preprocess' ]
+            'pacs_preprocess',
+            'step_scanline_masking',
+            'step_deglitching']
 
 CALIBFILE_DTC = var.path + '/pacs/PCalPhotometer_PhotTimeConstant_FM_v2.fits'
 CALIBFILE_GAI = var.path + '/pacs/PCalPhotometer_Gain_FM_v1.fits'
@@ -1592,3 +1594,90 @@ def _scan_speed(pointing):
         speed[islice] = np.round(np.median(velocity[dest:dest+n][inscan]),1)
         dest += n
     return speed
+
+#-------------------------------------------------------------------------------
+# processing steps
+
+def step_scanline_masking(obs, n_repetition=0, n_scanline=None):
+    """
+    Mask everything up to the n_scanline scan line of the n_repetition repetition.
+    If n_scanline is None, mask the whole repetition.
+
+    Arguments
+    ----------
+
+    obs: PacsObservation
+        The considered PACS observation instance.
+
+    n_repetition: int
+        Mask everything up to n_repetition.
+
+    n_scanline: int or None (default: None)
+        Mask everything up to n_scanline of n_repetition.
+        If None mask n_repetition entirely.
+
+    Returns
+    -------
+
+    Returns nothing, obs is altered inplace.
+
+    Note
+    ----
+
+    scan line index starts at 1 !
+    """
+    if n_scanline == None:
+        for i in xrange(n_repetition):
+            obs.pointing.masked[obs.status.Repetition == i] = True
+    else:
+        for i in xrange(n_repetition - 1):
+            obs.pointing.masked[obs.status.Repetition == i] = True
+        for j in xrange(1, n_scanline):
+            obs.pointing.masked[(obs.status.Repetition == n_repetition) *
+                                (obs.status.ScanLineNumber == j)] = True
+
+def step_deglitching(obs, tod, length=100, nsigma=25., method="mad"):
+    """
+    Include all the deglitching steps : 
+
+       - define a sharp projector without oversampling and with
+         default resolution.
+
+       - perform tod filtering
+
+       - second level deglitching with mad or std
+
+    Arguments
+    ---------
+    obs : PacsObservation instance
+    tod : Time Ordered Data
+    length : int (default: 100)
+        Median filtering window size.
+    nsigma : float (default: 25.)
+        Median filtering threshold
+    method : "mad" or "std" (default: "mad")
+        Filtering method (median absolute deviation or standard deviation).
+
+    Returns
+    -------
+    Returns nothing. tod mask is updated in-place.
+    """
+    import tamasis as tm
+
+    if method == "mad":
+        method = tm.deglitch_l2mad
+    elif method == "std":
+        method = tm.deglitch_l2std
+    else:
+        raise ValueError("Unrecognized deglitching method.")
+
+    # special deglitching projector
+    proj_glitch = tm.Projection(obs,
+                                method='sharp',
+                                oversampling=False,
+                                npixels_per_sample=6)
+    # filter tod with narrow window
+    tod_glitch = tm.filter_median(tod, length=length)
+    # actual degltiching according to selected method (mad or std)
+    tod.mask = method(tod_glitch, proj_glitch, nsigma=nsigma)
+
