@@ -947,7 +947,7 @@ class Rounding(AcquisitionModel, Square):
 
     def direct(self, input, inplace, cachein, cacheout):
         output = self.validate_input_inplace(input, inplace)
-        self.round(output)
+        self.round(output.T)
         return output
 
 
