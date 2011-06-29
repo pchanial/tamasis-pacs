@@ -63,7 +63,7 @@ def main():
                               "substraction_mean",
                               "raw"):
                     get = config.getboolean
-            if section == "degltiching":
+            if section == "deglitching":
                 if option in ("length", "nsigma"):
                     get = config.getfloat
             if section == "filter_median":
@@ -152,8 +152,8 @@ def pipeline_wrls(filenames, output_file, keywords, verbose=False):
     tm.step_scanline_masking(obs, **keywords["scanline_masking"])
     # get data
     tod = obs.get_tod(**keywords["get_tod"])
-    # degltiching
-    tm.step_deglitching(obs, tod, **keywords["degltiching"])
+    # deglitching
+    tm.step_deglitching(obs, tod, **keywords["deglitching"])
     # median filtering
     tod = tm.filter_median(tod, **keywords["filter_median"])
     # define projector
