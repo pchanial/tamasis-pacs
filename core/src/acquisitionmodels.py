@@ -1884,12 +1884,12 @@ def Clip(vmin, vmax, description=None, **keywords):
 
 def Maximum(value, description=None, **keywords):
     description = description or 'Maximum'
-    return acquisitionmodel_factory(lambda x: np.maximum(x, value, out=x),
+    return acquisitionmodel_factory(lambda x: np.maximum(x, value, x),
                                     description=description, **keywords)
 
 def Minimum(value, description=None, **keywords):
     description = description or 'Minimum'
-    return acquisitionmodel_factory(lambda x: np.minimum(x, value, out=x),
+    return acquisitionmodel_factory(lambda x: np.minimum(x, value, x),
                                     description=description, **keywords)
 
 
