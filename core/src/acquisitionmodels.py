@@ -23,7 +23,7 @@ from .numpyutils import _my_isscalar
 from .processing import interpolate_linear
 from .quantity import Quantity, UnitError, _divide_unit, _multiply_unit
 from .utils import diff, diffT, diffTdiff, shift
-from .mpiutils import split_work
+from .mpiutils import split_shape, split_work
 
 __all__ = [
     'AcquisitionModel',
@@ -187,40 +187,6 @@ class AcquisitionModel(object):
             'an incompatible shape ' + str(shapeout) + '. Expected shape is ' +\
             str(self.shapeout) + '.')
 
-    def validate_input_direct(self, input, cachein, cacheout):
-
-        def set_cachein(cache):
-            self.cachein = cache
-        def set_cacheout(cache):
-            self.cacheout = cache
-
-        return self.validate_input_cache(input, self.description,
-            cachein, cacheout,
-            self.attrin, self.attrout,
-            self.cachein, self.cacheout,
-            set_cachein, set_cacheout,
-            self.shapein, self.shapeout,
-            self.typein, self.typeout,
-            self.unitin, self.unitout,
-            lambda shape: self.validate_shapein(shape))
-
-    def validate_input_transpose(self, input, cachein, cacheout):
-
-        def set_cachein(cache):
-            self.cachein = cache
-        def set_cacheout(cache):
-            self.cacheout = cache
-
-        return self.validate_input_cache(input, self.description + '.T',
-            cachein, cacheout,
-            self.attrout, self.attrin,
-            self.cacheout, self.cachein,
-            set_cacheout, set_cachein,
-            self.shapeout, self.shapein,
-            self.typeout, self.typein,
-            self.unitout, self.unitin,
-            lambda shape: self.validate_shapeout(shape))
-
     def validate_input_inplace(self, input, inplace):
 
         input = np.asanyarray(input)
@@ -262,6 +228,40 @@ class AcquisitionModel(object):
             setattr(input, k, v)
 
         return input
+
+    def validate_input_direct(self, input, cachein, cacheout):
+
+        def set_cachein(cache):
+            self.cachein = cache
+        def set_cacheout(cache):
+            self.cacheout = cache
+
+        return self.validate_input_cache(input, self.description,
+            cachein, cacheout,
+            self.attrin, self.attrout,
+            self.cachein, self.cacheout,
+            set_cachein, set_cacheout,
+            self.shapein, self.shapeout,
+            self.typein, self.typeout,
+            self.unitin, self.unitout,
+            lambda shape: self.validate_shapein(shape))
+
+    def validate_input_transpose(self, input, cachein, cacheout):
+
+        def set_cachein(cache):
+            self.cachein = cache
+        def set_cacheout(cache):
+            self.cacheout = cache
+
+        return self.validate_input_cache(input, self.description + '.T',
+            cachein, cacheout,
+            self.attrout, self.attrin,
+            self.cacheout, self.cachein,
+            set_cacheout, set_cachein,
+            self.shapeout, self.shapein,
+            self.typeout, self.typein,
+            self.unitout, self.unitin,
+            lambda shape: self.validate_shapeout(shape))
 
     def validate_input_cache(self, input, description,
                              do_cachein, do_cacheout,
@@ -1134,7 +1134,7 @@ class DistributionGlobal(AcquisitionModelLinear):
             comm = var.comm_map
         self.comm = comm
 
-        # if local is false, the maps are not distributed
+        # if share is true, the maps are not distributed
         if share:
             def direct(input, inplace, cachein, cacheout):
                 return self.validate_input_inplace(input, inplace)
@@ -1149,9 +1149,7 @@ class DistributionGlobal(AcquisitionModelLinear):
                                             cache=False, **keywords)
             return
 
-        shapeout = list(shape)
-        shapeout[0] = int(np.ceil(float(shape[0]) / comm.Get_size()))
-        shapeout = tuple(shapeout)
+        shapeout = split_shape(shape, comm)
         self.counts = []
         self.offsets = [0]
         for rank in range(comm.Get_size()):
@@ -1171,8 +1169,7 @@ class DistributionGlobal(AcquisitionModelLinear):
         s = split_work(self.shapein[0], comm=self.comm)
         n = s.stop - s.start
         output[0:n] = input[s.start:s.stop]
-        if n < self.shapein[0]:
-            output[n:] = 0
+        output[n:] = 0
         return output
 
     def transpose(self, input, inplace, cachein, cacheout):
@@ -1189,32 +1186,26 @@ class DistributionGlobal(AcquisitionModelLinear):
 
 class DistributionLocal(AcquisitionModelLinear):
     """
-    Distribute a local map to different MPI processes.
+    Scatter a distributed map to different MPI processes under the control of a
+    local non-distributed mask.
     """
 
-    def __init__(self, maskout, operator=MPI.SUM, comm=None, **keywords):
+    def __init__(self, mask, operator=MPI.SUM, comm=None, **keywords):
         if comm is None:
             comm = var.comm_map
-        shapeout = (int(np.sum(~maskout)),)
-        shapein = list(maskout.shape)
-        shapein[0] = int(np.ceil(float(shapein[0]) / comm.Get_size()))
-        shapein = tuple(shapein)
-        attrin = { 'comm':comm, 'shape_global':maskout.shape }
+        shapeout = (int(np.sum(~mask)),)
+        shapein = split_shape(mask.shape, comm)
+        attrin = { 'comm':comm, 'shape_global':mask.shape }
         attrout = { 'comm':MPI.COMM_SELF, 'shape_global':shapeout}
         AcquisitionModelLinear.__init__(self, cache=True, typein=Map,
             shapein=shapein, shapeout=shapeout, attrin=attrin, **keywords)
         self.comm = comm
-        self.maskout = maskout
+        self.mask = mask
         self.operator = operator
-        try:
-            self.mask = self.transpose(np.ones(shapeout), True, True, True) == 0
-        except MemoryError:
-            gc.collect()
-            self.mask = self.transpose(np.ones(shapeout), True, True, True) == 0
 
     def direct(self, input, inplace, cachein, cacheout):
         input, output = self.validate_input_direct(input, cachein, cacheout)
-        status = tmf.mpi_allscatterlocal(input.T, self.maskout.view(np.int8).T,
+        status = tmf.mpi_allscatterlocal(input.T, self.mask.view(np.int8).T,
             output.T, self.comm.py2f())
         if status == 0: return output
         if status < 0:
@@ -1223,7 +1214,7 @@ class DistributionLocal(AcquisitionModelLinear):
 
     def transpose(self, input, inplace, cachein, cacheout):
         input, output = self.validate_input_transpose(input, cachein, cacheout)
-        status = tmf.mpi_allreducelocal(input.T, self.maskout.view(np.int8).T,
+        status = tmf.mpi_allreducelocal(input.T, self.mask.view(np.int8).T,
             output.T, self.operator.py2f(), self.comm.py2f())
         if status == 0: return output
         if status < 0:
