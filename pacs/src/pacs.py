@@ -760,9 +760,7 @@ class PacsObservation(PacsBase):
         """
         Returns the signal and mask timelines.
 
-        By default, if no active mask is specified, the Master mask will
-        be retrieved if it exists. Otherwise, the activated masks will
-        be read and combined.
+        By default, all activated masks will be combined.
         """
 
         if raw:
@@ -771,11 +769,10 @@ class PacsObservation(PacsBase):
 
         act_masks = set([m for slice in self.slice \
                          for i, m in enumerate(slice.mask_name) \
-                         if m not in ('','master') and slice.mask_activated[i]])
+                         if m and slice.mask_activated[i]])
         dea_masks = set([m for slice in self.slice \
                          for i, m in enumerate(slice.mask_name) \
-                         if m not in ('','master') and \
-                            not slice.mask_activated[i]])
+                         if m and not slice.mask_activated[i]])
         all_masks = set([m for slice in self.slice for m in slice.mask_name \
                          if m != ''])
 
@@ -799,12 +796,6 @@ class PacsObservation(PacsBase):
                     print("Warning: mask '" + m + "' is not found.")
                 else:
                     sel_masks.add(m)
-
-        # use 'master' if all activated masks are selected
-        if all(['master' in slice.mask_name for slice in self.slice]) and \
-           act_masks <= sel_masks:
-            sel_masks -= act_masks
-            sel_masks.add('master')
 
         sel_masks = ','.join(sorted(sel_masks))
 
