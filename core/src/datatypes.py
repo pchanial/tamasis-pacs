@@ -165,6 +165,8 @@ class FitsArray(DistributedArray, Quantity):
                     unit = header['BUNIT']
                 elif 'QTTY____' in header:
                     unit = header['QTTY____'] # HCSS crap
+                    if unit == '1':
+                        unit = ''
             try:
                 derived_units = fits['derived_units'].data
                 derived_units = pickle.loads(str(derived_units.data))
