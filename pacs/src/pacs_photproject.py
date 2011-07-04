@@ -1,133 +1,177 @@
-# Copyrights 2010-2011 Pierre Chanial
-# All rights reserved
-#
-#!/usr/bin/env python2.6
-#
-# NAME: tamasis_photproject
-# 
-# DESCRIPTION: create a map from a set of PACS observations, by backprojecting 
-# the timelines onto the sky map, and by dividing it by the weights, which are
-# the backprojection of 1.
-# The routine is meant to replicate HCSS' photproject using TAMASIS' tools
-#
-# Author: P. Chanial
+#!/usr/bin/env python
+"""
+Command-line interface to perform PACS map-making using HCSS's photproject
+algorithm
 
-import numpy as np
-from   optparse import OptionParser
-import sys
-from   tamasis import *
+Author: Pierre Chanial
+"""
 
-# preprocessor options
-parser = OptionParser('Usage: %prog [options] fitsfile...')
-parser.add_option('--output-tod', help='write tod to disk in FITS format [default:'
-                  ' %default]', action='store_true', dest='do_outputtod', default=False)
-parser.add_option('--flatfielding', help='divide by calibration flat-fie'
-                  'ld [default: %default]', dest='do_flatfielding', action='store_'
-                  'true', default=False)
-parser.add_option('--subtraction-mean', help='subtract mean value [default: %default]', dest='do_subtraction_mean', action='store_'
-                  'true', default=False)
-parser.add_option('--median-filtering', help='window length for timeline median filtering.', metavar='LENGTH')
-parser.add_option('-d', '--deglitching', help='method for timeline deglitching:'
-                  ' l2std, l2mad or none [default: %default]', metavar='METHOD',
-                  default='none')
-parser.add_option('--nsigma', help='N-sigma deglitching value [default: %defaul'
-                  't]', default=5.)
-parser.add_option('-n', '--npixels-per-sample', help='maximum number of sky pix'
-                  'els intercepted by a PACS detector [default: 6]', default=6)
+options = "hvf:o:"
+long_options = ["help", "verbose", "filenames=", "output="]
 
-parser.add_option('--policy-inscan', help='Policy for in-scan frames [default: %default]', default='keep')
-
-parser.add_option('--policy-turnaround', help='Policy for turn-around frames [default: %default]', default='keep')
-
-parser.add_option('--policy-other', help='Policy for non in-scan and non turn-around frames [default: %default]', default='remove')
-
-parser.add_option('--policy-invalid', help='Policy for invalid frames [default: %default]', default='mask')
-
-# mapper options
-parser.add_option('--output-map', help='write output map to disk in FITS format [default:'
-                  ' %default]', action='store_true', dest='do_outputmap', default=True)
-parser.add_option('--header', help='use FITS header in FILE to specify the map '
-                  'projection [default: automatic]', metavar='FILE')
-parser.add_option('--resolution', help='input pixel size of the map in arcsecon'
-                  'ds [default: 3.2 for the blue channel, 6.4 for the red one]')
-parser.add_option('--ds9', help='display the map using ds9', action='store_true', dest='do_ds9', default=False)
-
-(options, filename) = parser.parse_args(sys.argv[1:])
-
-if len(filename) == 0:
-    raise SystemExit(parser.print_help() or 1)
-
-# Check options
-options.deglitching = options.deglitching.lower()
-if options.deglitching not in ('none', 'l2std', 'l2mad'):
-    raise ValueError("Invalid deglitching method '"+options.deglitching+"'. Val"
-                     "id methods are 'l2std', 'l2mad' or 'none'.")
-
-if options.median_filtering is not None:
+def main():
+    import os, sys, getopt, ConfigParser, time
+    # parse command line arguments
     try:
-        length = int(options.median_filtering)
-    except:
-        raise ValueError("Invalid filtering length '"+options.median_filtering+"'.")
+        opts, args = getopt.getopt(sys.argv[1:], options, long_options)
+    except getopt.GetoptError, err:
+        print(str(err))
+        usage()
+        sys.exit(2)
 
-if options.npixels_per_sample is not None:
-    options.npixels_per_sample = int(options.npixels_per_sample)
+    # default
+    verbose = False
 
-# Set up the PACS observation(s)
-obs = PacsObservation(filename,
-                      policy_inscan=options.policy_inscan,
-                      policy_turnaround=options.policy_turnaround,
-                      policy_other=options.policy_other,
-                      policy_invalid=options.policy_invalid)
+    # parse options
+    for o, a in opts:
+        if o in ("-h", "--help"):
+            usage()
+            sys.exit()
+        if o in ("-v", "--verbose"):
+            verbose = True
 
-# Read the timeline
-tod = obs.get_tod(flatfielding=options.do_flatfielding,
-                  subtraction_mean=options.do_subtraction_mean,
-                  unit='Jy/arcsec^2')
+    # read config file
+    if len(args) == 0:
+        print("Error: config filename is mandatory.\n")
+        usage()
+        sys.exit(2)
+    config_file = args[0]
+    config = ConfigParser.RawConfigParser()
+    config.read(config_file)
+    keywords = dict()
+    # parse config
+    for section in config.sections():
+        keywords[section] = dict()
+        for option in config.options(section):
+            get = config.get
+            # recast to bool, int or float if needed
+            # if option not handled here, it defaults to a string
+            if section == "PacsObservation":
+                if option == "reject_bad_line":
+                    get = config.getboolean
+                if option == "fine_sampling_factor":
+                    get = config.getint
+                if option in ("active_fraction",
+                              "delay",
+                              "calblock_extension_time"):
+                    get = config.getfloat
+            if section == "scanline_masking":
+                if option in ("n_repetition", "n_scanline"):
+                    get = config.getint
+            if section == "get_tod":
+                if option in ("flatfielding",
+                              "substraction_mean",
+                              "raw"):
+                    get = config.getboolean
+            if section == "deglitching":
+                if option in ("length", "nsigma"):
+                    get = config.getfloat
+            if section == "filter_median":
+                if option == "length":
+                    get = config.getfloat
+            if section == "Projection":
+                if option == "npixels_per_sample":
+                    get = config.getint
+                if option == "resolution":
+                    get = config.getfloat
+            # store option using the appropriate get to recast option.
+            keywords[section][option] = get(section, option)
+    # special case for the main section
+    data_file_list = config.get("main", "filenames").split(",")
+    # if filenames argument is passed, override config file value.
+    for o, a in opts:
+        if o in ("-f", "--filenames"):
+            data_file_list = a.split(", ")
+    data_file_list = [w.lstrip().rstrip() for w in data_file_list]
+    # append date string to the output file to distinguish results.
+    date = time.strftime("%y%m%d_%H%M%S", time.gmtime())
+    # extract filename from data_file
+    filename = data_file_list[0].split(os.sep)[-1]
+    # remove extension
+    fname = ".".join(filename.split(".")[:-1])
+    # store results into the Data subdirectory as expected by sumatra
+    output_file = "Data/map" + fname + '_' + date + '.fits'
+    # if output argument is passed, override config file value.
+    for o, a in opts:
+        if o in ("-o", "--output"):
+            output_file = a
+    # run tamasis mapper
+    pipeline_photproject(data_file_list, output_file, keywords)
 
-if options.median_filtering is not None:
-    tod = filter_median(tod, length)
+def pipeline_photproject(filenames, output_file, keywords):
+    """
+    Perform regularized least-square inversion of state of the art
+    PACS model.  The PACS model includes tod mask, compression,
+    response, projection and noise covariance (invntt).
+    Processing steps are as follows :
+    
+        - define PacsObservation instance
+        - mask first scanlines to avoid drift
+        - get Time Ordered Data (get_tod)
+        - 2nd level deglitching (with standard projector and tod median
+            filtering with a  narrow window)
+        - median filtering
+        - define projection
+        - perform inversion on model
+        - save file
 
-# Set up the acquisition model. oversampling is set to False because
-# photproject does not attempt to sample better than what is transmitted
-if options.deglitching != 'none' or options.do_outputmap:
-    projection = Projection(obs,
-                            header=options.header,
-                            resolution=options.resolution,
-                            oversampling=False,
-                            npixels_per_sample=options.npixels_per_sample)
+    Arguments
+    ---------
+    filenames: list of strings
+        List of data filenames.
+    output_file : string
+        Name of the output fits file.
+    keywords: dict
+        Dictionary containing options for all steps as dictionary.
 
-# Deglitch
-if options.deglitching != 'none':
-    nbads = np.sum(tod.mask % 2)
-    if options.deglitching == 'l2std':
-        tod.mask = deglitch_l2std(tod, projection, nsigma=options.nsigma)
-    else:
-        tod.mask = deglitch_l2mad(tod, projection, nsigma=options.nsigma)
+    Returns
+    -------
+    Returns nothing. Save result as a fits file.
+    """
+    from scipy.sparse.linalg import cgs
+    import tamasis as tm
+    # define observation
+    obs = tm.PacsObservation(filenames, **keywords["PacsObservation"])
+    # extra masking
+    tm.step_scanline_masking(obs, **keywords["scanline_masking"])
+    # get data
+    tod = obs.get_tod(**keywords["get_tod"])
+    # deglitching
+    tm.step_deglitching(obs, tod, **keywords["deglitching"])
+    # median filtering
+    tod = tm.filter_median(tod, **keywords["filter_median"])
+    # define projector
+    projection = tm.Projection(obs, oversampling=False, **keywords["Projection"])
+    # build instrument model
+    masking = tm.Masking(tod.mask)
+    model = masking * projection
+    # set tod masked values to zero
+    tod = masking(tod)
+    # perform map-making
+    map_naive = tm.mapper_naive(tod, model, **keywords["mapper_naive"])
+    # save
+    map_naive.save(output_file)
 
-if options.do_outputtod:
-    if len(tod.nsamples) != len(filename):
-        raise ValueError('The number of tod slices is not the number of input filenames.')
-    dest = 0
-    tod_ = tod.reshape((obs.nrows, obs.ncolumns, tod.shape[-1]))
-    for nsamples, f in zip(tod.nsamples, filename):
-        tod_[:,:,dest:dest+nsamples].save(f+'_tod.fits')
-        dest += nsamples
+def usage():
+    print(__usage__)
 
-if not options.do_outputmap:
-    exit()
+__usage__ = """Usage: pacs_wrls [options] [config_file]
 
-# Get map dimensions
-nx = projection.header['naxis1']
-ny = projection.header['naxis2']
+Use tamasis regularized least-square map-making routine with madmap
+noise model.
 
-# Backproject the timeline and divide it by the weight
-print('Computing the map...')
-mymap = mapper_naive(tod, projection, unit='Jy/pixel')
+[config_file] is the name of the configuration file which contains
+map-making parameters. This file contains arguments to the various
+processing steps of the map-maker. For an exemple, see the file
+tamasis_invntt.cfg in the tamasis/pacs/src/ directory.
 
-# Write resulting map as a FITS file
-print('Writing the map...')
-mymap.save(filename[0] + '_map.fits')
+Options:
+  -h, --help        Show this help message and exit.
+  -v, --verbose     Print status messages to std output.
+  -f, --filenames   Overrides filenames config file value.
+  -o, --output      Overrides output default value.
+"""
 
-# Display map
-if options.do_ds9:
-     mymap.ds9()
+# to call from command line
+if __name__ == "__main__":
+    main()
