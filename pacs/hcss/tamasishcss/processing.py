@@ -15,11 +15,11 @@ from herschel.ia.task.views import TaskToolRegistry
 from herschel.pacs.signal import Frames
 from herschel.pacs.spg import *
 
-__all__ = [ 'tamasis_dir', 'tamasisPrepareFrames', 'tamasisPreprocessor', 'tamasisPhotProject' ]
+__all__ = [ 'tamasisPrepareFrames', 'tamasisPreprocessor', 'tamasisPhotProject' ]
 
-tamasis_dir = '/home/pchanial/software/lib/python2.6/site-packages/tamasis/'
-ld_library_path = '/opt/core-3.1-amd64/openmpi/1.4.1-gcc45/lib:/opt/core-3.1-amd64/gcc/4.5/lib64:/opt/core-3.1-amd64/libelf/0.8.13-gcc45/lib:/opt/core-3.1-amd64/cloog-ppl/0.15.7-gcc45/lib:/opt/core-3.1-amd64/polylib/5.22.4-gcc45/lib:/opt/core-3.1-amd64/ppl/0.10.2-gcc45/lib:/opt/core-3.1-amd64/mpc/0.8.1-gcc45/lib:/opt/core-3.1-amd64/mpfr/2.4.2-gcc45/lib:/opt/core-3.1-amd64/gmp/4.3.2-gcc45/lib:/opt/core-3.1-amd64/fftw3/3.2.2/lib:/opt/core-3.1-amd64/python/2.6/lib:/opt/core-3.1-amd64/ifc/11.1/lib/intel64:/opt/core-3.1-amd64/ifc/11.1/mkl/lib/em64t:/opt/core-3.1-amd64/cfitsio/3.23/lib'
 python_path = '/home/pchanial/software/lib/python2.6/site-packages'
+tamasis_path = python_path + '/tamasis/'
+ld_library_path = '/opt/core-3.1-amd64/ifc/2011.0.084/composerxe-2011.0.084/composerxe-2011.1.107/compiler/lib/intel64:/opt/core-3.1-amd64/ifc/2011.0.084/composerxe-2011.0.084/composerxe-2011.1.107/mpirt/lib/intel64:/opt/core-3.1-amd64/ifc/2011.0.084/composerxe-2011.0.084/composerxe-2011.1.107/compiler/lib/intel64:/opt/core-3.1-amd64/ifc/2011.0.084/composerxe-2011.0.084/composerxe-2011.1.107/mkl/lib/intel64:/opt/core-3.1-amd64/openmpi/1.4.1-gcc45/lib:/opt/core-3.1-amd64/cfitsio/3.25/lib:/opt/core-3.1-amd64/pgplot/5.2/:/opt/core-3.1-amd64/gcc/4.5/lib64:/opt/core-3.1-amd64/libelf/0.8.13-gcc45/lib:/opt/core-3.1-amd64/cloog-ppl/0.15.7-gcc45/lib:/opt/core-3.1-amd64/polylib/5.22.4-gcc45/lib:/opt/core-3.1-amd64/ppl/0.10.2-gcc45/lib:/opt/core-3.1-amd64/mpc/0.8.1-gcc45/lib:/opt/core-3.1-amd64/mpfr/2.4.2-gcc45/lib:/opt/core-3.1-amd64/gmp/4.3.2-gcc45/lib:/opt/core-3.1-amd64/fftw3/3.2.2/lib:/opt/core-3.1-amd64/python/2.6/lib:/opt/core-3.1-amd64/ifc/12.0/lib/intel64:/opt/core-3.1-amd64/ifc/12.0/mkl/lib/em64t:/opt/core-3.1-amd64/cfitsio/3.23/lib'
 False = 0
 
 fa                     = herschel.ia.io.fits.FitsArchive()
@@ -272,7 +272,7 @@ def _get_filename():
 
 def _get_cmd_preprocessor(frames, options):
 
-    cmd = 'python ' + tamasis_dir + 'pacs_photproject.py'
+    cmd = 'python ' + tamasis_path + 'pacs_photproject_deprecated.py'
     
     # write frames to disk
     filename = _get_filename()+'_tod_'
