@@ -1780,10 +1780,12 @@ class FftHalfComplex(AcquisitionModelLinear, Square):
 class Convolution(AcquisitionModelLinear):
     def __init__(self, shape, kernel, flags=['measure'], nthreads=None,
                  **keywords):
-        AcquisitionModelLinear.__init__(self, shapein=shape, **keywords)
 
         kernel = np.asarray(kernel)
         kernel = kernel.astype(np.dtype(1. + kernel.dtype.type()))
+        AcquisitionModelLinear.__init__(self, shapein=shape, dtype=kernel.dtype,
+                                        **keywords)
+
         ndim = len(self.shapein)
         if ndim != kernel.ndim:
             raise ValueError("The kernel dimension '" + str(kernel.ndim) + "' "\
