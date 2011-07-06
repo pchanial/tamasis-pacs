@@ -1,6 +1,8 @@
 # Copyrights 2010-2011 Pierre Chanial
 # All rights reserved
 #
+from __future__ import division
+
 try:
     import fftw3
 except:
@@ -1262,7 +1264,7 @@ class Compression(AcquisitionModelLinear):
                 ') is not an integer times the compression factor (' + \
                 str(self.factor)+').')
         return combine_sliced_shape(shapein[0:-1],
-                                    np.array(shapein[-1]) / self.factor)
+                                    np.array(shapein[-1]) // self.factor)
 
     def validate_shapeout(self, shapeout):
         if shapeout is None:
@@ -1775,15 +1777,72 @@ class FftHalfComplex(AcquisitionModelLinear, Square):
 #-------------------------------------------------------------------------------
 
 
-class Convolution(Symmetric):
+class Convolution(AcquisitionModelLinear):
+    def __init__(self, shape, kernel, flags=['measure'], nthreads=None,
+                 **keywords):
+        AcquisitionModelLinear.__init__(self, shapein=shape, **keywords)
 
-    def __init__(self, kernel, **keywords):
-        Symmetric.__init__(self, **keywords)
-        self.kernel = np.asanyarray(kernel)
+        kernel = np.asarray(kernel)
+        kernel = kernel.astype(np.dtype(1. + kernel.dtype.type()))
+        ndim = len(self.shapein)
+        if ndim != kernel.ndim:
+            raise ValueError("The kernel dimension '" + str(kernel.ndim) + "' "\
+                "is incompatible with the specified shape '" + str(ndim) + "'.")
 
+        # if the kernel is larger than the image, we don't crop it since it
+        # might affect normalisation of the kernel
+        if any([ks > s for ks,s in zip(kernel.shape, shape)]):
+            raise ValueError('The kernel must not be larger than the input.')
+
+        nthreads = nthreads or tmf.info_nthreads()
+
+        ker_origin = (np.array(kernel.shape)-1) / 2
+        if any([int(o) != o for o in ker_origin]):
+            raise ValueError('Kernel with even dimension is not yet handled.')
+
+        # pad kernel with zeros
+        ker_slice = [ slice(0,s) for s in kernel.shape ]
+        kernel, kernel[ker_slice] = np.zeros(shape, kernel.dtype), kernel
+        for axis, o in enumerate(ker_origin):
+            kernel = np.roll(kernel, int(-o), axis=axis)
+        
+        # set up fftw plans
+        self._in = np.empty(shape, kernel.dtype)
+        self._out = np.empty(shape, complex)
+        self.forward_plan = fftw3.Plan(self._in, self._out,
+                                       direction='forward',
+                                       flags=flags,
+                                       nthreads=nthreads)
+        self.backward_plan = fftw3.Plan(self._out, self._in,
+                                        direction='backward',
+                                        flags=flags,
+                                        nthreads=nthreads)
+
+        # FT kernel
+        self._in[:] = kernel
+        fftw3.execute(self.forward_plan)
+        self.kernel = self._out / kernel.size
+        
     def direct(self, input, inplace, cachein, cacheout):
         output = self.validate_input_inplace(input, inplace)
-        output[:] = scipy.signal.fftconvolve(input, self.kernel, mode='same')
+        self._in[:] = input
+        fftw3.execute(self.forward_plan)
+        #self._out *= self.kernel
+        tmf.multiply_complex(self._out.ravel(), self.kernel.ravel(),
+                             self._out.ravel())
+        fftw3.execute(self.backward_plan)
+        output[:] = self._in
+        return output
+        
+    def transpose(self, input, inplace, cachein, cacheout):
+        output = self.validate_input_inplace(input, inplace)
+        self._in[:] = input
+        fftw3.execute(self.forward_plan)
+        #self._out *= self.kernel.conjugate()
+        tmf.multiply_conjugate_complex(self._out.ravel(), self.kernel.ravel(),
+                                       self._out.ravel())
+        fftw3.execute(self.backward_plan)
+        output[:] = self._in
         return output
 
 

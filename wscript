@@ -198,10 +198,18 @@ end program test
         f90file = conf.bldnode.make_node('include/'+f77file.name)
         f77_to_f90(f77file, f90file)
 
-    # Write the file .f2py_f2cmap which maps the real type parameter 'p' to a C type
-    ctype = {'4':'float', '8':'double', '16':'long_double'}
-    os.system("echo {\\'real\\':{\\'p\\':\\'" + ctype[conf.options.precision_real] +              \
-              "\\'}} > %s/.f2py_f2cmap" % out)
+    # Write the file .f2py_f2cmap which maps the real or complex type parameter
+    # 'p' to a C type
+    p = conf.options.precision_real
+    ctype = {'4' : 'float',
+             '8' : 'double',
+             '16': 'long_double'}[p]
+    cctype = {'4' : 'complex_float',
+              '8' : 'complex_double',
+              '16': 'complex_long_double'}[p]
+    os.system("echo {\\'real\\':{\\'p\\':\\'" + ctype + \
+        "\\'}, \\'complex\\':{\\'p\\':\\'" + cctype + "\\'}} > %s/.f2py_f2cmap"\
+        % out)
 
 
 

@@ -1,4 +1,5 @@
 import numpy as np
+import scipy
 import scipy.sparse.linalg
 
 from tamasis import *
@@ -175,6 +176,87 @@ tod = Tod(np.random.random((10,1000))+1, nsamples=(100,300,5,1000-100-300-5))
 fft = FftHalfComplex(tod.nsamples)
 tod2 = fft.T(fft(tod))
 if any_neq(tod, tod2): raise TestFailure('fft4')
+
+
+#-------
+# Fftw3
+#-------
+
+imashape = (7, 7)
+kershape = (3, 3)
+kerorig = (np.array(kershape) - 1) // 2
+kernel = np.zeros(kershape)
+kernel[kerorig[0]-1:kerorig[0]+2,kerorig[1]-1:kerorig[1]+2] = 0.5 ** 4
+kernel[kerorig[0], kerorig[1]] = 0.5
+kernel[kerorig[0]-1,kerorig[1]-1] *= 2
+kernel[kerorig[0]+1,kerorig[1]+1] = 0
+
+image = np.zeros(imashape)
+image[3,3] = 1.
+ref = scipy.signal.convolve(image, kernel, mode='same')
+convol=Convolution(image.shape, kernel)
+con = convol(image)
+if any_neq(ref, con, atol=1.e-15): raise TestFailure()
+
+image = np.array([0,1,0,0,0,0,0])
+kernel = [1,1,0.5]
+convol = Convolution(image.shape, [1,1,1])
+con = convol(image)
+ref = scipy.signal.convolve(image, kernel, mode='same')
+
+for kx in range(1,4,2):
+    kshape = (kx,)
+    kernel = np.ones(kshape)
+    kernel.flat[-1] = 0.5
+    for ix in range(kx*2, kx*2+3):
+      ishape = (ix,)
+      image = np.zeros(ishape)
+      image.flat[image.size//2] = 1.
+      convol = Convolution(image.shape, kernel)
+      con = convol(image)
+      ref = scipy.signal.convolve(image, kernel, mode='same')
+      if any_neq(con, ref, atol=1.e-15):
+          raise TestFailure('Convol:'+','.join([str(kshape),str(ishape)]))
+      if any_neq(convol.dense(), convol.T.dense().T, atol=1.e-15):
+          raise TestFailure('Convol.T')
+
+for kx in range(1,4,2):
+  for ky in range(1,4,2):
+    kshape = (kx,ky)
+    kernel = np.ones(kshape)
+    kernel.flat[-1] = 0.5
+    for ix in range(kx*2+1, kx*2+3):
+      for iy in range(ky*2+1, ky*2+3):
+        ishape = (ix,iy)
+        image = np.zeros(ishape)
+        image[tuple([s//2 for s in image.shape])] = 1.
+        convol = Convolution(image.shape, kernel)
+        con = convol(image)
+        ref = scipy.signal.convolve(image, kernel, mode='same')
+        if any_neq(con, ref, atol=1.e-15):
+            raise TestFailure('Convol:'+','.join([str(kshape),str(ishape)]))
+        if any_neq(convol.dense(), convol.T.dense().T, atol=1.e-15):
+            raise TestFailure('Convol.T')
+
+for kx in range(1,4,2):
+  for ky in range(1,4,2):
+    for kz in range(1,4,2):
+      kshape = (kx,ky,kz)
+      kernel = np.ones(kshape)
+      kernel.flat[-1] = 0.5
+      for ix in range(kx*2+1, kx*2+3):
+        for iy in range(ky*2+1, ky*2+3):
+          for iz in range(kz*2+1, kz*2+3):
+            ishape = (ix,iy,iz)
+            image = np.zeros(ishape)
+            image[tuple([s//2 for s in image.shape])] = 1.
+            convol = Convolution(image.shape, kernel)
+            con = convol(image)
+            ref = scipy.signal.convolve(image, kernel, mode='same')
+            if any_neq(con, ref, atol=1.e-15):
+                raise TestFailure('Convol:'+','.join([str(kshape),str(ishape)]))
+            if any_neq(convol.dense(), convol.T.dense().T, atol=1.e-15):
+                raise TestFailure('Convol.T')
 
 
 #--------------------------------

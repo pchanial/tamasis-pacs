@@ -667,7 +667,7 @@ end subroutine subtract_inplace
 
 subroutine multiply_inplace(a, m, b, n)
 
-    use module_tamasis,  only : p
+    use module_tamasis, only : p
     implicit none
 
     real(p), intent(inout) :: a(m)
@@ -692,6 +692,72 @@ subroutine multiply_inplace(a, m, b, n)
     !$omp end parallel do
 
 end subroutine multiply_inplace
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine multiply_complex(a, m, b, n, c)
+
+    use module_tamasis, only : p
+    implicit none
+
+    complex(p), intent(in)    :: a(m)
+    complex(p), intent(in)    :: b(n)
+    complex(p), intent(inout) :: c(m)
+    integer, intent(in)        :: m, n
+    integer                    :: i, o
+
+    if (m == n) then
+        !$omp parallel do
+        do i = 1, n
+        c(i) = a(i) * b(i)
+        end do
+        !$omp end parallel do
+        return
+    end if
+
+    o = m / n
+    !$omp parallel do
+    do i = 1, n
+        c((i-1)*o+1:i*o) = a((i-1)*o+1:i*o) * b(i)
+    end do
+    !$omp end parallel do
+
+end subroutine multiply_complex
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine multiply_conjugate_complex(a, m, b, n, c)
+
+    use module_tamasis, only : p
+    implicit none
+
+    complex(p), intent(in)    :: a(m)
+    complex(p), intent(in)    :: b(n)
+    complex(p), intent(inout) :: c(m)
+    integer, intent(in)       :: m, n
+    integer                   :: i, o
+
+    if (m == n) then
+        !$omp parallel do
+        do i = 1, n
+        c(i) = a(i) * conjg(b(i))
+        end do
+        !$omp end parallel do
+        return
+    end if
+
+    o = m / n
+    !$omp parallel do
+    do i = 1, n
+        c((i-1)*o+1:i*o) = a((i-1)*o+1:i*o) * conjg(b(i))
+    end do
+    !$omp end parallel do
+
+end subroutine multiply_conjugate_complex
 
 
 !-----------------------------------------------------------------------------------------------------------------------------------
