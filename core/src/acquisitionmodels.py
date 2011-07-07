@@ -448,7 +448,7 @@ class AcquisitionModelLinear(AcquisitionModel, LinearOperator):
 
     def dense(self):
         d = np.ndarray(self.shape, dtype=self.dtype)
-        v = np.zeros(self.shape[1], dtype=var.FLOAT_DTYPE)
+        v = np.zeros(self.shape[1], dtype=self.dtype)
         for i in range(self.shape[1]):
             v[:] = 0
             v[i] = 1
@@ -537,7 +537,7 @@ class Composite(AcquisitionModel):
                                 inplace, cachein, cacheout).ravel()
             def dense():
                 d = np.ndarray(self.shape, dtype=self.dtype)
-                v = np.zeros(self.shape[1], dtype=var.FLOAT_DTYPE)
+                v = np.zeros(self.shape[1], dtype=self.dtype)
                 for i in range(self.shape[1]):
                     v[:] = 0
                     v[i] = 1
@@ -1816,8 +1816,7 @@ class Convolution(AcquisitionModelLinear):
     def __init__(self, shape, kernel, flags=['measure'], nthreads=None,
                  **keywords):
 
-        kernel = np.asarray(kernel)
-        kernel = kernel.astype(np.dtype(1. + kernel.dtype.type()))
+        kernel = kernel.astype(var.get_default_dtype(kernel))
         AcquisitionModelLinear.__init__(self, shapein=shape, dtype=kernel.dtype,
                                         **keywords)
 
