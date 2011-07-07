@@ -59,6 +59,8 @@ __all__ = [
     'Shift',
     'SqrtInvNtt',
     'Unpacking',
+    'Zero',
+    'I', 'O',
     'acquisitionmodel_factory',
     'asacquisitionmodel',
 ]
@@ -634,6 +636,11 @@ class Addition(Composite):
     a flattened list of operators is created by associativity, in order to
     benefit from the AcquisitionModel's caching mechanism.
     """
+    def __init__(self, ops, **keywords):
+        Composite.__init__(self, ops, **keywords)
+        self.blocks = _reduce_commute_scalar(self.blocks, np.add)
+        if len(self.blocks) == 1:
+            _toacquisitionmodel(self, self.blocks[0])
 
     def direct(self, input, inplace, cachein, cacheout):
         input = self.validate_input(input, self.shapein)
@@ -727,6 +734,12 @@ class Composition(Composite):
     a flattened list of operators is created by associativity, in order to
     benefit from the AcquisitionModel's caching mechanism.
     """
+
+    def __init__(self, ops, **keywords):
+        Composite.__init__(self, ops, **keywords)
+        self.blocks = _reduce_commute_scalar(self.blocks, np.multiply)
+        if len(self.blocks) == 1:
+            _toacquisitionmodel(self, self.blocks[0])
 
     def direct(self, input, inplace, cachein, cacheout):
         input = self.validate_input(input, self.shapein)
@@ -1325,21 +1338,6 @@ class DownSampling(Compression):
 #-------------------------------------------------------------------------------
 
 
-class Identity(Symmetric):
-    """
-    Identity class.
-    """
-
-    def __init__(self, **keywords):
-        Symmetric.__init__(self, **keywords)
-
-    def direct(self, input, inplace, cachein, cacheout):
-        return self.validate_input_inplace(input, inplace)
-       
-
-#-------------------------------------------------------------------------------
-
-
 class Scalar(Diagonal):
     """
     Class for scalar multiplication
@@ -1351,9 +1349,46 @@ class Scalar(Diagonal):
         Diagonal.__init__(self, value, **keywords)
        
     def __str__(self):
-        return super(self.__class__, self).__str__()+' (' + \
-               str(self.data) + ')'
+        value = self.data.flat[0]
+        if value == int(value):
+            value = int(value)
+        return '(' + str(value) + ')'
     
+
+#-------------------------------------------------------------------------------
+
+
+class Identity(Scalar):
+    """
+    Identity operator.
+    """
+
+    def __init__(self, **keywords):
+        Scalar.__init__(self, 1., **keywords)
+
+    def direct(self, input, inplace, cachein, cacheout):
+        return self.validate_input_inplace(input, inplace)
+
+I = Identity()
+    
+
+#-------------------------------------------------------------------------------
+
+
+class Zero(Scalar):
+    """
+    Zero operator.
+    """
+
+    def __init__(self, **keywords):
+        Scalar.__init__(self, 0., **keywords)
+
+    def direct(self, input, inplace, cachein, cacheout):
+        output = self.validate_input_inplace(input, inplace)
+        output[:] = 0
+        return output
+
+O = Zero()
 
 #-------------------------------------------------------------------------------
 
@@ -1890,8 +1925,7 @@ class SqrtInvNtt(InvNtt):
         invntt = InvNtt(*args, **kw)
         _tocompositemodel(self, Composition, invntt.blocks)
         data = self.blocks[2].data
-        data[:] = np.sqrt(data)
-        #np.sqrt(data, out=data) does not work with numpy 1.5
+        np.sqrt(data, data)
 
 
 #-------------------------------------------------------------------------------
@@ -2003,6 +2037,14 @@ def _tocompositemodel(model, cls, models):
 #-------------------------------------------------------------------------------
 
 
+def _toacquisitionmodel(op, new):
+    op.__class__ = new.__class__
+    op.__dict__ = new.__dict__
+
+
+#-------------------------------------------------------------------------------
+
+
 def _get_dtype(type1, type2):
     t1 = type1.type()
     t2 = type2.type()
@@ -2091,3 +2133,30 @@ def _validate_output_unit(input, output, unitin, unitout):
         return
     output._unit = _divide_unit(output._unit, unitin)
     output._unit = _multiply_unit(output._unit, unitout)
+
+
+#-------------------------------------------------------------------------------
+
+
+def _reduce_commute_scalar(ops, op):
+    # moving scalars from right to left
+    if len(ops) < 2:
+        return ops
+    ops = list(ops)
+    i = len(ops) - 2
+    while i >= 0:
+        if isinstance(ops[i+1], Scalar):
+            if isinstance(ops[i], Scalar):
+                ops[i] = Scalar(op(ops[i].data, ops[i+1].data))
+                del ops[i+1]
+            elif isinstance(ops[i], LinearOperator):
+                ops[i], ops[i+1] = ops[i+1], ops[i]
+            elif op == np.multiply:
+                if ops[i+1].data == 1:
+                    del ops[i+1]
+        i -= 1
+    if len(ops) > 1 and op == np.multiply and isinstance(ops[0], Scalar):
+        if ops[0].data == 1:
+            del ops[0]
+
+    return ops
