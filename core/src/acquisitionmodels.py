@@ -644,22 +644,22 @@ class Addition(Composite):
 
     def direct(self, input, inplace, cachein, cacheout):
         input = self.validate_input(input, self.shapein)
-        output = self.blocks[0].direct(input, False, False, False)
+        output = np.array(self.blocks[0].direct(input, False, False, False),
+                          ndmin=1, copy=False)
         for i, model in enumerate(self.blocks[1:]):
             last = i == len(self.blocks) - 2
-            tmf.add_inplace(np.array(output, ndmin=1, copy=False).T,
-                            np.array(model.direct(input, inplace and last,
-                            cachein, cacheout), ndmin=1, copy=False).T)
+            tmf.add(output.T, np.array(model.direct(input, inplace and last,
+                    cachein, cacheout), ndmin=1, copy=False).T, output.ravel())
         return output
 
     def transpose(self, input, inplace, cachein, cacheout):
         input = self.validate_input(input, self.shapeout)
-        output = self.blocks[0].transpose(input, False, False, False)
+        output = np.array(self.blocks[0].transpose(input, False, False, False),
+                          ndmin=1, copy=False)
         for i, model in enumerate(self.blocks[1:]):
             last = i == len(self.blocks) - 2
-            tmf.add_inplace(np.array(output, ndmin=1, copy=False).T,
-                            np.array(model.transpose(input, inplace and last,
-                            cachein, cacheout), ndmin=1, copy=False).T)
+            tmf.add(output.T, np.array(model.transpose(input, inplace and last,
+                    cachein, cacheout), ndmin=1, copy=False).T, output.ravel())
         return output
 
     @property
@@ -826,7 +826,7 @@ class Square(object):
 
 
 class Symmetric(AcquisitionModelLinear, Square):
-    """Symmetric operator"""
+    """Symmetric operator."""
 
     def __init__(self, **keywords):
         AcquisitionModelLinear.__init__(self, **keywords)
@@ -851,17 +851,17 @@ class Diagonal(Symmetric):
     is broadcast along the fast dimensions.
     """
 
-    def __init__(self, diagonal, **keywords):
-        diagonal = np.array(diagonal, dtype=var.get_default_dtype(diagonal),
-                            order='c')
-        Symmetric.__init__(self, dtype=diagonal.dtype, **keywords)
-        self.isscalar = diagonal.ndim == 0
-        self.data = np.array(diagonal, ndmin=1, copy=False)
+    def __init__(self, diagonal, dtype=None, **keywords):
+        dtype = dtype or var.get_default_dtype(diagonal)
+        self.data = np.array(diagonal, dtype, order='c', ndmin=1, copy=False)
+        Symmetric.__init__(self, dtype=dtype, **keywords)
 
     def direct(self, input, inplace, cachein, cacheout):
         output = self.validate_input_inplace(input, inplace)
         if self.dtype == var.FLOAT_DTYPE:
-            tmf.multiply_inplace(output.T, self.data.T)
+            tmf.multiply(output.T, self.data.T, output.ravel())
+        elif self.dtype == var.COMPLEX_DTYPE:
+            tmf.multiply_complex(output.T, self.data.T, output.ravel())
         else:
             output.T[:] *= self.data.T
         return output
@@ -869,11 +869,12 @@ class Diagonal(Symmetric):
     def validate_shapein(self, shapein):
         if shapein is None:
             return self.shapein
-        if self.isscalar:
+        if self.data.size == 1:
             return shapein
         if flatten_sliced_shape(shapein[0:self.data.ndim]) != self.data.shape:
-            raise ValueError('The input has an incompatible shape ' + \
-                             str(shapein) + '.')
+            raise ValueError("The input has an incompatible shape '" + \
+                str(shapein) + "' incompatible with that of the diagonal data "\
+                "'" + str(self.data.shape) + "'.")
         return shapein
 
     def matvec(self, v, inplace=False, cachein=False, cacheout=False):
@@ -881,6 +882,9 @@ class Diagonal(Symmetric):
         shape.append(-1)
         v = v.reshape(shape)
         return self.direct(v, inplace, cachein, cacheout).ravel()
+
+
+#-------------------------------------------------------------------------------
 
 
 class Offset(AcquisitionModel, Square):
@@ -891,18 +895,18 @@ class Offset(AcquisitionModel, Square):
     greater than the specified diagonal array, in which case the latter is
     broadcast along the fast dimensions. This operator is not linear.
     """
-    def __init__(self, offset, **keywords):
-        offset = np.array(offset, dtype=var.get_default_dtype(offset),
-                          order='c')
-        AcquisitionModel.__init__(self, dtype=offset.dtype, **keywords)
+    def __init__(self, offset, dtype=None, **keywords):
+        dtype = dtype or var.get_default_dtype(offset)
+        self.data = np.array(offset, dtype, order='c', ndmin=1, copy=False)
+        AcquisitionModel.__init__(self, dtype=dtype, **keywords)
         Square.__init__(self, **keywords)
-        self.isscalar = offset.ndim == 0
-        self.data = np.array(offset, ndmin=1, copy=False)
 
     def direct(self, input, inplace, cachein, cacheout):
         output = self.validate_input_inplace(input, inplace)
         if self.dtype == var.FLOAT_DTYPE:
-            tmf.add_inplace(output.T, self.data.T)
+            tmf.add(output.T, self.data.T, output.ravel())
+        elif self.dtype == var.COMPLEX_DTYPE:
+            tmf.add_complex(output.T, self.data.T, output.ravel())
         else:
             output.T[:] += self.data.T
         return output
@@ -910,11 +914,12 @@ class Offset(AcquisitionModel, Square):
     def validate_shapein(self, shapein):
         if shapein is None:
             return self.shapein
-        if self.isscalar:
+        if self.data.size == 1:
             return shapein
         if flatten_sliced_shape(shapein[0:self.data.ndim]) != self.data.shape:
-            raise ValueError('The input has an incompatible shape ' + \
-                             str(shapein) + '.')
+            raise ValueError("The input has an incompatible shape '" + \
+                str(shapein) + "' incompatible with that of the offset data "\
+                "'" + str(self.data.shape) + "'.")
         return shapein
 
     def matvec(self, v, inplace=False, cachein=False, cacheout=False):
@@ -923,6 +928,61 @@ class Offset(AcquisitionModel, Square):
         v = v.reshape(shape)
         return self.direct(v, inplace, cachein, cacheout).ravel()
 
+
+#-------------------------------------------------------------------------------
+
+
+class Scalar(Diagonal):
+    """
+    Multiplication by a scalar.
+    """
+
+    def __init__(self, value, **keywords):
+        if not np.iscomplex(value):
+            value = np.real(value)
+        Diagonal.__init__(self, value, **keywords)
+       
+    def __str__(self):
+        value = self.data.flat[0]
+        if value == int(value):
+            value = int(value)
+        return '(' + str(value) + ')'
+    
+
+#-------------------------------------------------------------------------------
+
+
+class Identity(Scalar):
+    """
+    Identity operator.
+    """
+
+    def __init__(self, **keywords):
+        Scalar.__init__(self, 1., **keywords)
+
+    def direct(self, input, inplace, cachein, cacheout):
+        return self.validate_input_inplace(input, inplace)
+
+I = Identity()
+    
+
+#-------------------------------------------------------------------------------
+
+
+class Zero(Scalar):
+    """
+    Zero operator.
+    """
+
+    def __init__(self, **keywords):
+        Scalar.__init__(self, 0., **keywords)
+
+    def direct(self, input, inplace, cachein, cacheout):
+        output = self.validate_input_inplace(input, inplace)
+        output[:] = 0
+        return output
+
+O = Zero()
 
 #-------------------------------------------------------------------------------
 
@@ -1334,61 +1394,6 @@ class DownSampling(Compression):
             np.array(input.nsamples, np.int32), self.factor.astype(np.int32))
         return output
       
-
-#-------------------------------------------------------------------------------
-
-
-class Scalar(Diagonal):
-    """
-    Class for scalar multiplication
-    """
-
-    def __init__(self, value, **keywords):
-        if not np.iscomplex(value):
-            value = np.real(value)
-        Diagonal.__init__(self, value, **keywords)
-       
-    def __str__(self):
-        value = self.data.flat[0]
-        if value == int(value):
-            value = int(value)
-        return '(' + str(value) + ')'
-    
-
-#-------------------------------------------------------------------------------
-
-
-class Identity(Scalar):
-    """
-    Identity operator.
-    """
-
-    def __init__(self, **keywords):
-        Scalar.__init__(self, 1., **keywords)
-
-    def direct(self, input, inplace, cachein, cacheout):
-        return self.validate_input_inplace(input, inplace)
-
-I = Identity()
-    
-
-#-------------------------------------------------------------------------------
-
-
-class Zero(Scalar):
-    """
-    Zero operator.
-    """
-
-    def __init__(self, **keywords):
-        Scalar.__init__(self, 0., **keywords)
-
-    def direct(self, input, inplace, cachein, cacheout):
-        output = self.validate_input_inplace(input, inplace)
-        output[:] = 0
-        return output
-
-O = Zero()
 
 #-------------------------------------------------------------------------------
 
@@ -1814,10 +1819,11 @@ class FftHalfComplex(AcquisitionModelLinear, Square):
 
 class Convolution(AcquisitionModelLinear):
     def __init__(self, shape, kernel, flags=['measure'], nthreads=None,
-                 **keywords):
+                 dtype=None, **keywords):
 
-        kernel = kernel.astype(var.get_default_dtype(kernel))
-        AcquisitionModelLinear.__init__(self, shapein=shape, dtype=kernel.dtype,
+        dtype = dtype or var.get_default_dtype(kernel)
+        kernel = np.array(kernel, dtype, copy=False)
+        AcquisitionModelLinear.__init__(self, shapein=shape, dtype=dtype,
                                         **keywords)
 
         ndim = len(self.shapein)

@@ -633,65 +633,188 @@ end subroutine add_inplace
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine subtract_inplace(a, m, b, n)
+subroutine add(a, m, b, n, c)
 
     use module_tamasis,  only : p
     implicit none
 
-    real(p), intent(inout) :: a(m)
+    real(p), intent(in)    :: a(m)
     real(p), intent(in)    :: b(n)
+    real(p), intent(inout) :: c(m)
     integer, intent(in)    :: m, n
     integer                :: i, o
 
-    if (m == n) then
-        !$omp parallel do
-        do i = 1, m
-            a(i) = a(i) - b(i)
-        end do
-        !$omp end parallel do
+    if (n == m) then
+        !$omp parallel workshare
+        c = a + b
+        !$omp end parallel workshare
         return
     end if
 
     o = m / n
     !$omp parallel do
     do i = 1, n
-        a((i-1)*o+1:i*o) = a((i-1)*o+1:i*o) - b(i)
+        c((i-1)*o+1:i*o) = a((i-1)*o+1:i*o) + b(i)
     end do
     !$omp end parallel do
 
-end subroutine subtract_inplace
+end subroutine add
 
 
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine multiply_inplace(a, m, b, n)
+subroutine subtract(a, m, b, n, c)
 
-    use module_tamasis, only : p
+    use module_tamasis,  only : p
     implicit none
 
-    real(p), intent(inout) :: a(m)
+    real(p), intent(in)    :: a(m)
     real(p), intent(in)    :: b(n)
+    real(p), intent(inout) :: c(m)
     integer, intent(in)    :: m, n
     integer                :: i, o
 
-    if (m == n) then
-        !$omp parallel do
-        do i = 1, m
-            a(i) = a(i) * b(i)
-        end do
-        !$omp end parallel do
+    if (n == m) then
+        !$omp parallel workshare
+        c = a - b
+        !$omp end parallel workshare
         return
     end if
 
     o = m / n
     !$omp parallel do
     do i = 1, n
-        a((i-1)*o+1:i*o) = a((i-1)*o+1:i*o) * b(i)
+        c((i-1)*o+1:i*o) = a((i-1)*o+1:i*o) - b(i)
     end do
     !$omp end parallel do
 
-end subroutine multiply_inplace
+end subroutine subtract
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine multiply(a, m, b, n, c)
+
+    use module_tamasis,  only : p
+    implicit none
+
+    real(p), intent(in)    :: a(m)
+    real(p), intent(in)    :: b(n)
+    real(p), intent(inout) :: c(m)
+    integer, intent(in)    :: m, n
+    integer                :: i, o
+
+    if (n == m) then
+        !$omp parallel workshare
+        c = a * b
+        !$omp end parallel workshare
+        return
+    end if
+
+    o = m / n
+    !$omp parallel do
+    do i = 1, n
+        c((i-1)*o+1:i*o) = a((i-1)*o+1:i*o) * b(i)
+    end do
+    !$omp end parallel do
+
+end subroutine multiply
+
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine divide(a, m, b, n, c)
+
+    use module_tamasis,  only : p
+    implicit none
+
+    real(p), intent(in)    :: a(m)
+    real(p), intent(in)    :: b(n)
+    real(p), intent(inout) :: c(m)
+    integer, intent(in)    :: m, n
+    integer                :: i, o
+
+    if (n == m) then
+        !$omp parallel workshare
+        c = a / b
+        !$omp end parallel workshare
+        return
+    end if
+
+    o = m / n
+    !$omp parallel do
+    do i = 1, n
+        c((i-1)*o+1:i*o) = a((i-1)*o+1:i*o) / b(i)
+    end do
+    !$omp end parallel do
+
+end subroutine divide
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine add_complex(a, m, b, n, c)
+
+    use module_tamasis, only : p
+    implicit none
+
+    complex(p), intent(in)    :: a(m)
+    complex(p), intent(in)    :: b(n)
+    complex(p), intent(inout) :: c(m)
+    integer, intent(in)       :: m, n
+    integer                   :: i, o
+
+    if (m == n) then
+        !$omp parallel workshare
+        c = a + b
+        !$omp end parallel workshare
+        return
+    end if
+
+    o = m / n
+    !$omp parallel do
+    do i = 1, n
+        c((i-1)*o+1:i*o) = a((i-1)*o+1:i*o) + b(i)
+    end do
+    !$omp end parallel do
+
+end subroutine add_complex
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine subtract_complex(a, m, b, n, c)
+
+    use module_tamasis, only : p
+    implicit none
+
+    complex(p), intent(in)    :: a(m)
+    complex(p), intent(in)    :: b(n)
+    complex(p), intent(inout) :: c(m)
+    integer, intent(in)       :: m, n
+    integer                   :: i, o
+
+    if (m == n) then
+        !$omp parallel workshare
+        c = a - b
+        !$omp end parallel workshare
+        return
+    end if
+
+    o = m / n
+    !$omp parallel do
+    do i = 1, n
+        c((i-1)*o+1:i*o) = a((i-1)*o+1:i*o) - b(i)
+    end do
+    !$omp end parallel do
+
+end subroutine subtract_complex
 
 
 !-----------------------------------------------------------------------------------------------------------------------------------
@@ -705,15 +828,13 @@ subroutine multiply_complex(a, m, b, n, c)
     complex(p), intent(in)    :: a(m)
     complex(p), intent(in)    :: b(n)
     complex(p), intent(inout) :: c(m)
-    integer, intent(in)        :: m, n
-    integer                    :: i, o
+    integer, intent(in)       :: m, n
+    integer                   :: i, o
 
     if (m == n) then
-        !$omp parallel do
-        do i = 1, n
-        c(i) = a(i) * b(i)
-        end do
-        !$omp end parallel do
+        !$omp parallel workshare
+        c = a * b
+        !$omp end parallel workshare
         return
     end if
 
@@ -725,6 +846,37 @@ subroutine multiply_complex(a, m, b, n, c)
     !$omp end parallel do
 
 end subroutine multiply_complex
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine divide_complex(a, m, b, n, c)
+
+    use module_tamasis, only : p
+    implicit none
+
+    complex(p), intent(in)    :: a(m)
+    complex(p), intent(in)    :: b(n)
+    complex(p), intent(inout) :: c(m)
+    integer, intent(in)       :: m, n
+    integer                   :: i, o
+
+    if (m == n) then
+        !$omp parallel workshare
+        c = a / b
+        !$omp end parallel workshare
+        return
+    end if
+
+    o = m / n
+    !$omp parallel do
+    do i = 1, n
+        c((i-1)*o+1:i*o) = a((i-1)*o+1:i*o) / b(i)
+    end do
+    !$omp end parallel do
+
+end subroutine divide_complex
 
 
 !-----------------------------------------------------------------------------------------------------------------------------------
@@ -742,11 +894,9 @@ subroutine multiply_conjugate_complex(a, m, b, n, c)
     integer                   :: i, o
 
     if (m == n) then
-        !$omp parallel do
-        do i = 1, n
-        c(i) = a(i) * conjg(b(i))
-        end do
-        !$omp end parallel do
+        !$omp parallel workshare
+        c = a * conjg(b)
+        !$omp end parallel workshare
         return
     end if
 

@@ -67,7 +67,7 @@ def mapper_naive(tod, model, unit=None, local_mask=None):
     tod[:] = 1
     map_weights = model.T(tod, True, True, False)
     old_settings = np.seterr(divide='ignore', invalid='ignore')
-    tmf.divide_inplace(mymap.T, map_weights.T)
+    mymap /= map_weights
     mymap.unit = todunit
     np.seterr(**old_settings)
     mymap.coverage = map_weights
