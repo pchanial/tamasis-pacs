@@ -1,6 +1,9 @@
 # Copyrights 2010-2011 Pierre Chanial
 # All rights reserved
 #
+
+from __future__ import division
+
 import numpy as np
 import pyfits
 import re
@@ -107,7 +110,7 @@ class MadMap1Observation(Observation):
         tod = Tod.zeros((ndetectors,nsamples))
 
         sizeofpmatrix = self.info.npixels_per_sample * tod.size
-        print('Info: Allocating '+str(sizeofpmatrix/2.**17)+' MiB for the pointing matrix.')
+        print('Info: Allocating '+str(sizeofpmatrix / 2**17)+' MiB for the pointing matrix.')
         pmatrix = np.zeros(sizeofpmatrix, dtype=np.int64)
         status = tmf.madmap1_read_tod(self.info.todfile, self.info.invnttfile, self.info.convert, self.info.npixels_per_sample, tod.T, pmatrix)
         if status != 0: raise RuntimeError()

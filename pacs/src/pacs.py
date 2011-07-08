@@ -1,6 +1,9 @@
 # Copyrights 2010-2011 Pierre Chanial
 # All rights reserved
 #
+
+from __future__ import division
+
 import gc
 import glob
 import kapteyn
@@ -110,7 +113,7 @@ class PacsBase(Observation):
         instrument.detector.corner.u = detector_corner[:,:,:,0]
         instrument.detector.corner.v = detector_corner[:,:,:,1]
         instrument.detector.time_constant = pyfits.open(CALIBFILE_DTC) \
-            [{'red':1, 'green':2, 'blue':3}[band]].data / 1000. # 's'
+            [{'red':1, 'green':2, 'blue':3}[band]].data / 1000 # 's'
         instrument.detector.time_constant[detector_bad] = np.nan
         instrument.detector.area = detector_area # arcsec^2
         instrument.detector.flat_total = dflat * oflat
@@ -132,7 +135,7 @@ class PacsBase(Observation):
         self.comm_tod = comm_tod or var.comm_tod
 
     def get_derived_units(self):
-        volt = Quantity(1./self.instrument.responsivity, 'Jy')
+        volt = Quantity(1/self.instrument.responsivity, 'Jy')
         return (
             {
                 'detector_reference': Quantity(1 / \
@@ -215,7 +218,7 @@ class PacsBase(Observation):
         nvalids = int(np.sum(nsamples))
         if npixels_per_sample != 0:
             sizeofpmatrix = npixels_per_sample * nvalids * ndetectors
-            print('Info: Allocating '+str(sizeofpmatrix/2.**17)+' MiB for the '
+            print('Info: Allocating '+str(sizeofpmatrix / 2**17)+' MiB for the '
                   'pointing matrix.')
         else:
             # f2py doesn't accept zero-sized opaque arguments
@@ -287,7 +290,7 @@ class PacsBase(Observation):
         data /= self.instrument.active_fraction * self.instrument.responsivity
         ndetectors = self.get_ndetectors()
         nsamples = self.get_nsamples()
-        nsamples_tot = np.sum(nsamples*self.slice.compression_factor/4)
+        nsamples_tot = np.sum(nsamples*self.slice.compression_factor / 4)
         if nsamples_tot > data.shape[-1]:
             raise ValueError('There is not enough noise data for this observa' \
                              'tion.')
@@ -302,7 +305,7 @@ class PacsBase(Observation):
         if flatfielding:
             result.T[:] /= self.pack(self.instrument.detector.flat_detector)
 
-        compression = CompressionAverage(self.slice.compression_factor/4)
+        compression = CompressionAverage(self.slice.compression_factor / 4)
         result = compression(result)
         return result
 
@@ -1084,7 +1087,7 @@ class PacsMultiplexing(AcquisitionModelLinear):
                 str(shapein[1]) + ') is not an integer times the fine sampling'\
                 ' factor ('+str(self.fine_sampling_factor)+').')
         shapeout = list(shapein)
-        shapeout[1] = shapeout[1] / self.fine_sampling_factor
+        shapeout[1] = shapeout[1] // self.fine_sampling_factor
         return tuple(shapeout)
 
     def validate_shapeout(self, shapeout):

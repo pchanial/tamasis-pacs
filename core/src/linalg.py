@@ -1,3 +1,5 @@
+from __future__ import division
+
 import numpy as np
 import tamasisfortran as tmf
 from mpi4py import MPI
@@ -168,7 +170,7 @@ class norm_lp(Function):
                 out = np.empty(())
             if comm is None:
                 comm = MPI.COMM_WORLD
-            out.flat = tmf.normp(x.T, p, comm.py2f())**(1./p)
+            out.flat = tmf.normp(x.T, p, comm.py2f())**(1 / p)
             return float(out)
         def df(x, out=None, inwork=None, outwork=None, comm=None):
             x = np.array(x, copy=False, order='c', dtype=var.FLOAT_DTYPE)

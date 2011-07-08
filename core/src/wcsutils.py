@@ -1,6 +1,9 @@
 # Copyrights 2010-2011 Pierre Chanial
 # All rights reserved
 #
+
+from __future__ import division
+
 import numpy as np
 import pyfits
 import tamasisfortran as tmf
@@ -233,7 +236,7 @@ def create_fitsheader(naxis=None, dtype=None, fromdata=None, extname=None,
         raise ValueError('CRVAL does not have two elements.')
 
     if crpix is None:
-        crpix = (np.array(naxis) + 1) / 2.
+        crpix = (np.array(naxis) + 1) / 2
     else:
         crpix = np.asarray(crpix, dtype=np.float64)
     if crpix.size != 2:

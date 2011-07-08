@@ -1,6 +1,9 @@
 # Copyrights 2010-2011 Pierre Chanial
 # All rights reserved
 #
+
+from __future__ import division
+
 import numpy as np
 from . import var
 

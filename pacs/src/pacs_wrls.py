@@ -6,6 +6,8 @@ state-of-the-art PACS instrument model.
 Author: Nicolas Barbey
 """
 
+from __future__ import division
+
 options = "hvf:o:"
 long_options = ["help", "verbose", "filenames=", "output="]
 

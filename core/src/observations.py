@@ -1,6 +1,9 @@
 # Copyrights 2010-2011 Pierre Chanial
 # All rights reserved
 #
+
+from __future__ import division
+
 import numpy as np
 
 from . import var
@@ -433,8 +436,8 @@ def create_scan(ra0, dec0, scan_acceleration, sampling_period, scan_angle=0.,
     # Start of computations, alpha and delta are the longitude and
     # latitide in arc seconds in the referential of the map.
     signe = 1
-    delta = -extralength - scan_length/2.
-    alpha = -scan_step * (scan_nlegs-1)/2.
+    delta = -extralength - scan_length/2
+    alpha = -scan_step * (scan_nlegs-1)/2
     alpha0 = alpha
     line_counter = 0
     working_time = 0.
@@ -447,20 +450,20 @@ def create_scan(ra0, dec0, scan_acceleration, sampling_period, scan_angle=0.,
             working_time = working_time - full_line_time
             signe = -signe
             line_counter = line_counter + 1
-            alpha = -scan_step * (scan_nlegs-1) / 2. + line_counter * scan_step
+            alpha = -scan_step * (scan_nlegs-1) / 2 + line_counter * scan_step
             alpha0 = alpha
    
         # acceleration at the beginning of a scan line to go from 0 to the
         # scan_speed. 
         if working_time < extra_time1:
-            delta = -signe * (extralength + scan_length/2) + signe * 0.5 * \
+            delta = -signe * (extralength + scan_length / 2) + signe * 0.5 * \
                     scan_acceleration * working_time * working_time
             info  = Pointing.TURNAROUND
    
         # constant speed
         if working_time >=  extra_time1 and \
            working_time < extra_time1 + line_time:
-            delta = signe * (-scan_length / 2. + (working_time - extra_time1) *\
+            delta = signe * (-scan_length / 2 + (working_time - extra_time1) *\
                     scan_speed)
             info  = Pointing.INSCAN
  
@@ -468,7 +471,7 @@ def create_scan(ra0, dec0, scan_acceleration, sampling_period, scan_angle=0.,
         if working_time >= extra_time1 + line_time and \
            working_time < extra_time1 + line_time + extra_time1:
             dt = working_time - extra_time1 - line_time
-            delta = signe * (scan_length / 2. + scan_speed * dt - \
+            delta = signe * (scan_length / 2 + scan_speed * dt - \
                     0.5 * scan_acceleration * dt * dt)
             info  = Pointing.TURNAROUND
   
@@ -484,7 +487,7 @@ def create_scan(ra0, dec0, scan_acceleration, sampling_period, scan_angle=0.,
            working_time < full_line_time:
             dt = working_time - 2 * extra_time1 - line_time - extra_time2
             speed = scan_acceleration * extra_time2
-            alpha = (alpha0 + scan_step / 2.) + speed * dt - \
+            alpha = (alpha0 + scan_step / 2) + speed * dt - \
                     0.5 * scan_acceleration * dt * dt
             info  = Pointing.TURNAROUND
 
@@ -496,8 +499,8 @@ def create_scan(ra0, dec0, scan_acceleration, sampling_period, scan_angle=0.,
         working_time = working_time + sampling_period
 
     # Convert the longitude and latitude *expressed in degrees) to ra and dec
-    ra, dec = _change_coord(ra0, dec0, scan_angle, longitude / 3600.,
-                            latitude / 3600.)
+    ra, dec = _change_coord(ra0, dec0, scan_angle, longitude / 3600,
+                            latitude / 3600)
 
     scan = Pointing(time, ra, dec, 0., infos, dtype=dtype)
     header = create_fitsheader(nsamples)

@@ -12,6 +12,8 @@
 #
 # Author: P. Chanial
 
+from __future__ import division
+
 import numpy as np
 from   optparse import OptionParser
 import sys

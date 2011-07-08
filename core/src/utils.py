@@ -1,6 +1,9 @@
 # Copyrights 2010-2011 Pierre Chanial
 # All rights reserved
 #
+
+from __future__ import division
+
 import kapteyn
 import numpy as np
 import os
@@ -302,8 +305,8 @@ def airy_disk(shape, fwhm, origin=None, resolution=1.):
     d  = distance(shape, origin=origin, resolution=resolution)
     index = np.where(d == 0)
     d[index] = 1.e-30
-    d *= 1.61633 / (fwhm/2.)
-    d  = (2 * scipy.special.jn(1,d)/d)**2
+    d *= 1.61633 / (fwhm / 2)
+    d  = (2 * scipy.special.jn(1,d) / d)**2
     d /= np.sum(d)
     return d
 
@@ -313,7 +316,7 @@ def airy_disk(shape, fwhm, origin=None, resolution=1.):
 
 def aperture_circular(shape, diameter, origin=None, resolution=1.):
     array = distance(shape, origin=origin, resolution=resolution)
-    m = array > diameter / 2.
+    m = array > diameter / 2
     array[ m] = 0
     array[~m] = 1
     return array
@@ -593,7 +596,7 @@ def gaussian(shape, fwhm, origin=None, resolution=1., unit=None):
         raise NotImplementedError()
     d = distance(shape, origin=origin, resolution=resolution)
     d.unit = ''
-    d = np.exp(-d**2/(2*sigma**2))
+    d = np.exp(-d**2 / (2*sigma**2))
     d /= np.sum(d)
     if unit:
         d.unit = unit

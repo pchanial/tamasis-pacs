@@ -6,6 +6,8 @@ algorithm
 Author: Pierre Chanial
 """
 
+from __future__ import division
+
 options = "hvf:o:"
 long_options = ["help", "verbose", "filenames=", "output="]
 
