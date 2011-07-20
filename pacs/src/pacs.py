@@ -888,15 +888,15 @@ class PacsSimulation(PacsBase):
     """
     This class creates a simulated PACS observation.
     """
-    def __init__(self, pointing, band, mode=None, fine_sampling_factor=1,
+    def __init__(self, pointings, band, mode=None, fine_sampling_factor=1,
                  policy_bad_detector='mask', reject_bad_line=False,
                  policy_inscan='keep', policy_turnaround='keep',
                  policy_other='keep', policy_invalid='keep', active_fraction=0,
                  delay=0., comm_tod=None):
 
-        header = pointing.header.copy() if pointing.header else None
-        pointing = pointing.copy()
-        pointing.header = header
+        if not isinstance(pointings, (list,tuple)):
+            pointings = (pointings,)
+        active_fraction = float(active_fraction)
 
         band = band.lower()
         choices = ('blue', 'green', 'red')
@@ -905,14 +905,23 @@ class PacsSimulation(PacsBase):
                 "'. Expected values are " + strenum(choices, 'or') + '.')
 
         # get compression factor from input pointing
-        delta = np.median(pointing.time[1:]-pointing.time[0:-1])
-        if not np.isfinite(delta):
-            delta = self.SAMPLING_PERIOD
-        compression_factor = int(np.round(delta / self.SAMPLING_PERIOD))
+        deltas = [np.median(p.time[1:]-p.time[0:-1]) for p in pointings]
+        deltas = [d for d in deltas if np.isfinite(d)]
+        if len(deltas) == 0:
+            delta0 = self.SAMPLING_PERIOD
+        else:
+            delta0 = np.median(np.hstack([p.time[1:]-p.time[0:-1] for p in \
+                               pointings]))
+
+        if not np.allclose(deltas, delta0, rtol=0.01):
+            raise ValueError('The input pointings do not have the same samplin'\
+                             'g period: '+str(deltas)+'.')
+
+        compression_factor = int(np.round(delta0 / self.SAMPLING_PERIOD))
         if compression_factor <= 0:
             raise ValueError('Invalid time in pointing argument. Use PacsSimu' \
                              'lation.SAMPLING_PERIOD.')
-        if np.abs(delta / compression_factor - self.SAMPLING_PERIOD) > 0.01 * \
+        if np.abs(delta0 / compression_factor - self.SAMPLING_PERIOD) > 0.01 * \
            self.SAMPLING_PERIOD:
             print('Warning: the pointing time has unexpected sampling rate. ' \
                   'Assuming a compression factor of ' + str(compression_factor)\
@@ -946,21 +955,34 @@ class PacsSimulation(PacsBase):
             comm_tod)
 
         # get work load according to detector policy and MPI process
-        self.instrument.detector.removed, filename = _get_workload(band,
-            ('simulation',), self.instrument.detector.masked,
-            policy_bad_detector, mode == 'transparent', self.comm_tod)
+        self.instrument.detector.removed, pointings = _get_workload(band,
+            pointings, self.instrument.detector.masked, policy_bad_detector,
+            mode == 'transparent', self.comm_tod)
+
+        nslices = len(pointings)
+        nsamples = tuple([len(p) for p in pointings])
+        nsamples_tot = sum(nsamples)
+
+        # concatenate pointings
+        pointing = Pointing(0, 0, 0, 0, nsamples=nsamples,
+                            dtype=self.POINTING_DTYPE)
+        d = 0
+        for p, n in zip(pointings, nsamples):
+            names = (set(p.dtype.names) | set(p.__dict__.keys())) & \
+                    set(pointing.dtype.names)
+            for name in names:
+                pointing[name][d:d+n] = p[name]
+            d += n
 
         # store pointing information
-        if not hasattr(pointing, 'chop'):
-            pointing.chop = np.zeros(pointing.size, var.FLOAT_DTYPE)
-        pointing.masked  = \
+        pointing.masked  |= \
             (policy_inscan     == 'mask')   & \
                 (pointing.info == Pointing.INSCAN) | \
             (policy_turnaround == 'mask')   & \
                 (pointing.info == Pointing.TURNAROUND) | \
             (policy_other      == 'mask')   & \
                 (pointing.info == Pointing.OTHER)
-        pointing.removed = \
+        pointing.removed |= \
             (policy_inscan     == 'remove') & \
                 (pointing.info == Pointing.INSCAN) | \
             (policy_turnaround == 'remove') & \
@@ -969,9 +991,7 @@ class PacsSimulation(PacsBase):
                 (pointing.info == Pointing.OTHER)
         self.pointing = pointing
 
-        nsamples_all = self.pointing.size
-
-        self.slice = np.recarray(1, dtype=[
+        self.slice = np.recarray(nslices, dtype=[
             ('filename', 'S256'),
             ('nsamples_all', int),
             ('start', int),
@@ -990,25 +1010,23 @@ class PacsSimulation(PacsBase):
             ('scan_step', float),
             ('scan_speed', float)])
 
-        self.slice.filename = filename
-        self.slice.nsamples_all = nsamples_all
+        self.slice.filename = 'simulation'
+        self.slice.nsamples_all = nsamples
         self.slice.start[0] = 0
-        self.slice.start[1:] = np.cumsum(nsamples_all)[:-1]
-        self.slice.stop = np.cumsum(nsamples_all)
+        self.slice.start[1:] = np.cumsum(nsamples)[:-1]
+        self.slice.stop = np.cumsum(nsamples)
         self.slice.obsid = 0
         self.slice.mode = mode
         self.slice.compression_factor = compression_factor
         self.slice.delay = delay
         self.slice.unit = ''
-        for field in ('ra', 'dec', 'cam_angle', 'scan_angle', 'scan_nlegs',
-                      'scan_length', 'scan_step'):
-            self.slice[field] = pointing.header[field] if field in \
-                pointing.header else 0
-        self.slice.scan_speed = _scan_speed(self.pointing)
-        self.slice.ninscans = np.sum(self.pointing.info == Pointing.INSCAN)
-        self.slice.nturnarounds = np.sum(self.pointing.info==Pointing.TURNAROUND)
-        self.slice.nothers = np.sum(self.pointing.info == Pointing.OTHER)
-        self.slice.ninvalids = 0
+        
+        for s, p in zip(self.slice, pointings):
+            if p.header is not None:
+                for field in ('ra', 'dec', 'cam_angle', 'scan_angle',
+                              'scan_nlegs', 'scan_length', 'scan_step'):
+                    s[field] = p.header[field] if field in p.header else 0
+            s.scan_speed = _scan_speed(p)
         
         # store policy
         self.policy = MaskPolicy('inscan,turnaround,other,invalid',
@@ -1236,11 +1254,42 @@ def pacs_preprocess(obs, tod,
 #-------------------------------------------------------------------------------
 
 
-def pacs_create_scan(ra0, dec0, cam_angle=0., scan_angle=0., scan_length=30.,
+def pacs_create_scan(ra0, dec0, cam_angle=45., scan_angle=0., scan_length=30.,
                      scan_nlegs=3, scan_step=148., scan_speed=20., 
-                     compression_factor=4):
+                     compression_factor=4, cross_scan=False):
+    """Returns pointing information for a PACS scan.
+
+    The output is a Pointing instance that can be handed to PacsSimulation to
+    create a simulation.
+
+    Parameters
+    ----------
+    ra0: float
+        Right Ascension of the scan center
+    dec0: float
+        Declination of the scan center
+    cam_angle: float
+        Angle between the scan line direction and the PACS instrument Z-axis
+        (called array-to-map angle in the PACS user's manual)
+    scan_angle: float
+        Angle between the scan line direction and the North minus 90 degrees
+    scan_length: float
+        Length of the scan lines, in arcseconds
+    scan_nlegs: integer
+        Number of scan legs
+    scan_step: float
+        Separation between scan legs, in arcseconds
+    scan_speed: float
+        Scan speed, in arcsec/s
+    compression_factor: 1, 4 or 8
+        On board compression factor
+    cross_scan: boolean
+        Set to True to append a cross-scan
+    """
+
     if int(compression_factor) not in (1, 4, 8):
         raise ValueError("Input compression_factor must be 1, 4 or 8.")
+
     scan = create_scan(ra0, dec0,
                        PacsBase.ACCELERATION,
                        PacsBase.SAMPLING_PERIOD * compression_factor,
@@ -1250,6 +1299,27 @@ def pacs_create_scan(ra0, dec0, cam_angle=0., scan_angle=0., scan_length=30.,
                        scan_step=scan_step,
                        scan_speed=scan_speed,
                        dtype=PacsBase.POINTING_DTYPE)
+    if cross_scan:
+        cross = create_scan(ra0, dec0,
+                       PacsBase.ACCELERATION,
+                       PacsBase.SAMPLING_PERIOD * compression_factor,
+                       scan_angle=scan_angle + 90,
+                       scan_length=scan_length,
+                       scan_nlegs=scan_nlegs,
+                       scan_step=scan_step,
+                       scan_speed=scan_speed,
+                       dtype=PacsBase.POINTING_DTYPE)
+        cross.time += scan.time[-1] + PacsBase.SAMPLING_PERIOD * \
+                      compression_factor
+        header = scan.header
+        scan, scan.header = Pointing(np.hstack([scan.time, cross.time]),
+                                     np.hstack([scan.ra, cross.ra]),
+                                     np.hstack([scan.dec, cross.dec]),
+                                     0.,
+                                     info=np.hstack([scan.info, cross.info]),
+                                     dtype=PacsBase.POINTING_DTYPE), scan.header
+
+    scan.pa = scan_angle + cam_angle
     scan.header.update('HIERARCH cam_angle', cam_angle)
     scan.chop = 0.
     return scan

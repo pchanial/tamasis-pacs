@@ -378,8 +378,6 @@ def create_scan(ra0, dec0, scan_acceleration, sampling_period, scan_angle=0.,
     Authors: R. Gastaud
     """
     
-    scan_angle -= 90.
-
     scan_acceleration = float(scan_acceleration)
     if scan_acceleration <= 0:
         raise ValueError('Input scan_acceleration must be strictly positive.')
@@ -499,7 +497,7 @@ def create_scan(ra0, dec0, scan_acceleration, sampling_period, scan_angle=0.,
         working_time = working_time + sampling_period
 
     # Convert the longitude and latitude *expressed in degrees) to ra and dec
-    ra, dec = _change_coord(ra0, dec0, scan_angle, longitude / 3600,
+    ra, dec = _change_coord(ra0, dec0, scan_angle - 90, longitude / 3600,
                             latitude / 3600)
 
     scan = Pointing(time, ra, dec, 0., infos, dtype=dtype)
