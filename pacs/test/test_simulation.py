@@ -102,3 +102,30 @@ for c in (1,2,4,8):
     for b in ('blue', 'green', 'red'):
         simul = PacsSimulation(pointing, b, mode='calibration')
         if simul.slice[0].compression_factor != c: raise TestFailure()
+
+# simulation #>1
+ra = (23, 24)
+dec = (50, 51)
+cam_angle=(10, 11)
+scan_angle = (0, -90)
+scan_length = (10, 20)
+scan_nlegs = (2, 3)
+scan_step = (147, 149)
+scan_speed = (20, 60)
+compression_factor = (4, 4)
+
+pointings = [pacs_create_scan(r,d,ca,sa,sl,sn,sst,ssp,cf) for \
+             r,d,ca,sa,sl,sn,sst,ssp,cf in zip(ra,dec,cam_angle,scan_angle,
+             scan_length,scan_nlegs,scan_step,scan_speed,compression_factor)]
+simul = PacsSimulation(pointings, 'blue')
+s = simul.slice
+
+if any_neq(s.ra, ra) or \
+   any_neq(s.dec, dec) or \
+   any_neq(s.cam_angle, cam_angle) or \
+   any_neq(s.scan_angle, scan_angle) or \
+   any_neq(s.scan_length, scan_length) or \
+   any_neq(s.scan_nlegs, scan_nlegs) or \
+   any_neq(s.scan_step, scan_step) or \
+   any_neq(s.scan_speed, scan_speed) or \
+   any_neq(s.compression_factor, compression_factor): raise TestFailure()

@@ -145,5 +145,3 @@ t = proj2(m)
 if any_neq(minmax(t), [0,0]): raise TestFailure()
 t[:] = 1
 if any_neq(minmax(proj2.T(t)), [0,0]): raise TestFailure()
-
-
