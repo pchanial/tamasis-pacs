@@ -5,6 +5,6 @@ published: true
 category: faq
 ---
 
-TAMASIS is an ASTRONET funded project aiming at enhancing the science that can be produced from the submillimeter surveys currently in preparation in Europe with instruments such as Herschel, Alma and SCUBA2.
+Tamasis is an ASTRONET funded project aiming at enhancing the science that can be produced from the submillimeter surveys currently in preparation in Europe with instruments such as Herschel, ALMA and SCUBA2.
 
-TAMASIS is a collaboration between french, dutch and austrian institutes: CEA/SAp and IAS in France, Leiden Observatory in the Netherlands, and European Southern observatory in Germany, with support from the FWF, the Austrian Science Fund. 
+This project is a collaboration between French, Dutch and Austrian institutes: CEA/SAp and IAS in France, Leiden Observatory in the Netherlands, and European Southern observatory in Germany, with support from the FWF, the Austrian Science Fund. 
