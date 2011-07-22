@@ -1,22 +1,18 @@
 @import url(http://fonts.googleapis.com/css?family=Rosario);
 
-html, body {
-  height: 100%;
-}
-
 html {
   overflow-x: hidden;
   overflow-y: scroll;
 }
 
 body {
-  -moz-background-size: 100%;
-  -o-background-size: 100%;
-  -webkit-background-size: 100%;
   background-attachment: fixed;
   background-image: url('../images/background.jpg');
   background-position: center;
-  background-size: auto;
+  -moz-background-size: 100% auto;
+  -o-background-size: 100% auto;
+  -webkit-background-size: 100% auto;
+  background-size: 100% auto;
   color: #333;
   font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-size: 1em;
