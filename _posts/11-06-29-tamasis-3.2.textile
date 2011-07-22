@@ -7,7 +7,7 @@ categories: blog
 ---
 
 What's new ?
-* parallel read and write of FITS files using MPI-IO
+* parallel write of FITS files using MPI-IO
 * implement class @DistributedArray@ to ease manipulation of MPI-distributed maps
 * new general purpose operators: @SqrtInvNtt@, @Offset@, @Rounding@ (9 different methods), @Clip@, @Minimum@, @Maximum@
 * new PACS operators: Jy-to-Volts and Volts-to-ADU converters
