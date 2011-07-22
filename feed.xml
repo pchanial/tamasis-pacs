@@ -4,14 +4,14 @@ layout: nil
 <?xml version="1.0" encoding="utf-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom">
  
- <title>Recursive</title>
+ <title>Tamasis/PACS</title>
  <link href="http://pchanial.github.com/tamasis-map/feed/" rel="self"/>
  <link href="http://pchanial.github.com/tamasis-map/"/>
  <updated>{{ site.time | date_to_xmlschema }}</updated>
  <id>http://pchanial.github.com/tamasis-map/</id>
  <author>
-   <name>Recursive</name>
-   <email>mail@recursive-design.com</email>
+   <name>Tamasis/PACS</name>
+   <email></email>
  </author>
 
  {% for post in site.posts %}
