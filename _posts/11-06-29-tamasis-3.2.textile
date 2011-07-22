@@ -1,0 +1,15 @@
+---
+layout: post
+title: Tamasis 3.2
+excerpt: Release of Tamasis 3.2
+published: true
+categories: blog
+---
+
+What's new ?
+* parallel read and write of FITS files using MPI-IO
+* implement class @DistributedArray@ to ease manipulation of MPI-distributed maps
+* new general purpose operators: @SqrtInvNtt@, @Offset@, @Rounding@ (9 different methods), @Clip@, @Minimum@, @Maximum@
+* new PACS operators: Jy-to-Volts and Volts-to-ADU converters
+* linesearch with Armijo rule or strong Wolfe-Powell
+* command line interface for map-making routines, contributed by Nicolas Barbey

@@ -1,0 +1,13 @@
+---
+layout: post
+title: Tamasis 3.1
+excerpt: Release of Tamasis 3.1
+published: true
+categories: blog
+---
+
+What's new ?
+* API change: @InvNtt@ operator now works in direct space so it returns the actual time-time noise correlation matrix ala MADmap.
+* new @PacsObservation@ method @get_detector_stddev@, which returns the detector standard deviation given an optional median filtering length.
+* new @plot_tod@ method useful to display a @Tod@ with the mask information, ex: @plot_tod(tod[100])@ will plot detector #100's timeline
+* parallel (OpenMP+MPI) non-linear conjugate gradient solver with preconditioning, with different descent methods and norms

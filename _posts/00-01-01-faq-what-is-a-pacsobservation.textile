@@ -1,0 +1,14 @@
+---
+layout: faq
+title: What is a PacsObservation?
+published: true
+category: faq
+---
+
+A @PacsObservation@ or a @PacsSimulation@ stores information about the
+
+* instrument (@instrument@ attribute)
+* observation (@slice@ attribute)
+* pointing (@pointing@ attribute)
+
+They do not contain the signal or mask data, but provide a means to access them through the method @get_tod@. They also do not contain the pointing matrix, which is obtained through the method @get_pointing_matrix@.

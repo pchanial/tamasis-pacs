@@ -1,0 +1,24 @@
+---
+layout: post
+title: Software dependencies
+category: installation-dependencies
+---
+
+h4. Python modules
+
+* numpy >= 1.4.1
+* kapteyn >= 2.0.2
+* matplotlib >= 0.99
+* mpi4py
+* "pyfftw":https://launchpad.net/pyfftw/ >= 0.2.1
+* pyfits >= 2.3
+* scipy
+
+
+h4. Other libraries
+
+* gfortran >= 4.5 or ifort >= 11.1
+* cfitsio >= 3.23
+* FFTW >= 3.2.2
+* wcslib >= 4.4.4
+* openmpi or mpich

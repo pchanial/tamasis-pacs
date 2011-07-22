@@ -1,0 +1,43 @@
+---
+layout: faq
+title: How to create a map from a single detector?
+published: true
+category: faq
+---
+
+A @PacsObservation@ gathers information about the instrument settings, stored in the @instrument@ attribute.  With the exception of the detector channel, all the information store in the @instrument@ attribute can be modified after instantiation. More information can be found on "what contains a PacsObservation":/2000/faq-what-is-a-pacsobservation/.
+
+The field @detector.removed@ controls the list of detectors to be included in the timelines and the field @detector.masked@, the list of detectors to be masked in the timelines. The former is used the distribute the work among processors in a MPI job and the latter to flag the bad detectors. Either can be used to control which detectors will contribute to the map.
+
+To speed up the processing and the memory consumption, let's remove detectors instead of masking them. The number of non-removed detectors can be obtained dynamically through the method @get_ndetectors@.
+
+{% highlight python %}
+>>> obs = PacsObservation('myobs.fits')
+>>> obs.get_ndetectors()
+2048
+>>> obs.get_tod().shape
+(2048, 360)
+{% endhighlight %}
+
+The following snippet remove all detectors but one:
+
+{% highlight python %}
+>>> obs.instrument.detector.removed = True
+>>> obs.instrument.detector.removed[7,12] = False
+>>> obs.get_ndetectors()
+1
+>>> obs.get_tod().shape
+(1, 360)
+{% endhighlight %}
+
+To restrict the processing to the bolometer matrix 1:
+
+{% highlight python %}
+>>> d = obs.instrument.detector
+>>> d.removed = d.matrix != 1
+>>> obs.get_ndetectors()
+256
+{% endhighlight %}
+
+Once the @removed@ or @masked@ fields are set, you can "create a map":http:// as usual.
+

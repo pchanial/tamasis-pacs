@@ -1,0 +1,13 @@
+---
+layout: faq
+title: How to add a point source to a map?
+published: true
+category: faq
+---
+
+
+h3. TBD
+
+{% highlight python %}
+sky = gaussian(...)
+{% endhighlight %}

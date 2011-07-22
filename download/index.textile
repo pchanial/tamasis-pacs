@@ -1,0 +1,29 @@
+---
+layout: default
+title: Download
+excerpt: Download Tamasis package
+---
+
+h2. {{ page.title }}
+
+<div class="content">
+  There are two ways to download the Tamasis/PACS package.
+  
+* Either by retrieving a tar or a zip archive at "github":https://github.com/pchanial/tamasis-map/
+
+* or by cloning the project, using the version control system "Git":http://git-scm.com/:
+
+bc. $ git clone git://github.com/pchanial/tamasis-map.git
+
+The second method is more convenient to make updates (if you've just cloned the repository, you will obviously not get anything new)
+
+bc. $ cd tamasis-map.git
+$ git pull
+Already up-to-date.
+
+This method is also required if you are to test tamasis' development branch.
+
+
+Once the package has been retrieved, you may proceed to the "installation":/installation.
+
+</div>

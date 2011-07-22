@@ -1,0 +1,67 @@
+---
+layout: faq
+title: How to create a PACS simulation?
+excerpt: Creation of PACS Simulation
+published: true
+category: faq
+---
+
+The first step is to get a sky map, which will be used for the simulation. You may "create a synthetic map":/2000/faq-how-to-add-a-point-source-to-a-map/ or load it if the sky map is in FITS format:
+
+{% highlight python %}
+sky = Map('myfile.fits')
+{% endhighlight %}
+
+Then, let's setup the spacecraft attitude during the scan
+
+{% highlight python %}
+pointing = pacs_create_scan(sky.header['CRVAL1'], # RA of scan center
+                            sky.header['CRVAL2'], # decl. of scan center
+                            scan_length=10*60,    # scan length in arcsec
+                            scan_speed=60,        # scan speed in arcsec/s
+                            cross_scan=True)      # include cross-scan
+{% endhighlight %}
+
+and the instrument accordingly to these pointings
+
+{% highlight python %}
+simul = PacsSimulation(pointing, 'blue')
+{% endhighlight %}
+
+We need an acquisition model to observe the sky map
+
+{% highlight python %}
+masking = Masking(simul.pack(simul.instrument.detector.masked))
+projection = Projection(simul, header=sky.header)
+compression = CompressionAverage(simul.slice.compression_factor)
+model = masking * compression * projection
+{% endhighlight %}
+
+At this stage, we are almost done: getting the simulated timeline is the easy part since the input of the acquisition model is the sky map and its output is the timeline.
+
+{% highlight python %}
+tod = model(sky)
+{% endhighlight %}
+
+Note that this instrument model could be used to create timelines from different sky maps, as long as their shape and header are consistent with those of the original sky map.
+
+It is now possible to add real noise to the simulated timeline. To this effect, we can use a calibration observation which was taken with a still spacecraft, to characterise the noise power spectrum density of the bolometers:
+
+{% highlight python %}
+tod += simul.get_random()
+{% endhighlight %}
+
+This method only works on the CEA/SAp cluster, that's because I prefer not to increase Tamasis' package size (and Git index) by several gigabytes.
+
+Finally, the simulated timeline can be saved as a FITS file
+
+{% highlight python %}
+simul.save('mysimulatedtod.fits', tod)
+{% endhighlight %}
+
+for later reuse as a regular <code>PacsObservation</code> (HIPE won't be able to read it though, and there is no plan to enable it):
+
+{% highlight python %}
+simul = PacsObservation('mysimulatedtod.fits')
+tod = simul.get_tod()
+{% endhighlight %}

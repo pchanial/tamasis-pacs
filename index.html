@@ -1,95 +1,22 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset='utf-8'>
+---
+layout: default
+home: true
+title: Map-maker for Herschel/PACS
+excerpt: This package provides tools to create maps from Herschel/PACS observations. It is massively parallel (MPI + OpenMP) and is written in Fortran (for the number crunching) and Python (for the abstraction easiness). Because of its high level of modularity, support for other astronomical instruments might be added in the future.
+multiplecontainer: true
+---
 
-  <title>pchanial/tamasis-map @ GitHub</title>
-
-  <style type="text/css">
-    body {
-      margin-top: 1.0em;
-      background-color: #f0db93;
-      font-family: Helvetica, Arial, FreeSans, san-serif;
-      color: #000000;
-    }
-    #container {
-      margin: 0 auto;
-      width: 700px;
-    }
-    h1 { font-size: 3.8em; color: #0f246c; margin-bottom: 3px; }
-    h1 .small { font-size: 0.4em; }
-    h1 a { text-decoration: none }
-    h2 { font-size: 1.5em; color: #0f246c; }
-    h3 { text-align: center; color: #0f246c; }
-    a { color: #0f246c; }
-    .description { font-size: 1.2em; margin-bottom: 30px; margin-top: 30px; font-style: italic;}
-    .download { float: right; }
-    pre { background: #000; color: #fff; padding: 15px;}
-    hr { border: 0; width: 80%; border-bottom: 1px solid #aaa}
-    .footer { text-align:center; padding-top:30px; font-style: italic; }
-  </style>
-</head>
-
-<body>
-  <a href="http://github.com/pchanial/tamasis-map"><img style="position: absolute; top: 0; right: 0; border: 0;" src="http://s3.amazonaws.com/github/ribbons/forkme_right_darkblue_121621.png" alt="Fork me on GitHub" /></a>
-
-  <div id="container">
-
-    <div class="download">
-      <a href="http://github.com/pchanial/tamasis-map/zipball/master">
-        <img border="0" width="90" src="http://github.com/images/modules/download/zip.png"></a>
-      <a href="http://github.com/pchanial/tamasis-map/tarball/master">
-        <img border="0" width="90" src="http://github.com/images/modules/download/tar.png"></a>
-    </div>
-
-    <h1><a href="http://github.com/pchanial/tamasis-map">tamasis-map</a>
-      <span class="small">by <a href="http://github.com/pchanial">pchanial</a></span></h1>
-
-    <div class="description">
-      Map-making tools
-    </div>
-
-    <h2>Dependencies</h2>
-<p>Python models:
-- numpy >= 1.4.1
-- kapteyn >= 2.0.2
-- matplotlib >= 0.99
-- mpi4py
-- pyFFTW >= 3 0.2
-- pyfits >= 2.3
-- scipy
-
-Other:
-- gfortran >= 4.5 or ifort >= 11.1
-- cfitsio >= 3.23
-- FFTW >= 3.2.2
-- wcslib >= 4.4.4
-- openmpi</p>
-<h2>Install</h2>
-<p>./waf configure --prefix=/mysoftdir build install </p>
-<h2>Authors</h2>
-<p>Pierre Chanial (pierre.chanial@cea.fr)<br/><br/>      </p>
-<h2>Contact</h2>
-<p>Pierre Chanial (pierre.chanial@cea.fr)<br/>      </p>
-
-
-    <h2>Download</h2>
-    <p>
-      You can download this project in either
-      <a href="http://github.com/pchanial/tamasis-map/zipball/master">zip</a> or
-      <a href="http://github.com/pchanial/tamasis-map/tarball/master">tar</a> formats.
-    </p>
-    <p>You can also clone the project with <a href="http://git-scm.com">Git</a>
-      by running:
-      <pre>$ git clone git://github.com/pchanial/tamasis-map</pre>
-    </p>
-
-    <div class="footer">
-      get the source code on GitHub : <a href="http://github.com/pchanial/tamasis-map">pchanial/tamasis-map</a>
-    </div>
-
+{% for post in site.categories.blog limit:5 %}
+<div class="container">
+  <div class="content">
+    <h4>
+      <a href="{{ post.url }}/">{{ post.title }}</a>
+    </h4>
+    <p class="date">{{ post.date | date_to_string }}</p>
+    <p> {{ post.content }} </p>
   </div>
-
-  
-</body>
-</html>
+</div>
+{% endfor %}
+<p id="footnote">
+  If you did not find what you were looking for, try the <a href="/archive">archive.</a>
+</p>
