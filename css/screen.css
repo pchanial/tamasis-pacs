@@ -48,8 +48,8 @@ h4 {
   font-size: 1.5em;
 }
 
-p, ul {
-  margin: 20px 0;
+p {
+  margin: 20px 0px;
 }
 
 a, strong {
@@ -159,7 +159,6 @@ div.content img, div.content object {
   width: 440px;
 }
 
-
 code, pre {
   font-family: "Monaco", "Courier New", monospace;
   line-height: 100%;
@@ -179,7 +178,7 @@ div.content pre {
 }
 
 div.content ul {
-  margin: 0px 0px 0px 1em;
+  margin: 0 0 0 3em;
 }
 
 div.content ul li {
@@ -298,12 +297,4 @@ div#box a:hover {
 
 div.box p {
   margin: 10px 0 0 0;
-}
-
-img#mo {
-  margin: -10px 0px -45px -75px;
-}
-
-img#mo:hover {
-  margin: -12px 0px -43px -75px;
 }
