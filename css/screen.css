@@ -15,7 +15,7 @@ body {
   background-size: 100% auto;
   color: #333;
   font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-  font-size: 1em;
+  font-size: 100%;
   line-height: 150%;
   text-shadow: 0 1px 0 #fff;
   text-align: justify;
@@ -81,15 +81,7 @@ blockquote {
 }
 
 div#outer {
-  width: 100%;
-  min-height: 100%;
-  padding: 50px 0 20px 0;
-}
-
-div#wrapper {
-  width:75%;
-  margin: auto;
-  position: relative;
+  margin: 3em 12%;
 }
 
 div.container {
@@ -138,7 +130,7 @@ div#header li form input {
   font-size: 1em; /* required by firefox 5.0 */
 }
 
-div.content img, div.content object {
+div.content img {
   -moz-border-radius: 5px;
   -moz-box-shadow: 0 1px 0 #fff;
   -webkit-border-radius: 5px;
@@ -218,73 +210,21 @@ div.notice {
   margin: 0px 0px 5px -40px;
 }
 
-div#disqus_thread {
-  margin: 20px 0px 0px 0px;
-}
-
-div.dsq-options, div.dsq-sharing-options, div.dsq-dc-logo, div#dsq-global-toolbar, div#dsq-pagination {
-  display:none !important;
-}
-
-p.article_date {
-  float: left;
-}
-
-span.article_buttons {
-  margin: 20px 0;
-  float: right;
-  text-align: right;
-}
-
-span.article_buttons a {
-  display: block;
-}
-
-a:hover span.balloon {
-  display: inline;
-}
-
-span.balloon {
-  background-color: #222;
-  color: #fff;
-  font-size: 1em;
-  padding:3px 5px;
+.date {
   -moz-border-radius: 5px;
-  -moz-box-shadow: 0 -1px 0 #444;
+  -moz-box-shadow: 1px 1px 0 #888;
   -webkit-border-radius: 5px;
-  -webkit-box-shadow: 0 -1px 0 #444;
-  text-shadow: 0 1px 0 #000;
-  font-weight: 500;
-  margin: 0 5px;
-  display:none;
-}
-
-div.box {
-  width: 120px;
-  background-color: #222;
+  -webkit-box-shadow: 1px 1px 0 #888;
+  background-color: #ddd;
+  border-radius: 5px;
+  box-shadow: 1px 1px 0 #888;
+  color: #000;
+  text-shadow: 0 1px 0 #888, 1px 0 0 #888;
   padding: 10px;
-  -moz-border-radius-topright: 5px;
-  -moz-border-radius-bottomright: 5px;
-  -moz-box-shadow: 0 -1px 0 #444;
-  -webkit-border-top-right-radius: 5px;
-  -webkit-border-bottom-right-radius: 5px;
-  -webkit-box-shadow: 0 -1px 0 #444, 0 0 10px #222;
-  z-index: 0;
-}
-
-div.box, div.box a {
-  color: #fff;
-  font-size: 1em;
-  line-height: 130%;
-  text-shadow: 0 1px 0 #000;
-}
-
-div#box a:hover {
-  color: #ddd;
-}
-
-div.box p {
-  margin: 10px 0 0 0;
+  font-size: 50%;
+  line-height: 100%;
+  margin: 0;
+  float: left;
 }
 
 img#feed {

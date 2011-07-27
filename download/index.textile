@@ -4,7 +4,7 @@ title: Download
 excerpt: Download Tamasis package
 ---
 
-h2. {{ page.title }}
+h3. {{ page.title }}
 
 <div class="content">
 

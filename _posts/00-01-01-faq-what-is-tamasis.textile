@@ -1,5 +1,5 @@
 ---
-layout: faq
+layout: post
 title: What is Tamasis?
 published: true
 category: faq

@@ -1,5 +1,5 @@
 ---
-layout: faq
+layout: post
 title: How to create a map from a single detector?
 published: true
 category: faq

@@ -1,5 +1,5 @@
 ---
-layout: faq
+layout: post
 title: How to add a point source to a map?
 published: true
 category: faq

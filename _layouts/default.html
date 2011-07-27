@@ -16,53 +16,48 @@
 </head>
 <body>
   <div id="outer">
-    <div id="wrapper">
-      <div class="container">
-        <div id="header">
-          <h1> Tamasis/PACS </h1>
-          <ul>
-            <li>
-              <a href="/tamasis-map/">What's new</a>
-            </li>
-            <li>
-              <a href="/tamasis-map/download">Download</a>
-            </li>
-            <li>
-              <a href="/tamasis-map/installation">Installation</a>
-            </li>
-            <li>
-              <a href="/tamasis-map/faq">FAQ</a>
-            </li>
-            <li>
-              <a href="/tamasis-map/contact">Contact</a>
-            </li>
-            <li>
-              <form action="/tamasis-map/search" method="get">
-                <input type="search" name="query" placeholder="Search"/>
-              </form>
-            </li>
-            <li>
-              <a href="http://feeds.feedburner.com/tamasismap">
-                <img id="feed" src="/tamasis-map/images/feed.png"/>
-              </a>
-            </li>
-          </ul>
-          <hr class="right"/>
-        </div>
-{% unless page.multiplecontainer %}
-        {{ content }}
-{% else %}
-        <h2> {{ page.title }} </h2>
-        {{ page.excerpt }}
-{% endunless %}
+    <div class="container">
+      <div id="header">
+        <h1> Tamasis/PACS </h1>
+        <ul>
+          <li>
+            <a href="/tamasis-map/">What's new</a>
+          </li>
+          <li>
+            <a href="/tamasis-map/download">Download</a>
+          </li>
+          <li>
+            <a href="/tamasis-map/installation">Installation</a>
+          </li>
+          <li>
+            <a href="/tamasis-map/faq">FAQ</a>
+          </li>
+          <li>
+            <a href="/tamasis-map/contact">Contact</a>
+          </li>
+          <li>
+            <form action="/tamasis-map/search" method="get">
+              <input type="search" name="query" placeholder="Search"/>
+            </form>
+          </li>
+          <li>
+            <a href="http://feeds.feedburner.com/tamasismap">
+              <img id="feed" src="/tamasis-map/images/feed.png"/>
+            </a>
+          </li>
+        </ul>
+        <hr class="right"/>
       </div>
-{% if page.multiplecontainer %}
+      {% unless page.multiplecontainer %}
       {{ content }}
-{% endif %}
+      {% else %}
+      <h3> {{ page.title }} </h3>
+      {{ page.excerpt }}
+      {% endunless %}
     </div>
+    {% if page.multiplecontainer %}
+    {{ content }}
+    {% endif %}
   </div>
-  <script stype="text/javascript">
-    $('.tweet').attr('href', 'http://twitter.com/share?url=' + escape(document.location) + '&via=pchanial&text=' + escape(document.title.split(' - ')[0]));
-  </script>
 </body>
 </html>
