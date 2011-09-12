@@ -1,11 +1,9 @@
-import numpy as np
 import os
 import tamasis
 from tamasis import *
 from mpi4py import MPI
 
 
-import scipy
 #solver = scipy.sparse.linalg.bicgstab
 solver = tamasis.solvers.cg
 tol = 1.e-3
@@ -28,7 +26,7 @@ model_ref = Masking(tod_ref.mask) * \
             Projection(obs_ref, oversampling=False, npixels_per_sample=6)
 map_naive_ref = mapper_naive(tod_ref, model_ref, unit='Jy/arcsec^2')
 map_ls_ref = mapper_ls(tod_ref, model_ref, tol=tol, maxiter=maxiter,
-                       solver=solver, M=Diagonal(1/map_naive_ref.coverage))
+                       solver=solver, M=DiagonalOperator(1/map_naive_ref.coverage))
 header_ref = map_naive_ref.header
 
 # LS map, not sliced
@@ -45,7 +43,7 @@ model = masking * proj
 
 map_naive_g1 = mapper_naive(tod, model, unit='Jy/arcsec^2')
 map_ls_g1 = mapper_ls(tod, model, tol=tol, maxiter=maxiter, solver=solver,
-                      M=Diagonal(1/map_naive_ref.coverage))
+                      M=DiagonalOperator(1/map_naive_ref.coverage))
 
 # LS map, sliced
 tamasis.var.comm_tod = MPI.COMM_WORLD
@@ -56,7 +54,7 @@ model = masking * proj
 
 map_naive_local = mapper_naive(tod, model, unit='Jy/arcsec^2')
 map_ls_local = mapper_ls(tod, model, tol=tol, maxiter=maxiter, solver=solver,
-                         M=Diagonal(1/map_naive_local.coverage))
+                         M=DiagonalOperator(1/map_naive_local.coverage))
 proj_global = DistributionGlobal(proj.mask.shape)
 map_naive_g2 = proj_global.T(map_naive_local)
 map_ls_g2 = proj_global.T(map_ls_local)
@@ -67,7 +65,7 @@ tamasis.var.comm_map = MPI.COMM_SELF
 model = masking * proj * proj_global
 map_naive_g3 = mapper_naive(tod, model, unit='Jy/arcsec^2')
 map_ls_g3 = mapper_ls(tod, model, tol=tol, maxiter=maxiter, solver=solver,
-                      M=Diagonal(1/map_naive_ref.coverage),
+                      M=DiagonalOperator(1/map_naive_ref.coverage),
                       comm_map=MPI.COMM_SELF)
 
 if any_neq(map_naive_ref, map_naive_g1.magnitude, mtol): raise TestFailure()

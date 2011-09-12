@@ -1,8 +1,6 @@
 import os
-import scipy
 import tamasis
 
-from scipy.sparse.linalg import cgs
 from tamasis import *
 from tamasis.linalg import norm2, norm2_ellipsoid
 
@@ -29,8 +27,8 @@ class Callback():
     def __call__(self, x):
         self.niterations += 1
 
-invntt = Diagonal(1/obs.get_detector_stddev(100)**2)
-invntt = Identity()
+invntt = DiagonalOperator(1/obs.get_detector_stddev(100)**2, broadcast='fast')
+invntt = IdentityOperator()
 map_nl = mapper_nl(tod, model, hypers=2*[1.],
                    norms=[norm2_ellipsoid(invntt)] + 2*[norm2],
                    tol=1.e-4, maxiter=1000,

@@ -1,5 +1,4 @@
 import os
-import scipy
 import tamasis
 
 from mpi4py import MPI
@@ -28,7 +27,7 @@ multiplexing = CompressionAverage(obs.instrument.fine_sampling_factor,
                                   description='Multiplexing')
 projection   = Projection(obs, resolution=3.2, oversampling=False,
                           npixels_per_sample=6, header=map_ref.header)
-telescope    = Identity(description='Telescope PSF')
+telescope    = IdentityOperator()
 
 model = masking_tod * multiplexing * projection * telescope
 print(model)

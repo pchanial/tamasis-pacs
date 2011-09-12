@@ -13,7 +13,8 @@ import re
 import scipy
 
 from mpi4py import MPI
-from operators import Operator, ScalarOperator, RoundOperator, ClipOperator
+from operators import (Operator, ScalarOperator, IdentityOperator,
+                       RoundOperator, ClipOperator)
 from operators.core import CompositeOperator
 from operators.utils import strenum, strplural, openmp_num_threads
 
@@ -1080,17 +1081,13 @@ class PacsMultiplexing(Operator):
         self.fine_sampling_factor = obs.instrument.fine_sampling_factor
         self.ij = obs.instrument.ij
 
-    def direct(self, input, inplace, cachein, cacheout):
-        input, output = self.validate_input_direct(input, cachein, cacheout)
+    def direct(self, input, output):
         tmf.pacs_multiplexing_direct(input.T, output.T,
                                      self.fine_sampling_factor, self.ij)
-        return output
 
-    def transpose(self, input, inplace, cachein, cacheout):
-        input, output = self.validate_input_transpose(input, cachein, cacheout)
+    def transpose(self, input, output):
         tmf.pacs_multiplexing_transpose(input.T, output.T,
                                         self.fine_sampling_factor, self.ij)
-        return output
 
     def validate_shapein(self, shapein):
         if shapein is None:
@@ -1445,7 +1442,7 @@ def pacs_compute_delay(obs, tod, model, invntt=None, tol_delay=1.e-3,
         raise ValueError('Temporal delay is determined within a single obsid.')
 
     if weight is None:
-        weight = Identity()
+        weight = IdentityOperator()
 
     method = scipy.optimize.brent
     result = method(criteria_delay, (obs, tod, model, weight, tol_mapper,

@@ -74,6 +74,6 @@ map_naive = mapper_naive(tod, model)
 map_madmap = mapper_ls(tod, model,
                        invntt=invntt,
                        unpacking=Unpacking(projection.mask),
-                       M=Diagonal(1/map_naive.coverage),
+                       M=DiagonalOperator(1/map_naive.coverage),
                        tol=1.e-5)
 map_madmap.save('map_madmap.fits')

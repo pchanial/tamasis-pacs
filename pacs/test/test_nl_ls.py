@@ -1,6 +1,4 @@
-import numpy as np
 import os
-import scipy
 import tamasis
 from tamasis import *
 
@@ -27,7 +25,7 @@ class Callback():
     def __call__(self, x):
         self.niterations += 1
 
-invntt = Diagonal(1/obs.get_detector_stddev(100)**2)
+invntt = DiagonalOperator(1/obs.get_detector_stddev(100)**2, broadcast='fast')
 norm = tamasis.linalg.norm2_ellipsoid(invntt)
 precond = 1./map_naive.coverage
 precond[precond > 1] = 0

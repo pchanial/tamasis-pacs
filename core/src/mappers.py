@@ -58,7 +58,7 @@ def mapper_naive(tod, model, unit=None, local_mask=None):
         inplace = False
 
     mask = getattr(tod, 'mask', None)
-    tod = Masking(mask)(tod, inplace=inplace)
+    Masking(mask)(tod, tod)
 
     # model.T expects a quantity / detector, we hide our units to 
     # prevent a unit validation exception
@@ -66,9 +66,9 @@ def mapper_naive(tod, model, unit=None, local_mask=None):
     tod.unit = ''
 
     # compute model.T(tod)/model.T(one)
-    mymap = model.T(tod, True, True, False)
+    mymap = model.T(tod)
     tod[:] = 1
-    map_weights = model.T(tod, True, True, False)
+    map_weights = model.T(tod)
     old_settings = np.seterr(divide='ignore', invalid='ignore')
     mymap /= map_weights
     mymap.unit = todunit
@@ -118,7 +118,7 @@ def mapper_ls(tod, model, invntt=None, unpacking=None, x0=None, tol=1.e-5,
         invntt = IdentityOperator()
 
     A = model.T * invntt * model
-    b = (model.T * invntt)(tod, inplace=True)
+    b = (model.T * invntt)(tod)
     if M is not None:
         M = asoperator(M, shapein=model.shapein, shapeout=model.shapein)
 

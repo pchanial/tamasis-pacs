@@ -29,6 +29,7 @@ __all__ = [
     'DistributionLocal',
     'RollOperator',
     'Convolution',
+    'Diagonal',
     'DdTdd',
     'DiscreteDifference',
     'Fft',
@@ -55,6 +56,7 @@ __all__ = [
     'Masking',
 ]
 
+Diagonal = DiagonalOperator
 
 def partitioned_last_axis(cls):
 

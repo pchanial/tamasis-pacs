@@ -33,7 +33,7 @@ packing = Unpacking(obs.info.mapmask).T
 #map_rlsw1 = mapper_rls(tod, projection*packing, padding.T * fft.T * invNtt * fft * padding, hyper=0, tol=1.e-5, M=M, solver=cg)
 #print('Elapsed time: ' + str(map_rlsw1.header['time']))
 
-M = Diagonal(packing(1/map_naive.coverage))
+M = DiagonalOperator(packing(1/map_naive.coverage))
 if np.any(~np.isfinite(M.data)):
     raise TestFailure()
 

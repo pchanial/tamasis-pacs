@@ -66,10 +66,10 @@ for field in obs.status.dtype.names:
     elif any_neq(obs.status[field], status2[field]): raise TestFailure('Status problem with: '+field)
 if any_neq(tod, tod2): raise TestFailure()
 
-telescope    = Identity(description='Telescope PSF')
+telescope    = IdentityOperator()
 projection   = Projection(obs, resolution=3.2, oversampling=False, npixels_per_sample=6)
 multiplexing = CompressionAverage(obs.instrument.fine_sampling_factor, description='Multiplexing')
-crosstalk    = Identity(description='Crosstalk')
+crosstalk    = IdentityOperator()
 compression  = CompressionAverage(obs.slice.compression_factor)
 masking      = Masking(tod.mask)
 
