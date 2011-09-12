@@ -2,14 +2,12 @@
 from __future__ import division
 
 import numpy as np
-import tamasisfortran as tmf
 
 from mpi4py import MPI
-from scipy.sparse.linalg import aslinearoperator
+from operators import IdentityOperator, asoperator
 
-from . import var
 from .linalg import dot, norm2
-from .acquisitionmodels import Identity, asacquisitionmodel
+
 
 __all__ = []
 
@@ -19,10 +17,10 @@ def cg(A, b, x0, tol=1.e-5, maxiter=300, callback=None, M=None, comm=None):
     if comm is None:
         comm = MPI.COMM_WORLD
 
-    A = asacquisitionmodel(A)
+    A = asoperator(A)
     if M is None:
-        M = Identity()
-    M = asacquisitionmodel(M)
+        M = IdentityOperator()
+    M = asoperator(M)
 
     maxRelError = tol**2
 
@@ -148,8 +146,6 @@ def nlcg(objfunc, n, linesearch, descent_method='pr', x0=None, M=None,
     if comm is None:
         comm = MPI.COMM_WORLD
 
-    rank = comm.Get_rank()
-
     # tolerance
     f = np.array(0.)
     work = []
@@ -219,7 +215,7 @@ class LineSearch(object):
             gradient at origin (updated after call)
         
         """
-        raise NotImplementederror()
+        raise NotImplementedError()
 
 class QuadraticStep(LineSearch):
 

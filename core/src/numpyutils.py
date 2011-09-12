@@ -126,6 +126,14 @@ def minmax(v):
     if np.all(np.isnan(v)):
         return np.array([np.nan, np.nan])
     return np.array((np.nanmin(v), np.nanmax(v)))
+   
+   
+#-------------------------------------------------------------------------------
+
+
+def isscalar(data):
+    """Hack around np.isscalar oddity"""
+    return data.ndim == 0 if isinstance(data, np.ndarray) else np.isscalar(data)
 
 
 #-------------------------------------------------------------------------------
@@ -164,11 +172,3 @@ def get_type(data):
 def _my_issctype(dtype):
     """Hack around np.issctype bug"""
     return np.issctype(dtype) and str(dtype)[0:2] != '|S'
-   
-   
-#-------------------------------------------------------------------------------
-
-
-def _my_isscalar(data):
-    """Hack around np.isscalar bug"""
-    return data.ndim == 0 if isinstance(data, np.ndarray) else np.isscalar(data)

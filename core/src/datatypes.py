@@ -10,23 +10,19 @@ import numpy as np
 import pickle
 import pyfits
 import StringIO
-    
+
 try:
     import ds9
     _imported_ds9 = True
 except:
     _imported_ds9 = False
 
-import tamasisfortran as tmf
-
 from functools import reduce
 from mpi4py import MPI
 
-from . import var
-from .numpyutils import _my_isscalar
 from .wcsutils import create_fitsheader
 from .mpiutils import read_fits, write_fits, split_shape, split_work
-from .quantity import Quantity, UnitError, _extract_unit, _strunit
+from .quantity import Quantity
 
 __all__ = [ 'FitsArray', 'Map', 'Tod' ]
 
@@ -209,10 +205,9 @@ class FitsArray(DistributedArray, Quantity):
         return item
 
     def __getattr__(self, name):
-        if self.dtype.names is None or name not in self.dtype.names:
-            raise AttributeError("'" + self.__class__.__name__ + "' object ha" \
-                "s no attribute '" + name + "'")
-        return self[name]
+        if self.dtype.names and name in self.dtype.names:
+            return self[name]
+        return super(FitsArray, self).__getattribute__(name)
 
     def __setattr__(self, name, value):
         if self.dtype.names and name in self.dtype.names:
@@ -303,10 +298,6 @@ class FitsArray(DistributedArray, Quantity):
                     np.floating, np.integer, np.complexfloating)) else repr(v)
                 header.update(k, v, c)
 
-        if np.rank(self) == 0:
-            value = self.reshape((1,))
-        else:
-            value = self.T if np.isfortran(self) else self
         write_fits(filename, self, header, self.shape_global, False, self.comm)
         if not isinstance(self, Map) and not isinstance(self, Tod):
             _save_derived_units(filename, self.derived_units, self.comm)
@@ -419,7 +410,7 @@ class FitsArray(DistributedArray, Quantity):
         """
         if not _imported_ds9:
             raise RuntimeError('The library pyds9 has not been installed.')
-        import ds9, os, time, sys, uuid, xpa
+        import os, time, sys, uuid, xpa
 
         id = None
         if not new:

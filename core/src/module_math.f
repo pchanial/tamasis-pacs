@@ -1021,24 +1021,25 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine diff_fast(array, m, n)
+    subroutine diff_fast(input, output, m, n)
 
-        real(p), intent(inout) :: array(m,n)
+        real(p), intent(in)    :: input(m,n)
+        real(p), intent(inout) :: output(m,n)
         integer, intent(in)    :: m, n
 
         integer :: i, j
 
         if (m <= 1) then
-            array = 0
+            output = 0
             return
         end if
 
         !$omp parallel do private(i,j)
         do j = 1, n
             do i = 1, m-1
-                array(i,j) = array(i,j) - array(i+1,j)
+                output(i,j) = input(i,j) - input(i+1,j)
             end do
-            array(m,j) = 0
+            output(m,j) = 0
         end do
         !$omp end parallel do
 
@@ -1048,16 +1049,17 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine diff_medium(array, m, n, o)
+    subroutine diff_medium(input, output, m, n, o)
 
         integer, intent(in)    :: m, n, o
-        real(p), intent(inout) :: array(m,n,o)
+        real(p), intent(in)    :: input(m,n,o)
+        real(p), intent(inout) :: output(m,n,o)
 
         integer, parameter     :: block = 4096
         integer                :: i, j, k, a, z
 
         if (n <= 1) then
-            array = 0
+            output = 0
             return
         end if
 
@@ -1068,10 +1070,10 @@ contains
                 a = (i-1) * block + 1
                 z = min(m, i * block)
                 do j = 1, n - 1
-                    array(a:z,j,k) = array(a:z,j,k) - array(a:z,j+1,k)
+                    output(a:z,j,k) = input(a:z,j,k) - input(a:z,j+1,k)
                 end do
             end do
-            array(:,n,k) = 0
+            output(:,n,k) = 0
         end do
         !$omp end parallel do
 
@@ -1081,10 +1083,11 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine diff_slow(array, m, n, boundary, islastrank)
+    subroutine diff_slow(input, output, m, n, boundary, islastrank)
 
         integer, intent(in)           :: m, n
-        real(p), intent(inout)        :: array(m,n)
+        real(p), intent(in)           :: input(m,n)
+        real(p), intent(inout)        :: output(m,n)
         real(p), intent(in), optional :: boundary(m)
         logical, intent(in), optional :: islastrank
 
@@ -1102,12 +1105,12 @@ contains
             a = (i-1) * block + 1
             z = min(m, i * block)
             do j = 1, n - 1
-                array(a:z,j) = array(a:z,j) - array(a:z,j+1)
+                output(a:z,j) = input(a:z,j) - input(a:z,j+1)
             end do
             if (present(boundary) .and. .not. islastrank_) then
-                array(a:z,n) = array(a:z,n) - boundary(a:z)
+                output(a:z,n) = input(a:z,n) - boundary(a:z)
             else
-                array(a:z,n) = 0
+                output(a:z,n) = 0
             end if
         end do
         !$omp end parallel do
@@ -1118,24 +1121,26 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine diffT_fast(array, m, n)
+    subroutine diffT_fast(input, output, m, n)
 
-        real(p), intent(inout) :: array(m,n)
+        real(p), intent(in)    :: input(m,n)
+        real(p), intent(inout) :: output(m,n)
         integer, intent(in)    :: m, n
 
         integer :: i, j
 
         if (m <= 1) then
-            array = 0
+            output = 0
             return
         end if
 
         !$omp parallel do private(i,j)
         do j = 1, n
-            array(m,j) = -array(m-1,j)
+            output(m,j) = -input(m-1,j)
             do i = m-1, 2, -1
-                array(i,j) = array(i,j) - array(i-1,j)
+                output(i,j) = input(i,j) - input(i-1,j)
             end do
+            output(1,j) = input(1,j)
         end do
         !$omp end parallel do
 
@@ -1145,16 +1150,17 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine diffT_medium(array, m, n, o)
+    subroutine diffT_medium(input, output, m, n, o)
 
         integer, intent(in)    :: m, n, o
-        real(p), intent(inout) :: array(m,n,o)
+        real(p), intent(in)    :: input(m,n,o)
+        real(p), intent(inout) :: output(m,n,o)
 
         integer, parameter     :: block = 4096
         integer                :: i, j, k, a, z
 
         if (n <= 1) then
-            array = 0
+            output = 0
             return
         end if
 
@@ -1163,10 +1169,11 @@ contains
             do i = 1, (m-1) / block + 1
                 a = (i-1) * block + 1
                 z = min(m, i * block)
-                array(a:z,n,k) = -array(a:z,n-1,k)
+                output(a:z,n,k) = -input(a:z,n-1,k)
                 do j = n-1, 2, -1
-                    array(a:z,j,k) = array(a:z,j,k) - array(a:z,j-1,k)
+                    output(a:z,j,k) = input(a:z,j,k) - input(a:z,j-1,k)
                 end do
+                output(a:z,1,k) = input(a:z,1,k)
             end do
         end do
         !$omp end parallel do
@@ -1177,10 +1184,11 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine diffT_slow(array, m, n, boundary, isfirstrank, islastrank)
+    subroutine diffT_slow(input, output, m, n, boundary, isfirstrank, islastrank)
 
         integer, intent(in)           :: m, n
-        real(p), intent(inout)        :: array(m,n)
+        real(p), intent(in)           :: input(m,n)
+        real(p), intent(inout)        :: output(m,n)
         real(p), intent(in), optional :: boundary(m)
         logical, intent(in), optional :: isfirstrank
         logical, intent(in), optional :: islastrank
@@ -1197,7 +1205,7 @@ contains
         if (present(islastrank)) islastrank_ = islastrank
 
         if (n == 1 .and. isfirstrank_ .and. islastrank_) then
-            array = 0
+            output = 0
             return
         end if
 
@@ -1209,22 +1217,24 @@ contains
                 if (isfirstrank_) then
                     continue
                 else if (islastrank_) then
-                    array(a:z,1) = -boundary(a:z)
+                    output(a:z,1) = -boundary(a:z)
                 else
-                    array(a:z,1) = array(a:z,1) - boundary(a:z)
+                    output(a:z,1) = input(a:z,1) - boundary(a:z)
                 end if
                 cycle
             end if                    
             if (islastrank_) then
-                array(a:z,n) = -array(a:z,n-1)
+                output(a:z,n) = -input(a:z,n-1)
             else
-                array(a:z,n) = array(a:z,n) - array(a:z,n-1)
+                output(a:z,n) = input(a:z,n) - input(a:z,n-1)
             end if
             do j = n-1, 2, -1
-                array(a:z,j) = array(a:z,j) - array(a:z,j-1)
+                output(a:z,j) = input(a:z,j) - input(a:z,j-1)
             end do
             if (.not. isfirstrank_) then
-                array(a:z,1) = array(a:z,1) - boundary(a:z)
+                output(a:z,1) = input(a:z,1) - boundary(a:z)
+            else
+                output(a:z,1) = input(a:z,1)
             end if
         end do
         !$omp end parallel do
@@ -1235,12 +1245,13 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine diffTdiff_fast(array, m, n, scalar)
+    subroutine diffTdiff_fast(input, output, m, n, scalar)
 
         use module_tamasis,  only : p
         implicit none
 
-        real(p), intent(inout)        :: array(m,n)
+        real(p), intent(in)           :: input(m,n)
+        real(p), intent(inout)        :: output(m,n)
         integer, intent(in)           :: m, n
         real(p), intent(in), optional :: scalar
 
@@ -1248,7 +1259,7 @@ contains
         real(p) :: v, w, s
 
         if (m <= 1) then
-            array = 0
+            output = 0
             return
         end if
 
@@ -1260,14 +1271,14 @@ contains
 
         !$omp parallel do private(i,j,v,w)
         do j = 1, n
-            v = array(1,j)
-            array(1,j) = s * (array(1,j) - array(2,j))
+            v = input(1,j)
+            output(1,j) = s * (input(1,j) - input(2,j))
             do i = 2, m-1
-                w = array(i,j)
-                array(i,j) = s * (2 * w - v - array(i+1,j))
+                w = input(i,j)
+                output(i,j) = s * (2 * w - v - input(i+1,j))
                 v = w
             end do
-            array(m,j) = s * (array(m,j) - v)
+            output(m,j) = s * (input(m,j) - v)
         end do
         !$omp end parallel do
 
@@ -1277,13 +1288,14 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine diffTdiff_medium(array, m, n, o, scalar)
+    subroutine diffTdiff_medium(input, output, m, n, o, scalar)
 
         use module_tamasis,  only : p
         implicit none
 
         integer, intent(in)           :: m, n, o
-        real(p), intent(inout)        :: array(m,n,o)
+        real(p), intent(in)           :: input(m,n,o)
+        real(p), intent(inout)        :: output(m,n,o)
         real(p), intent(in), optional :: scalar
 
         integer, parameter :: block = 4096
@@ -1291,7 +1303,7 @@ contains
         real(p) :: w, v(block), s
         
         if (n <= 1) then
-            array = 0
+            output = 0
             return
         end if
 
@@ -1306,16 +1318,16 @@ contains
             do i = 1, (m-1) / block + 1
                 a = (i-1) * block + 1
                 z = min(i * block, m)
-                v(1:z-a+1) = array(a:z,1,k)
-                array(a:z,1,k) = s * (v(1:z-a+1) - array(a:z,2,k))
+                v(1:z-a+1) = input(a:z,1,k)
+                output(a:z,1,k) = s * (v(1:z-a+1) - input(a:z,2,k))
                 do j = 2, n-1
                     do h = a, z
-                        w = array(h,j,k)
-                        array(h,j,k) = s * (2 * w - v(h-a+1) - array(h,j+1,k))
+                        w = input(h,j,k)
+                        output(h,j,k) = s * (2 * w - v(h-a+1) - input(h,j+1,k))
                         v(h-a+1) = w
                     end  do
                 end do
-                array(a:z,n,k) = s * (array(a:z,n,k) - v(1:z-a+1))
+                output(a:z,n,k) = s * (input(a:z,n,k) - v(1:z-a+1))
             end do
         end do
         !$omp end parallel do
@@ -1326,10 +1338,11 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine diffTdiff_slow(array, m, n, scalar, boundary1, boundary2, isfirstrank, islastrank)
+    subroutine diffTdiff_slow(input, output, m, n, scalar, boundary1, boundary2, isfirstrank, islastrank)
 
         integer, intent(in)           :: m, n
-        real(p), intent(inout)        :: array(m,n)
+        real(p), intent(in)           :: input(m,n)
+        real(p), intent(inout)        :: output(m,n)
         real(p), intent(in), optional :: scalar
         real(p), intent(in), optional :: boundary1(m), boundary2(m)
         logical, intent(in), optional :: isfirstrank
@@ -1354,7 +1367,7 @@ contains
         if (present(islastrank)) islastrank_ = islastrank
 
         if (n == 1 .and. isfirstrank_ .and. islastrank_) then
-            array = 0
+            output = 0
             return
         end if
 
@@ -1364,31 +1377,31 @@ contains
             z = min(i * block, m)
             if (n == 1) then
                 if (isfirstrank_) then
-                    array(a:z,1) = s * (array(a:z,1) - boundary2(a:z))
+                    output(a:z,1) = s * (input(a:z,1) - boundary2(a:z))
                 else if (islastrank_) then
-                    array(a:z,1) = s * (array(a:z,1) - boundary1(a:z))
+                    output(a:z,1) = s * (input(a:z,1) - boundary1(a:z))
                 else
-                    array(a:z,1) = s * (2 * array(a:z,1) - boundary1(a:z) - boundary2(a:z))
+                    output(a:z,1) = s * (2 * input(a:z,1) - boundary1(a:z) - boundary2(a:z))
                 end if
                 cycle
             end if
-            v(1:z-a+1) = array(a:z,1)
+            v(1:z-a+1) = input(a:z,1)
             if (isfirstrank_) then
-                array(a:z,1) = s * (v(1:z-a+1) - array(a:z,2))
+                output(a:z,1) = s * (v(1:z-a+1) - input(a:z,2))
             else
-                array(a:z,1) = s * (2 * v(1:z-a+1) - boundary1(a:z) - array(a:z,2))
+                output(a:z,1) = s * (2 * v(1:z-a+1) - boundary1(a:z) - input(a:z,2))
             end if
             do j = 2, n-1
                 do h = a, z
-                    w = array(h,j)
-                    array(h,j) = s * (2 * w - v(h-a+1) - array(h,j+1))
+                    w = input(h,j)
+                    output(h,j) = s * (2 * w - v(h-a+1) - input(h,j+1))
                     v(h-a+1) = w
                 end  do
             end do
             if (islastrank_) then
-                array(a:z,n) = s * (array(a:z,n) - v(1:z-a+1))
+                output(a:z,n) = s * (input(a:z,n) - v(1:z-a+1))
             else
-                array(a:z,n) = s * (2 * array(a:z,n) - v(1:z-a+1) - boundary2(a:z))
+                output(a:z,n) = s * (2 * input(a:z,n) - v(1:z-a+1) - boundary2(a:z))
             end if
         end do
         !$omp end parallel do
@@ -1399,28 +1412,32 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine shift_fast(array, m, n, offset)
+    subroutine shift_fast(input, output, m, n, offset)
 
-        real(p), intent(inout) :: array(m,n)
+        real(p), intent(in)    :: input(m,n)
+        real(p), intent(inout) :: output(m,n)
         integer, intent(in)    :: m, n
         integer, intent(in)    :: offset(:)
 
         integer :: i, j, d
 
-        !$omp parallel do private(d)
+        !$omp parallel do private(i,j,d)
         do j = 1, n
             d = offset((j-1) / (n / size(offset)) + 1)
-            if (d == 0) cycle
+            if (d == 0) then
+                output(:,j) = input(:,j)
+                cycle
+            end if
             if (d > 0) then
                 do i = m, d+1, -1
-                    array(i,j) = array(i-d,j)
+                    output(i,j) = input(i-d,j)
                 end do
-                array(1:min(d,m),j) = 0
+                output(1:min(d,m),j) = 0
             else
                 do i = 1, m+d
-                    array(i,j) = array(i-d,j)
+                    output(i,j) = input(i-d,j)
                 end do
-                array(max(m+d+1,1):m,j) = 0             
+                output(max(m+d+1,1):m,j) = 0             
             end if
         end do
         !$omp end parallel do
@@ -1431,10 +1448,11 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine shift_medium(array, m, n, o, offset)
+    subroutine shift_medium(input, output, m, n, o, offset)
 
         integer, intent(in)    :: m, n, o
-        real(p), intent(inout) :: array(m,n,o)
+        real(p), intent(in)    :: input(m,n,o)
+        real(p), intent(inout) :: output(m,n,o)
         integer, intent(in)    :: offset(:)
 
         integer :: j, k, d
@@ -1442,17 +1460,20 @@ contains
         !$omp parallel do private(d)
         do k = 1, o
             d = offset((k-1) / (o / size(offset)) + 1)
-            if (d == 0) cycle
+            if (d == 0)  then
+                output(:,:,k) = input(:,:,k)
+                cycle
+            end if
             if (d > 0) then
                 do j = n, d+1, -1
-                    array(:,j,k) = array(:,j-d,k)
+                    output(:,j,k) = input(:,j-d,k)
                 end do
-                array(:,1:min(d,n),k) = 0
+                output(:,1:min(d,n),k) = 0
             else
                 do j = 1, n+d
-                    array(:,j,k) = array(:,j-d,k)
+                    output(:,j,k) = input(:,j-d,k)
                 end do
-                array(:,max(n+d+1,1):n,k) = 0             
+                output(:,max(n+d+1,1):n,k) = 0             
             end if
         end do
         !$omp end parallel do

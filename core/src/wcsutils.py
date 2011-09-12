@@ -9,7 +9,7 @@ import pyfits
 import tamasisfortran as tmf
 
 from . import var
-from .numpyutils import _my_isscalar
+from . import numpyutils as nu
 from kapteyn import wcs
 
 __all__ = [ 
@@ -223,7 +223,7 @@ def create_fitsheader(naxis=None, dtype=None, fromdata=None, extname=None,
     else:
         if cdelt is None:
             return header
-        if _my_isscalar(cdelt):
+        if nu.isscalar(cdelt):
             cdelt = (-cdelt, cdelt)
         if pa is None:
             pa = 0.
@@ -246,7 +246,7 @@ def create_fitsheader(naxis=None, dtype=None, fromdata=None, extname=None,
     if ctype.size != 2:
         raise ValueError('CTYPE does not have two elements.')
 
-    if _my_isscalar(cunit):
+    if nu.isscalar(cunit):
         cunit = (cunit, cunit)
     cunit = np.asarray(cunit, dtype=np.string_)
     if cunit.size != 2:

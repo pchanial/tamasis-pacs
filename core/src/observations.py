@@ -7,8 +7,8 @@ from __future__ import division
 import numpy as np
 
 from . import var
+from . import numpyutils as nu
 from .datatypes import FitsArray, Map, Tod, create_fitsheader
-from .numpyutils import _my_isscalar
 from .quantity import Quantity
 from .stringutils import strenum
 
@@ -227,12 +227,12 @@ class MaskPolicy(object):
     REMOVE = 2
     def __init__(self, flags, values, description=None):
         self._description = description
-        if _my_isscalar(flags):
+        if nu.isscalar(flags):
             if isinstance(flags, str):
                 flags = flags.split(',')
             else:
                 flags = (flags,)
-        if _my_isscalar(values):
+        if nu.isscalar(values):
             if isinstance(values, str):
                 values = values.split(',')
             else:
@@ -308,7 +308,7 @@ class Pointing(FitsArray):
         if nsamples is None:
             nsamples = (time.size,)
         else:
-            if _my_isscalar(nsamples):
+            if nu.isscalar(nsamples):
                 nsamples = (nsamples,)
             else:
                 nsamples = tuple(nsamples)

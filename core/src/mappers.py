@@ -6,20 +6,23 @@ from __future__ import division
 import cProfile
 import numpy as np
 import os
-import scipy
 import tamasisfortran as tmf
 import time
 
-from copy import copy
 from mpi4py import MPI
 from . import var
-from .acquisitionmodels import Addition, DdTdd, Diagonal, DiscreteDifference, \
-    Identity, Masking, Scalar, asacquisitionmodel
-from .datatypes import Map, Tod, flatten_sliced_shape
-from .linalg import Function, dot, norm2, norm2_ellipsoid
+from operators import AdditionOperator, DiagonalOperator, IdentityOperator, asoperator
+from .acquisitionmodels import DdTdd, DiscreteDifference, Masking
+from .datatypes import Map
+from .linalg import Function, norm2, norm2_ellipsoid
 from .quantity import Quantity, UnitError
 from .solvers import cg, nlcg, QuadraticStep
 
+__all__ = [ 'mapper_naive',
+            'mapper_ls',
+            'mapper_rls',
+            'mapper_nl',
+]
 
 def mapper_naive(tod, model, unit=None, local_mask=None):
     """
@@ -36,7 +39,7 @@ def mapper_naive(tod, model, unit=None, local_mask=None):
     tod : Tod
         The input Time Ordered Data
 
-    model : AcquisitionModel
+    model : LinearOperator
         The instrument model such as tod = model(map)
 
     unit : string
@@ -112,12 +115,12 @@ def mapper_ls(tod, model, invntt=None, unpacking=None, x0=None, tol=1.e-5,
     tod = _validate_tod(tod, model)
 
     if invntt is None:
-        invntt = Identity()
+        invntt = IdentityOperator()
 
     A = model.T * invntt * model
     b = (model.T * invntt)(tod, inplace=True)
     if M is not None:
-        M = asacquisitionmodel(M, shapein=model.shapein, shapeout=model.shapein)
+        M = asoperator(M, shapein=model.shapein, shapeout=model.shapein)
 
     return _solver(A, b, tod, model, invntt, hyper=0, x0=x0, tol=tol,
                    maxiter=maxiter, M=M, solver=solver, verbose=verbose,
@@ -135,7 +138,7 @@ def mapper_rls(tod, model, invntt=None, unpacking=None, hyper=1.0, x0=None,
     tod = _validate_tod(tod, model)
 
     if invntt is None:
-        invntt = Identity()
+        invntt = IdentityOperator()
 
     if comm_map is None:
         comm_map = var.comm_map
@@ -150,7 +153,7 @@ def mapper_rls(tod, model, invntt=None, unpacking=None, hyper=1.0, x0=None,
     npriors = len(model.shapein)
     priors = [ DiscreteDifference(axis=axis, shapein=model.shapein,
                comm=comm_map) for axis in range(npriors) ]
-    prior = Addition([DdTdd(axis=axis, scalar=hyper * ntods / nmaps,
+    prior = AdditionOperator([DdTdd(axis=axis, scalar=hyper * ntods / nmaps,
         comm=comm_map) for axis in range(npriors)])
     if hyper != 0 and (comm_map.Get_rank() == 0 or comm_map.Get_size() > 1):
 # commenting this for now, matvec is not updated
@@ -191,7 +194,7 @@ def mapper_nl(tod, model, unpacking=None, priors=[], hypers=[], norms=[],
     if len(comms) == 0:
         comms = [var.comm_tod] + npriors * [var.comm_map]
 
-    if isinstance(M, Diagonal):
+    if isinstance(M, DiagonalOperator):
         tmf.remove_nonfinite(M.data.T)
 
     hypers = np.asarray(hypers, dtype=var.FLOAT_DTYPE)
@@ -300,7 +303,7 @@ def _solver(A, b, tod, model, invntt, priors=[], hyper=0, x0=None, tol=1.e-5,
 
     npriors = len(priors)
 
-    if isinstance(M, Diagonal):
+    if isinstance(M, DiagonalOperator):
         tmf.remove_nonfinite(M.data.T)
 
     if unpacking is not None:

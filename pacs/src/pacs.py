@@ -6,22 +6,21 @@ from __future__ import division
 
 import gc
 import glob
-import kapteyn
 import numpy as np
 import os
 import pyfits
 import re
 import scipy
-import tempfile
+
+from mpi4py import MPI
+from operators import Operator, ScalarOperator, RoundOperator, ClipOperator
+from operators.core import CompositeOperator
+from operators.utils import strenum, strplural, openmp_num_threads
 
 from . import var
-from matplotlib import pyplot as P
-from mpi4py import MPI
-from tamasis.acquisitionmodels import Composite
-from tamasis.core import *
+from tamasis.core import Quantity, Tod, MaskPolicy, Pointing, create_fitsheader,  tmf, CompressionAverage, Projection, Masking
 from tamasis.mpiutils import split_observation
 from tamasis.observations import Observation, Instrument, create_scan
-from tamasis.stringutils import strenum, strplural
 from tamasis.wcsutils import combine_fitsheader
 
 __all__ = [ 'PacsObservation',
@@ -288,7 +287,6 @@ class PacsBase(Observation):
         data = pyfits.open(os.path.join(path, file))['Signal'] \
                      .data[:,:,istart:iend]
         data /= self.instrument.active_fraction * self.instrument.responsivity
-        ndetectors = self.get_ndetectors()
         nsamples = self.get_nsamples()
         nsamples_tot = np.sum(nsamples*self.slice.compression_factor / 4)
         if nsamples_tot > data.shape[-1]:
@@ -388,7 +386,7 @@ class PacsBase(Observation):
         if ra is not None and dec is not None:
             if pa is None:
                 pa = ra * 0.
-            if chop is NOne:
+            if chop is None:
                 chop = ra * 0.
         elif (ra is None) ^ (dec is None):
             raise ValueError('Both R.A. and Dec must be set.')
@@ -445,7 +443,7 @@ class PacsBase(Observation):
                 'd mask', len(m), False, ': ' + ', '.join(m))).capitalize() \
                 for s,m in (('',a), ('de',d)))
 
-        nthreads = tmf.info_nthreads()
+        nthreads = openmp_num_threads()
         ndetectors = self.get_ndetectors()
         sp = len('Info ')*' '
         unit = 'unknown' if self.slice[0].unit == '' else self.slice[0].unit
@@ -851,7 +849,7 @@ class PacsObservation(PacsBase):
                 try:
                     s = hdu.data
                     break
-                except IndexError as errmsg:
+                except IndexError:
                     pass
             
             status.append(s.base)
@@ -961,7 +959,6 @@ class PacsSimulation(PacsBase):
 
         nslices = len(pointings)
         nsamples = tuple([len(p) for p in pointings])
-        nsamples_tot = sum(nsamples)
 
         # concatenate pointings
         pointing = Pointing(0, 0, 0, 0, nsamples=nsamples,
@@ -1070,18 +1067,16 @@ class PacsSimulation(PacsBase):
 #-------------------------------------------------------------------------------
 
 
-class PacsMultiplexing(AcquisitionModelLinear):
+class PacsMultiplexing(Operator):
     """
     Performs the multiplexing of the PACS subarrays.
     The subarray columns are read one after the other, in a 0.025s cycle (40Hz).
     """
     def __init__(self, obs, shapein=None, description=None):
-        AcquisitionModelLinear.__init__(self,
-                                        cache=True,
-                                        shapein=shapein,
-                                        shapeout=shapeout,
-                                        typein=Tod,
-                                        description=description)
+        Operator.__init__(self,
+                          shapein=shapein,
+                          classin=Tod,
+                          description=description)
         self.fine_sampling_factor = obs.instrument.fine_sampling_factor
         self.ij = obs.instrument.ij
 
@@ -1101,7 +1096,7 @@ class PacsMultiplexing(AcquisitionModelLinear):
         if shapein is None:
             return None
         if shapein[1] % self.fine_sampling_factor != 0:
-            raise ValidationError('The input timeline size (' + \
+            raise ValueError('The input timeline size (' + \
                 str(shapein[1]) + ') is not an integer times the fine sampling'\
                 ' factor ('+str(self.fine_sampling_factor)+').')
         shapeout = list(shapein)
@@ -1137,10 +1132,10 @@ def PacsConversionAdu(obs, gain='nominal', offset='direct'):
     z = obs.instrument.adu_converter_max[offset]
 
     return np.product([
-        Clip(a, z, description='ADU converter saturation'),
-        Rounding(description='ADU converter rounding'),
-        Offset(o, description='ADU converter offset'),
-        Scalar(1/g, description='ADU converter gain')])
+        ClipOperator(a, z, description='ADU converter saturation'),
+        RoundOperator(description='ADU converter rounding'),
+        OffsetOperator(o, description='ADU converter offset'),
+        ScalarOperator(1/g, description='ADU converter gain')])
 
 
 #-------------------------------------------------------------------------------
@@ -1148,8 +1143,9 @@ def PacsConversionAdu(obs, gain='nominal', offset='direct'):
 
 def PacsConversionVolts(obs):
     """Jy-to-Volts conversion."""
-    return Scalar(obs.instrument.responsivity / obs.instrument.active_fraction,
-                  description='Jy-to-Volts conversion')
+    return ScalarOperator(obs.instrument.responsivity / \
+                          obs.instrument.active_fraction,
+                          description='Jy-to-Volts conversion')
 
 
 #-------------------------------------------------------------------------------
@@ -1410,12 +1406,12 @@ def pacs_compute_delay(obs, tod, model, invntt=None, tol_delay=1.e-3,
     def func_model(obs, tod, model):
 
         def substitute_projection(model):
-            for i, c in enumerate(model.blocks):
+            for i, c in enumerate(model.operands):
                 if isinstance(c, Projection):
-                    model.blocks[i] = Projection(obs, method=c.method,
+                    model.operands[i] = Projection(obs, method=c.method,
                        header=c.header, npixels_per_sample=c.npixels_per_sample)
                     return True
-                elif isinstance(c, Composite):
+                elif isinstance(c, CompositeOperator):
                     if substitute_projection(c):
                         return True
             return False
@@ -1423,7 +1419,7 @@ def pacs_compute_delay(obs, tod, model, invntt=None, tol_delay=1.e-3,
         if isinstance(model, Projection):
             return Projection(obs, method=model.method, header=model.header,
                               npixels_per_sample=model.npixels_per_sample)
-        if isinstance(model, Composite):
+        if isinstance(model, CompositeOperator):
             if substitute_projection(model):
                 return model
 

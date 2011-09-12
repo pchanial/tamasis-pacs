@@ -6,8 +6,6 @@ from __future__ import division
 
 import kapteyn
 import numpy as np
-import os
-import re
 import scipy.special
 import tamasisfortran as tmf
 import scipy.signal
@@ -16,9 +14,8 @@ from matplotlib import pyplot
 from mpi4py import MPI
 
 from . import var
-from .numpyutils import _my_isscalar
+from . import numpyutils as nu
 from .wcsutils import angle_lonlat, barycenter_lonlat
-from .quantity import Quantity
 from .datatypes import Map, create_fitsheader
 
 __all__ = [ 
@@ -325,15 +322,15 @@ def aperture_circular(shape, diameter, origin=None, resolution=1.):
 #-------------------------------------------------------------------------------
 
 
-def diff(array, axis=0, comm=None):
+def diff(input, output, axis=0, comm=None):
     """
     Inplace discrete difference
     """
 
-    if not isinstance(array, np.ndarray):
+    if not isinstance(input, np.ndarray):
         raise TypeError('Input array is not an ndarray.')
 
-    if array.dtype != var.FLOAT_DTYPE:
+    if input.dtype != var.FLOAT_DTYPE:
         raise TypeError('The data type of the input array is not ' + \
                         str(var.FLOAT_DTYPE.type) + '.')
 
@@ -343,10 +340,10 @@ def diff(array, axis=0, comm=None):
     if comm is None:
         comm = MPI.COMM_WORLD
 
-    ndim = array.ndim
+    ndim = input.ndim
     
     if ndim == 0:
-        array.flat = 0
+        output.flat = 0
         return
 
     if axis >= ndim:
@@ -354,26 +351,27 @@ def diff(array, axis=0, comm=None):
                          ' less than ' + str(ndim-1) + '.')
 
     if axis != 0 or comm.Get_size() == 1:
-        tmf.diff(array.T, ndim-axis, np.asarray(array.T.shape))
+        tmf.diff(input.ravel(), output.ravel(), ndim-axis,
+                 np.asarray(input.T.shape))
         return
 
-    status = tmf.diff_mpi(array.T, ndim-axis, np.asarray(array.T.shape),
-                          comm.py2f())
+    status = tmf.diff_mpi(input.ravel(), output.ravel(), ndim-axis,
+                          np.asarray(input.T.shape), comm.py2f())
     if status != 0: raise RuntimeError()
 
 
 #-------------------------------------------------------------------------------
 
 
-def diffT(array, axis=0, comm=None):
+def diffT(input, output, axis=0, comm=None):
     """
     Inplace discrete difference transpose
     """
 
-    if not isinstance(array, np.ndarray):
+    if not isinstance(input, np.ndarray):
         raise TypeError('Input array is not an ndarray.')
 
-    if array.dtype != var.FLOAT_DTYPE:
+    if input.dtype != var.FLOAT_DTYPE:
         raise TypeError('The data type of the input array is not ' + \
                         str(var.FLOAT_DTYPE.type) + '.')
 
@@ -383,10 +381,10 @@ def diffT(array, axis=0, comm=None):
     if comm is None:
         comm = MPI.COMM_WORLD
 
-    ndim = array.ndim
+    ndim = input.ndim
 
     if ndim == 0:
-        array.flat = 0
+        output.flat = 0
         return
 
     if axis >= ndim:
@@ -394,25 +392,26 @@ def diffT(array, axis=0, comm=None):
                          ' less than ' + str(ndim-1) + '.')
 
     if axis != 0 or comm.Get_size() == 1:
-        tmf.difft(array.T, ndim-axis, np.asarray(array.T.shape))
+        tmf.difft(input.ravel(), output.ravel(), ndim-axis,
+                  np.asarray(input.T.shape))
         return
 
-    status = tmf.difft_mpi(array.T, ndim-axis, np.asarray(array.T.shape),
-                          comm.py2f())
+    status = tmf.difft_mpi(input.ravel(), output.ravel(), ndim-axis,
+                           np.asarray(input.T.shape), comm.py2f())
     if status != 0: raise RuntimeError()
     
 #-------------------------------------------------------------------------------
 
 
-def diffTdiff(array, axis=0, scalar=1., comm=None):
+def diffTdiff(input, output, axis=0, scalar=1., comm=None):
     """
     Inplace discrete difference transpose times discrete difference
     """
 
-    if not isinstance(array, np.ndarray):
+    if not isinstance(input, np.ndarray):
         raise TypeError('Input array is not an ndarray.')
 
-    if array.dtype != var.FLOAT_DTYPE:
+    if input.dtype != var.FLOAT_DTYPE:
         raise TypeError('The data type of the input array is not ' + \
                         str(var.FLOAT_DTYPE.type) + '.')
 
@@ -423,10 +422,10 @@ def diffTdiff(array, axis=0, scalar=1., comm=None):
         comm = MPI.COMM_WORLD
 
     scalar = np.asarray(scalar, var.FLOAT_DTYPE)
-    ndim = array.ndim
+    ndim = input.ndim
     
     if ndim == 0:
-        array.flat = 0
+        output.flat = 0
         return
     
     if axis >= ndim:
@@ -434,19 +433,20 @@ def diffTdiff(array, axis=0, scalar=1., comm=None):
                          ' less than ' + str(ndim) + '.')
 
     if axis != 0 or comm.Get_size() == 1:
-        tmf.difftdiff(array.T, ndim-axis, np.asarray(array.T.shape), scalar)
+        tmf.difftdiff(input.ravel(), output.ravel(), ndim-axis,
+                      np.asarray(input.T.shape), scalar)
 
         return
 
-    status = tmf.difftdiff_mpi(array.T, ndim-axis, np.asarray(array.T.shape),
-                               scalar, comm.py2f())
+    status = tmf.difftdiff_mpi(input.ravel(), output.ravel(), ndim-axis,
+                               np.asarray(input.T.shape), scalar, comm.py2f())
     if status != 0: raise RuntimeError()
 
 
 #-------------------------------------------------------------------------------
 
 
-def shift(array, n, axis=0):
+def shift(input, output, n, axis=-1):
     """
     Shift array elements inplace along a given axis.
 
@@ -477,29 +477,28 @@ def shift(array, n, axis=0):
     array([[0., 1., 1., 1.],
            [2., 2., 2., 0.]])
     """
-    if not isinstance(array, np.ndarray):
+    if not isinstance(input, np.ndarray):
         raise TypeError('Input array is not an ndarray.')
 
-    if array.dtype != var.FLOAT_DTYPE:
+    if input.dtype != var.FLOAT_DTYPE:
         raise TypeError('The data type of the input array is not ' + \
                         str(var.FLOAT_DTYPE.name) + '.')
 
-    rank = array.ndim
+    rank = input.ndim
     n = np.array(n, ndmin=1, dtype='int32').ravel()
     
     if axis < 0:
         axis = rank + axis
 
     if axis == 0 and n.size > 1 or n.size != 1 and n.size not in \
-       np.cumproduct(array.shape[0:axis]):
+       np.cumproduct(input.shape[0:axis]):
         raise ValueError('The offset size is incompatible with the first dime' \
                          'nsions of the array')
     if rank == 0:
-        array.shape = (1,)
-        array[:] = 0
-        array.shape = ()
+        output[()] = 0
     else:
-        tmf.shift(array.ravel(), rank-axis, np.asarray(array.T.shape), n)
+        tmf.shift(input.ravel(), output.ravel(), rank-axis,
+                  np.asarray(input.T.shape), n)
 
     
 #-------------------------------------------------------------------------------
@@ -530,7 +529,7 @@ def distance(shape, origin=None, resolution=1.):
     [ 1.          0.          1.        ]
     [ 1.41421356  1.          1.41421356]]
     """
-    if _my_isscalar(shape):
+    if nu.isscalar(shape):
         shape = (shape,)
     else:
         shape = tuple(shape)
@@ -544,7 +543,7 @@ def distance(shape, origin=None, resolution=1.):
 
     unit = getattr(resolution, '_unit', None)
 
-    if _my_isscalar(resolution):
+    if nu.isscalar(resolution):
         resolution = np.resize(resolution, rank)
     resolution = np.asanyarray(resolution, dtype=var.FLOAT_DTYPE)
 

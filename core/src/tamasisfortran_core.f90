@@ -52,21 +52,6 @@ end subroutine info_nbytes_real
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine info_nthreads(nthreads)
-
-    use omp_lib, only : omp_get_max_threads
-    implicit none
-
-    integer, intent(out) :: nthreads
-
-    nthreads = omp_get_max_threads()
-
-end subroutine info_nthreads
-
-
-!-----------------------------------------------------------------------------------------------------------------------------------
-
-
 subroutine pointing_matrix_direct(pmatrix, map1d, signal, npixels_per_sample, nsamples, ndetectors, npixels)
 
     use module_pointingmatrix, only : PointingElement, pmatrix_direct
@@ -523,6 +508,37 @@ end subroutine fft_filter_uncorrelated
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
+subroutine fft_filter_uncorrelated2(data, nsamples, ncorrelations, ndetectors, tod_filter, status)
+
+    use iso_fortran_env,  only : ERROR_UNIT
+    use module_filtering, only : FilterUncorrelated, fft_filter => create_filter_uncorrelated
+    use module_tamasis,   only : p
+    implicit none
+
+    real(p), intent(in)  :: data(ncorrelations+1,ndetectors)
+    integer, intent(in)  :: nsamples
+    integer, intent(in)  :: ncorrelations
+    integer, intent(in)  :: ndetectors
+    real(p), intent(out) :: tod_filter(nsamples,ndetectors)
+    integer, intent(out) :: status
+
+    type(FilterUncorrelated) :: filter(1)
+
+    filter%ncorrelations = ncorrelations
+    filter%bandwidth = 2 * ncorrelations + 1
+    filter%ndetectors = ndetectors
+    allocate (filter(1)%data(ncorrelations+1,ndetectors))
+    filter(1)%data = data(:,:)
+
+    call fft_filter(filter, [nsamples], ndetectors, tod_filter, status)
+    if (status /= 0) return
+
+end subroutine fft_filter_uncorrelated2
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
 subroutine fft_plan(data, nsamples, nslices, plan, nsamples_tot, ndetectors)
 
     use module_filtering, only : fft_tod
@@ -552,7 +568,31 @@ end subroutine fft_plan
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine unpack_direct(input, nvalids, mask, nx, ny, output, field)
+subroutine packing(input, mask, nx, ny, nvalids, output)
+
+    use iso_fortran_env, only : ERROR_UNIT
+    use module_tamasis,  only : p
+    implicit none
+
+    real(p), intent(in)    :: input(nx,ny)
+    logical*1, intent(in)  :: mask(nx,ny)
+    integer, intent(in)    :: nx, ny
+    integer, intent(in)    :: nvalids
+    real(p), intent(inout) :: output(nvalids)
+
+    if (count(.not. mask) /= nvalids) then
+        write (ERROR_UNIT,'(a)') 'UNPACK_TRANSPOSE: The mask is not compatible with the output size.'
+        return
+    endif
+    output = pack(input, .not. mask)
+
+end subroutine packing
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine unpacking(input, nvalids, mask, nx, ny, output, field)
 
     use iso_fortran_env, only : ERROR_UNIT
     use module_tamasis,  only : p
@@ -571,312 +611,7 @@ subroutine unpack_direct(input, nvalids, mask, nx, ny, output, field)
     endif
     output = unpack(input, .not. mask, field)
 
-end subroutine unpack_direct
-
-
-!-----------------------------------------------------------------------------------------------------------------------------------
-
-
-subroutine unpack_transpose(input, mask, nx, ny, nvalids, output)
-
-    use iso_fortran_env, only : ERROR_UNIT
-    use module_tamasis,  only : p
-    implicit none
-
-    real(p), intent(in)    :: input(nx,ny)
-    logical*1, intent(in)  :: mask(nx,ny)
-    integer, intent(in)    :: nx, ny
-    integer, intent(in)    :: nvalids
-    real(p), intent(inout) :: output(nvalids)
-
-    if (count(.not. mask) /= nvalids) then
-        write (ERROR_UNIT,'(a)') 'UNPACK_TRANSPOSE: The mask is not compatible with the output size.'
-        return
-    endif
-    output = pack(input, .not. mask)
-
-end subroutine unpack_transpose
-
-
-!-----------------------------------------------------------------------------------------------------------------------------------
-
-
-subroutine add_inplace(a, m, b, n)
-
-    use module_tamasis,  only : p
-    implicit none
-
-    real(p), intent(inout) :: a(m)
-    real(p), intent(in)    :: b(n)
-    integer, intent(in)    :: m, n
-    integer                :: i, o
-
-    if (m == n) then
-        !$omp parallel do
-        do i = 1, m
-            a(i) = a(i) + b(i)
-        end do
-        !$omp end parallel do
-        return
-    end if
-
-    o = m / n
-    !$omp parallel do
-    do i = 1, n
-        a((i-1)*o+1:i*o) = a((i-1)*o+1:i*o) + b(i)
-    end do
-    !$omp end parallel do
-
-end subroutine add_inplace
-
-
-!-----------------------------------------------------------------------------------------------------------------------------------
-
-
-subroutine add(a, m, b, n, c)
-
-    use module_tamasis,  only : p
-    implicit none
-
-    real(p), intent(in)    :: a(m)
-    real(p), intent(in)    :: b(n)
-    real(p), intent(inout) :: c(m)
-    integer, intent(in)    :: m, n
-    integer                :: i, o
-
-    if (n == m) then
-        !$omp parallel workshare
-        c = a + b
-        !$omp end parallel workshare
-        return
-    end if
-
-    o = m / n
-    !$omp parallel do
-    do i = 1, n
-        c((i-1)*o+1:i*o) = a((i-1)*o+1:i*o) + b(i)
-    end do
-    !$omp end parallel do
-
-end subroutine add
-
-
-!-----------------------------------------------------------------------------------------------------------------------------------
-
-
-subroutine subtract(a, m, b, n, c)
-
-    use module_tamasis,  only : p
-    implicit none
-
-    real(p), intent(in)    :: a(m)
-    real(p), intent(in)    :: b(n)
-    real(p), intent(inout) :: c(m)
-    integer, intent(in)    :: m, n
-    integer                :: i, o
-
-    if (n == m) then
-        !$omp parallel workshare
-        c = a - b
-        !$omp end parallel workshare
-        return
-    end if
-
-    o = m / n
-    !$omp parallel do
-    do i = 1, n
-        c((i-1)*o+1:i*o) = a((i-1)*o+1:i*o) - b(i)
-    end do
-    !$omp end parallel do
-
-end subroutine subtract
-
-
-!-----------------------------------------------------------------------------------------------------------------------------------
-
-
-subroutine multiply(a, m, b, n, c)
-
-    use module_tamasis,  only : p
-    implicit none
-
-    real(p), intent(in)    :: a(m)
-    real(p), intent(in)    :: b(n)
-    real(p), intent(inout) :: c(m)
-    integer, intent(in)    :: m, n
-    integer                :: i, o
-
-    if (n == m) then
-        !$omp parallel workshare
-        c = a * b
-        !$omp end parallel workshare
-        return
-    end if
-
-    o = m / n
-    !$omp parallel do
-    do i = 1, n
-        c((i-1)*o+1:i*o) = a((i-1)*o+1:i*o) * b(i)
-    end do
-    !$omp end parallel do
-
-end subroutine multiply
-
-
-
-!-----------------------------------------------------------------------------------------------------------------------------------
-
-
-subroutine divide(a, m, b, n, c)
-
-    use module_tamasis,  only : p
-    implicit none
-
-    real(p), intent(in)    :: a(m)
-    real(p), intent(in)    :: b(n)
-    real(p), intent(inout) :: c(m)
-    integer, intent(in)    :: m, n
-    integer                :: i, o
-
-    if (n == m) then
-        !$omp parallel workshare
-        c = a / b
-        !$omp end parallel workshare
-        return
-    end if
-
-    o = m / n
-    !$omp parallel do
-    do i = 1, n
-        c((i-1)*o+1:i*o) = a((i-1)*o+1:i*o) / b(i)
-    end do
-    !$omp end parallel do
-
-end subroutine divide
-
-
-!-----------------------------------------------------------------------------------------------------------------------------------
-
-
-subroutine add_complex(a, m, b, n, c)
-
-    use module_tamasis, only : p
-    implicit none
-
-    complex(p), intent(in)    :: a(m)
-    complex(p), intent(in)    :: b(n)
-    complex(p), intent(inout) :: c(m)
-    integer, intent(in)       :: m, n
-    integer                   :: i, o
-
-    if (m == n) then
-        !$omp parallel workshare
-        c = a + b
-        !$omp end parallel workshare
-        return
-    end if
-
-    o = m / n
-    !$omp parallel do
-    do i = 1, n
-        c((i-1)*o+1:i*o) = a((i-1)*o+1:i*o) + b(i)
-    end do
-    !$omp end parallel do
-
-end subroutine add_complex
-
-
-!-----------------------------------------------------------------------------------------------------------------------------------
-
-
-subroutine subtract_complex(a, m, b, n, c)
-
-    use module_tamasis, only : p
-    implicit none
-
-    complex(p), intent(in)    :: a(m)
-    complex(p), intent(in)    :: b(n)
-    complex(p), intent(inout) :: c(m)
-    integer, intent(in)       :: m, n
-    integer                   :: i, o
-
-    if (m == n) then
-        !$omp parallel workshare
-        c = a - b
-        !$omp end parallel workshare
-        return
-    end if
-
-    o = m / n
-    !$omp parallel do
-    do i = 1, n
-        c((i-1)*o+1:i*o) = a((i-1)*o+1:i*o) - b(i)
-    end do
-    !$omp end parallel do
-
-end subroutine subtract_complex
-
-
-!-----------------------------------------------------------------------------------------------------------------------------------
-
-
-subroutine multiply_complex(a, m, b, n, c)
-
-    use module_tamasis, only : p
-    implicit none
-
-    complex(p), intent(in)    :: a(m)
-    complex(p), intent(in)    :: b(n)
-    complex(p), intent(inout) :: c(m)
-    integer, intent(in)       :: m, n
-    integer                   :: i, o
-
-    if (m == n) then
-        !$omp parallel workshare
-        c = a * b
-        !$omp end parallel workshare
-        return
-    end if
-
-    o = m / n
-    !$omp parallel do
-    do i = 1, n
-        c((i-1)*o+1:i*o) = a((i-1)*o+1:i*o) * b(i)
-    end do
-    !$omp end parallel do
-
-end subroutine multiply_complex
-
-
-!-----------------------------------------------------------------------------------------------------------------------------------
-
-
-subroutine divide_complex(a, m, b, n, c)
-
-    use module_tamasis, only : p
-    implicit none
-
-    complex(p), intent(in)    :: a(m)
-    complex(p), intent(in)    :: b(n)
-    complex(p), intent(inout) :: c(m)
-    integer, intent(in)       :: m, n
-    integer                   :: i, o
-
-    if (m == n) then
-        !$omp parallel workshare
-        c = a / b
-        !$omp end parallel workshare
-        return
-    end if
-
-    o = m / n
-    !$omp parallel do
-    do i = 1, n
-        c((i-1)*o+1:i*o) = a((i-1)*o+1:i*o) / b(i)
-    end do
-    !$omp end parallel do
-
-end subroutine divide_complex
+end subroutine unpacking
 
 
 !-----------------------------------------------------------------------------------------------------------------------------------
@@ -913,48 +648,17 @@ end subroutine multiply_conjugate_complex
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine divide_inplace(a, m, b, n)
-
-    use module_tamasis,  only : p
-    implicit none
-
-    real(p), intent(inout) :: a(m)
-    real(p), intent(in)    :: b(n)
-    integer, intent(in)    :: m, n
-    integer                :: i, o
-
-    if (m == n) then
-        !$omp parallel do
-        do i = 1, m
-            a(i) = a(i) / b(i)
-        end do
-        !$omp end parallel do
-        return
-    end if
-
-    o = m / n
-    !$omp parallel do
-    do i = 1, n
-        a((i-1)*o+1:i*o) = a((i-1)*o+1:i*o) / b(i)
-    end do
-    !$omp end parallel do
-
-end subroutine divide_inplace
-
-
-!-----------------------------------------------------------------------------------------------------------------------------------
-
-
-subroutine round_rtz(array, n)
+subroutine round_rtz(input, output, n)
 
     use module_tamasis, only : p
     implicit none
 
-    real(p), intent(inout) :: array(n)
+    real(p), intent(in)    :: input(n)
+    real(p), intent(inout) :: output(n)
     integer, intent(in)    :: n
 
     !$omp parallel workshare
-    array = aint(array)
+    output = aint(input)
     !$omp end parallel workshare
 
 end subroutine round_rtz
@@ -963,16 +667,17 @@ end subroutine round_rtz
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine round_rti(array, n)
+subroutine round_rti(input, output, n)
 
     use module_tamasis, only : p
     implicit none
 
-    real(p), intent(inout) :: array(n)
+    real(p), intent(in)    :: input(n)
+    real(p), intent(inout) :: output(n)
     integer, intent(in)    :: n
 
     !$omp parallel workshare
-    array = sign(real(ceiling(abs(array)), p), array)
+    output = sign(real(ceiling(abs(input)), kind=p), input)
     !$omp end parallel workshare
 
 end subroutine round_rti
@@ -981,16 +686,17 @@ end subroutine round_rti
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine round_rtmi(array, n)
+subroutine round_rtmi(input, output, n)
 
     use module_tamasis, only : p
     implicit none
 
-    real(p), intent(inout) :: array(n)
+    real(p), intent(in)    :: input(n)
+    real(p), intent(inout) :: output(n)
     integer, intent(in)    :: n
 
     !$omp parallel workshare
-    array = floor(array)
+    output = floor(input)
     !$omp end parallel workshare
 
 end subroutine round_rtmi
@@ -999,16 +705,17 @@ end subroutine round_rtmi
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine round_rtpi(array, n)
+subroutine round_rtpi(input, output, n)
 
     use module_tamasis, only : p
     implicit none
 
-    real(p), intent(inout) :: array(n)
+    real(p), intent(in)    :: input(n)
+    real(p), intent(inout) :: output(n)
     integer, intent(in)    :: n
 
     !$omp parallel workshare
-    array = ceiling(array)
+    output = ceiling(input)
     !$omp end parallel workshare
 
 end subroutine round_rtpi
@@ -1017,24 +724,25 @@ end subroutine round_rtpi
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine round_rhtz(array, n)
+subroutine round_rhtz(input, output, n)
 
     use module_tamasis, only : p
     implicit none
 
-    real(p), intent(inout) :: array(n)
+    real(p), intent(in)    :: input(n)
+    real(p), intent(inout) :: output(n)
     integer, intent(in)    :: n
 
     integer :: i
     real(p) :: x
 
-    !$omp parallel do
+    !$omp parallel do private(x)
     do i = 1, n
-        x = anint(array(i))
-        if (abs(x-array(i)) ==  0.5_p) then
-            x = x - sign(1._p, array(i))
+        x = anint(input(i))
+        if (abs(x-input(i)) ==  0.5_p) then
+            x = x - sign(1._p, input(i))
         end if
-        array(i) = x
+        output(i) = x
     end do
     !$omp end parallel do
 
@@ -1044,16 +752,17 @@ end subroutine round_rhtz
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine round_rhti(array, n)
+subroutine round_rhti(input, output, n)
 
     use module_tamasis, only : p
     implicit none
 
-    real(p), intent(inout) :: array(n)
+    real(p), intent(in)    :: input(n)
+    real(p), intent(inout) :: output(n)
     integer, intent(in)    :: n
 
     !$omp parallel workshare
-    array = anint(array)
+    output = anint(input)
     !$omp end parallel workshare
 
 end subroutine round_rhti
@@ -1062,17 +771,18 @@ end subroutine round_rhti
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine round_rhtmi(array, n)
+subroutine round_rhtmi(input, output, n)
 
     use module_math,    only : nint_down
     use module_tamasis, only : p
     implicit none
 
-    real(p), intent(inout) :: array(n)
+    real(p), intent(in)    :: input(n)
+    real(p), intent(inout) :: output(n)
     integer, intent(in)    :: n
 
     !$omp parallel workshare
-    array = nint_down(array)
+    output = nint_down(input)
     !$omp end parallel workshare
 
 end subroutine round_rhtmi
@@ -1081,17 +791,18 @@ end subroutine round_rhtmi
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine round_rhtpi(array, n)
+subroutine round_rhtpi(input, output, n)
 
     use module_math,    only : nint_up
     use module_tamasis, only : p
     implicit none
 
-    real(p), intent(inout) :: array(n)
+    real(p), intent(in)    :: input(n)
+    real(p), intent(inout) :: output(n)
     integer, intent(in)    :: n
 
     !$omp parallel workshare
-    array = nint_up(array)
+    output = nint_up(input)
     !$omp end parallel workshare
 
 end subroutine round_rhtpi
@@ -1100,12 +811,13 @@ end subroutine round_rhtpi
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine round_rhs(array, n)
+subroutine round_rhs(input, output, n)
 
     use module_tamasis, only : p
     implicit none
 
-    real(p), intent(inout) :: array(n)
+    real(p), intent(in)    :: input(n)
+    real(p), intent(inout) :: output(n)
     integer, intent(in)    :: n
 
     integer                :: i, s, clock
@@ -1120,16 +832,16 @@ subroutine round_rhs(array, n)
     call random_seed(put=seed)
     deallocate(seed)
 
-    !$omp parallel do
+    !$omp parallel do private(x)
     do i = 1, n
-        x = anint(array(i))
-        if (abs(x-array(i)) == 0.5_p) then
+        x = anint(input(i))
+        if (abs(x-input(i)) == 0.5_p) then
             call random_number(rnd)
             if (rnd >= 0.5_p) then
-                x = x - sign(1._p, array(i))
+                x = x - sign(1._p, input(i))
             end if
         end if
-        array(i) = x
+        output(i) = x
     end do
     !$omp end parallel do
 
@@ -1551,14 +1263,15 @@ end subroutine dnormp
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine diff(array, asize, dim, ashape, arank)
+subroutine diff(input, output, asize, dim, ashape, arank)
 
     use module_math,    only : diff_fast, diff_medium
     use module_tamasis, only : p
     implicit none
 
     integer*8, intent(in)  :: asize
-    real(p), intent(inout) :: array(asize)
+    real(p), intent(in)    :: input(asize)
+    real(p), intent(inout) :: output(asize)
     integer, intent(in)    :: dim
     integer, intent(in)    :: arank
     integer*8, intent(in)  :: ashape(arank)
@@ -1570,9 +1283,9 @@ subroutine diff(array, asize, dim, ashape, arank)
     nslow = product(ashape(dim+1:arank))
 
     if (dim == 1) then
-        call diff_fast(array(1), ndiff, nslow)
+        call diff_fast(input(1), output(1), ndiff, nslow)
     else
-        call diff_medium(array(1), nfast, ndiff, nslow)
+        call diff_medium(input(1), output(1), nfast, ndiff, nslow)
     end if
 
 end subroutine diff
@@ -1581,7 +1294,7 @@ end subroutine diff
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine diff_mpi(array, asize, dim, ashape, arank, comm, status)
+subroutine diff_mpi(input, output, asize, dim, ashape, arank, comm, status)
 
     use module_math,    only : diff_fast, diff_medium, diff_slow
     use module_tamasis, only : p
@@ -1591,7 +1304,8 @@ subroutine diff_mpi(array, asize, dim, ashape, arank, comm, status)
     implicit none
 
     integer*8, intent(in)  :: asize
-    real(p), intent(inout) :: array(asize)
+    real(p), intent(in)    :: input(asize)
+    real(p), intent(inout) :: output(asize)
     integer, intent(in)    :: dim
     integer, intent(in)    :: arank
     integer*8, intent(in)  :: ashape(arank)
@@ -1615,14 +1329,14 @@ subroutine diff_mpi(array, asize, dim, ashape, arank, comm, status)
         call MPI_Comm_size(comm, size, status)
         if (status /= 0) return
         allocate (boundary(nfast))
-        call MPI_Sendrecv(array(1:nfast), nfast, MPI_DOUBLE_PRECISION, modulo(rank-1, size), 0,                                    &
+        call MPI_Sendrecv(input(1:nfast), nfast, MPI_DOUBLE_PRECISION, modulo(rank-1, size), 0,                                    &
                           boundary, nfast, MPI_DOUBLE_PRECISION, modulo(rank+1, size), 0, comm, mpistatus, status)
         if (status /= 0) return
-        call diff_slow(array(1), nfast, ndiff, boundary, rank == size - 1)
+        call diff_slow(input(1), output(1), nfast, ndiff, boundary, rank == size - 1)
     else if (dim > 1) then
-        call diff_medium(array(1), nfast, ndiff, nslow)
+        call diff_medium(input(1), output(1), nfast, ndiff, nslow)
     else
-        call diff_fast(array(1), ndiff, nslow)
+        call diff_fast(input(1), output(1), ndiff, nslow)
     end if
 
 end subroutine diff_mpi
@@ -1631,14 +1345,15 @@ end subroutine diff_mpi
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine diffT(array, asize, dim, ashape, arank)
+subroutine diffT(input, output, asize, dim, ashape, arank)
 
     use module_math,    only : diffT_fast, diffT_medium
     use module_tamasis, only : p
     implicit none
 
     integer*8, intent(in)  :: asize
-    real(p), intent(inout) :: array(asize)
+    real(p), intent(in)    :: input(asize)
+    real(p), intent(inout) :: output(asize)
     integer, intent(in)    :: dim
     integer, intent(in)    :: arank
     integer*8, intent(in)  :: ashape(arank)
@@ -1650,9 +1365,9 @@ subroutine diffT(array, asize, dim, ashape, arank)
     nslow = product(ashape(dim+1:arank))
 
     if (dim == 1) then
-        call diffT_fast(array(1), ndiff, nslow)
+        call diffT_fast(input(1), output(1), ndiff, nslow)
     else
-        call diffT_medium(array(1), nfast, ndiff, nslow)
+        call diffT_medium(input(1), output(1), nfast, ndiff, nslow)
     end if
 
 end subroutine diffT
@@ -1661,7 +1376,7 @@ end subroutine diffT
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine diffT_mpi(array, asize, dim, ashape, arank, comm, status)
+subroutine diffT_mpi(input, output, asize, dim, ashape, arank, comm, status)
 
     use module_math,    only : diffT_fast, diffT_medium, diffT_slow
     use module_tamasis, only : p
@@ -1671,7 +1386,8 @@ subroutine diffT_mpi(array, asize, dim, ashape, arank, comm, status)
     implicit none
 
     integer*8, intent(in)  :: asize
-    real(p), intent(inout) :: array(asize)
+    real(p), intent(in)    :: input(asize)
+    real(p), intent(inout) :: output(asize)
     integer, intent(in)    :: dim
     integer, intent(in)    :: arank
     integer*8, intent(in)  :: ashape(arank)
@@ -1695,14 +1411,14 @@ subroutine diffT_mpi(array, asize, dim, ashape, arank, comm, status)
         call MPI_Comm_size(comm, size, status)
         if (status /= 0) return
         allocate (boundary(nfast))
-        call MPI_Sendrecv(array(asize-nfast+1:asize), nfast, MPI_DOUBLE_PRECISION, modulo(rank+1, size), 0,                        &
+        call MPI_Sendrecv(input(asize-nfast+1:asize), nfast, MPI_DOUBLE_PRECISION, modulo(rank+1, size), 0,                        &
                           boundary, nfast, MPI_DOUBLE_PRECISION, modulo(rank-1, size), 0, comm, mpistatus, status)
         if (status /= 0) return
-        call diffT_slow(array(1), nfast, ndiff, boundary, rank == 0, rank == size - 1)
+        call diffT_slow(input(1), output(1), nfast, ndiff, boundary, rank == 0, rank == size - 1)
     else if (dim > 1) then
-        call diffT_medium(array(1), nfast, ndiff, nslow)
+        call diffT_medium(input(1), output(1), nfast, ndiff, nslow)
     else
-        call diffT_fast(array(1), ndiff, nslow)
+        call diffT_fast(input(1), output(1), ndiff, nslow)
     end if
 
 end subroutine difft_mpi
@@ -1711,14 +1427,15 @@ end subroutine difft_mpi
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine diffTdiff(array, asize, dim, ashape, arank, scalar)
+subroutine diffTdiff(input, output, asize, dim, ashape, arank, scalar)
 
     use module_math,    only : diffTdiff_fast, diffTdiff_medium
     use module_tamasis, only : p
     implicit none
 
     integer*8, intent(in)  :: asize
-    real(p), intent(inout) :: array(asize)
+    real(p), intent(in)    :: input(asize)
+    real(p), intent(inout) :: output(asize)
     integer, intent(in)    :: dim
     integer, intent(in)    :: arank
     integer*8, intent(in)  :: ashape(arank)
@@ -1731,9 +1448,9 @@ subroutine diffTdiff(array, asize, dim, ashape, arank, scalar)
     nslow = product(ashape(dim+1:arank))
 
     if (dim == 1) then
-        call diffTdiff_fast(array(1), ndiff, nslow, scalar)
+        call diffTdiff_fast(input(1), output(1), ndiff, nslow, scalar)
     else
-        call diffTdiff_medium(array(1), nfast, ndiff, nslow, scalar)
+        call diffTdiff_medium(input(1), output(1), nfast, ndiff, nslow, scalar)
     end if
 
 end subroutine diffTdiff
@@ -1742,7 +1459,7 @@ end subroutine diffTdiff
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine diffTdiff_mpi(array, asize, dim, ashape, arank, scalar, comm, status)
+subroutine diffTdiff_mpi(input, output, asize, dim, ashape, arank, scalar, comm, status)
 
     use module_math,    only : diffTdiff_fast, diffTdiff_medium, diffTdiff_slow
     use module_tamasis, only : p
@@ -1752,7 +1469,8 @@ subroutine diffTdiff_mpi(array, asize, dim, ashape, arank, scalar, comm, status)
     implicit none
 
     integer*8, intent(in)  :: asize
-    real(p), intent(inout) :: array(asize)
+    real(p), intent(in)    :: input(asize)
+    real(p), intent(inout) :: output(asize)
     integer, intent(in)    :: dim
     integer, intent(in)    :: arank
     integer*8, intent(in)  :: ashape(arank)
@@ -1777,17 +1495,17 @@ subroutine diffTdiff_mpi(array, asize, dim, ashape, arank, scalar, comm, status)
         call MPI_Comm_size(comm, size, status)
         if (status /= 0) return
         allocate (boundary1(nfast), boundary2(nfast))
-        call MPI_Sendrecv(array(asize-nfast+1:asize), nfast, MPI_DOUBLE_PRECISION, modulo(rank+1, size), 0,                        &
+        call MPI_Sendrecv(input(asize-nfast+1:asize), nfast, MPI_DOUBLE_PRECISION, modulo(rank+1, size), 0,                        &
                           boundary1, nfast, MPI_DOUBLE_PRECISION, modulo(rank-1, size), 0, comm, mpistatus, status)
         if (status /= 0) return
-        call MPI_Sendrecv(array(1:nfast), nfast, MPI_DOUBLE_PRECISION, modulo(rank-1, size), 0,                                    &
+        call MPI_Sendrecv(input(1:nfast), nfast, MPI_DOUBLE_PRECISION, modulo(rank-1, size), 0,                                    &
                           boundary2, nfast, MPI_DOUBLE_PRECISION, modulo(rank+1, size), 0, comm, mpistatus, status)
         if (status /= 0) return
-        call diffTdiff_slow(array(1), nfast, ndiff, scalar, boundary1, boundary2, rank == 0, rank == size - 1)
+        call diffTdiff_slow(input(1), output(1), nfast, ndiff, scalar, boundary1, boundary2, rank == 0, rank == size - 1)
     else if (dim > 1) then
-        call diffTdiff_medium(array(1), nfast, ndiff, nslow, scalar)
+        call diffTdiff_medium(input(1), output(1), nfast, ndiff, nslow, scalar)
     else
-        call diffTdiff_fast(array(1), ndiff, nslow, scalar)
+        call diffTdiff_fast(input(1), output(1), ndiff, nslow, scalar)
     end if
 
 end subroutine difftdiff_mpi
@@ -1796,14 +1514,15 @@ end subroutine difftdiff_mpi
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine shift(array, asize, dim, ashape, arank, offset, offsetsize)
+subroutine shift(input, output, asize, dim, ashape, arank, offset, offsetsize)
 
     use module_math,    only : shift_fast, shift_medium
     use module_tamasis, only : p
     implicit none
 
     integer*8, intent(in)  :: asize
-    real(p), intent(inout) :: array(asize)
+    real(p), intent(in)    :: input(asize)
+    real(p), intent(inout) :: output(asize)
     integer, intent(in)    :: dim
     integer, intent(in)    :: arank
     integer*8, intent(in)  :: ashape(arank)
@@ -1817,9 +1536,9 @@ subroutine shift(array, asize, dim, ashape, arank, offset, offsetsize)
     nslow = product(ashape(dim+1:arank))
 
     if (dim == 1) then
-        call shift_fast(array(1), nshift, nslow, offset)
+        call shift_fast(input(1), output(1), nshift, nslow, offset)
     else
-        call shift_medium(array(1), nfast, nshift, nslow, offset)
+        call shift_medium(input(1), output(1), nfast, nshift, nslow, offset)
     end if
 
 end subroutine shift
@@ -1828,7 +1547,7 @@ end subroutine shift
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine masking(input, m, mask, n, status)
+subroutine masking_inplace(input, m, mask, n)
 
     use iso_fortran_env, only : ERROR_UNIT
     use module_tamasis,  only : p
@@ -1837,17 +1556,8 @@ subroutine masking(input, m, mask, n, status)
     real(p), intent(inout) :: input(m)
     logical*1, intent(in)  :: mask(n)
     integer, intent(in)    :: m, n
-    integer, intent(out)   :: status
 
     integer :: i, o
-
-    if (modulo(m, n) /= 0) then
-        write (ERROR_UNIT,'(a,2(i0,a))') "The data array has a size incompatible with the mask ('", m, "' instead of '", n, "')."
-        status = 1
-        return
-    end if
-
-    status = 0
 
     if (m == n) then
         !$omp parallel workshare
@@ -1870,7 +1580,53 @@ subroutine masking(input, m, mask, n, status)
         !$omp end parallel do
     end if
 
-end subroutine masking
+end subroutine masking_inplace
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine masking_outplace(input, m, mask, n, output)
+
+    use iso_fortran_env, only : ERROR_UNIT
+    use module_tamasis,  only : p
+    implicit none
+
+    real(p), intent(in)    :: input(m)
+    logical*1, intent(in)  :: mask(n)
+    integer, intent(in)    :: m, n
+    real(p), intent(inout) :: output(m)
+
+    integer :: i, o
+
+    if (m == n) then
+        !$omp parallel workshare
+        where (mask)
+            output = 0
+        elsewhere
+            output = input
+        end where
+        !$omp end parallel workshare
+    else if (n == 1) then
+        if (mask(1)) then
+            !$omp parallel workshare
+            output = 0
+            !$omp end parallel workshare
+        end if
+    else
+        o = m / n
+        !$omp parallel do
+        do i = 1, n
+            if (mask(i)) then
+                output((i-1)*o+1:i*o) = 0
+            else
+                output((i-1)*o+1:i*o) = input((i-1)*o+1:i*o)
+            end if
+        end do
+        !$omp end parallel do
+    end if
+
+end subroutine masking_outplace
 
 
 !-----------------------------------------------------------------------------------------------------------------------------------
