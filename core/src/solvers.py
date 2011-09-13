@@ -55,7 +55,7 @@ def cg(A, b, x0, tol=1.e-5, maxiter=300, callback=None, M=None, comm=None):
             break
         
         q = d.copy()
-        q = A.matvec(q, True, True, True)
+        A.matvec(q, q)
 
         alpha = deltaNew / dot(d, q, comm=comm)
         x += alpha * d
@@ -72,7 +72,7 @@ def cg(A, b, x0, tol=1.e-5, maxiter=300, callback=None, M=None, comm=None):
 
         qnorm = np.sqrt(norm2(q, comm=comm))
         s = r.copy()
-        s = M.matvec(s, True, True, True)
+        M.matvec(s, s)
 
         deltaOld = deltaNew
 

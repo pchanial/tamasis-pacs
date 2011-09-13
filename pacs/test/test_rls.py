@@ -1,5 +1,4 @@
 import os
-import scipy
 import tamasis
 
 from scipy.sparse.linalg import cgs
@@ -7,7 +6,7 @@ from tamasis import *
 
 class TestFailure(Exception): pass
 
-tamasis.var.verbose = False
+tamasis.var.verbose = True
 profile = None#'test_rls.png'
 data_dir = os.path.dirname(__file__) + '/data/'
 obs = PacsObservation(filename=data_dir+'frames_blue.fits',
@@ -38,6 +37,7 @@ if profile is None:
         raise TestFailure()
 
 ref = Map(data_dir + 'frames_blue_map_rls_cgs_tol1e-6.fits')
+ref.derived_units = map_rls.derived_units
 cov = ref.coverage > 80
 if any_neq(ref[cov], map_rls[cov], 1.e-1): raise TestFailure()
 cov = ref.coverage > 125

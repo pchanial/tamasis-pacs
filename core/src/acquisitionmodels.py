@@ -47,13 +47,12 @@ __all__ = [
     'DistributionGlobal',
     'DistributionLocal',
     'Convolution',
-    'DdTdd',
-    'DiscreteDifference',
     'Fft',
     'FftHalfComplex',
-    'FftHalfComplex_old',
     'InterpolationLinear',
     'Masking',
+    'Packing',
+    'Unpacking',
 ]
 
 Diagonal = DiagonalOperator
@@ -514,7 +513,8 @@ class Projection(Operator):
             self.unitout = 'Jy ' + self.unitout
 
         shapeout = (self.ndetectors, np.sum(nsamples))
-        Operator.__init__(self, shapein=shapein, shapeout=shapeout)
+        Operator.__init__(self, shapein=shapein, shapeout=shapeout,
+                          dtype=var.FLOAT_DTYPE)
         self.mask = mask
         if not self.ispacked and not istoddistributed:
             return
@@ -639,10 +639,10 @@ class DdTdd(Operator):
                  **keywords):
         if description is None and scalar != 1.:
             description = str(scalar) + ' DdTdd'
-        Operator.__init__(self, **keywords)
         self.axis = axis
         self.scalar = scalar
         self.comm = comm or var.comm_map
+        Operator.__init__(self, **keywords)
 
     def direct(self, input, output):
         diffTdiff(input, output, self.axis, self.scalar, comm=self.comm)

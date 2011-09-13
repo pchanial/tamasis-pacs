@@ -1,9 +1,9 @@
 from __future__ import division
 
 import numpy as np
+import operators as op
 import tamasisfortran as tmf
 from mpi4py import MPI
-from scipy.sparse.linalg import aslinearoperator
 from . import var
 
 __all__ = []
@@ -36,15 +36,19 @@ def dot(x1, x2, comm=None):
 #-------------------------------------------------------------------------------
 
 
-class Function:
+class Function(object):
     def __init__(self, f, df=None):
-        self.__call__ = f
+        self.direct = f
         if df is not None:
             self.D = Function(df)
-    def __call__(x, out=None, inwork=None, outwork=None, comm=None):
-        raise NotImplementedError()
-    def D(x, out=None, inwork=None, outwork=None, comm=None):
-        raise NotImplementedError()
+    direct = None
+    D = None
+    def __call__(self, x, output=None, inwork=None, outwork=None, comm=None):
+        if self.direct is None:
+            raise NotImplementedError()
+        output = np.array(np.nan)
+        self.direct(x, output, inwork=inwork, outwork=outwork, comm=None)
+        return output[()]
     def set_out(self, out, value):
         if out is not None:
             if isinstance(value, (list, tuple)):
@@ -180,8 +184,7 @@ class norm_lp(Function):
                 comm = MPI.COMM_WORLD
             tmf.dnorm_lp(x.T, p, comm.py2f(), out.T)
             return out
-        self.__call__ = f
-        self.D = Function(df)
+        Function.__init__(self, f, df)
 
 
 #-------------------------------------------------------------------------------
@@ -227,8 +230,7 @@ class norm_huber(Function):
             tmf.dnorm_huber(x.T, delta, out.T)
             return out
 
-        self.__call__ = f
-        self.D = Function(df)
+        Function.__init__(self, f, df)
         
 
 #-------------------------------------------------------------------------------
@@ -274,8 +276,7 @@ class normp(Function):
                 out = np.empty(x.shape)
             tmf.dnormp(x.T, p, out.T)
             return out
-        self.__call__ = f
-        self.D = Function(df)
+        Function.__init__(self, f, df)
 
 
 #-------------------------------------------------------------------------------
@@ -286,8 +287,16 @@ class norm2_ellipsoid(Function):
 
     Returns x^T A x, where A is a definite positive symmetric matrix
     """
+    def __new__(cls, A):
+        A = op.asoperator(A)
+        if isinstance(A, op.IdentityOperator):
+            return norm2
+        norm = super(norm2_ellipsoid, cls).__new__(cls)
+        norm.A = A
+        return norm
+
     def __init__(self, A):
-        A = aslinearoperator(A)
+        print '__init__'
         def f(x, out=None, inwork=None, outwork=None, comm=None):
             if out is None:
                 out = np.empty(())
@@ -296,12 +305,12 @@ class norm2_ellipsoid(Function):
             
             if outwork is not None:
                 if len(outwork) == 0:
-                    outwork.append(A.matvec(x.ravel()))
+                    outwork.append(self.A(x))
                 else:
-                    outwork[0][:] = A.matvec(x.ravel())
+                    outwork[0][:] = self.A(x)
                 Ax = outwork[0]
             else:
-                Ax = A.matvec(x.ravel())
+                Ax = self.A(x)
             out.flat = dot(x, Ax, comm=comm)
             return float(out)
         def df(x, out=None, inwork=None, outwork=None, comm=None):
@@ -310,12 +319,11 @@ class norm2_ellipsoid(Function):
             if inwork is not None:
                 Ax = inwork[0]
             else:
-                Ax = A.matvec(x.ravel())
+                Ax = self.A(x)
             if out is not None:
                 out[:] = 2 * Ax
                 return out
             return 2 * Ax
-        self.__call__ = f
-        self.D = Function(df)
+        Function.__init__(self, f, df)
 
 del f, df

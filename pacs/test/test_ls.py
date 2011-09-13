@@ -5,7 +5,7 @@ from tamasis import *
 
 class TestFailure(Exception): pass
 
-tamasis.var.verbose = False
+tamasis.var.verbose = True
 profile = None#'test_ls.png'
 data_dir = os.path.dirname(__file__) + '/data/'
 obs = PacsObservation(data_dir+'frames_blue.fits', fine_sampling_factor=1)

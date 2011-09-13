@@ -77,30 +77,6 @@ def mapper_naive(tod, model, unit=None, local_mask=None):
    
     if unit is not None:
         mymap.inunit(unit)
-        return mymap
-
-    # make sure that the map unit is compatible with the input unit of the model
-    if len(mymap._unit) == 0:
-        mymap._unit = model.unitin
-        return mymap
-
-    if all([u in mymap._unit and mymap._unit[u] == v \
-            for u,v in model.unitin.items()]):
-        return mymap
-
-    for u, v in zip(['sr', 'rad', 'deg', 'arcmin', "'", 'arcsec', '"',
-                     'pixel_reference'], [1,2,2,2,2,2,2,1]):
-        if u in mymap._unit and mymap._unit[u] == -v:
-            newunit = mymap.unit + ' ' + u + '^' + str(v) + ' ' + \
-                      Quantity(1,model.unitin).unit
-            try:
-                mymap.inunit(newunit)
-                return mymap
-            except UnitError:
-                pass
-    
-    print("Warning: cannot set naive map to a unit compatible with that of th" \
-          "e model '" + Quantity(1,model.unitin).unit + "'.")
 
     return mymap
 
@@ -156,9 +132,7 @@ def mapper_rls(tod, model, invntt=None, unpacking=None, hyper=1.0, x0=None,
     prior = AdditionOperator([DdTdd(axis=axis, scalar=hyper * ntods / nmaps,
         comm=comm_map) for axis in range(npriors)])
     if hyper != 0 and (comm_map.Get_rank() == 0 or comm_map.Get_size() > 1):
-# commenting this for now, matvec is not updated
-#        A += prior
-        A = A + prior
+        A += prior
 
     b = (model.T * invntt)(tod)
 
@@ -278,19 +252,9 @@ def mapper_nl(tod, model, unpacking=None, priors=[], hypers=[], norms=[],
 
 
 def _validate_tod(tod, model):
-    # make sure that the tod unit is compatible with the model's output unit
-    mask = getattr(tod, 'mask', None)
-    tod = Masking(mask)(tod)
-
-    if tod.unit == '':
-        tod.unit = model.unitout
-    else:
-        if any([u not in tod._unit or tod._unit[u] != v
-                for u,v in model.unitout.items()]):
-            return UnitError("The input tod has a unit '" + tod.unit + \
-                "' incompatible with that of the model '" + Quantity(1, 
-                model.unitout).unit + "'.")
-        
+    # make sure that the tod is masked
+    if hasattr(tod, 'mask'):
+        tod = Masking(tod.mask)(tod)
     return tod
 
 
@@ -354,7 +318,7 @@ def _solver(A, b, tod, model, invntt, priors=[], hyper=0, x0=None, tol=1.e-5,
     if var.verbose or profile:
         print('')
         print('Model:')
-        print(A)
+        print(repr(A))
         if M is not None:
             print('Preconditioner:')
             print(M)
@@ -402,7 +366,10 @@ def _solver(A, b, tod, model, invntt, priors=[], hyper=0, x0=None, tol=1.e-5,
     if unpacking is not None:
         solution = unpacking(solution)
 
-    coverage = Map(model.T(np.ones(tod.shape), True, True, True), copy=False)
+    coverage = model.T(np.ones(tod.shape))
+    unit = getattr(coverage, 'unit', None)
+    derived_units = getattr(coverage, 'derived_units', None)
+
     header = coverage.header
     header.update('likeliho', Js[0])
     header.update('criter', sum(Js))
@@ -420,9 +387,9 @@ def _solver(A, b, tod, model, invntt, priors=[], hyper=0, x0=None, tol=1.e-5,
 
     output = Map(solution.reshape(model.shapein),
                  header=header,
-                 coverage=coverage,
-                 unit=tod.unit + ' ' + (1/Quantity(1, model.unitout)).unit + \
-                      ' ' + Quantity(1, model.unitin).unit,
+                 coverage=Map(coverage, copy=False, unit=''),
+                 unit=unit,
+                 derived_units=derived_units,
                  comm=coverage.comm,
                  shape_global=coverage.shape_global,
                  copy=False)
