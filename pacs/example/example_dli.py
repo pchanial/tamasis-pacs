@@ -1,5 +1,5 @@
 #-------------------------------------------------------------
-# Creation of a map using the regularised least square method
+# Creation of a map using the double loop inference algorithm
 #-------------------------------------------------------------
 import os
 from tamasis import *
