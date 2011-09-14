@@ -12,8 +12,7 @@ operators.core.verbose = False
 #frames_files = [path+'1342185454_red_PreparedFrames.fits[10001:]',
 #                path+'1342185455_red_PreparedFrames.fits[10001:]']
 
-path = os.path.join(os.getenv("HOME"), "projets", "tamasis-map",
-                    "pacs", "test", "data")
+path = os.path.dirname(__file__) + '/../test/data/'
 frames_files = [os.path.join(path, 'frames_blue.fits'),]
 
 # Setup the instrument and pointings for these files
