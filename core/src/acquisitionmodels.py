@@ -622,6 +622,7 @@ class DiscreteDifference(Operator):
         Operator.__init__(self, **keywords)
         self.axis = axis
         self.comm = comm or var.comm_map
+        self.add_rule('.T.', self._rule_ddtdd)
 
     def direct(self, input, output):
         diff(input, output, self.axis, comm=self.comm)
@@ -629,20 +630,25 @@ class DiscreteDifference(Operator):
     def transpose(self, input, output):
         diffT(input, output, self.axis, comm=self.comm)
 
+    def _rule_ddtdd(self, dT):
+        return DdTdd(self.axis, comm=self.comm)
+
 
 @real
 @symmetric
 class DdTdd(Operator):
     """Calculate operator dX.T dX along a given axis."""
 
-    def __init__(self, axis=-1, scalar=1., description=None, comm=None,
+    def __init__(self, axis=-1, scalar=1., comm=None,
                  **keywords):
-        if description is None and scalar != 1.:
-            description = str(scalar) + ' DdTdd'
+        Operator.__init__(self, **keywords)
+        self.__name__ = (str(scalar) + ' ' if scalar != 1 else '') + \
+            self.__name__
         self.axis = axis
         self.scalar = scalar
-        self.comm = comm or var.comm_map
-        Operator.__init__(self, **keywords)
+        self.comm = comm or var.comm_map        
+        self.add_rule('{ScalarOperator}.',lambda s: DdTdd(self.axis,
+            s.data * self.scalar))
 
     def direct(self, input, output):
         diffTdiff(input, output, self.axis, self.scalar, comm=self.comm)
