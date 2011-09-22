@@ -79,6 +79,8 @@ def configure(conf):
         conf.env.FCFLAGS = ['-ffree-form', '-Wall', '-fPIC', '-cpp']
         if conf.options.debug:
             conf.env.FCFLAGS += ['-g', '-fcheck=all', '-fbacktrace']
+        else:
+            conf.env.FCFLAGS += ['-O3']
         if 'OPENMP' in libraries:
             conf.env.FCFLAGS_OPENMP = ['-fopenmp']
             conf.env.LIB_OPENMP = ['gomp']
