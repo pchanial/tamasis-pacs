@@ -67,10 +67,8 @@ def partitioned_last_axis(cls):
             del keywords['nsamples']
         else:
             nsamples = None
-            print 'k', keywords
         if nsamples is None or len(nsamples) == 1:
             inst = cls.__new_original__(cls_, *args, **keywords)
-            print inst.__class__ 
             cls_.__init__ = partitioned_init
             return inst
 
@@ -154,6 +152,8 @@ class Compression_old(Operator):
                           **keywords)
 
     def reshapein(self, shapein):
+        if shapein is None:
+            return None
         if self.nsamplesout is None:
             if shapein[-1] % self.factor != 0:
                 raise ValueError("The input timeline size '{0}') is incompatibl"
@@ -172,6 +172,8 @@ class Compression_old(Operator):
         return tuple(shapeout)
 
     def reshapeout(self, shapeout):
+        if shapeout is None:
+            return None
         if self.nsamplesin is None:
             expected = shapeout[-1] * self.factor[0]
         else:
@@ -198,7 +200,6 @@ class CompressionAverage_old(Compression_old):
             nsamples = (input.shape[-1],)
         else:
             nsamples = self.nsamplesin
-            output.nsamples = self.nsamplesout
         tmf.compression_average_direct(input.T, output.T,
             np.array(nsamples, np.int32), np.array(self.factor, np.int32))
 
@@ -207,7 +208,6 @@ class CompressionAverage_old(Compression_old):
             nsamples = (input.shape[-1],)
         else:
             nsamples = self.nsamplesout
-            output.nsamples = self.nsamplesin
         tmf.compression_average_transpose(input.T, output.T,
             np.array(nsamples, np.int32), np.array(self.factor, np.int32))
 
@@ -243,6 +243,8 @@ class Compression(Operator):
                           **keywords)
 
     def reshapein(self, shapein):
+        if shapein is None:
+            return None
         if shapein[-1] % self.factor != 0:
             raise ValueError("The input timeline size '{0}') is incompatible wi"
                 "th the compression factor '{1}'".format(shapein[-1],
@@ -252,6 +254,8 @@ class Compression(Operator):
         return tuple(shapeout)
 
     def reshapeout(self, shapeout):
+        if shapeout is None:
+            return None
         shapeout = list(shapeout)
         shapeout[-1] = shapeout[-1] * self.factor[0]
         return  tuple(shapeout)
@@ -282,35 +286,37 @@ class CompressionAverage(Operator):
                           **keywords)
 
     def reshapein(self, shapein):
+        if shapein is None:
+            return None
         if shapein[-1] % self.factor != 0:
             raise ValueError("The input timeline size '{0}') is incompatible wi"
                 "th the compression factor '{1}'".format(shapein[-1],
                 self.factor))
         shapeout = list(shapein)
         shapeout[-1] = shapein[-1] // self.factor
-        return tuple(shapeout)
+        return shapeout
 
     def reshapeout(self, shapeout):
-        shapeout = list(shapeout)
-        shapeout[-1] = shapeout[-1] * self.factor[0]
-        return  tuple(shapeout)
+        if shapeout is None:
+            return None
+        shapein = list(shapeout)
+        shapein[-1] = shapein[-1] * self.factor
+        return shapein
 
     def __str__(self):
         return super(CompressionAverage, self).__str__() + ' (x{})'.format(self.factor)
 
     def direct(self, input, output):
-        nsamples = (input.shape[-1],)
-        output_ = np.ascontiguousarray(output)
-        tmf.compression_average_direct(input.T, output_.T,
-            np.array(nsamples, np.int32), np.array((self.factor,), np.int32))
-        output[:] = output_
+        input_, ishape, istride = _ravel_strided(input)
+        output_, oshape, ostride = _ravel_strided(output)
+        tmf.compression_average_direct(input_, ishape[0], ishape[1], istride,
+            output_, oshape[1], ostride, self.factor)
 
     def transpose(self, input, output):
-        nsamples = (input.shape[-1],)
-        output_ = np.ascontiguousarray(output)
-        tmf.compression_average_transpose(input.T, output_.T,
-            np.array(nsamples, np.int32), np.array(self.factor, np.int32))
-        output[:] = output_
+        input_, ishape, istride = _ravel_strided(input)
+        output_, oshape, ostride = _ravel_strided(output)
+        tmf.compression_average_transpose(input_, ishape[0], ishape[1], istride,
+            output_, oshape[1], ostride, self.factor)
 
 
 class DownSampling(Compression_old):
@@ -324,7 +330,6 @@ class DownSampling(Compression_old):
             nsamples = (input.shape[-1],)
         else:
             nsamples = self.nsamplesin
-            output.nsamples = self.nsamplesout
         tmf.downsampling_direct(input.T, output.T,
             np.array(nsamples, np.int32), np.array(self.factor, np.int32))
 
@@ -333,7 +338,6 @@ class DownSampling(Compression_old):
             nsamples = (input.shape[-1],)
         else:
             nsamples = self.nsamplesout
-            output.nsamples = self.nsamplesin
         tmf.downsampling_transpose(input.T, output.T,
             np.array(nsamples, np.int32), np.array(self.factor, np.int32))
       
@@ -434,11 +438,15 @@ class Padding(Operator):
             dest_padded += input.shape[-1]
 
     def reshapein(self, shapein):
+        if shapein is None:
+            return None
         shapeout = list(shapein)
         shapeout[-1] += self.left[0] + self.right[0]
         return shapeout
        
     def reshapeout(self, shapeout):
+        if shapeout is None:
+            return None
         shapein = list(shapeout)
         shapein[-1] -= self.left[0] + self.right[0]
         return shapein
@@ -542,7 +550,6 @@ class Projection(Operator):
         output.unit = self.unitout
         output.derived_units = self.duout
         output.header = None
-        output.nsamples = self.nsamples
         tmf.pointing_matrix_direct(self._pmatrix, input.T, output.T,
                                    self.npixels_per_sample)
 
@@ -552,8 +559,6 @@ class Projection(Operator):
         output.header = self.header
         output.unit = self.unitin
         output.derived_units = self.duin
-        if hasattr(output, 'nsamples'):
-            delattr(output, 'nsamples')
         tmf.pointing_matrix_transpose(self._pmatrix, input.T, output.T, 
                                       self.npixels_per_sample)
 
@@ -587,25 +592,19 @@ class ResponseTruncatedExponential(Operator):
             if tau.unit != '':
                 raise ValueError('The time constant must be dimensionless.')
         self.tau = np.array(tau, dtype=var.FLOAT_DTYPE, ndmin=1)
-        Operator.__init__(self, classin=Tod, **keywords)
+        Operator.__init__(self, **keywords)
 
     def direct(self, input, output):
-        if self.nsamples is not None:
-            nsamples = self.nsamples
-            output.nsamples = nsamples
-        else:
-            nsamples = (input.shape[-1],)
-        tmf.convolution_trexp_direct(input.ravel(), output.ravel(),
-                                     np.array(nsamples), self.tau)
+        input_, ishape, istride = _ravel_strided(input)
+        output_, oshape, ostride = _ravel_strided(output)
+        tmf.convolution_trexp_direct(input_, ishape[0], ishape[1], istride,
+            output_, oshape[1], ostride, self.tau)
 
     def transpose(self, input, output):
-        if self.nsamples is not None:
-            nsamples = self.nsamples
-            output.nsamples = nsamples
-        else:
-            nsamples = (input.shape[-1],)
-        tmf.convolution_trexp_transpose(input.ravel(), output.ravel(),
-                                        np.array(nsamples), self.tau)
+        input_, ishape, istride = _ravel_strided(input)
+        output_, oshape, ostride = _ravel_strided(output)
+        tmf.convolution_trexp_transpose(input_, ishape[0], ishape[1], istride,
+            output_, oshape[1], ostride, self.tau)
 
 
 @real
@@ -977,9 +976,6 @@ class FftHalfComplex_old(Operator):
                            nthreads=1)._get_parameter()
 
     def direct(self, input, output):
-        print self.same_data(input, output)
-        print input.__array_interface__
-        print output.__array_interface__
         if not self.same_data(input, output):
             output[:] = input
         output_ = np.reshape(output, (-1, input.shape[-1]))
@@ -1145,3 +1141,24 @@ class myOp(Operator):
 
     def __str__(self):
         return self.__class__.__name__ + '(value={})'.format(self.value)
+
+def _ravel_strided(array):
+    # array_ = array.reshape((-1,array.shape[-1]))
+    #XXX bug in numpy 1.5.1: reshape with -1 leads to bogus strides
+    array_ = array.reshape((np.prod(array.shape[:-1]),array.shape[-1]))
+    n2, n1 = array_.shape
+    if id(array_.base) != id(array):
+        raise RuntimeError()
+    if not array_[0,:].flags.c_contiguous:
+        raise RuntimeError()
+    if array_.flags.c_contiguous:
+        return array_.ravel(), array_.shape, n1
+    s2, s1 = array_.strides
+    print 's2,s1', s2, s1
+    s2 //= s1
+    start = (array.__array_interface__['data'][0] - \
+             array.base.__array_interface__['data'][0]) // s1
+    stop = start + (n2 - 1) * s2 + n1
+    flat = array.base.ravel()[start:stop]
+    return flat, array_.shape, s2
+    

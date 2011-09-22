@@ -17,20 +17,14 @@ contains
 
     subroutine compression_average_direct(data, compressed, factor)
 
-        real(p), intent(in)  :: data(:,:)
+        real(p), intent(in)  :: data(:)
         integer, intent(in)  :: factor
-        real(p), intent(out) :: compressed(size(data,1)/factor,size(data,2))
-        integer              :: nsamples, ndetectors, isample, idetector
+        real(p), intent(out) :: compressed(size(data)/factor)
+        integer              :: isample
 
-        nsamples   = size(compressed,1)
-        ndetectors = size(compressed,2)
-        !$omp parallel do default(shared) private(idetector,isample)
-        do idetector=1, ndetectors
-            do isample = 1, nsamples
-                compressed(isample, idetector) = sum(data((isample-1)*factor+1:isample*factor,idetector)) / factor
-            end do
+        do isample = 1, size(compressed)
+            compressed(isample) = sum(data((isample-1)*factor+1:isample*factor)) / factor
         end do
-        !$omp end parallel do
 
     end subroutine compression_average_direct
 
@@ -40,20 +34,14 @@ contains
 
     subroutine compression_average_transpose(compressed, data, factor)
 
-        real(p), intent(in)  :: compressed(:,:)
+        real(p), intent(in)  :: compressed(:)
         integer, intent(in)  :: factor
-        real(p), intent(out) :: data(size(compressed,1)*factor,size(compressed,2))
-        integer              :: nsamples, ndetectors, isample, idetector
+        real(p), intent(out) :: data(size(compressed)*factor)
+        integer              :: isample
 
-        nsamples   = size(compressed,1)
-        ndetectors = size(compressed,2)
-        !$omp parallel do default(shared) private(idetector,isample)
-        do idetector=1, ndetectors
-            do isample = 1, nsamples
-                data((isample-1)*factor+1:isample*factor,idetector) = compressed(isample, idetector) / factor
-            end do
+        do isample = 1, size(compressed)
+            data((isample-1)*factor+1:isample*factor) = compressed(isample) / factor
         end do
-        !$omp end parallel do
 
     end subroutine compression_average_transpose
 

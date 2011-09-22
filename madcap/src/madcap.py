@@ -121,7 +121,7 @@ class MadMap1Observation(Observation):
         """
         Method to get the Tod from this observation
         """
-        tod = Tod.zeros((self.get_ndetectors(), self.get_nsamples()))
+        tod = Tod.zeros((self.get_ndetectors(), np.sum(self.get_nsamples())))
         sizeofpmatrix = self.info.npixels_per_sample * tod.size
         pmatrix = np.zeros(sizeofpmatrix, dtype=int)
         status = tmf.madmap1_read_tod(self.info.todfile, self.info.invnttfile,

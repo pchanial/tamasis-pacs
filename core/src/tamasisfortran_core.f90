@@ -169,41 +169,25 @@ end subroutine pointing_matrix_pack
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine compression_average_direct(data, compressed, nsamples, nslices, factor, nfactors, nsamples_data, nsamples_compressed,   &
-                                      ndetectors)
+subroutine compression_average_direct(input, ninputs, ndetectors, isize, istride, output, noutputs, osize, ostride, factor)
 
-    use module_compression, only : direct => compression_average_direct
+    use module_compression, only : func => compression_average_direct
     use module_tamasis,     only : p
     implicit none
 
-    integer, intent(in)    :: nfactors, nslices
-    integer, intent(in)    :: factor(nfactors), nsamples(nslices), nsamples_data, nsamples_compressed, ndetectors
-    real(p), intent(in)    :: data(nsamples_data,ndetectors)
-    real(p), intent(inout) :: compressed(nsamples_compressed,ndetectors)
+    real(p), intent(in)    :: input(ninputs)
+    real(p), intent(inout) :: output(noutputs)
+    integer, intent(in)    :: ninputs, ndetectors, isize, istride
+    integer, intent(in)    :: noutputs, osize, ostride
+    integer, intent(in)    :: factor
 
-    integer :: i, i2, j, j2, islice, f
+    integer :: i
 
-    i = 1
-    j = 1
-    islice = 1
-    f = factor(1)
-    do
-        i2 = i
-        j2 = j
-        do
-            i2 = i2 + nsamples(islice)
-            j2 = j2 + nsamples(islice) / f
-            if (islice == nslices) exit
-            if (factor(min(islice+1, nfactors)) /= f) exit
-            islice = islice + 1
-        end do
-        call direct(data(i:i2-1,:), compressed(j:j2-1,:), f)
-        if (islice == nslices) exit
-        i = i2
-        j = j2
-        islice = islice + 1
-        f = factor(islice)
+    !$omp parallel do
+    do i = 1, ndetectors
+        call func(input((i-1)*istride+1:(i-1)*istride+isize), output((i-1)*ostride+1:(i-1)*ostride+osize), factor)
     end do
+    !$omp end parallel do
 
 end subroutine compression_average_direct
 
@@ -211,41 +195,25 @@ end subroutine compression_average_direct
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine compression_average_transpose(compressed, data, nsamples, nslices, factor, nfactors, nsamples_compressed, nsamples_data,&
-                                         ndetectors)
+subroutine compression_average_transpose(input, ninputs, ndetectors, isize, istride, output, noutputs, osize, ostride, factor)
 
-    use module_compression, only : transpose => compression_average_transpose
+    use module_compression, only : func => compression_average_transpose
     use module_tamasis,     only : p
     implicit none
 
-    integer, intent(in)    :: nfactors, nslices
-    integer, intent(in)    :: factor(nfactors), nsamples(nslices), nsamples_data, nsamples_compressed, ndetectors
-    real(p), intent(in)    :: compressed(nsamples_compressed,ndetectors)
-    real(p), intent(inout) :: data(nsamples_data,ndetectors)
+    real(p), intent(in)    :: input(ninputs)
+    real(p), intent(inout) :: output(noutputs)
+    integer, intent(in)    :: ninputs, ndetectors, isize, istride
+    integer, intent(in)    :: noutputs, osize, ostride
+    integer, intent(in)    :: factor
 
-    integer :: i, i2, j, j2, islice, f
+    integer :: i
 
-    i = 1
-    j = 1
-    islice = 1
-    f = factor(1)
-    do
-        i2 = i
-        j2 = j
-        do
-            i2 = i2 + nsamples(islice)
-            j2 = j2 + nsamples(islice) * f
-            if (islice == nslices) exit
-            if (factor(min(islice+1, nfactors)) /= f) exit
-            islice = islice + 1
-        end do
-        call transpose(compressed(i:i2-1,:), data(j:j2-1,:), f)
-        if (islice == nslices) exit
-        i = i2
-        j = j2
-        islice = islice + 1
-        f = factor(islice)
+    !$omp parallel do
+    do i = 1, ndetectors
+        call func(input((i-1)*istride+1:(i-1)*istride+isize), output((i-1)*ostride+1:(i-1)*ostride+osize), factor)
     end do
+    !$omp end parallel do
 
 end subroutine compression_average_transpose
 
@@ -1851,28 +1819,26 @@ end subroutine projection_scale
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine convolution_trexp_direct(data, nsamples, nslices, tau, nsamples_tot, ndetectors)
+subroutine convolution_trexp_direct(input, ninputs, ndetectors, isize, istride, output, noutputs, osize, ostride, tau, ntaus)
 
-    use module_filtering, only : trexp_direct => convolution_trexp_direct
+    use module_filtering, only : func => convolution_trexp_direct
     use module_tamasis,   only : p
     implicit none
 
-    real(p), intent(inout) :: data(nsamples_tot,ndetectors)
-    integer*8, intent(in)  :: nsamples(nslices)
-    integer, intent(in)    :: nslices
-    real(p), intent(in)    :: tau(ndetectors)
-    integer, intent(in)    :: nsamples_tot
-    integer, intent(in)    :: ndetectors
+    real(p), intent(in)    :: input(ninputs)
+    real(p), intent(inout) :: output(noutputs)
+    integer, intent(in)    :: ninputs, ndetectors, isize, istride
+    integer, intent(in)    :: noutputs, osize, ostride
+    real(p), intent(in)    :: tau(ntaus)
+    integer, intent(in)    :: ntaus
 
-    integer                :: islice, dest
+    integer :: i
 
-    dest = 1
-    do islice = 1, nslices
-
-        call trexp_direct(data(dest:dest+nsamples(islice)-1,:), tau)
-        dest = dest + nsamples(islice)
-
+    !$omp parallel do
+    do i = 1, ndetectors
+        call func(input((i-1)*istride+1:(i-1)*istride+isize), output((i-1)*ostride+1:(i-1)*ostride+osize), tau(i))
     end do
+    !$omp end parallel do
 
 end subroutine convolution_trexp_direct
 
@@ -1880,28 +1846,26 @@ end subroutine convolution_trexp_direct
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine convolution_trexp_transpose(data, nsamples, nslices, tau, nsamples_tot, ndetectors)
+subroutine convolution_trexp_transpose(input, ninputs, ndetectors, isize, istride, output, noutputs, osize, ostride, tau, ntaus)
 
-    use module_filtering, only : trexp_transpose => convolution_trexp_transpose
+    use module_filtering, only : func => convolution_trexp_transpose
     use module_tamasis,   only : p
     implicit none
 
-    real(p), intent(inout) :: data(nsamples_tot,ndetectors)
-    integer*8, intent(in)  :: nsamples(nslices)
-    integer, intent(in)    :: nslices
-    real(p), intent(in)    :: tau(ndetectors)
-    integer, intent(in)    :: nsamples_tot
-    integer, intent(in)    :: ndetectors
+    real(p), intent(in)    :: input(ninputs)
+    real(p), intent(inout) :: output(noutputs)
+    integer, intent(in)    :: ninputs, ndetectors, isize, istride
+    integer, intent(in)    :: noutputs, osize, ostride
+    real(p), intent(in)    :: tau(ntaus)
+    integer, intent(in)    :: ntaus
 
-    integer                :: islice, dest
+    integer :: i
 
-    dest = 1
-    do islice = 1, nslices
-
-        call trexp_transpose(data(dest:dest+nsamples(islice)-1,:), tau)
-        dest = dest + nsamples(islice)
-
+    !$omp parallel do
+    do i = 1, ndetectors
+        call func(input((i-1)*istride+1:(i-1)*istride+isize), output((i-1)*ostride+1:(i-1)*ostride+osize), tau(i))
     end do
+    !$omp end parallel do
 
 end subroutine convolution_trexp_transpose
 

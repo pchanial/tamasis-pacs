@@ -5,7 +5,6 @@
 from __future__ import division
 
 import numpy as np
-import pyfits
 import scipy
 import tamasisfortran as tmf
 from .datatypes import Tod
@@ -66,7 +65,7 @@ def deglitch_l2mad(tod, projection, nsigma=5.):
 #-------------------------------------------------------------------------------
 
 
-def filter_median(tod, length=10, mask=None):
+def filter_median(tod, length=10, mask=None, nsamples=None):
     """
     Median filtering, O(1) in window length
     """
@@ -79,10 +78,12 @@ def filter_median(tod, length=10, mask=None):
     else:
         mask = np.zeros(tod.shape, np.int8)
 
-    nsamples = getattr(tod, 'nsamples', (tod.shape[-1],))
+    if nsamples is None:
+        nsamples = tod.shape[-1]
     nsamples_tot = tod.shape[-1]
     status = tmf.filter_median(filtered.reshape((-1,nsamples_tot)).T,
-        mask.reshape((-1,nsamples_tot)).T, length, np.array(nsamples, np.int32))
+        mask.reshape((-1,nsamples_tot)).T, length,
+        np.array(nsamples, np.int32, ndmin=1))
     if status != 0:
         raise RuntimeError()
     return filtered
@@ -91,22 +92,23 @@ def filter_median(tod, length=10, mask=None):
 #-------------------------------------------------------------------------------
 
 
-def filter_polynomial(tod, degree):
+def filter_polynomial(tod, degree, nsamples=None):
     """
     Filter by subtracting a fitted polynomial of arbitrary degree.
     """
+    if nsamples is None:
+        nsamples = (tod.shape[-1],)
     filtered = tod.copy()
     dest = 0
-    for islice in range(len(tod.nsamples)):
-        nsamples = tod.nsamples[islice]
-        x = np.arange(nsamples)
-        slope = scipy.polyfit(x, tod[:,dest:dest+nsamples].T, deg=degree)
+    for islice, n in enumerate(nsamples):
+        x = np.arange(n)
+        slope = scipy.polyfit(x, tod[:,dest:dest+n].T, deg=degree)
 
         for idetector in range(tod.shape[0]):
-            filtered[idetector,dest:dest+nsamples] -= \
+            filtered[idetector,dest:dest+n] -= \
                 scipy.polyval(slope[:,idetector], x)
        
-        dest = dest + nsamples
+        dest = dest + n
 
     return filtered
 
@@ -114,22 +116,22 @@ def filter_polynomial(tod, degree):
 #-------------------------------------------------------------------------------
 
 
-def interpolate_linear(tod):
+def interpolate_linear(tod, nsamples=None):
     """
     In-place interpolation of masked values of a Tod
     """
     if tod.mask is None:
         return
-
+    if nsamples is None:
+        nsamples = (tod.shape[-1],)
     dest = 0
-    for islice in range(len(tod.nsamples)):
-        nsamples = tod.nsamples[islice]
-        x = np.arange(nsamples)
+    for islice, n in enumerate(nsamples):
+        x = np.arange(n)
         for idetector in range(tod.shape[0]):
-            tod_ = tod[idetector,dest:dest+nsamples]
-            invalid = tod.mask[idetector,dest:dest+nsamples]
+            tod_ = tod[idetector,dest:dest+n]
+            invalid = tod.mask[idetector,dest:dest+n]
             tod_[invalid] = np.interp(x[invalid], x[~invalid], tod_[~invalid])
-        dest = dest + nsamples
+        dest = dest + n
     
     return
 

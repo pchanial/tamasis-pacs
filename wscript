@@ -76,7 +76,7 @@ def configure(conf):
     conf.check_fortran_mangling()
 
     if conf.env.FC_NAME == 'GFORTRAN':
-        conf.env.FCFLAGS = ['-ffree-form', '-Wall', '-fPIC', '-cpp', '-O3']
+        conf.env.FCFLAGS = ['-ffree-form', '-Wall', '-fPIC', '-cpp']
         if conf.options.debug:
             conf.env.FCFLAGS += ['-g', '-fcheck=all', '-fbacktrace']
         if 'OPENMP' in libraries:
@@ -327,7 +327,7 @@ class test_python(BuildContext):
     fun = 'test_python_fun'
 
 def test_python_fun(bld):
-    bld(rule   = '${IPYTHON} -noconfirm_exit --i ' + bld.path.find_node('core/test/test_broken_locale.py').abspath(),
+    bld(rule   = '${IPYTHON} --noconfirm_exit --i ' + bld.path.find_node('core/test/test_broken_locale.py').abspath(),
         always = True)
 
     for subdir in subdirs:

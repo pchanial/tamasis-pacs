@@ -135,27 +135,25 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
     
     
-    subroutine convolution_trexp_direct(data, tau)
+    subroutine convolution_trexp_direct(input, output, tau)
 
-        real(p), intent(inout) :: data(:,:)
-        real(p), intent(in)    :: tau(size(data,2))
+        real(p), intent(in)    :: input(:)
+        real(p), intent(inout) :: output(size(input))
+        real(p), intent(in)    :: tau
 
-        integer :: i, j
+        integer :: i
         real(p) :: v, w
 
-        !$omp parallel do private(i,j,v,w)
-        do j = 1, size(data,2)
-            if (tau(j) <= 0 .or. tau(j) /= tau(j)) then
-                data(:,j) = 0
-                cycle
-            end if
-            w = exp(-1/tau(j))
-            v = 1._p - w
-            do i = 2, size(data,1)
-                data(i,j) = w * data(i-1,j) + v * data(i,j)
-            end do
+        if (tau <= 0 .or. tau /= tau) then
+            output = 0
+            return
+        end if
+        w = exp(-1/tau)
+        v = 1._p - w
+        output(1) = input(1)
+        do i = 2, size(input)
+            output(i) = w * output(i-1) + v * input(i)
         end do
-        !$omp end parallel do
         
     end subroutine convolution_trexp_direct
 
@@ -163,32 +161,28 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
     
     
-    subroutine convolution_trexp_transpose(data, tau)
+    subroutine convolution_trexp_transpose(input, output, tau)
 
-        real(p), intent(inout) :: data(:,:)
-        real(p), intent(in)    :: tau(size(data,2))
+        real(p), intent(in)    :: input(:)
+        real(p), intent(inout) :: output(size(input))
+        real(p), intent(in)    :: tau
 
-        integer :: m, n, i, j
+        integer :: n, i
         real(p) :: v, w
 
-        m = size(data,1)
-        n = size(data,2)
-        !$omp parallel do private(i,j,v,w)
-        do j = 1, n
-            if (tau(j) <= 0 .or. tau(j) /= tau(j)) then
-                data(:,j) = 0
-                cycle
-            end if
-            w = exp(-1/tau(j))
-            v = 1._p - w
-            data(m,j) = v * data(m,j)
-            do i = m-1, 1, -1
-                data(i,j) = w * data(i+1,j) + v * data(i,j)
-            end do
-            data(1,j) = data(1,j) / v
+        n = size(input)
+        if (tau <= 0 .or. tau /= tau) then
+            output = 0
+            return
+        end if
+        w = exp(-1/tau)
+        v = 1._p - w
+        output(n) = v * input(n)
+        do i = n-1, 1, -1
+            output(i) = w * output(i+1) + v * input(i)
         end do
-        !$omp end parallel do
-        
+        output(1) = output(1) / v
+
     end subroutine convolution_trexp_transpose
 
 

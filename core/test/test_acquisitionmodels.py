@@ -3,7 +3,14 @@ import numpy as np
 from numpy.testing import assert_array_equal, assert_almost_equal
 from tamasis.acquisitionmodels import CompressionAverage, DownSampling, Padding, ResponseTruncatedExponential
 
-def test_compression_average():
+def test_compression_average1():
+    data = np.array([1., 2., 2., 3.])
+    compression = CompressionAverage(2)
+    compressed = compression(data)
+    assert_array_equal(compressed, [1.5, 2.5])
+    assert_array_equal(compression.T(compressed), [0.75, 0.75, 1.25, 1.25])
+
+def test_compression_average2():
     nsamples = (10,5)
     tod = np.empty((2,15), float)
     tod[0,:] = [1,1,1,1,1,3,3,3,3,3,4,4,4,4,4]
@@ -12,12 +19,10 @@ def test_compression_average():
     tod2 = compression(tod)
     assert tod2.shape == (2,3)
     assert_array_equal(tod2, [[1.,3.,4.],[1.,1.,1.5]])
-    assert tod2.nsamples == (2,1)
 
     tod3 = compression.T(tod2)
     assert tod3.shape == (2,15)
     assert_almost_equal(tod3[0,:], (0.2,0.2,0.2,0.2,0.2,0.6,0.6,0.6,0.6,0.6,0.8,0.8,0.8,0.8,0.8))
-    assert tod3.nsamples == (10,5)
     
     tod = np.array([1,2,2,3,3,3,4,4,4,4])
     compression = CompressionAverage([1,2,3,4], nsamples=[1,2,3,4])
@@ -27,8 +32,7 @@ def test_compression_average():
     assert_almost_equal(tod3, 10*[1])
 
     a = CompressionAverage(3)
-    b = a.T.T
-    assert a is b
+    assert_almost_equal(a.todense().T, a.T.todense())
 
 
 def test_downsampling():
@@ -57,7 +61,6 @@ def test_padding():
     padding = Padding(left=1,right=(4,20), nsamples=(12,3))
     b = padding(a)
     assert b.shape == (10,41)
-    assert b.nsamples == (17,24)
     assert_array_equal(b[:,0:1], 0)
     assert_array_equal(b[:,1:13], a[:,0:12])
     assert_array_equal(b[:,13:17], 0)
@@ -67,7 +70,7 @@ def test_padding():
 
     c = padding.T(b)
     assert c.shape == a.shape
-    assert_array_equal(c == a)
+    assert_array_equal(c, a)
 
 
 def test_response_truncated_exponential():
@@ -79,9 +82,10 @@ def test_response_truncated_exponential():
     a[0,1:]=0
     b = r(a)
     assert_almost_equal(b[0,:], [np.exp(-t/1.) for t in range(0,10)])
-    assert_almost_equal(r.T.dense(), r.dense().T)
+    assert_almost_equal(r.T.todense(), r.todense().T)
 
-test_compression_average()
+test_compression_average1()
+test_compression_average2()
 test_downsampling()
 test_padding()
 test_response_truncated_exponential()

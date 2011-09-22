@@ -297,8 +297,7 @@ class PacsBase(Observation):
         irandom = np.random.random_integers(0,iend-istart-nsamples_tot)
         result = Tod(data[:,:,irandom:irandom+nsamples_tot],
                      unit='Jy/detector',
-                     derived_units=self.get_derived_units()[0],
-                     nsamples=nsamples)
+                     derived_units=self.get_derived_units()[0])
         if subtraction_mean:
             result.T[:] -= np.mean(result, axis=1)
         if flatfielding:
@@ -344,7 +343,6 @@ class PacsBase(Observation):
             output._unit = input._unit
             output._derived_units = input._derived_units.copy()
         if isinstance(input, Tod):
-            output.nsamples = input.nsamples
             if input.mask is not None:
                 mask = input.mask.view(np.int8)
                 output.mask = tmf.pacs_pack_int8(mask.T, n, m.T).T
@@ -368,7 +366,6 @@ class PacsBase(Observation):
             output._unit = input._unit
             output._derived_units = input._derived_units.copy()
         if isinstance(input, Tod):
-            output.nsamples = input.nsamples
             if input.mask is not None:
                 mask = input.mask.view(np.int8)
                 output.mask = tmf.pacs_unpack(mask.T, m.T).T
@@ -805,7 +802,6 @@ class PacsObservation(PacsBase):
         nsamples_tot = int(np.sum(self.get_nsamples()))
         tod = Tod.empty((ndetectors, nsamples_tot),
                         mask=np.empty((ndetectors, nsamples_tot), np.bool8),
-                        nsamples=self.get_nsamples(),
                         unit=self.slice[0].unit,
                         derived_units=self.get_derived_units()[0])
 
@@ -1225,7 +1221,7 @@ def pacs_preprocess(obs, tod,
             model = compression * projection
         else:
             model = projection
-        map_mask = model.T(Tod(tod.mask, nsamples=tod.nsamples))
+        map_mask = model.T(tod.mask)
         model = masking * model
         return tod, model, mapper_naive(tod, model), map_mask
 
@@ -1238,7 +1234,7 @@ def pacs_preprocess(obs, tod,
     maskingc = Masking(todc.mask)
 
     model = compression * projection
-    map_mask = model.T(Tod(tod.mask, nsamples=tod.nsamples, copy=False))
+    map_mask = model.T(tod.mask)
     model = masking * model
 
     return todc, model, mapper_naive(todc, model), map_mask

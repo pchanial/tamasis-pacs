@@ -79,7 +79,7 @@ print model
 # naive map
 tod.inunit('Jy/arcsec^2')
 backmap = model.T(tod.magnitude)
-unity = Tod.ones(tod.shape, nsamples=tod.nsamples)
+unity = Tod.ones(tod.shape)
 weights = model.T(unity)
 map_naive = Map(backmap / weights, unit='Jy/arcsec^2')
 

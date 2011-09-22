@@ -107,11 +107,11 @@ if options.deglitching != 'none':
         tod.mask = deglitch_l2mad(tod, projection, nsigma=options.nsigma)
 
 if options.do_outputtod:
-    if len(tod.nsamples) != len(filename):
+    if len(obs.get_nsamples()) != len(filename):
         raise ValueError('The number of tod slices is not the number of input filenames.')
     dest = 0
     tod_ = obs.unpack(tod)
-    for nsamples, f in zip(tod.nsamples, filename):
+    for nsamples, f in zip(obs.get_nsamples(), filename):
         tod_[:,:,dest:dest+nsamples].save(f+'_tod.fits')
         dest += nsamples
 

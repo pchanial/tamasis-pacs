@@ -59,11 +59,7 @@ masking = Masking(tod.mask)
 model = masking * projection
 
 # Get the filter operator N^-1
-length = np.asarray(2**np.ceil(np.log2(np.array(tod.nsamples) + 200)), dtype='int')
-invntt = InvNtt(length, obs.get_filter_uncorrelated())
-fft = FftHalfComplex(length)
-padding = Padding(left=invntt.ncorrelations, right=length-tod.nsamples-invntt.ncorrelations)
-invntt = padding.T * fft.T * invntt * fft * padding
+invntt = InvNtt(obs)
 
 # The naive map is given by
 map_naive = mapper_naive(tod, model)

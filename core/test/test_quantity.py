@@ -174,7 +174,7 @@ b[0]=1
 if a[0] != b[0]: raise TestFailure()
 
 
-a = Tod([10.,10.], nsamples=(1,1), unit='m')
+a = Tod([10.,10.], unit='m')
 b = Quantity(a)
 if a.unit != b.unit: raise TestFailure()
 
@@ -183,12 +183,11 @@ b[0] = 0
 if a[0] != b[0]: raise TestFailure()
 if id(a) == id(b): raise TestFailure()
 
-a = Tod([10.,10.], nsamples=(1,1))
+a = Tod([10.,10.])
 b = Quantity(a, subok=True)
 if a.__class__ is not b.__class__: raise TestFailure()
-if a.nsamples is not b.nsamples: raise TestFailure()
 
-a = Tod([10.,10.], nsamples=(1,1))
+a = Tod([10.,10.])
 b = Quantity(a, subok=True, copy=False)
 if id(a) != id(b): raise TestFailure()
 

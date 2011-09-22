@@ -654,7 +654,7 @@ class Map(FitsArray):
 
 class Tod(FitsArray):
 
-    def __new__(cls, data, mask=None, nsamples=None, header=None, unit=None,
+    def __new__(cls, data, mask=None, header=None, unit=None,
                 derived_units=None, dtype=None, copy=True, order='C',
                 subok=False, ndmin=0, shape_global=None, comm=None):
 
@@ -682,19 +682,6 @@ class Tod(FitsArray):
 
         if mask is not None:
             result._mask = np.array(mask, np.bool8, copy=copy)
-        
-        # nsamples attribute
-        if type(data) is str and nsamples is None:
-            if 'nsamples' in result.header:
-                nsamples = result.header['nsamples'][1:-1].replace(' ', '')
-                if len(nsamples) > 0:
-                    nsamples = [int(float(x))
-                                for x in nsamples.split(',') if x.strip() != '']
-                del result.header['NSAMPLES']
-        if nsamples is None:
-            return result
-        shape = validate_sliced_shape(result.shape, nsamples)
-        result.nsamples = shape[-1] if len(shape) > 0 else shape
 
         return result
 
@@ -736,8 +723,6 @@ class Tod(FitsArray):
     def __array_finalize__(self, array):
         FitsArray.__array_finalize__(self, array)
         self._mask = getattr(array, 'mask', None)
-        self.nsamples = getattr(array, 'nsamples', () if np.rank(self) == 0 \
-                        else (self.shape[-1],))
 
     def __getitem__(self, key):
         item = super(Tod, self).__getitem__(key)
@@ -745,15 +730,6 @@ class Tod(FitsArray):
             return item
         if item.mask is not None:
             item.mask = item.mask[key]
-        if not isinstance(key, tuple):
-            return item
-        if len(key) > 1:
-            if not isinstance(key[-1], slice):
-                return item
-            else:
-                if key[-1].start is not None or key[-1].stop is not None or \
-                   key[-1].step is not None:
-                    item.nsamples = (item.shape[-1],)
         return item
 
     def reshape(self, newdims, order='C'):
@@ -764,57 +740,35 @@ class Tod(FitsArray):
         return result
 
     @staticmethod
-    def empty(shape, mask=None, nsamples=None, header=None, unit=None,
-              derived_units=None, dtype=None, order=None, comm=MPI.COMM_SELF):
-        nsamples = nsamples or shape[-1]
-        shape = flatten_sliced_shape(shape)
+    def empty(shape, mask=None, header=None, unit=None, derived_units=None,
+              dtype=None, order=None, comm=MPI.COMM_SELF):
         if len(shape) <= 1 and comm.Get_size() > 1:
             raise ValueError('Scalar or vector Tod can not be distributed.')
         shape_local = split_shape(shape, comm)
-        return Tod(np.empty(shape_local, dtype, order), mask, nsamples, header,
-                   unit, derived_units, dtype, copy=False, shape_global=shape,
+        return Tod(np.empty(shape_local, dtype, order), mask, header, unit,
+                   derived_units, dtype, copy=False, shape_global=shape,
                    comm=comm)
 
     @staticmethod
-    def ones(shape, mask=None, nsamples=None, header=None, unit=None,
-             derived_units=None, dtype=None, order=None, comm=MPI.COMM_SELF):
-        nsamples = nsamples or shape[-1]
-        shape = flatten_sliced_shape(shape)
+    def ones(shape, mask=None, header=None, unit=None, derived_units=None,
+             dtype=None, order=None, comm=MPI.COMM_SELF):
         if len(shape) <= 1 and comm.Get_size() > 1:
             raise ValueError('Scalar or vector Tod can not be distributed.')
         shape_local = split_shape(shape, comm)
-        return Tod(np.ones(shape_local, dtype, order), mask, nsamples, header,
-                   unit, derived_units, dtype, copy=False, shape_global=shape,
+        return Tod(np.ones(shape_local, dtype, order), mask, header, unit,
+                   derived_units, dtype, copy=False, shape_global=shape,
                    comm=comm)
 
     @staticmethod
-    def zeros(shape, mask=None, nsamples=None, header=None, unit=None,
-              derived_units=None, dtype=None, order=None, comm=MPI.COMM_SELF):
-        nsamples = nsamples or shape[-1]
-        shape = flatten_sliced_shape(shape)
+    def zeros(shape, mask=None, header=None, unit=None, derived_units=None,
+              dtype=None, order=None, comm=MPI.COMM_SELF):
         if len(shape) <= 1 and comm.Get_size() > 1:
             raise ValueError('Scalar or vector Tod can not be distributed.')
         shape_local = split_shape(shape, comm)
-        return Tod(np.zeros(shape_local, dtype, order), mask, nsamples, header,
-                   unit, derived_units, dtype, copy=False, shape_global=shape,
+        return Tod(np.zeros(shape_local, dtype, order), mask, header, unit,
+                   derived_units, dtype, copy=False, shape_global=shape,
                    comm=comm)
 
-    def flatten(self, order='C'):
-        """
-        Return a copy of the array collapsed into one dimension.
-        """
-        result = super(self.__class__, self).flatten(order)
-        result.nsamples = None
-        return result
-
-    def ravel(self, order='C'):
-        """
-        Return a flattened view of the array
-        """
-        result = super(self.__class__, self).ravel(order)
-        result.nsamples = None
-        return result
-        
     def imshow(self, title=None, aspect='auto', **kw):
         """
         A simple graphical display function for the Map class
@@ -842,17 +796,9 @@ class Tod(FitsArray):
         output += str(self.shape[-1]) + ' sample'
         if self.shape[-1] > 1:
             output += 's'
-        nslices = len(self.nsamples)
-        if nslices > 1:
-            strsamples = ','.join((str(self.nsamples[i])
-                                   for i in range(nslices)))
-            output += ' in ' + str(nslices) + ' slices ('+strsamples+')'
         return output + ']'
 
     def save(self, filename, fitskw=None):
-        fitskw = fitskw or {}
-        if 'NSAMPLES' not in [k.upper() for k in fitskw.keys()]:
-            fitskw['NSAMPLES'] = (self.nsamples, 'Number of samples per slice')
         FitsArray.save(self, filename, fitskw=fitskw)
         if self.mask is not None:
             write_fits(filename, self.mask.view('uint8'), None,
@@ -868,93 +814,6 @@ class Tod(FitsArray):
             tolocal = DistributedArray.__dict__['tolocal']
             output.mask = tolocal(self.mask, comm)
         return output
-
-
-#-------------------------------------------------------------------------------
-
-
-def flatten_sliced_shape(shape):
-    if shape is None:
-        return shape
-    if not shape:
-        return ()
-    if not isinstance(shape, (list, tuple, np.ndarray)):
-        return (int(shape),)
-    shape_1 = shape[-1]
-    if not isinstance(shape_1, (list, tuple, np.ndarray)):
-        return tuple(shape)
-    shape = list(shape)
-    shape[-1] = sum(tuple(shape_1))
-    return tuple(shape)
-
-   
-#-------------------------------------------------------------------------------
-
-
-def combine_sliced_shape(shape, nsamples):
-    if not isinstance(shape, (list, tuple, np.ndarray)):
-        shape = [ shape ]
-    else:
-        shape = list(shape) # list makes a shallow copy
-    if not isinstance(nsamples, (list, tuple, np.ndarray)):
-        nsamples = (int(nsamples),)
-    else:
-        nsamples = tuple(nsamples)
-    shape.append(nsamples)
-    return tuple(shape)
-
-   
-#-------------------------------------------------------------------------------
-
-
-def validate_sliced_shape(shape, nsamples=None):
-
-    if isinstance(shape, np.ndarray):
-        shape = tuple(shape)
-
-    if not shape:
-        if nsamples:
-            raise ValueError("The input is scalar or None, but nsamples is eq" \
-                             "ual to '" + str(nsamples) + "'.")
-        return None if shape is None else ()
-
-    if not isinstance(shape, (list, tuple, np.ndarray)):
-        shape = (int(shape),)
-
-    shape_1 = shape[-1]
-    if nsamples is None:
-        if isinstance(shape_1, (list, np.ndarray)):
-            shape = list(shape)
-            shape[-1] = tuple(shape_1)
-        return tuple(shape)
-    
-    if not isinstance(nsamples, (list, tuple, np.ndarray)):
-        nsamples = (nsamples,)
-    else:
-        nsamples = tuple(nsamples)
-
-    if len(nsamples) == 0:
-        raise ValueError('The input is not scalar and is incompatible with ns' \
-            'amples.')
-
-    if isinstance(shape_1, (list, tuple, np.ndarray)):
-        shape_1 = tuple(shape_1)
-        if shape_1 != nsamples:
-            raise ValueError('The input has an incompatible slicing of samples'\
-                " '" + str(nsamples) + "' instead of '" + str(shape_1) + "'.")
-
-    sum_shape_1 = sum(shape_1) if isinstance(shape_1, tuple) else shape_1
-    if sum_shape_1 != sum(nsamples):
-        raise ValueError('The sliced input has an incompatible number of samp' \
-            "les '" + str(nsamples) + "' instead of '" + str(shape_1) + "'.")
-    
-    if isinstance(shape_1, tuple):
-        return tuple(shape)
-
-    shape = list(shape)
-    shape[-1] = nsamples
-
-    return tuple(shape)
 
 
 #-------------------------------------------------------------------------------
