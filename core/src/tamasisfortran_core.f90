@@ -221,41 +221,25 @@ end subroutine compression_average_transpose
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine downsampling_direct(data, compressed, nsamples, nslices, factor, nfactors, nsamples_data, nsamples_compressed,          &
-                               ndetectors)
+subroutine downsampling_direct(input, ninputs, ndetectors, isize, istride, output, noutputs, osize, ostride, factor)
 
-    use module_compression, only : direct => downsampling_direct
+    use module_compression, only : func => downsampling_direct
     use module_tamasis,     only : p
     implicit none
 
-    integer, intent(in)    :: nfactors, nslices
-    integer, intent(in)    :: factor(nfactors), nsamples(nslices), nsamples_data, nsamples_compressed, ndetectors
-    real(p), intent(in)    :: data(nsamples_data,ndetectors)
-    real(p), intent(inout) :: compressed(nsamples_compressed,ndetectors)
+    real(p), intent(in)    :: input(ninputs)
+    real(p), intent(inout) :: output(noutputs)
+    integer, intent(in)    :: ninputs, ndetectors, isize, istride
+    integer, intent(in)    :: noutputs, osize, ostride
+    integer, intent(in)    :: factor
 
-    integer :: i, i2, j, j2, islice, f
+    integer :: i
 
-    i = 1
-    j = 1
-    islice = 1
-    f = factor(1)
-    do
-        i2 = i
-        j2 = j
-        do
-            i2 = i2 + nsamples(islice)
-            j2 = j2 + nsamples(islice) / f
-            if (islice == nslices) exit
-            if (factor(min(islice+1, nfactors)) /= f) exit
-            islice = islice + 1
-        end do
-        call direct(data(i:i2-1,:), compressed(j:j2-1,:), f)
-        if (islice == nslices) exit
-        i = i2
-        j = j2
-        islice = islice + 1
-        f = factor(islice)
+    !$omp parallel do
+    do i = 1, ndetectors
+        call func(input((i-1)*istride+1:(i-1)*istride+isize), output((i-1)*ostride+1:(i-1)*ostride+osize), factor)
     end do
+    !$omp end parallel do
 
 end subroutine downsampling_direct
 
@@ -263,41 +247,25 @@ end subroutine downsampling_direct
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine downsampling_transpose(compressed, data, nsamples, nslices, factor, nfactors, nsamples_compressed, nsamples_data,       &
-                                  ndetectors)
+subroutine downsampling_transpose(input, ninputs, ndetectors, isize, istride, output, noutputs, osize, ostride, factor)
 
-    use module_compression, only : transpose => downsampling_transpose
+    use module_compression, only : func => downsampling_transpose
     use module_tamasis,     only : p
     implicit none
 
-    integer, intent(in)    :: nfactors, nslices
-    integer, intent(in)    :: factor(nfactors), nsamples(nslices), nsamples_data, nsamples_compressed, ndetectors
-    real(p), intent(in)    :: compressed(nsamples_compressed,ndetectors)
-    real(p), intent(inout) :: data(nsamples_data,ndetectors)
+    real(p), intent(in)    :: input(ninputs)
+    real(p), intent(inout) :: output(noutputs)
+    integer, intent(in)    :: ninputs, ndetectors, isize, istride
+    integer, intent(in)    :: noutputs, osize, ostride
+    integer, intent(in)    :: factor
 
-    integer :: i, i2, j, j2, islice, f
+    integer :: i
 
-    i = 1
-    j = 1
-    islice = 1
-    f = factor(1)
-    do
-        i2 = i
-        j2 = j
-        do
-            i2 = i2 + nsamples(islice)
-            j2 = j2 + nsamples(islice) * f
-            if (islice == nslices) exit
-            if (factor(min(islice+1, nfactors)) /= f) exit
-            islice = islice + 1
-        end do
-        call transpose(compressed(i:i2-1,:), data(j:j2-1,:), f)
-        if (islice == nslices) exit
-        i = i2
-        j = j2
-        islice = islice + 1
-        f = factor(islice)
+    !$omp parallel do
+    do i = 1, ndetectors
+        call func(input((i-1)*istride+1:(i-1)*istride+isize), output((i-1)*ostride+1:(i-1)*ostride+osize), factor)
     end do
+    !$omp end parallel do
 
 end subroutine downsampling_transpose
 

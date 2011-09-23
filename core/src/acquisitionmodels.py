@@ -1,6 +1,7 @@
 from __future__ import division
 
 import functools
+import inspect
 import numpy as np
 
 import tamasisfortran as tmf
@@ -38,7 +39,6 @@ __all__ = [
     'ShiftOperator',
     'CompressionAverage',
     'DownSampling',
-    'CompressionAverage_old',
     'InvNtt',
     'Padding',
     'Projection',
@@ -57,162 +57,121 @@ __all__ = [
 
 Diagonal = DiagonalOperator
 
-def partitioned_last_axis(cls):
-
-    @staticmethod
-    @functools.wraps(cls.__new__)
-    def partitioned_new(cls_, *args, **keywords):
-        if 'nsamples' in keywords:
-            nsamples = tointtuple(keywords['nsamples'])
-            del keywords['nsamples']
-        else:
-            nsamples = None
-        if nsamples is None or len(nsamples) == 1:
-            inst = cls.__new_original__(cls_, *args, **keywords)
-            cls_.__init__ = partitioned_init
-            return inst
-
-        n = len(nsamples)
-        argss = tuple(tuple(a if isscalar(a) else a[i] for a in args) \
-                      for i in range(n))
-        keyss = tuple(dict((k, v if isscalar(v) else v[i]) \
-                      for k,v in keywords.iteritems()) for i in range(n))
-        operands = [cls.__new_original__(cls_, *a, **k) \
-                    for a,k in zip(argss, keyss)]
-        print 'args:', argss
-        print 'keys:', keyss
-        for o,a,k in zip(operands, argss, keyss):
-            o.__init_original__(*a, **k)
-        return PartitionOperator(operands, partitionin=nsamples, axisin=-1)
-
-    @functools.wraps(cls.__init__)
-    def partitioned_init(self, *args, **keywords):
-        try:
-            del keywords['nsamples']
-        except KeyError:
-            pass
-        cls.__init_original__(self, *args, **keywords)
-
-    cls.__new_original__ = cls.__new__
-    cls.__new__ = partitioned_new
-    cls.__init_original__ = cls.__init__
-    cls.__init__ = partitioned_init
-    return cls
-
-@real
-@linear
-class Compression_old(Operator):
-
+def partitioned(*partition_args, **keywords):
     """
-    Abstract class for compressing the input signal.
-    Compression is operated on the fastest axis.
+    Class decorator that partitions an Operator along a specified axis.
+    It adds a 'partition' keyed argument to the class constructor.
+    
+    Parameters
+    ----------
+    axis: int
+        Partition axis of the input (default is 0)
+
+    *partition_args: string varargs
+       Specify the class' arguments of the __init__ method that  can be a
+       sequence to be dispatched to the partitioned operators.
+
+    Example
+    -------
+    >>> @partitioned('value')
+    >>> @linear
+    >>> class MyOp(Operator):
+    >>>     def __init__(self, value, shapein=None):
+    >>>         self.value = value
+    >>>         Operator.__init__(self, lambda i,o: np.multiply(i,value,o),
+    >>>                           shapein=shapein)
+    >>>
+    >>> op = MyOp([1,2,3], shapein=3, partition=(1,1,1))
+    >>> op.todense()
+    array([[ 1.,  0.,  0.],
+           [ 0.,  2.,  0.],
+           [ 0.,  0.,  3.]])
+
+    >>> [o.value for o in op.operands]
+    [1, 2, 3]
+        
     """
+    # the following way to extract keywords is unnecessary in Python3 (PEP 3102)
+    if 'axis' in keywords:
+        axisin = keywords['axis']
+        del keywords['axis']
+    else:
+        axisin = 0
+    if len(keywords) > 0:
+        raise TypeError('Invalid keyed argument.')
 
-    def __new__(cls, factor, shapein=None, **keywords):
-        factor = tointtuple(factor)
-        if np.all(factor == 1):
-            op = IdentityOperator(shapein=shapein, **keywords)
-            op.factor = (1,)
-            return op
-        return super(Compression_old, cls).__new__(cls, factor, shapein, **keywords)
+    def func(cls):
 
-    def __init__(self, factor, shapein=None, shapeout=None, nsamples=None,
-                 **keywords):
+        @functools.wraps(cls.__new__)
+        def partition_new(cls_, *args, **keywords):
+            if 'partition' in keywords and keywords['partition'] is not None:
+                partitionin = tointtuple(keywords['partition'])
+                del keywords['partition']
+            else:
+                inst = cls.__new_original__(cls_, *args, **keywords)
+                cls_.__init__ = partition_init
+                return inst
 
-        factor = tointtuple(factor)
-        nsamples = tointtuple(nsamples)
+            # dispatch arguments
+            n = len(partitionin)
+            class_args, jk, jk, jk = inspect.getargspec(cls_.__init_original__)
+            class_args.pop(0)
+            argss = tuple(tuple(a[i] if class_args[j] in partition_args and \
+                not isscalar(a) else a for j,a in enumerate(args)) \
+                for i in range(n))
+            keyss = tuple(dict((k, v[i]) if k in partition_args and \
+                not isscalar(v) else (k,v) for k,v in keywords.iteritems()) \
+                for i in range(n))
+            
+            # the input shapein/out describe the PartitionOperator
+            def _reshape(s, p, a):
+                s = list(tointtuple(s))
+                s[a] = p
+                return tuple(s)
+            if 'shapein' in keywords:
+                shapein = keywords['shapein']
+                for keys, p in zip(keyss, partitionin):
+                    keys['shapein'] = _reshape(shapein, p, axisin)
+            else:
+                shapein = None
+            if 'shapeout' in keywords:
+                shapeout = keywords['shapeout']
+                for keys, p in zip(keyss, partitionin):
+                    keys['shapeout'] = _reshape(shapeout, p, axisin)
+            else:
+                shapeout = None
 
-        if nsamples is None:
-            if len(factor) > 1:
-                raise ValueError("When dealing with mixed compression factors, "
-                "the keyed argument 'nsamples' must be set.")
-        elif len(factor) > 1 and len(nsamples) != len(factor):
-            raise ValueError("The number of specified compression factors '{0}'"
-                " is different from the number of slices given by nsamples '{1}"
-                "'".format(len(factor), len(nsamples)))
-        elif np.any(np.mod(nsamples, factor) != 0):
-            raise ValueError("The compression factor is incompatible with the s"
-                "slicing given by nsamples.")
+            # instantiate the partitioned operators
+            ops = [cls.__new_original__(cls_, *a, **k) \
+                   for a,k in zip(argss, keyss)]
+            for o,a,k in zip(ops, argss, keyss):
+                if isinstance(o, cls):
+                    o.__init_original__(*a, **k)
+            if len(ops) == 1:
+                return ops[0]
 
-        self.factor = factor
+            return PartitionOperator(ops, partitionin=partitionin,
+                       axisin=axisin, shapein=shapein, shapeout=shapeout)
 
-        if shapein is not None:
-            shapeout_expected = self.reshapein(shapein)
-            if shapeout and tointtuple(shapeout) != shapeout_expected:
-                raise ValueError('The output shape is incompatible with the com'
-                                 'pression factor.')
+        @functools.wraps(cls.__init__)
+        def partition_init(self, *args, **keywords):
+            if 'partition' in keywords:
+                partitionin = tointtuple(keywords['partition'])
+                if partitionin is not None and len(partitionin) == 1:
+                    return
+                del keywords['partition']
+            cls.__init_original__(self, *args, **keywords)
 
-        self.nsamplesin = nsamples
-        if nsamples is None:
-            self.nsamplesout = None
-        else:
-            self.nsamplesout = tointtuple(np.divide(nsamples, factor))
+        cls.__new_original__ = staticmethod(cls.__new__)
+        cls.__new__ = staticmethod(partition_new)
+        cls.__init_original__ = cls.__init__
+        cls.__init__ = partition_init
+        return cls
 
-        Operator.__init__(self, shapein=shapein, dtype=var.FLOAT_DTYPE,
-                          **keywords)
-
-    def reshapein(self, shapein):
-        if shapein is None:
-            return None
-        if self.nsamplesout is None:
-            if shapein[-1] % self.factor != 0:
-                raise ValueError("The input timeline size '{0}') is incompatibl"
-                    "e with the compression factor '{1}'".format(shapein[-1],
-                    self.factor))
-            expected = shapein[-1] // self.factor
-        else:
-            if shapein[-1] != np.sum(self.nsamplesin):
-                raise ValueError("The input timeline size '{0}' is incompatible"
-                    " with the compression factor '{1}' and the slicing given b"
-                    "y nsamples '{2}'".format(shapein[-1], self.factor,
-                    self.nsamples))
-            expected = int(np.sum(self.nsamplesout))
-        shapeout = list(shapein)
-        shapeout[-1] = expected
-        return tuple(shapeout)
-
-    def reshapeout(self, shapeout):
-        if shapeout is None:
-            return None
-        if self.nsamplesin is None:
-            expected = shapeout[-1] * self.factor[0]
-        else:
-            expected = int(np.sum(self.nsamplesin))
-        shapeout = list(shapeout)
-        shapeout[-1] = expected
-        return  tuple(shapeout)
-
-    def __str__(self):
-        if len(self.factor) == 1:
-            sfactor = str(self.factor[0])
-        else:
-            sfactor = str(self.factor)[1:-1].replace(' ', '')
-        return super(Compression_old, self).__str__() + ' (x' + sfactor + ')'
+    return func
 
 
-class CompressionAverage_old(Compression_old):
-    """
-    Compress the input signal by averaging blocks of specified size.
-    """
-
-    def direct(self, input, output):
-        if self.nsamplesout is None:
-            nsamples = (input.shape[-1],)
-        else:
-            nsamples = self.nsamplesin
-        tmf.compression_average_direct(input.T, output.T,
-            np.array(nsamples, np.int32), np.array(self.factor, np.int32))
-
-    def transpose(self, input, output):
-        if self.nsamplesin is None:
-            nsamples = (input.shape[-1],)
-        else:
-            nsamples = self.nsamplesout
-        tmf.compression_average_transpose(input.T, output.T,
-            np.array(nsamples, np.int32), np.array(self.factor, np.int32))
-
-
-@partitioned_last_axis
+@partitioned('factor', axis=-1)
 @real
 @linear
 class Compression(Operator):
@@ -230,60 +189,9 @@ class Compression(Operator):
         return super(Compression, cls).__new__(cls, factor, shapein, **keywords)
 
     def __init__(self, factor, shapein=None, shapeout=None, **keywords):
-
-        factor = int(factor)
-        if shapein is not None:
-            shapeout_expected = self.reshapein(shapein)
-            if shapeout and tointtuple(shapeout) != shapeout_expected:
-                raise ValueError('The output shape is incompatible with the com'
-                                 'pression factor.')
-
-        self.factor = factor
-        Operator.__init__(self, shapein=shapein, dtype=var.FLOAT_DTYPE,
-                          **keywords)
-
-    def reshapein(self, shapein):
-        if shapein is None:
-            return None
-        if shapein[-1] % self.factor != 0:
-            raise ValueError("The input timeline size '{0}') is incompatible wi"
-                "th the compression factor '{1}'".format(shapein[-1],
-                self.factor))
-        shapeout = list(shapein)
-        shapeout[-1] = shapein[-1] // self.factor
-        return tuple(shapeout)
-
-    def reshapeout(self, shapeout):
-        if shapeout is None:
-            return None
-        shapeout = list(shapeout)
-        shapeout[-1] = shapeout[-1] * self.factor[0]
-        return  tuple(shapeout)
-
-    def __str__(self):
-        return super(Compression, self).__str__() + ' (x{})'.format(self.factor)
-
-
-@partitioned_last_axis
-@real
-@linear
-class CompressionAverage(Operator):
-    """
-    Compress the input signal by averaging blocks of specified size.
-    """
-
-    def __init__(self, factor, shapein=None, shapeout=None, **keywords):
-
-        factor = int(factor)
-        if shapein is not None:
-            shapeout_expected = self.reshapein(shapein)
-            if shapeout and tointtuple(shapeout) != shapeout_expected:
-                raise ValueError('The output shape is incompatible with the com'
-                                 'pression factor.')
-
-        self.factor = factor
-        Operator.__init__(self, shapein=shapein, dtype=var.FLOAT_DTYPE,
-                          **keywords)
+        print 'ici'
+        self.factor = int(factor)
+        Operator.__init__(self, shapein=shapein, shapeout=shapeout, **keywords)
 
     def reshapein(self, shapein):
         if shapein is None:
@@ -299,9 +207,18 @@ class CompressionAverage(Operator):
     def reshapeout(self, shapeout):
         if shapeout is None:
             return None
-        shapein = list(shapeout)
-        shapein[-1] = shapein[-1] * self.factor
-        return shapein
+        shapeout = list(shapeout)
+        shapeout[-1] = shapeout[-1] * self.factor
+        return  shapeout
+
+    def __str__(self):
+        return super(Compression, self).__str__() + ' (x{})'.format(self.factor)
+
+
+class CompressionAverage(Compression):
+    """
+    Compress the input signal by averaging blocks of specified size.
+    """
 
     def __str__(self):
         return super(CompressionAverage, self).__str__() + ' (x{})'.format(self.factor)
@@ -315,31 +232,27 @@ class CompressionAverage(Operator):
     def transpose(self, input, output):
         input_, ishape, istride = _ravel_strided(input)
         output_, oshape, ostride = _ravel_strided(output)
-        tmf.compression_average_transpose(input_, ishape[0], ishape[1], istride,
-            output_, oshape[1], ostride, self.factor)
+        tmf.compression_average_transpose(input_, ishape[0], ishape[1],
+            istride, output_, oshape[1], ostride, self.factor)
 
 
-class DownSampling(Compression_old):
+class DownSampling(Compression):
     """
     Downsample the input signal by picking up one sample out of a number
     specified by the compression factor
     """
 
     def direct(self, input, output):
-        if self.nsamplesout is None:
-            nsamples = (input.shape[-1],)
-        else:
-            nsamples = self.nsamplesin
-        tmf.downsampling_direct(input.T, output.T,
-            np.array(nsamples, np.int32), np.array(self.factor, np.int32))
+        input_, ishape, istride = _ravel_strided(input)
+        output_, oshape, ostride = _ravel_strided(output)
+        tmf.downsampling_direct(input_, ishape[0], ishape[1], istride, output_,
+            oshape[1], ostride, self.factor)
 
     def transpose(self, input, output):
-        if self.nsamplesin is None:
-            nsamples = (input.shape[-1],)
-        else:
-            nsamples = self.nsamplesout
-        tmf.downsampling_transpose(input.T, output.T,
-            np.array(nsamples, np.int32), np.array(self.factor, np.int32))
+        input_, ishape, istride = _ravel_strided(input)
+        output_, oshape, ostride = _ravel_strided(output)
+        tmf.downsampling_transpose(input_, ishape[0], ishape[1], istride,
+            output_, oshape[1], ostride, self.factor)
       
 
 @real
@@ -351,9 +264,9 @@ class InvNtt(Operator):
         length = np.asarray(2**np.ceil(np.log2(np.array(nsamples) + 200)), int)
         invntt = cls._get_diagonal(length, obs.get_filter_uncorrelated(
                                     filename=filename, **keywords))
-        fft = FftHalfComplex(tuple(length), nsamples=tuple(length))
+        fft = FftHalfComplex(tuple(length), partition=tuple(length))
         padding = Padding(left=invntt.ncorrelations, right=length - nsamples - \
-                          invntt.ncorrelations, nsamples=nsamples)
+                          invntt.ncorrelations, partition=nsamples)
         return padding, fft, invntt
         return padding.T * fft.T * invntt * fft * padding
 
@@ -386,7 +299,7 @@ class SqrtInvNtt(InvNtt):
         np.sqrt(data, data)
 
 
-@partitioned_last_axis
+@partitioned('left', 'right', axis=-1)
 @real
 @linear
 class Padding(Operator):
@@ -1001,7 +914,7 @@ class FftHalfComplex_old(Operator):
         return shape
 
 
-@partitioned_last_axis
+@partitioned('size', axis=-1)
 @real
 @orthogonal
 class FftHalfComplex(Operator):
@@ -1128,19 +1041,6 @@ class InterpolationLinear(Operator):
 
     def transpose(self, input, output):
         raise NotImplementedError()
-
-@partitioned_last_axis
-class myOp(Operator):
-    """ Bla1. """
-    def __init__(self, value, **keywords):
-        """ Bla2. """
-        self.value=value
-        Operator.__init__(self, **keywords)
-    def direct(self, input, output):
-        output[:] = self.value * input
-
-    def __str__(self):
-        return self.__class__.__name__ + '(value={})'.format(self.value)
 
 def _ravel_strided(array):
     # array_ = array.reshape((-1,array.shape[-1]))
