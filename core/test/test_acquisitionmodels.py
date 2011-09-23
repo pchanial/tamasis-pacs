@@ -108,7 +108,7 @@ def test_downsampling2():
     a = CompressionAverage(3)
     assert_almost_equal(a.todense(9).T, a.T.todense(3))
 
-def test_padding():
+def test_padding1():
     padding = Padding(left=1,right=20)
     a = np.arange(10*15).reshape((10,15))
     b = padding(a)
@@ -116,12 +116,13 @@ def test_padding():
     assert_array_equal(b[:,0:1], 0)
     assert_array_equal(b[:,1:16], a)
     assert_array_equal(b[:,16:], 0)
+    shapein = (10,15)
+    shapeout = (10,15+1+20)
+    assert_array_equal(padding.T.todense(shapeout), padding.todense(shapein).T)
 
-    c = padding.T(b)
-    assert c.shape == a.shape
-    assert_array_equal(c, a)
-
+def test_padding2():
     padding = Padding(left=1,right=(4,20), partition=(12,3))
+    a = np.arange(10*15).reshape((10,15))
     b = padding(a)
     assert b.shape == (10,41)
     assert_array_equal(b[:,0:1], 0)
@@ -130,11 +131,9 @@ def test_padding():
     assert_array_equal(b[:,17:18], 0)
     assert_array_equal(b[:,18:21], a[:,12:])
     assert_array_equal(b[:,21:], 0)
-
-    c = padding.T(b)
-    assert c.shape == a.shape
-    assert_array_equal(c, a)
-
+    shapein = (10,15)
+    shapeout = (10,(12+1+4)+(3+1+20))
+    assert_array_equal(padding.T.todense(shapeout), padding.todense(shapein).T)
 
 def test_response_truncated_exponential():
     r = ResponseTruncatedExponential(1., shapein=(1,10))

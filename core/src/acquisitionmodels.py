@@ -305,63 +305,39 @@ class SqrtInvNtt(InvNtt):
 class Padding(Operator):
     """Pads before and after along the fast dimension of an ndarray."""
 
-    def __init__(self, left=0, right=0., shapein=None, **keywords):
-        left = np.array(left, ndmin=1, dtype=int)
-        right = np.array(right, ndmin=1, dtype=int)
-        if np.any(left < 0):
+    def __init__(self, left=0, right=0., **keywords):
+        left = int(left)
+        right = int(right)
+        if left < 0:
             raise ValueError('Left padding is not positive.')
-        if np.any(right < 0):
+        if right < 0:
             raise ValueError('Right padding is not positive.')
-        if left.ndim != 1 or right.ndim != 1:
-            raise ValueError('Padding must be scalar or a vector.')
-        if right.size > 1 and left.size > 1 and right.size != left.size:
-            raise ValueError('Invalid left and right padding.')
-
-        self.left  = tuple(left)
-        if left.size == 1:
-            self.left = right.size * self.left
-        self.right = tuple(right)
-        if right.size == 1:
-            self.right = left.size * self.right
-        Operator.__init__(self, shapein=shapein, **keywords)
+        self.left = left
+        self.right = right
+        Operator.__init__(self, **keywords)        
    
     def direct(self, input, output):
-        dest = 0
-        dest_padded = 0
-        for islice in range(1):
-            nsamples = input.shape[-1]
-            left = self.left[islice if len(self.left) > 1 else 0]
-            output[...,dest_padded:dest_padded+left] = 0
-            output[...,dest_padded+left:dest_padded+left+nsamples] = \
-                input[...,dest:dest+nsamples]
-            output[...,dest_padded+left+nsamples:dest_padded+ \
-                output.shape[-1]] = 0
-            dest += nsamples
-            dest_padded += output.shape[-1]
+        right = -self.right if self.right != 0 else output.shape[-1]
+        output[...,:self.left] = 0
+        output[...,self.left:right] = input
+        output[...,right:] = 0
    
     def transpose(self, input, output):
-        dest = 0
-        dest_padded = 0
-        for islice in range(1):
-            nsamples = output.shape[-1]
-            left  = self.left [islice if len(self.left)  > 1 else 0]
-            output[...,dest:dest+nsamples] = \
-                input[...,dest_padded+left:dest_padded+left+nsamples]
-            dest += nsamples
-            dest_padded += input.shape[-1]
+        right = -self.right if self.right != 0 else input.shape[-1]
+        output[...] = input[...,self.left:right]
 
     def reshapein(self, shapein):
         if shapein is None:
             return None
         shapeout = list(shapein)
-        shapeout[-1] += self.left[0] + self.right[0]
+        shapeout[-1] += self.left + self.right
         return shapeout
        
     def reshapeout(self, shapeout):
         if shapeout is None:
             return None
         shapein = list(shapeout)
-        shapein[-1] -= self.left[0] + self.right[0]
+        shapein[-1] -= self.left + self.right
         return shapein
 
 
@@ -372,7 +348,7 @@ class Padding(Operator):
 @linear
 class Projection(Operator):
     """
-    This class handles  operations by the pointing matrix
+    This class handles operations by the pointing matrix
 
     The input observation has the following required attributes/methods:
         - nfinesamples
@@ -862,56 +838,6 @@ class Fft(Operator):
         self._in[:] = input
         fftw3.execute(self.backward_plan)
         output[:] = self._out / self.n
-
-
-@real
-@orthogonal
-class FftHalfComplex_old(Operator):
-    """
-    Performs real-to-half-complex fft
-    """
-
-    def __init__(self, nsamples, **keywords):
-        Operator.__init__(self, **keywords)
-        self.nsamples = tuple(np.array(nsamples, ndmin=1, dtype=int))
-        self.forward_plan = np.empty(len(self.nsamples), dtype=int)
-        self.backward_plan = np.empty(len(self.nsamples), dtype=int)
-        for i, n in enumerate(self.nsamples):
-            tarray = np.empty(n, dtype=var.FLOAT_DTYPE)
-            farray = np.empty(n, dtype=var.FLOAT_DTYPE)
-            self.forward_plan[i] = \
-                fftw3.Plan(tarray, farray, direction='forward',
-                           flags=['measure'], realtypes=['halfcomplex r2c'],
-                           nthreads=1)._get_parameter()
-            self.backward_plan[i] = \
-                fftw3.Plan(farray, tarray, direction='backward',
-                           flags=['measure'], realtypes=['halfcomplex c2r'],
-                           nthreads=1)._get_parameter()
-
-    def direct(self, input, output):
-        if not self.same_data(input, output):
-            output[:] = input
-        output_ = np.reshape(output, (-1, input.shape[-1]))
-        tmf.fft_plan(output_.T, np.array(self.nsamples), self.forward_plan)
-
-    def transpose(self, input, output):
-        if not self.same_data(input, output):
-            output[:] = input
-        output_ = np.reshape(output, (-1, input.shape[-1]))
-        tmf.fft_plan(output_.T, np.array(self.nsamples), self.backward_plan)
-        dest = 0
-        for n in self.nsamples:
-            output_[:,dest:dest+n] /= n
-            dest += n
-
-    def validate_shapein(self, shape):
-        if shape is None:
-            return None
-        nsamples = shape[-1]
-        if shape[-1] != sum(self.nsamples):
-            raise ValueError("Invalid FFT size '" + str(nsamples) + \
-                                  "' instead of '"+str(sum(self.nsamples))+"'.")
-        return shape
 
 
 @partitioned('size', axis=-1)
