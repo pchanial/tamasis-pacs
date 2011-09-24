@@ -1,26 +1,23 @@
 import numpy as np
-from tamasis.numpyutils import *
+from tamasis.numpyutils import all_eq, any_neq, minmax
 
-class TestFailure(Exception):
-    def __init__(self, *args):
-        if args is not None:
-            print('Test failure:\n' + ',\n'.join([repr(a) for a in args]))
-        raise Exception()
+def test_any_neq1():
+    assert all_eq(1, 1+1.e-15)
+    assert all_eq([1], [1+1.e-15])
+    assert any_neq(1, 1+1.e-13)
+    assert any_neq([1], [1+1.e-13])
+    assert all_eq(1, np.asarray(1+1.e-8, dtype='float32'))
+    assert all_eq([1], [np.asarray(1+1.e-8, dtype='float32')])
+    assert any_neq(1, np.asarray(1+1.e-6, dtype='float32'))
+    assert any_neq([1], [np.asarray(1+1.e-6, dtype='float32')])
 
-NaN = np.nan
-if any_neq(1, 1+1.e-15): raise TestFailure()
-if any_neq([1], [1+1.e-15]): raise TestFailure()
-if not any_neq(1, 1+1.e-13): raise TestFailure()
-if not any_neq([1], [1+1.e-13]): raise TestFailure()
-if any_neq(1, np.asarray(1+1.e-8, dtype='float32')): raise TestFailure()
-if any_neq([1], [np.asarray(1+1.e-8, dtype='float32')]): raise TestFailure()
-if not any_neq(1, np.asarray(1+1.e-6, dtype='float32')): raise TestFailure()
-if not any_neq([1], [np.asarray(1+1.e-6, dtype='float32')]): raise TestFailure()
-if any_neq(NaN, NaN): raise TestFailure()
-if any_neq([NaN], [NaN]): raise TestFailure()
-if any_neq([NaN,1], [NaN,1]): raise TestFailure()
-if not any_neq([NaN,1,NaN], [NaN,1,3]): raise TestFailure()
-if any_neq(minmax([NaN, 1., 4., NaN, 10.]), [1., 10.]): raise TestFailure()
+def test_any_neq2():
+    NaN = np.nan
+    assert all_eq(NaN, NaN)
+    assert all_eq([NaN], [NaN])
+    assert all_eq([NaN,1], [NaN,1])
+    assert any_neq([NaN,1,NaN], [NaN,1,3])
+    assert all_eq(minmax([NaN, 1., 4., NaN, 10.]), [1., 10.])
 
 class A(np.ndarray):
     __slots__ = ('__dict__', 'info1')
@@ -51,24 +48,27 @@ array(data=%s,
 
 dtypes=(np.bool, np.int8, np.int16, np.int32, np.int64, np.float32, np.float64, np.complex64, np.complex128)
 
-for dtype in dtypes:
-    arr = np.ones((2,3), dtype=dtype)
-    a = A(arr, info1='1', info2=True)
-    b1 = A(arr, info1='1', info2=True)
-    b1[0,1] = 0
-    b2 = A(arr, info1='2', info2=True)
-    b3 = A(arr, info1='1', info2=False)
-
-    for b in (b1, b2, b3):
-        if not any_neq(a, b): raise TestFailure(dtype, a, b)
-    b = a.copy()
-    if any_neq(a,b): raise TestFailure(dtype, a, b)
-
-    a.info3 = b
-    b1 = a.copy(); b1.info3[0,1] = 0
-    b2 = a.copy(); b2.info3.info1 = '2'
-    b3 = a.copy(); b3.info3.info2 = False
-    for b in (b1, b2, b3):
-        if not any_neq(a, b): raise TestFailure(dtype, a, b)
-    b = a.copy()
-    if any_neq(a,b): raise TestFailure(dtype, a, b)
+def test_any_neq3():
+    for dtype in dtypes:
+        arr = np.ones((2,3), dtype=dtype)
+        a = A(arr, info1='1', info2=True)
+        b1 = A(arr, info1='1', info2=True)
+        b1[0,1] = 0
+        b2 = A(arr, info1='2', info2=True)
+        b3 = A(arr, info1='1', info2=False)
+        def func1(a, b):
+            assert any_neq(a, b)
+        for b in (b1, b2, b3):
+            yield func1, a, b
+        b = a.copy()
+        assert all_eq(a,b)
+        a.info3 = b
+        b1 = a.copy(); b1.info3[0,1] = 0
+        b2 = a.copy(); b2.info3.info1 = '2'
+        b3 = a.copy(); b3.info3.info2 = False
+        def func2(a, b):
+            assert any_neq(a, b)
+        for b in (b1, b2, b3):
+            yield func2, a, b
+        b = a.copy()
+        assert all_eq(a,b)
