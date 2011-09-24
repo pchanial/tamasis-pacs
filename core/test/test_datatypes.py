@@ -3,146 +3,20 @@ import glob
 import os
 import pickle
 import tamasis
+from numpy.testing import assert_array_equal
 from tamasis import Quantity, FitsArray, Map, Tod, create_fitsheader
-from tamasis.numpyutils import any_neq, get_attributes
+from tamasis.numpyutils import all_eq, get_attributes
 from uuid import uuid1
 
 tamasis.var.verbose = True
 filename = 'tamasistest-'+str(uuid1())
-deftype = tamasis.var.FLOAT_DTYPE.type
+default_type = tamasis.var.FLOAT_DTYPE.type
+types = [Quantity, FitsArray, Map, Tod]
 
-def test_cleanup():
-    files = glob.glob(filename+'*')
-    for file in files:
+def teardown():
+    for file in glob.glob(filename+'*'):
         os.remove(file)
 
-class TestFailure(Exception):
-    test_cleanup()
-
-# check copies
-d = np.array([1,2])
-u = 'Jy'
-du = {'Jy':Quantity(1,'Yj')}
-h = create_fitsheader(fromdata=d)
-h.update('myk', 10)
-o = 'upper'
-n = (0, 2)
-m = np.array([True, False])
-c = np.array([1., 2.])
-e = np.array([3., 4.])
-
-a = Quantity(d, u, du)
-b = FitsArray(a, header=h)
-c = Map(b, origin=o, error=e, coverage=c)
-d = Tod(b, mask=m)
-objs = [a, b, c, d]
-for obj in objs:
-    obj2 = obj.__class__(obj, copy=False)
-    if id(obj) != id(obj2): raise TestFailure()
-
-for obj in objs:
-    obj2 = obj.__class__(obj, copy=True)
-    for k in get_attributes(obj):
-        if (k in ['_unit', '_derived_units', 'comm', 'shape_global', 'origin'])\
-            is not (id(getattr(obj, k)) == id(getattr(obj2, k))):
-            print k, id(getattr(obj, k)), id(getattr(obj2, k))
-
-b = FitsArray(a, unit=u, derived_units=du, header=h)
-c = Map(a, unit=u, derived_units=du, header=h, origin=o, error=e, coverage=c)
-d = Tod(a, unit=u, derived_units=du, header=h, mask=m)
-
-objs = [b, c, d]
-for obj in objs:
-    obj2 = obj.__class__(obj, copy=False)
-    if id(obj) != id(obj2): raise TestFailure()
-
-for obj in objs:
-    obj2 = obj.__class__(obj, copy=True)
-    for k in get_attributes(obj):
-        if (k in ['_unit', '_derived_units', 'comm', 'shape_global', 'origin'])\
-            is not (id(getattr(obj, k)) == id(getattr(obj2, k))):
-            print k, id(getattr(obj, k)), id(getattr(obj2, k))
-
-tod = Tod((2,))
-tod = Tod([2])
-tod = Tod(np.array([2]))
-tod = Tod(2)
-tod = Tod(np.array(2))
-tod = Tod((2,))
-tod = Tod([2])
-
-a = np.ones((10,32))
-tod = a.view(Tod)
-assert hasattr(tod, 'mask')
-
-tod2 = tod + 1
-assert isinstance(tod2, Tod)
-
-a = Tod([10,20])
-if a.dtype.type != deftype: raise TestFailure()
-
-a = Tod([10,20], mask=[True,False])
-b = Tod(a, copy=True)
-if id(a.mask) == id(b.mask): raise TestFailure()
-
-b = Tod(a, copy=False)
-if id(a) != id(b): raise TestFailure()
-
-othertype = np.float32 if deftype is not np.float32 else np.float64
-b = Tod(a, dtype=othertype, copy=False)
-if id(a) == id(b): raise TestFailure()
-if id(a.mask) != id(b.mask): raise TestFailure()
-
-header = create_fitsheader((10,20))
-a = FitsArray([10,20], header=header, unit='m')
-b = Tod(a)
-if id(a.header) == id(b.header): raise TestFailure()
-if id(a.unit) != id(b.unit): raise TestFailure()
-
-b = Tod(a, copy=False)
-if id(a.header) != id(b.header): raise TestFailure()
-if id(a.unit) != id(b.unit): raise TestFailure()
-
-a = Tod([20,10], header=header, unit='m')
-b =  FitsArray(a)
-if id(a.header) == id(b.header): raise TestFailure()
-if id(a.unit) != id(b.unit): raise TestFailure()
-
-b = FitsArray(a, copy=False)
-if id(a.header) != id(b.header): raise TestFailure()
-if id(a.unit) != id(b.unit): raise TestFailure()
-
-b = FitsArray(a, subok=True)
-if id(a) == id(b): raise TestFailure()
-if id(a.header) == id(b.header): raise TestFailure()
-if id(a.unit) != id(b.unit): raise TestFailure()
-
-b = FitsArray(a, copy=False, subok=True)
-if id(a) != id(b): raise TestFailure()
-
-a = Tod([])
-if a.shape != (0,): raise TestFailure()
-if a.size != 0: raise TestFailure()
-
-a = Tod(1)
-if a.shape != (): raise TestFailure()
-if a.size != 1: raise TestFailure()
-
-m = np.ndarray((10,2,10), dtype='int8')
-m.flat = np.random.random(m.size)*2
-a = Tod(np.random.random_sample((10,2,10)), mask=m, unit='Jy')
-a.save(filename+'_tod.fits')
-b = Tod(filename+'_tod.fits')
-if np.any(a != b): raise TestFailure()
-
-class MAP(Map):
-    def __init__(self, data):
-        self.info = 'info'
-
-m = MAP(np.ones(3))
-if get_attributes(m) != ['_derived_units', '_header', '_unit','comm', 'coverage', 'error', 'info', 'origin', 'shape_global']: raise TestFailure()
-
-# test pickling
 a = np.ones((4,3))
 a[1,2] = 4
 q = Quantity(a, unit='myunit', derived_units={'myunit': Quantity(2., 'Jy')})
@@ -151,20 +25,146 @@ m = Map(f, origin='upper', error=a*2, coverage=a*3)
 mask = np.zeros((4,3), np.bool8)
 mask[0,2] = True
 t = Tod(f, mask=mask)
+del mask
 
-objs = (q,f,m,t)
-for v in range(pickle.HIGHEST_PROTOCOL):
-    for o in objs:
+def test_copy_false_subok_true():
+    def func(obj1, t):
+        obj2 = t(obj1, copy=False, subok=True)
+        if isinstance(obj, t):
+            assert obj1 is obj2
+        else:
+            assert obj1 is not obj2
+            assert all_eq(obj1, obj2)
+    for obj in [q, f, m, t]:
+        for ty in types:
+            yield func, obj, ty
+
+def test_copy_false_subok_false():
+    def func(obj1, t):
+        obj2 = t(obj1, copy=False, subok=False)
+        if type(obj1) is t:
+            assert obj1 is obj2
+        else:
+            assert obj1 is not obj2
+            assert all_eq(obj1, obj2)
+    for obj in [q, f, m, t]:
+        for ty in types:
+            yield func, obj, ty
+
+def test_copy_true_subok_true():
+    def func(obj1, ty):
+        obj2 = ty(obj1, copy=True, subok=True)
+        assert obj1 is not obj2
+        assert all_eq(obj1, obj2)
+        if isinstance(obj1, ty):
+            assert type(obj2) is type(obj1)
+        else:
+            assert type(obj2) is ty
+    for obj1 in [q, f, m, t]:
+        for ty in types:
+            yield func, obj1, ty
+
+def test_copy_true_subok_false():
+    def func(obj1, ty):
+        obj2 = ty(obj1, copy=True, subok=False)
+        assert obj1 is not obj2
+        assert all_eq(obj1, obj2)
+        assert type(obj2) is ty
+    for obj1 in [q, f, m, t]:
+        for ty in types:
+            yield func, obj1, ty
+
+def test_input1():
+    def func(t, i):
+        d = t(i)
+        assert d.shape == (1,)
+        assert d[0] == 2
+    for t in types:
+        for i in [(2,), [2], np.array([2])]:
+            yield func, t, i
+
+def test_input2():
+    def func(t, i):
+        d = t(i)
+        assert d.shape == ()
+        assert d[...] == 2
+    for t in types:
+        for i in [2, np.array(2)]:
+            yield func, t, i
+
+def test_input3():
+    def func(t):
+        d = t([])
+        assert d.shape == (0,)
+    for t in types:
+        yield func, t
+
+def test_view():
+    array = np.ones((10,32))
+    aq = ['unit', 'derived_units']
+    af = aq + ['header']
+    attrs = [aq, af, af + ['coverage', 'error', 'origin'], af + ['mask']]
+    def func(t, attr):
+        d = array.view(t)
+        for a in attr:
+            assert hasattr(d, a)
+    for t, attr in zip(types, attrs):
+        yield func, t, attr
+
+def test_operation():
+    def func(t):
+        a = t.ones(10)
+        a2 = a + 1
+        assert type(a2) is t
+    for t in types[1:]:
+        yield func, t
+
+def test_default_dtype():
+    def func(t):
+        a = t([10,20])
+        assert a.dtype == default_type
+    for t in types:
+        yield func, t
+
+def test_dtype():
+    def func(t, dtype):
+        d = t(a, dtype=dtype, copy=False)
+        assert d.dtype == dtype
+    for t in types:
+        for dtype in [np.float32, np.float64, np.complex64, np.complex128]:
+            yield func, t, dtype
+
+def test_tod_save():
+    m = np.ndarray((10,2,10), dtype='int8')
+    m.flat = np.random.random(m.size)*2
+    a = Tod(np.random.random_sample((10,2,10)), mask=m, unit='Jy')
+    a.save(filename+'_tod.fits')
+    b = Tod(filename+'_tod.fits')
+    assert_array_equal(a, b)
+
+def test_map():
+    class MAP(Map):
+        def __init__(self, data):
+            self.info = 'info'
+    m = MAP(np.ones(3))
+    assert get_attributes(m) == ['_derived_units', '_header', '_unit','comm', 'coverage', 'error',
+                                 'info', 'origin', 'shape_global']
+
+def test_pickling():
+    objs = (q,f,m,t)
+    def func1(v, o):
         o2 = pickle.loads(pickle.dumps(o,v))
-        if any_neq(o, o2): raise TestFailure()
-
-for o in objs[1:]:
-    test_cleanup()
-    o.save(filename+'_obj.fits')
-    o2 = type(o)(filename+'_obj.fits')
-    if any_neq(o, o2):
+        assert all_eq(o, o2)
+    for v in range(pickle.HIGHEST_PROTOCOL):
+        for o in objs:
+            yield func1, v, o
+    def func2(o):
+        o.save(filename+'_obj.fits')
+        o2 = type(o)(filename+'_obj.fits')
+        if all_eq(o, o2):
+            return
         print 'o', repr(o)
         print 'o2', repr(o2)
-        raise Exception()
-
-test_cleanup()
+        assert False
+    for o in objs[1:]:
+        yield func2, o
