@@ -9,7 +9,10 @@ from . import var
 
 np.seterr(all='ignore')
 
-__all__ = [ 'any_neq', 'minmax' ]
+__all__ = [ 'minmax' ]
+
+def all_eq(a, b, rtol=None, atol=0.):
+    return not any_neq(a, b, rtol=rtol, atol=atol)
 
 def any_neq(a, b, rtol=None, atol=0.):
     """
