@@ -1,10 +1,12 @@
 import numpy as np
+import operators
 import os
 import tamasis
 from tamasis import *
 
 class TestFailure(Exception): pass
 
+operators.core.verbose = False
 tamasis.var.verbose = True
 profile = None#'test_ls.png'
 data_dir = os.path.dirname(__file__) + '/data/'
