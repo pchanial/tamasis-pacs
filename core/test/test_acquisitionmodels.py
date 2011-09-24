@@ -1,10 +1,9 @@
-import nose
 import numpy as np
 
 from operators import Operator, PartitionOperator
 from operators.utils import isscalar
 from numpy.testing import assert_array_equal, assert_almost_equal, assert_raises
-from tamasis.acquisitionmodels import CompressionAverage, DownSampling, Padding, ResponseTruncatedExponential, partitioned
+from tamasis.acquisitionmodels import CompressionAverage, DownSampling, FftHalfComplex, Padding, ResponseTruncatedExponential, partitioned
 
 
 def test_partitioning():
@@ -146,6 +145,30 @@ def test_response_truncated_exponential():
     assert_almost_equal(b[0,:], [np.exp(-t/1.) for t in range(0,10)])
     assert_almost_equal(r.T.todense(), r.todense().T)
 
+def test_ffthalfcomplex1():
+    n = 100
+    fft = FftHalfComplex(n)
+    a = np.random.random(n)+1
+    b = fft.T(fft(a))
+    assert np.allclose(a, b)
+    a = np.random.random((3,n))+1
+    b = fft.T(fft(a))
+    assert np.allclose(a, b)
 
-if __name__ == "__main__":
-    nose.run(argv=['', __file__])
+def test_ffthalfcomplex2():
+    nsamples = 1000
+    fft = FftHalfComplex(nsamples)
+    a = np.random.random((10,nsamples))+1
+    b = fft.T(fft(a))
+    assert np.allclose(a, b)
+
+def test_ffthalfcomplex3():
+    partition = (100,300,5,1000-100-300-5)
+    ffts = [FftHalfComplex(p) for p in partition]
+    fft = PartitionOperator(ffts, partitionin=partition, axisin=-1)
+    a = np.random.random((10,np.sum(partition)))+1
+    b = fft(a)
+    b_ = np.hstack([ffts[0](a[:,:100]), ffts[1](a[:,100:400]), ffts[2](a[:,400:405]), ffts[3](a[:,405:])])
+    assert np.allclose(b, b_)
+    b = fft.T(fft(a))
+    assert np.allclose(a, b)

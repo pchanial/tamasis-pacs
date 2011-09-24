@@ -474,29 +474,26 @@ end subroutine fft_filter_uncorrelated2
 
 !-----------------------------------------------------------------------------------------------------------------------------------
 
+subroutine fft_plan(input, ninputs, ndetectors, isize, istride, output, noutputs, osize, ostride, plan)
 
-subroutine fft_plan(data, nsamples, nslices, plan, nsamples_tot, ndetectors)
-
-    use module_filtering, only : fft_tod
-    use module_tamasis,   only : p
+    use module_tamasis,     only : p
     implicit none
 
-    real(p), intent(inout) :: data(nsamples_tot,ndetectors)
-    integer*8, intent(in)  :: nsamples(nslices)
-    integer, intent(in)    :: nslices
-    integer*8, intent(in)  :: plan(nslices)
-    integer, intent(in)    :: nsamples_tot
-    integer, intent(in)    :: ndetectors
+    include 'fftw3.f'
 
-    integer                :: islice, dest
+    real(p), intent(in)    :: input(ninputs)
+    real(p), intent(inout) :: output(noutputs)
+    integer, intent(in)    :: ninputs, ndetectors, isize, istride
+    integer, intent(in)    :: noutputs, osize, ostride
+    integer*8, intent(in)  :: plan
 
-    dest = 1
-    do islice = 1, nslices
+    integer :: i
 
-        call fft_tod(plan(islice), data(dest:dest+nsamples(islice)-1,:))
-        dest = dest + nsamples(islice)
-
+    !$omp parallel do
+    do i = 1, ndetectors
+        call dfftw_execute_r2r(plan, input((i-1)*istride+1:(i-1)*istride+isize), output((i-1)*ostride+1:(i-1)*ostride+osize))
     end do
+    !$omp end parallel do
 
 end subroutine fft_plan
 

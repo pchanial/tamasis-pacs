@@ -26,36 +26,26 @@ from .utils import diff, diffT, diffTdiff, shift
 from .mpiutils import split_shape, split_work
 
 __all__ = [
+    'CompressionAverage',
+    'Convolution',
     'DistributionGlobal',
     'DistributionLocal',
-    'RollOperator',
-    'Convolution',
-    'Diagonal',
     'DdTdd',
     'DiscreteDifference',
+    'DownSampling',
     'Fft',
     'FftHalfComplex',
-    'InterpolationLinear',
-    'ShiftOperator',
-    'CompressionAverage',
-    'DownSampling',
     'InvNtt',
+    'Masking',
+    'Packing',
     'Padding',
     'Projection',
     'ResponseTruncatedExponential',
+    'RollOperator',
+    'ShiftOperator',
     'SqrtInvNtt',
-    'DistributionGlobal',
-    'DistributionLocal',
-    'Convolution',
-    'Fft',
-    'FftHalfComplex',
-    'InterpolationLinear',
-    'Masking',
-    'Packing',
     'Unpacking',
 ]
-
-Diagonal = DiagonalOperator
 
 def partitioned(*partition_args, **keywords):
     """
@@ -189,7 +179,6 @@ class Compression(Operator):
         return super(Compression, cls).__new__(cls, factor, shapein, **keywords)
 
     def __init__(self, factor, shapein=None, shapeout=None, **keywords):
-        print 'ici'
         self.factor = int(factor)
         Operator.__init__(self, shapein=shapein, shapeout=shapeout, **keywords)
 
@@ -840,7 +829,6 @@ class Fft(Operator):
         output[:] = self._out / self.n
 
 
-@partitioned('size', axis=-1)
 @real
 @orthogonal
 class FftHalfComplex(Operator):
@@ -848,48 +836,32 @@ class FftHalfComplex(Operator):
     Performs real-to-half-complex fft
     """
 
-    def __init__(self, size, **keywords):
+    def __init__(self, size, fftw_flags=['measure', 'unaligned'], **keywords):
+        size = int(size)
+        tarray = np.empty(size, dtype=var.FLOAT_DTYPE)
+        farray = np.empty(size, dtype=var.FLOAT_DTYPE)
+        forward_plan = fftw3.Plan(tarray, farray, direction='forward', flags= \
+            fftw_flags, realtypes=['halfcomplex r2c'], nthreads=1)
+        backward_plan = fftw3.Plan(tarray, farray, direction='backward', flags=\
+            fftw_flags, realtypes=['halfcomplex c2r'], nthreads=1)
+        self.size = size
+        self.fftw_flags = fftw_flags
+        self.forward_plan = forward_plan._get_parameter()
+        self.backward_plan = backward_plan._get_parameter()
         Operator.__init__(self, **keywords)
-        self.nsamples = tointtuple(size)
-        self.forward_plan = np.empty(len(self.nsamples), dtype=int)
-        self.backward_plan = np.empty(len(self.nsamples), dtype=int)
-        for i, n in enumerate(self.nsamples):
-            tarray = np.empty(n, dtype=var.FLOAT_DTYPE)
-            farray = np.empty(n, dtype=var.FLOAT_DTYPE)
-            self.forward_plan[i] = \
-                fftw3.Plan(tarray, farray, direction='forward',
-                           flags=['measure'], realtypes=['halfcomplex r2c'],
-                           nthreads=1)._get_parameter()
-            self.backward_plan[i] = \
-                fftw3.Plan(farray, tarray, direction='backward',
-                           flags=['measure'], realtypes=['halfcomplex c2r'],
-                           nthreads=1)._get_parameter()
 
     def direct(self, input, output):
-        output_ = np.ascontiguousarray(input).reshape((-1,input.shape[-1]))
-        tmf.fft_plan(output_.T, np.array(self.nsamples), self.forward_plan)
-        output[:] = output_
+        input_, ishape, istride = _ravel_strided(input)
+        output_, oshape, ostride = _ravel_strided(output)
+        tmf.fft_plan(input_, ishape[0], ishape[1], istride, output_, oshape[1],
+                     ostride, self.forward_plan)
 
     def transpose(self, input, output):
-        output_ = np.ascontiguousarray(input).reshape((-1,input.shape[-1]))
-        tmf.fft_plan(output_.T, np.array(self.nsamples), self.backward_plan)
-        dest = 0
-        for n in self.nsamples:
-            output_[:,dest:dest+n] /= n
-            dest += n
-        output[:] = output_
-
-    def _reshapein(self, shape):
-        if shape is None:
-            return None
-        nsamples = shape[-1]
-        if shape[-1] != sum(self.nsamples):
-            raise ValueError("Invalid FFT size '" + str(nsamples) + \
-                             "' instead of '"+str(sum(self.nsamples))+"'.")
-        return shape
-
-    def __str__(self):
-        return self.__class__.__name__ + '(size={})'.format(self.nsamples[0])
+        input_, ishape, istride = _ravel_strided(input)
+        output_, oshape, ostride = _ravel_strided(output)
+        tmf.fft_plan(input_, ishape[0], ishape[1], istride, output_, oshape[1],
+                     ostride, self.backward_plan)
+        output /= self.size
 
 
 class Convolution(Operator):
@@ -950,41 +922,29 @@ class Convolution(Operator):
         self._in[:] = input
         fftw3.execute(self.forward_plan)
         # avoid temp array in 'self._out *= self.kernel.conjugate()'
-        opi.multiply_conjugate_complex(self._out.ravel(), self.kernel.ravel(),
+        tmf.multiply_conjugate_complex(self._out.ravel(), self.kernel.ravel(),
                                        self._out.ravel())
         fftw3.execute(self.backward_plan)
         output[:] = self._in
 
-
-class InterpolationLinear(Operator):
-
-    def __init__(self, mask, **keywords):
-        Operator.__init__(self, attrin={'mask':mask}, **keywords)
-        self.mask = mask
-
-    def direct(self, input, output):
-        output[:] = interpolate_linear(output)
-
-    def transpose(self, input, output):
-        raise NotImplementedError()
 
 def _ravel_strided(array):
     # array_ = array.reshape((-1,array.shape[-1]))
     #XXX bug in numpy 1.5.1: reshape with -1 leads to bogus strides
     array_ = array.reshape((np.prod(array.shape[:-1]),array.shape[-1]))
     n2, n1 = array_.shape
-    if id(array_.base) != id(array):
-        raise RuntimeError()
-    if not array_[0,:].flags.c_contiguous:
-        raise RuntimeError()
     if array_.flags.c_contiguous:
         return array_.ravel(), array_.shape, n1
+    if not array_[0,:].flags.c_contiguous:
+        raise RuntimeError()
     s2, s1 = array_.strides
-    print 's2,s1', s2, s1
     s2 //= s1
+    base = array
+    while not base.flags.c_contiguous:
+        base = base.base
     start = (array.__array_interface__['data'][0] - \
-             array.base.__array_interface__['data'][0]) // s1
+             base.__array_interface__['data'][0]) // s1
     stop = start + (n2 - 1) * s2 + n1
-    flat = array.base.ravel()[start:stop]
+    flat = base.ravel()[start:stop]
     return flat, array_.shape, s2
     
