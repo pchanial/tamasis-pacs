@@ -19,6 +19,7 @@ except:
 
 from functools import reduce
 from mpi4py import MPI
+from operators.utils import tointtuple
 
 from .wcsutils import create_fitsheader
 from .mpiutils import read_fits, write_fits, split_shape, split_work
@@ -218,6 +219,7 @@ class FitsArray(DistributedArray, Quantity):
     @staticmethod
     def empty(shape, header=None, unit=None, derived_units=None, dtype=None,
               order=None, comm=MPI.COMM_SELF):
+        shape = tointtuple(shape)
         shape_local = split_shape(shape, comm)
         return FitsArray(np.empty(shape_local, dtype, order), header, unit,
             derived_units, dtype, copy=False, shape_global=shape, comm=comm)
@@ -225,6 +227,7 @@ class FitsArray(DistributedArray, Quantity):
     @staticmethod
     def ones(shape, header=None, unit=None, derived_units=None, dtype=None,
              order=None, comm=MPI.COMM_SELF):
+        shape = tointtuple(shape)
         shape_local = split_shape(shape, comm)
         return FitsArray(np.ones(shape_local, dtype, order), header, unit,
             derived_units, dtype, copy=False, shape_global=shape, comm=comm)
@@ -232,6 +235,7 @@ class FitsArray(DistributedArray, Quantity):
     @staticmethod
     def zeros(shape, header=None, unit=None, derived_units=None, dtype=None,
               order=None, comm=MPI.COMM_SELF):
+        shape = tointtuple(shape)
         shape_local = split_shape(shape, comm)
         return FitsArray(np.zeros(shape_local, dtype, order), header, unit,
             derived_units, dtype, copy=False, shape_global=shape, comm=comm)
@@ -556,6 +560,7 @@ class Map(FitsArray):
     def empty(shape, coverage=None, error=None, origin='lower', header=None,
               unit=None, derived_units=None, dtype=None, order=None,
               comm=MPI.COMM_SELF):
+        shape = tointtuple(shape)
         shape_local = split_shape(shape, comm)
         return Map(np.empty(shape_local, dtype, order), header, unit,
                    derived_units, coverage, error, origin, dtype, copy=False,
@@ -565,6 +570,7 @@ class Map(FitsArray):
     def ones(shape, coverage=None, error=None, origin='lower', header=None,
              unit=None, derived_units=None, dtype=None, order=None,
              comm=MPI.COMM_SELF):
+        shape = tointtuple(shape)
         shape_local = split_shape(shape, comm)
         return Map(np.ones(shape_local, dtype, order), header, unit,
                    derived_units, coverage, error, origin, dtype, copy=False,
@@ -574,6 +580,7 @@ class Map(FitsArray):
     def zeros(shape, coverage=None, error=None, origin='lower', header=None,
               unit=None, derived_units=None, dtype=None, order=None,
               comm=MPI.COMM_SELF):
+        shape = tointtuple(shape)
         shape_local = split_shape(shape, comm)
         return Map(np.zeros(shape_local, dtype, order), header, unit,
                    derived_units, coverage, error, origin, dtype, copy=False,
@@ -742,6 +749,7 @@ class Tod(FitsArray):
     @staticmethod
     def empty(shape, mask=None, header=None, unit=None, derived_units=None,
               dtype=None, order=None, comm=MPI.COMM_SELF):
+        shape = tointtuple(shape)
         if len(shape) <= 1 and comm.Get_size() > 1:
             raise ValueError('Scalar or vector Tod can not be distributed.')
         shape_local = split_shape(shape, comm)
@@ -752,6 +760,7 @@ class Tod(FitsArray):
     @staticmethod
     def ones(shape, mask=None, header=None, unit=None, derived_units=None,
              dtype=None, order=None, comm=MPI.COMM_SELF):
+        shape = tointtuple(shape)
         if len(shape) <= 1 and comm.Get_size() > 1:
             raise ValueError('Scalar or vector Tod can not be distributed.')
         shape_local = split_shape(shape, comm)
@@ -762,6 +771,7 @@ class Tod(FitsArray):
     @staticmethod
     def zeros(shape, mask=None, header=None, unit=None, derived_units=None,
               dtype=None, order=None, comm=MPI.COMM_SELF):
+        shape = tointtuple(shape)
         if len(shape) <= 1 and comm.Get_size() > 1:
             raise ValueError('Scalar or vector Tod can not be distributed.')
         shape_local = split_shape(shape, comm)
