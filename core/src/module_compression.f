@@ -68,7 +68,7 @@ contains
         real(p), intent(in)  :: compressed(:)
         integer, intent(in)  :: factor
         real(p), intent(out) :: data(size(compressed)*factor)
-        integer              :: nsamples, isample
+        integer              :: isample
 
         do isample = 1, size(compressed)
             data((isample-1)*factor+1) = compressed(isample)
