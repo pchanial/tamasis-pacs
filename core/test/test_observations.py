@@ -1,18 +1,17 @@
 import numpy as np
-from tamasis.observations import *
+from numpy.testing import assert_raises
+from tamasis.observations import MaskPolicy
+from tamasis.numpyutils import all_eq
 
 flags = ['bad', 'u1', 'u2']
-good_policy = ['kEep', 'removE', 'MASK']
-bad_policy = ['remove', 'KKeep']
 
-mask_policy = MaskPolicy(flags, good_policy)
-if np.any(np.array(mask_policy) != (0,2,1)): raise TestFailure()
-if mask_policy.bad != 'keep' or mask_policy.u1 != 'remove' or mask_policy.u2 != 'mask': raise TestFailure()
-try:
-    junk = MaskPolicy(flags, bad_policy)
-except ValueError:
-    pass
-try:
-    junk = MaskPolicy(flags[0:2], bad_policy)
-except KeyError:
-    pass
+def test_mask_policy1():
+    good_policy = ['kEep', 'removE', 'MASK']
+    mask_policy = MaskPolicy(flags, good_policy)
+    assert all_eq(np.array(mask_policy), (0,2,1))
+    assert mask_policy.bad == 'keep' and mask_policy.u1 == 'remove' and mask_policy.u2 == 'mask'
+
+def test_mask_policy2():
+    bad_policy = ['remove', 'KKeep']
+    assert_raises(ValueError, MaskPolicy, flags, bad_policy)
+    assert_raises(KeyError, MaskPolicy, flags[0:2], bad_policy)
