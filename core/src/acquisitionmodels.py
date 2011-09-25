@@ -496,7 +496,7 @@ class DiscreteDifference(Operator):
     """
 
     def __init__(self, axis=-1, comm=None, **keywords):
-        Operator.__init__(self, **keywords)
+        Operator.__init__(self, dtype=var.FLOAT_DTYPE, **keywords)
         self.axis = axis
         self.comm = comm or var.comm_map
         self.add_rule('.T.', self._rule_ddtdd)
@@ -516,9 +516,8 @@ class DiscreteDifference(Operator):
 class DdTdd(Operator):
     """Calculate operator dX.T dX along a given axis."""
 
-    def __init__(self, axis=-1, scalar=1., comm=None,
-                 **keywords):
-        Operator.__init__(self, **keywords)
+    def __init__(self, axis=-1, scalar=1., comm=None, **keywords):
+        Operator.__init__(self, dtype=var.FLOAT_DTYPE, **keywords)
         self.__name__ = (str(scalar) + ' ' if scalar != 1 else '') + \
             self.__name__
         self.axis = axis
@@ -649,7 +648,7 @@ class Masking(Operator):
         mask = np.array(mask, order='c', dtype=np.bool8)
         self.isscalar = mask.ndim == 0
         self.mask = np.array(mask, ndmin=1, copy=False)
-        Operator.__init__(self, **keywords)
+        Operator.__init__(self, dtype=var.FLOAT_DTYPE, **keywords)
 
     def direct(self, input, output):
         if self.same_data(input, output):
@@ -680,7 +679,7 @@ class Packing(Operator):
     def __init__(self, mask, **keywords):
         mask = np.array(mask, np.bool8)
         Operator.__init__(self, shapein=mask.shape, shapeout=np.sum(mask == 0),
-                          **keywords)
+                          dtype=var.FLOAT_DTYPE, **keywords)
         self.mask = mask
 
     def direct(self, input, output):
@@ -703,7 +702,7 @@ class Unpacking(Operator):
     def __init__(self, mask, **keywords):
         mask = np.array(mask, np.bool8)
         Operator.__init__(self, shapein=np.sum(mask == 0), shapeout=mask.shape,
-                          **keywords)
+                          dtype=var.FLOAT_DTYPE, **keywords)
         self.mask = mask
 
     def direct(self, input, output):
@@ -756,7 +755,7 @@ class Slicing(Operator):
 class ShiftOperator(Operator):
 
     def __init__(self, n, axis=-1, **keywords):
-        Operator.__init__(self, **keywords)
+        Operator.__init__(self, dtype=var.FLOAT_DTYPE, **keywords)
         self.axis = (axis,) if isscalar(axis) else tuple(axis)
         self.n = (n,) * len(self.axis) if isscalar(n) else \
                  tuple([np.array(m,int) for m in n])
@@ -863,7 +862,8 @@ class FftHalfComplex(Operator):
                      ostride, self.backward_plan)
         output /= self.size
 
-
+@real
+@linear
 class Convolution(Operator):
     def __init__(self, shape, kernel, flags=['measure'], nthreads=None,
                  dtype=None, **keywords):
