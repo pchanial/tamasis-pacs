@@ -15,5 +15,5 @@ from .pacs import *
 del datatypes, mappers, numpyutils, observations, processing, quantity, tamasisfortran
 del core, madcap, pacs
 
-__all__ = [ f for f in dir() if f[0] != '_' and f not in ('mpiutils', 'stringutils', 'tmf', 'var', 'wcsutils')]
+__all__ = [ f for f in dir() if f[0] != '_' and f not in ('mpiutils', 'tmf', 'var', 'wcsutils')]
 

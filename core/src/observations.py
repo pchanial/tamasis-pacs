@@ -5,12 +5,12 @@
 from __future__ import division
 
 import numpy as np
+from operators.utils import strenum
 
 from . import var
 from . import numpyutils as nu
 from .datatypes import FitsArray, Map, Tod, create_fitsheader
 from .quantity import Quantity
-from .stringutils import strenum
 
 __all__ = ['Observation', 'Instrument', 'MaskPolicy', 'Pointing']
 
@@ -249,7 +249,7 @@ class MaskPolicy(object):
             choices = ('keep', 'mask', 'remove')
             if value not in choices:
                 raise KeyError('Invalid policy ' + flag + "='" + value + \
-                    "'. Expected policies are " + strenum(choices, 'or') + '.')
+                    "'. Expected policies are " + strenum(choices) + '.')
             self._policy.append({flag:value})
             setattr(self, flag, value)
         self._policy = tuple(self._policy)
