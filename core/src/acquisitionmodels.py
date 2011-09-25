@@ -213,12 +213,16 @@ class CompressionAverage(Compression):
         return super(CompressionAverage, self).__str__() + ' (x{})'.format(self.factor)
 
     def direct(self, input, output):
+        if hasattr(output, 'mask'):
+            output.mask = None
         input_, ishape, istride = _ravel_strided(input)
         output_, oshape, ostride = _ravel_strided(output)
         tmf.compression_average_direct(input_, ishape[0], ishape[1], istride,
             output_, oshape[1], ostride, self.factor)
 
     def transpose(self, input, output):
+        if hasattr(output, 'mask'):
+            output.mask = None
         input_, ishape, istride = _ravel_strided(input)
         output_, oshape, ostride = _ravel_strided(output)
         tmf.compression_average_transpose(input_, ishape[0], ishape[1],
@@ -232,12 +236,16 @@ class DownSampling(Compression):
     """
 
     def direct(self, input, output):
+        if hasattr(output, 'mask'):
+            output.mask = None
         input_, ishape, istride = _ravel_strided(input)
         output_, oshape, ostride = _ravel_strided(output)
         tmf.downsampling_direct(input_, ishape[0], ishape[1], istride, output_,
             oshape[1], ostride, self.factor)
 
     def transpose(self, input, output):
+        if hasattr(output, 'mask'):
+            output.mask = None
         input_, ishape, istride = _ravel_strided(input)
         output_, oshape, ostride = _ravel_strided(output)
         tmf.downsampling_transpose(input_, ishape[0], ishape[1], istride,
@@ -253,10 +261,10 @@ class InvNtt(Operator):
         length = np.asarray(2**np.ceil(np.log2(np.array(nsamples) + 200)), int)
         invntt = cls._get_diagonal(length, obs.get_filter_uncorrelated(
                                     filename=filename, **keywords))
-        fft = FftHalfComplex(tuple(length), partition=tuple(length))
+        fft = PartitionOperator([FftHalfComplex(n) for n in length],
+                                partitionin=length, axisin=-1)
         padding = Padding(left=invntt.ncorrelations, right=length - nsamples - \
                           invntt.ncorrelations, partition=nsamples)
-        return padding, fft, invntt
         return padding.T * fft.T * invntt * fft * padding
 
     @staticmethod
@@ -306,12 +314,16 @@ class Padding(Operator):
         Operator.__init__(self, **keywords)        
    
     def direct(self, input, output):
+        if hasattr(output, 'mask'):
+            output.mask = None
         right = -self.right if self.right != 0 else output.shape[-1]
         output[...,:self.left] = 0
         output[...,self.left:right] = input
         output[...,right:] = 0
    
     def transpose(self, input, output):
+        if hasattr(output, 'mask'):
+            output.mask = None
         right = -self.right if self.right != 0 else input.shape[-1]
         output[...] = input[...,self.left:right]
 
