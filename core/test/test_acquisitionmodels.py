@@ -1,10 +1,12 @@
 import numpy as np
+import scipy
+import tamasis
 
-from operators import Operator, PartitionOperator
+from operators import Operator, AdditionOperator, CompositionOperator, DiagonalOperator, PartitionOperator, ScalarOperator, asoperator, I
 from operators.utils import isscalar
+from nose.tools import assert_is
 from numpy.testing import assert_array_equal, assert_almost_equal, assert_raises
-from tamasis.acquisitionmodels import CompressionAverage, DownSampling, FftHalfComplex, Padding, ResponseTruncatedExponential, partitioned
-
+from tamasis.acquisitionmodels import Convolution, CompressionAverage, DdTdd, DiscreteDifference, DownSampling, Fft, FftHalfComplex, Masking, Packing, Padding, ResponseTruncatedExponential, RollOperator, ShiftOperator, Unpacking, partitioned
 
 def test_partitioning():
 
@@ -172,3 +174,265 @@ def test_ffthalfcomplex3():
     assert np.allclose(b, b_)
     b = fft.T(fft(a))
     assert np.allclose(a, b)
+
+def test_addition():
+    def func(nops):
+        ops = [ DiscreteDifference(axis=axis,shapein=(2,3,4,5)) \
+                for axis in range(nops) ]
+        model = AdditionOperator(ops)
+        v = np.arange(2*3*4*5.).reshape(2,3,4,5)
+        a = model(v)
+        b = sum([op(v) for op in ops])
+        c = model(v,v)
+        assert np.all(a == b)
+        assert np.all(b == c)
+    for nops in range(1, 5):
+        yield func, nops
+
+def test_additionT():
+    def func(nops):
+        ops = [ DiscreteDifference(axis=axis,shapein=(2,3,4,5)) \
+                for axis in range(nops) ]
+        model = AdditionOperator(ops)
+        assert model.T.T is model
+        v = np.arange(2*3*4*5.).reshape(2,3,4,5)
+        a = model.T(v)
+        b = sum([op.T(v) for op in ops])
+        c = model.T(v,v)
+        assert np.all(a == b)
+        assert np.all(b == c)
+    for nops in range(1, 5):
+        yield func, nops
+
+def test_composition():
+    def func(nops):
+        ops = [ DiscreteDifference(axis=axis,shapein=(2,3,4,5)) \
+                for axis in range(nops) ]
+        model = CompositionOperator(ops)
+        v = np.arange(2*3*4*5.).reshape(2,3,4,5)
+        a = model(v)
+        b = v.copy()
+        for m in reversed(ops):
+            b = m(b)
+        c = model(v,v)
+        assert np.all(a == b) and np.all(b == c)
+    for nops in range(1, 5):
+        yield func, nops
+
+def test_compositionT():
+    def func(nops):
+        ops = [ DiscreteDifference(axis=axis,shapein=(2,3,4,5)) \
+                for axis in range(nops) ]
+        model = CompositionOperator(ops)
+        assert model.T.T is model
+        v = np.arange(2*3*4*5.).reshape(2,3,4,5)
+        a = model.T(v)
+        b = v.copy()
+        for m in ops:
+            b = m.T(b)
+        c = model.T(v,v)
+        assert np.all(a == b) and np.all(b == c)
+    for nops in range(1, 5):
+        yield func, nops
+
+def test_masking():
+    mask = Masking(None)
+    assert mask.shapein is None
+    assert mask.shapeout is None
+    assert mask.mask.ndim == 1
+    assert not mask.mask[0]
+    assert mask(3) == 3
+
+    b = np.array([3., 4., 1., 0., 3., 2.])
+    c = np.array([3., 4., 0., 0., 3., 0.])
+    mask = Masking(np.array([0, 0., 1., 1., 0., 1], dtype='int8'))
+    assert np.all(mask(b) == c)
+    mask = DiagonalOperator(np.array([1, 1., 0., 0., 1., 0]))
+    assert np.all(mask(b) == c)
+    mask = Masking(np.array([False, False, True, True, False, True]))
+    assert np.all(mask(b) == c)
+
+    b = np.array([[3., 4.], [1., 0.], [3., 2.]])
+    c = np.array([[3., 4.], [0., 0.], [3., 0.]])
+    mask = Masking(np.array([[0, 0.], [1., 1.], [0., 1.]], dtype='int8'))
+    assert np.all(mask(b) == c)
+    mask = DiagonalOperator(np.array([[1, 1.], [0., 0.], [1., 0.]]))
+    assert np.all(mask(b) == c)
+    mask = Masking(np.array([[False, False], [True, True], [False, True]]))
+    assert np.all(mask(b) == c)
+
+    b = np.array([[[3, 4.], [1., 0.]], [[3., 2], [-1, 9]]])
+    c = np.array([[[3, 4.], [0., 0.]], [[3., 0], [0, 0]]])
+    mask = Masking(np.array([[[0, 0.], [1., 1.]], [[0., 1], [1, 1]]], int))
+    assert np.all(mask(b) == c)
+    mask = DiagonalOperator(np.array([[[1, 1], [0., 0]], [[1, 0], [0, 0]]]))
+    assert np.all(mask(b) == c)
+    mask = Masking(np.array([[[False, False], [True, True]],
+                             [[False, True], [True, True]]]))
+    assert np.all(mask(b) == c)
+
+    c = mask(b, b)
+    assert id(b) == id(c)
+
+
+def test_packing():
+
+    p = Packing([False, True, True, False])
+    assert np.allclose(p([1,2,3,4]), [1,4])
+    assert np.allclose(p.T([1,4]), [1,0,0,4])
+
+    u = Unpacking([False, True, True, False])
+    assert np.allclose(u([1,4]), [1,0,0,4])
+    assert np.allclose(u.T([1,2,3,4]), [1,4])
+
+
+def test_convolution():
+    imashape = (7, 7)
+    kershape = (3, 3)
+    kerorig = (np.array(kershape) - 1) // 2
+    kernel = np.zeros(kershape)
+    kernel[kerorig[0]-1:kerorig[0]+2,kerorig[1]-1:kerorig[1]+2] = 0.5 ** 4
+    kernel[kerorig[0], kerorig[1]] = 0.5
+    kernel[kerorig[0]-1,kerorig[1]-1] *= 2
+    kernel[kerorig[0]+1,kerorig[1]+1] = 0
+
+    image = np.zeros(imashape)
+    image[3,3] = 1.
+    ref = scipy.signal.convolve(image, kernel, mode='same')
+    convol=Convolution(image.shape, kernel)
+    con = convol(image)
+    assert np.allclose(ref, con, atol=1.e-15)
+
+    image = np.array([0,1,0,0,0,0,0])
+    kernel = [1,1,0.5]
+    convol = Convolution(image.shape, [1,1,1])
+    con = convol(image)
+    ref = scipy.signal.convolve(image, kernel, mode='same')
+
+    for kx in range(1,4,2):
+        kshape = (kx,)
+        kernel = np.ones(kshape)
+        kernel.flat[-1] = 0.5
+        for ix in range(kx*2, kx*2+3):
+          ishape = (ix,)
+          image = np.zeros(ishape)
+          image.flat[image.size//2] = 1.
+          convol = Convolution(image.shape, kernel)
+          con = convol(image)
+          ref = scipy.signal.convolve(image, kernel, mode='same')
+          assert np.allclose(con, ref, atol=1.e-15)
+          assert np.allclose(convol.todense().T, convol.T.todense(),
+                             atol=1.e-15)
+
+    for kx in range(1,4,2):
+      for ky in range(1,4,2):
+        kshape = (kx,ky)
+        kernel = np.ones(kshape)
+        kernel.flat[-1] = 0.5
+        for ix in range(kx*2+1, kx*2+3):
+          for iy in range(ky*2+1, ky*2+3):
+            ishape = (ix,iy)
+            image = np.zeros(ishape)
+            image[tuple([s//2 for s in image.shape])] = 1.
+            convol = Convolution(image.shape, kernel)
+            con = convol(image)
+            ref = scipy.signal.convolve(image, kernel, mode='same')
+            assert np.allclose(con, ref, atol=1.e-15)
+            assert np.allclose(convol.todense().T, convol.T.todense(),
+                               atol=1.e-15)
+
+    for kx in range(1,4,2):
+      for ky in range(1,4,2):
+        for kz in range(1,4,2):
+          kshape = (kx,ky,kz)
+          kernel = np.ones(kshape)
+          kernel.flat[-1] = 0.5
+          for ix in range(kx*2+1, kx*2+3):
+            for iy in range(ky*2+1, ky*2+3):
+              for iz in range(kz*2+1, kz*2+3):
+                ishape = (ix,iy,iz)
+                image = np.zeros(ishape)
+                image[tuple([s//2 for s in image.shape])] = 1.
+                convol = Convolution(image.shape, kernel)
+                con = convol(image)
+                ref = scipy.signal.convolve(image, kernel, mode='same')
+                assert np.allclose(con, ref, atol=1.e-15)
+                assert np.allclose(convol.todense().T, convol.T.todense(),
+                                   atol=1.e-15)
+
+def test_scipy_linear_operator():
+    diagonal = np.arange(10.)
+    M = scipy.sparse.dia_matrix((diagonal, 0), shape=2*diagonal.shape)
+    model = asoperator(M)
+    vec = np.ones(10)
+    assert np.all(model(vec)   == diagonal)
+    assert np.all(model.T(vec) == diagonal)
+    assert np.all(model.matvec(vec)  == diagonal)
+    assert np.all(model.rmatvec(vec) == diagonal)
+
+def test_transpose():
+    syms = [ I, DiagonalOperator([1,2,3]), Masking([0,1,1,1]) ]
+    for m in syms:
+        yield assert_is, m, m.T
+
+def test_dtype():
+    CTYPE = tamasis.var.COMPLEX_DTYPE
+    FTYPE = tamasis.var.FLOAT_DTYPE
+    a = Fft((3,4))
+    assert a.dtype is CTYPE
+    a = ScalarOperator(complex(0,1))
+    assert a.dtype is CTYPE
+    a = ScalarOperator(complex(1,0))
+    assert a.dtype is CTYPE
+    a = ScalarOperator(3) + ScalarOperator(1)
+    assert a.dtype is FTYPE
+    a = DiagonalOperator(np.array([2.,3,4]))
+    assert a.dtype is FTYPE
+    a = DiagonalOperator(np.array([2,complex(3,1),4]))
+    assert a.dtype is CTYPE
+    a = Masking(np.array([1, complex(2,2)]))
+    assert a.dtype is FTYPE
+    a = Masking([True, False])
+    assert a.dtype is FTYPE
+    a = Masking(np.array([0,1,0], dtype='int8'))
+    assert a.dtype is FTYPE
+
+def test_diff():
+    def func(shape, axis):
+        dX = DiscreteDifference(axis=axis, shapein=shape)
+        assert_array_equal(dX.todense().T, dX.T.todense())
+        dtd = DdTdd(axis=axis, shapein=shape).todense()
+        assert_array_equal(np.matrix(dX.T.todense()) * \
+                      np.matrix(dX.todense()), dtd)
+    for shape in ((3,), (3,4), (3,4,5), (3,4,5,6)):
+        for axis in range(len(shape)):
+            yield func, shape, axis
+
+def test_shift1():
+    for axis in range(4):
+        shift = ShiftOperator(1, axis=axis, shapein=(3,4,5,6))
+        yield assert_array_equal, shift.todense().T, shift.T.todense()
+
+def test_shift2():
+    for axis in range(1,4):
+        shift = ShiftOperator(((1,2,3),), axis=axis, shapein=(3,4,5,6))
+        yield assert_array_equal, shift.todense().T, shift.T.todense()
+
+def test_shift3():
+    for offset in ( (3,), (3,4), (3,4,5) ):
+        for axis in range(len(offset),4):
+            s = np.random.random_integers(-2,2,offset)
+            shift = ShiftOperator([s], axis=axis, shapein=(3,4,5,6))
+            yield assert_array_equal, shift.todense().T, shift.T.todense()
+
+def test_roll():
+    shape = np.arange(2,6)
+    v = np.arange(2*3*4*5).reshape(shape)
+    for n in range(4):
+        for axis in ((0,),(1,),(2,),(3,),(0,1),(0,2),(0,3),(1,2),(1,3),(2,3),
+                     (0,1,2),(0,1,3),(0,2,3),(1,2,3),(1,2,3),(0,1,2,3)):
+            expected = v.copy()
+            for a in axis:
+                expected = np.roll(expected, n, a)
+            result = RollOperator(axis=axis, n=n)(v)
+            yield assert_array_equal, result, expected
