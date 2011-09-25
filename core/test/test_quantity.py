@@ -1,253 +1,195 @@
 import numpy as np
 import tamasis
-from tamasis import *
+from nose.tools import assert_equal, assert_is, assert_is_instance, assert_raises
+from numpy.testing import assert_almost_equal, assert_array_equal
+from tamasis.quantity import Quantity, UnitError
+from tamasis.numpyutils import all_eq
+from tamasis.var import FLOAT_DTYPE, COMPLEX_DTYPE
 
 class TestFailure(Exception): pass
 
-def testFailure():
-    if np.__version__ >= '1.4': raise TestFailure()
+def assert_quantity(q, m, u):
+    assert_is_instance(q, Quantity)
+    assert_array_equal(q.magnitude, m)
+    if isinstance(u, dict):
+        assert_equal(q._unit, u)
+    else:
+        assert_equal(q.unit, u)
 
-q = Quantity(1, 'km')
-if any_neq(q.SI, Quantity(1000, 'm')): raise TestFailure()
+def test1():
+    q = Quantity(1, 'km')
+    assert all_eq(q.SI, Quantity(1000, 'm'))
 
-q = Quantity(1, 'm')
-if any_neq(q, q.tounit('m')): raise TestFailure()
-q2 = q.copy()
-q.inunit('m')
-if any_neq(q, q2): raise TestFailure()
+    q = Quantity(1, 'm')
+    assert all_eq(q, q.tounit('m'))
+    q2 = q.copy()
+    q.inunit('m')
+    assert all_eq(q, q2)
 
-q = Quantity(1, 'km').tounit('m')
-if q.magnitude != 1000 or q.unit != 'm': raise TestFailure()
+def test2():
+    q = Quantity(1, 'km').tounit('m')
+    assert_quantity(q, 1000, 'm')
 
-q = Quantity(1, 'km')
-q.inunit('m')
-q2 = q.copy()
-if q.magnitude != 1000 or q.unit != 'm': raise TestFailure()
+def test3():
+    q = Quantity(1, 'km')
+    q.inunit('m')
+    assert_quantity(q, 1000, 'm')
 
-def test_unit_add(x, y, v, u):
+def check_unit_add(x, y, v, u):
     c = x + y
-    if not isinstance(c, Quantity): raise TestFailure(str(c))
-    if c.magnitude != v: raise TestFailure(str(c))
-    if c._unit != u: raise TestFailure(str(c))
+    assert_quantity(c, v, u)
 
-q = Quantity(1.)
-q2 = Quantity(1.)
-a = np.array(1.)
-i = 1
-test_unit_add(q, q2, 2, {})
-test_unit_add(q, a, 2, {})
-test_unit_add(q, i, 2, {})
+def test_add1():
+    q = Quantity(1.)
+    for other in Quantity(1.), np.array(1.), 1:
+        yield check_unit_add, q, other, 2, {}
+        yield check_unit_add, other, q, 2, {}
 
-q = Quantity(1., 'm')
-test_unit_add(q, q2, 2, {'m':1.0})
-test_unit_add(q, a, 2, {'m':1.0})
-test_unit_add(q, i, 2, {'m':1.0})
+def test_add2():
+    q = Quantity(1., 'm')
+    for other in Quantity(1.), np.array(1.), 1:
+        yield check_unit_add, q, other, 2, {'m':1.0}
+        yield check_unit_add, other, q, 2, {'m':1.0}
 
 if np.__version__ >= '1.4':
+  def test_add3():
     q = Quantity(1.)
     q2 = Quantity(1., 'km')
-    test_unit_add(q, q2, 2, {'km':1.0})
+    yield check_unit_add, q, q2, 2, {'km':1.0}
 
+  def test_add4():
     q = Quantity(1., 'm')
     q2 = Quantity(1., 'km')
-    test_unit_add(q, q2, 1001, {'m':1.0})
+    yield check_unit_add, q, q2, 1001, {'m':1.0}
 
+  def test_add5():
     q = Quantity(1., 'km')
     q2 = Quantity(1., 'm')
-    test_unit_add(q, q2, 1.001, {'km':1.0})
+    yield check_unit_add, q, q2, 1.001, {'km':1.0}
 
-q = Quantity(1.)
-a = np.array(1.)
-i = 1
-test_unit_add(a, q, 2, {})
-test_unit_add(i, q, 2, {})
+def test_add6():
+    assert_raises(UnitError, lambda: Quantity(1, 'kloug')+Quantity(3., 'babar'))
 
-q = Quantity(1., 'm')
-q2 = Quantity(1.)
-test_unit_add(q2, q, 2, {'m':1.0})
-test_unit_add(a, q, 2, {'m':1.0})
-test_unit_add(i, q, 2, {'m':1.0})
-
-try:
-    a=Quantity(1, 'kloug')+Quantity(3., 'babar')
-except UnitError:
-    pass
-
-# SUB
-
-def test_unit_sub(x, y, v, u):
+def check_unit_sub(x, y, v, u):
     if np.__version__ < '1.4':
         if getattr(x, '_unit', {}) is not {} and getattr(y, '_unit', {}) is not {}:
             if x._unit != y._unit:
                 print('Disabling operation on Quantities for Numpy < 1.4')
                 return
     c = x - y
-    if not isinstance(c, Quantity): raise TestFailure(str(c))
-    if c.magnitude != v: raise TestFailure(str(c))
-    if c._unit != u: raise TestFailure(str(c))
+    assert_quantity(c, v, u)
 
-q = Quantity(1.)
-q2 = Quantity(1.)
-a = np.array(1.)
-i = 1
-test_unit_sub(q, q2, 0, {})
-test_unit_sub(q, a, 0, {})
-test_unit_sub(q, i, 0, {})
+def test_sub1():
+    q = Quantity(1.)
+    for other in Quantity(1.), np.array(1.), 1:
+        yield check_unit_sub, q, other, 0, {}
+        yield check_unit_sub, other, q, 0, {}
 
-q = Quantity(1., 'm')
-test_unit_sub(q, q2, 0, {'m':1.0})
-test_unit_sub(q, a, 0, {'m':1.0})
-test_unit_sub(q, i, 0, {'m':1.0})
+def test_sub2():
+    q = Quantity(1., 'm')
+    for other in Quantity(1.), np.array(1.), 1:
+        yield check_unit_sub, q, other, 0, {'m':1.0}
+        yield check_unit_sub, other, q, 0, {'m':1.0}
 
-q = Quantity(1.)
-q2 = Quantity(1., 'km')
-test_unit_sub(q, q2, 0, {'km':1.0})
+def test_sub3():
+    q = Quantity(1.)
+    q2 = Quantity(1., 'km')
+    yield check_unit_sub, q, q2, 0, {'km':1.0}
 
-q = Quantity(1., 'm')
-q2 = Quantity(1., 'km')
-test_unit_sub(q, q2, -999, {'m':1.0})
+def test_sub4():
+    q = Quantity(1., 'm')
+    q2 = Quantity(1., 'km')
+    yield check_unit_sub, q, q2, -999, {'m':1.0}
 
-q = Quantity(1., 'km')
-q2 = Quantity(1., 'm')
-test_unit_sub(q, q2, 0.999, {'km':1.0})
+def test_sub5():
+    q = Quantity(1., 'km')
+    q2 = Quantity(1., 'm')
+    yield check_unit_sub, q, q2, 0.999, {'km':1.0}
 
-q = Quantity(1.)
-a = np.array(1.)
-i = 1
-test_unit_sub(a, q, 0, {})
-test_unit_sub(i, q, 0, {})
+def test_sub6():
+    assert_raises(UnitError, lambda: Quantity(1, 'kloug')-Quantity(3., 'babar'))
 
-q = Quantity(1., 'm')
-q2 = Quantity(1.)
-test_unit_sub(q2, q, 0, {'m':1.0})
-test_unit_sub(a, q, 0, {'m':1.0})
-test_unit_sub(i, q, 0, {'m':1.0})
+def test_conversion_error():
+    a=Quantity(1., 'kloug')
+    assert_raises(UnitError, lambda: a.inunit('notakloug'))
+    assert_raises(UnitError, lambda: a.inunit('kloug^2'))
 
-try:
-    a=Quantity(1, 'kloug')-Quantity(1., 'babar')
-except UnitError:
-    pass
+def test_conversion_sr1():
+    a = Quantity(1, 'MJy/sr').tounit('uJy/arcsec^2')
+    assert_almost_equal(a, 23.5044305391)
+    assert_equal(a.unit, 'uJy / arcsec^2')
 
-# unit conversion
-a=Quantity(1., 'kloug')
-try:
-    a.inunit('notakloug')
-except UnitError:
-    pass
-a=Quantity(1., 'kloug')
+def test_conversion_sr2():
+    a = (Quantity(1, 'MJy/sr')/Quantity(1, 'uJy/arcsec^2')).SI
+    assert_almost_equal(a, 23.5044305391)
+    assert_equal(a.unit, '')
 
-try:
-    a.inunit('kloug^2')
-except UnitError:
-    pass
+if np.__version__ >= '1.4':
+  def test_array_prepare():
+    assert Quantity(10, 'm') <=  Quantity(1,'km')
+    assert Quantity(10, 'm') < Quantity(1,'km')
+    assert Quantity(1, 'km') >=  Quantity(10,'m')
+    assert Quantity(1, 'km') > Quantity(10,'m')
+    assert Quantity(1, 'km') != Quantity(1,'m')
+    assert Quantity(1, 'km') == Quantity(1000,'m')
+    assert np.maximum(Quantity(10,'m'),Quantity(1,'km')) == 1000
+    assert np.minimum(Quantity(10,'m'),Quantity(1,'km')) == 10
 
-a = Quantity(1, 'MJy/sr').tounit('uJy/arcsec^2')
-if not np.allclose(a, 23.5044305391): raise TestFailure()
-if a.unit != 'uJy / arcsec^2': raise TestFailure()
-a = (Quantity(1, 'MJy/sr')/Quantity(1, 'uJy/arcsec^2')).SI
-if not np.allclose(a, 23.5044305391): raise TestFailure()
-if a.unit != '': raise TestFailure()
+def test_function():
+    a=Quantity([1.3,2,3], unit='Jy')
+    def func(f):
+        b = f(a)
+        assert_array_equal(b, f(a.view(np.ndarray)))
+        assert_equal(b.unit, 'Jy' if f is not np.var else 'Jy^2')
+        if f in (np.round,):
+            return
+        b = f(a, axis=0)
+        assert_array_equal(b, f(a.view(np.ndarray), axis=0))
+        assert_equal(b.unit, 'Jy' if f is not np.var else 'Jy^2')
+    for f in np.min, np.max, np.mean, np.ptp, np.round, np.sum, np.std, np.var:
+        yield func, f
 
-# test __array_prepare__
-if Quantity(10, 'm') >  Quantity(1,'km')  : testFailure()
-if Quantity(10, 'm') >= Quantity(1,'km')  : testFailure()
-if Quantity(1, 'km') <  Quantity(10,'m')  : testFailure()
-if Quantity(1, 'km') <= Quantity(10,'m')  : testFailure()
-if Quantity(1, 'km') == Quantity(1,'m')   : testFailure()
-if Quantity(1, 'km') != Quantity(1000,'m'): testFailure()
-if np.maximum(Quantity(10,'m'),Quantity(1,'km')) != 1000: testFailure()
-if np.minimum(Quantity(10,'m'),Quantity(1,'km')) != 10  : testFailure()
+def test_dtype():
+    assert_is(Quantity(1).dtype, FLOAT_DTYPE)
+    assert_is(Quantity(1, dtype='float32').dtype, np.dtype(np.float32))
+    assert_is(Quantity(1.).dtype, FLOAT_DTYPE)
+    assert_is(Quantity(complex(1,0)).dtype, np.dtype(np.complex128))
+    assert_is(Quantity(1., dtype=np.complex64).dtype, np.dtype(np.complex64))
+    assert_is(Quantity(1., dtype=np.complex128).dtype, np.dtype(np.complex128))
+    assert_is(Quantity(1., dtype=np.complex256).dtype, np.dtype(np.complex256))
+    assert_is(Quantity(np.array(complex(1,0))).dtype, COMPLEX_DTYPE)
+    assert_is(Quantity(np.array(np.complex64(1.))).dtype, COMPLEX_DTYPE)
+    assert_is(Quantity(np.array(np.complex128(1.))).dtype, COMPLEX_DTYPE)
 
-# test constructor
-a = np.array([10,20])
-b = Quantity(a)
-if a.dtype == b.dtype: raise TestFailure()
+def test_derived_units1():
+    du = {'detector':Quantity([1, 1/10.], 'm^2')}
+    a = Quantity([[1,2,3,4],[10,20,30,40]], 'detector', derived_units=du)
+    assert_almost_equal(a.SI, [[1,2,3,4],[1,2,3,4]])
+    a = Quantity(1, 'detector C', du)
+    assert a.SI.shape == (2,)
+    a = Quantity(np.ones((1,10)), 'detector', derived_units=du)
+    assert a.SI.shape == (2,10)
 
-a = Quantity([10.],'m')
-b = Quantity(a)
-if a._unit != b._unit: raise TestFailure()
-if id(a) == id(b): raise TestFailure()
-if id(a._unit) != id(b._unit): raise TestFailure()
+def test_derived_units2():
+    a = Quantity(4., 'Jy/detector', {'detector':Quantity(2,'arcsec^2')})
+    a.inunit(a.unit + ' / arcsec^2 * detector')
+    assert_quantity(a, 2, 'Jy / arcsec^2')
 
-b = Quantity(a, copy=False)
-b[0]=1
-if a[0] != b[0]: raise TestFailure()
+def test_derived_units3():
+    a = Quantity(2., 'brou', {'brou':Quantity(2.,'bra'),'bra':Quantity(2.,'bri'),'bri':Quantity(2.,'bro'), 'bro':Quantity(2, 'bru'), 'bru':Quantity(2.,'stop')})
+    b = a.tounit('bra')
+    assert b.magnitude == 4
+    b = a.tounit('bri')
+    assert b.magnitude == 8
+    b = a.tounit('bro')
+    assert b.magnitude == 16
+    b = a.tounit('bru')
+    assert b.magnitude == 32
+    b = a.tounit('stop')
+    assert b.magnitude == 64
+    b = a.SI
+    assert b.magnitude == 64
+    assert b.unit == 'stop'
 
-
-a = Tod([10.,10.], unit='m')
-b = Quantity(a)
-if a.unit != b.unit: raise TestFailure()
-
-b = Quantity(a, copy=False)
-b[0] = 0
-if a[0] != b[0]: raise TestFailure()
-if id(a) == id(b): raise TestFailure()
-
-a = Tod([10.,10.])
-b = Quantity(a, subok=True)
-if a.__class__ is not b.__class__: raise TestFailure()
-
-a = Tod([10.,10.])
-b = Quantity(a, subok=True, copy=False)
-if id(a) != id(b): raise TestFailure()
-
-# test mean/sum/std/var
-a=Quantity([1.3,2,3], unit='Jy')
-for func in (np.min, np.max, np.mean, np.ptp, np.round, np.sum, np.std):
-    b = func(a)
-    if any_neq(b, func(a.view(np.ndarray))): raise TestFailure(func)
-    if b.unit != 'Jy': raise TestFailure()
-    if func in (np.round,):
-        continue
-    b = func(a, axis=0)
-    if any_neq(b, func(a.view(np.ndarray), axis=0)): raise TestFailure(func)
-    if b.unit != 'Jy': raise TestFailure()
-
-b = np.var(a)
-if b != np.var(a.view(np.ndarray)): raise TestFailure(np.var)
-if b.unit != 'Jy^2': raise TestFailure()
-b = np.var(a, axis=0)
-if b != np.var(a.view(np.ndarray), axis=0): raise TestFailure()
-if b.unit != 'Jy^2': raise TestFailure()
-
-# test upcasting
-if Quantity(1).dtype is not tamasis.var.FLOAT_DTYPE: raise TestFailure()
-if Quantity(1, dtype='float32').dtype.type is not np.float32: raise TestFailure()
-if Quantity(1.).dtype is not tamasis.var.FLOAT_DTYPE: raise TestFailure()
-if Quantity(complex(1,0)).dtype.type is not np.complex128: raise TestFailure()
-if Quantity(1., dtype=np.complex64).dtype.type is not np.complex64: raise TestFailure()
-if Quantity(1., dtype=np.complex128).dtype.type is not np.complex128: raise TestFailure()
-if Quantity(1., dtype=np.complex256).dtype.type is not np.complex256: raise TestFailure()
-if Quantity(np.array(complex(1,0))).dtype is not tamasis.var.COMPLEX_DTYPE: raise TestFailure()
-if Quantity(np.array(np.complex64(1.))).dtype is not tamasis.var.COMPLEX_DTYPE: raise TestFailure()
-if Quantity(np.array(np.complex128(1.))).dtype is not tamasis.var.COMPLEX_DTYPE: raise TestFailure()
-
-# test custom derived units:
-derived_units = {'detector':Quantity([1, 1/10.], 'm^2')}
-a = Quantity([[1,2,3,4],[10,20,30,40]], 'detector', derived_units=derived_units)
-if not np.allclose(a.SI, [[1,2,3,4],[1,2,3,4]]): raise TestFailure()
-a = Quantity(1, 'detector C', derived_units)
-if a.SI.shape != (2,): raise TestFailure()
-a = Quantity(np.ones((1,10)), 'detector', derived_units=derived_units)
-if a.SI.shape != (2,10): raise TestFailure()
-
-a = Quantity(4., 'Jy/detector', {'detector':Quantity(2,'arcsec^2')})
-a.inunit(a.unit + ' / arcsec^2 * detector')
-if a.magnitude != 2 or a.unit != 'Jy / arcsec^2': raise TestFailure()
-
-a = Quantity(2., 'brou', {'brou':Quantity(2.,'bra'),'bra':Quantity(2.,'bri'),'bri':Quantity(2.,'bro'), 'bro':Quantity(2, 'bru'), 'bru':Quantity(2.,'stop')})
-b = a.tounit('bra')
-if b.magnitude != 4: raise TestFailure()
-b = a.tounit('bri')
-if b.magnitude != 8: raise TestFailure()
-b = a.tounit('bro')
-if b.magnitude != 16: raise TestFailure()
-b = a.tounit('bru')
-if b.magnitude != 32: raise TestFailure()
-b = a.tounit('stop')
-if b.magnitude != 64: raise TestFailure()
-b = a.SI
-if b.magnitude != 64 or b.unit != 'stop': raise TestFailure()
-
-# test pixels
-if any_neq(Quantity(1,'pixel/sr/pixel_reference').SI, Quantity(1, '/sr')): TestFailure()
+def test_pixels():
+    assert_quantity(Quantity(1,'pixel/sr/pixel_reference').SI, 1, 'sr^-1')
