@@ -205,7 +205,7 @@ class PacsBase(Observation):
         choices = ('nearest', 'sharp')
         if method not in choices:
             raise ValueError("Invalid method '" + method + \
-                "'. Expected values are " + strenum(choices, 'or') + '.')
+                "'. Expected values are " + strenum(choices) + '.')
 
         nsamples = self.get_nfinesamples() if oversampling else \
             self.get_nsamples()
@@ -897,7 +897,7 @@ class PacsSimulation(PacsBase):
         choices = ('blue', 'green', 'red')
         if band not in choices:
             raise ValueError("Invalid band '" + band + \
-                "'. Expected values are " + strenum(choices, 'or') + '.')
+                "'. Expected values are " + strenum(choices) + '.')
 
         # get compression factor from input pointing
         deltas = [np.median(p.time[1:]-p.time[0:-1]) for p in pointings]
@@ -935,7 +935,7 @@ class PacsSimulation(PacsBase):
             choices = ('prime', 'parallel', 'calibration', 'transparent')
             if mode not in choices:
                 raise ValueError("Invalid observing mode '" + mode + \
-                    "'. Expected values are " + strenum(choices, 'or') + '.')
+                    "'. Expected values are " + strenum(choices) + '.')
             if mode == 'prime' and compression_factor != 4 or \
                mode == 'parallel' and compression_factor != (4 if band == 'red'\
                     else 8) or \
@@ -1338,13 +1338,13 @@ def pacs_get_psf(band, resolution, kind='calibration'):
     choices = ('blue', 'green', 'red')
     if band not in choices:
         raise ValueError("Invalid band '" + band + "'. Expected values are " + \
-                         strenum(choices, 'or') + '.')
+                         strenum(choices) + '.')
 
     kind = kind.lower()
     choices = ('airy', 'gaussian', 'calibration')
     if kind not in choices:
         raise ValueError("Invalid PSF kind '" + kind + \
-            "'. Expected values are " + strenum(choices, 'or') + '.')
+            "'. Expected values are " + strenum(choices) + '.')
 
     if kind in ('airy', 'gaussian'):
         func = { 'airy': airy_disk, 'gaussian' : gaussian }[kind]
