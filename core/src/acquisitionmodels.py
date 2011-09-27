@@ -839,7 +839,6 @@ class Fft(Operator):
         fftw3.execute(self.backward_plan)
         output[:] = self._out / self.n
 
-
 @real
 @orthogonal
 class FftHalfComplex(Operator):
@@ -849,30 +848,52 @@ class FftHalfComplex(Operator):
 
     def __init__(self, size, fftw_flags=['measure', 'unaligned'], **keywords):
         size = int(size)
-        tarray = np.empty(size, dtype=var.FLOAT_DTYPE)
-        farray = np.empty(size, dtype=var.FLOAT_DTYPE)
-        forward_plan = fftw3.Plan(tarray, farray, direction='forward', flags= \
+        array1 = np.empty(size, dtype=var.FLOAT_DTYPE)
+        array2 = np.empty(size, dtype=var.FLOAT_DTYPE)
+        fplan = fftw3.Plan(array1, array2, direction='forward', flags= \
             fftw_flags, realtypes=['halfcomplex r2c'], nthreads=1)
-        backward_plan = fftw3.Plan(tarray, farray, direction='backward', flags=\
+        bplan = fftw3.Plan(array1, array2, direction='backward', flags=\
             fftw_flags, realtypes=['halfcomplex c2r'], nthreads=1)
+        ifplan = fftw3.Plan(array1, direction='forward', flags=fftw_flags,
+            realtypes=['halfcomplex r2c'], nthreads=1)
+        ibplan = fftw3.Plan(array1, direction='backward', flags=fftw_flags,
+            realtypes=['halfcomplex c2r'], nthreads=1)
         self.size = size
         self.fftw_flags = fftw_flags
-        self.forward_plan = forward_plan._get_parameter()
-        self.backward_plan = backward_plan._get_parameter()
+        self.fplan = fplan
+        self.bplan = bplan
+        self.ifplan = ifplan
+        self.ibplan = ibplan
         Operator.__init__(self, **keywords)
 
     def direct(self, input, output):
         input_, ishape, istride = _ravel_strided(input)
+        if self.same_data(input, output):
+            tmf.fft_plan_inplace(input_, ishape[0], ishape[1], istride,
+                                 self.ifplan._get_parameter())
+            return
         output_, oshape, ostride = _ravel_strided(output)
-        tmf.fft_plan(input_, ishape[0], ishape[1], istride, output_, oshape[1],
-                     ostride, self.forward_plan)
+        tmf.fft_plan_outplace(input_, ishape[0], ishape[1], istride, output_,
+                     oshape[1], ostride, self.fplan._get_parameter())
 
     def transpose(self, input, output):
         input_, ishape, istride = _ravel_strided(input)
-        output_, oshape, ostride = _ravel_strided(output)
-        tmf.fft_plan(input_, ishape[0], ishape[1], istride, output_, oshape[1],
-                     ostride, self.backward_plan)
+        if self.same_data(input, output):
+            tmf.fft_plan_inplace(input_, ishape[0], ishape[1], istride,
+                                 self.ibplan._get_parameter())
+        else:
+            output_, oshape, ostride = _ravel_strided(output)
+            tmf.fft_plan_outplace(input_, ishape[0], ishape[1], istride,
+                output_, oshape[1], ostride, self.bplan._get_parameter())
         output /= self.size
+
+    def reshapein(self, shapein):
+        if shapein is None:
+            return None
+        if shapein[-1] != self.size:
+            raise ValueError("Invalid input dimension '{0}'. Expected dimension"
+                             " is '{1}'".format(shapein[-1], self.size))
+        return shapein
 
 @real
 @linear

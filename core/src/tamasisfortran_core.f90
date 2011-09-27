@@ -474,12 +474,33 @@ end subroutine fft_filter_uncorrelated2
 
 !-----------------------------------------------------------------------------------------------------------------------------------
 
-subroutine fft_plan(input, ninputs, ndetectors, isize, istride, output, noutputs, osize, ostride, plan)
+subroutine fft_plan_inplace(input, ninputs, ndetectors, isize, istride, plan)
 
-    use module_tamasis,     only : p
+    use module_tamasis, only : p
     implicit none
 
-    include 'fftw3.f'
+    real(p), intent(in)    :: input(ninputs)
+    integer, intent(in)    :: ninputs, ndetectors, isize, istride
+    integer*8, intent(in)  :: plan
+
+    integer :: i
+
+    !$omp parallel do
+    do i = 1, ndetectors
+        call dfftw_execute_r2r(plan, input((i-1)*istride+1:(i-1)*istride+isize), input((i-1)*istride+1:(i-1)*istride+isize))
+    end do
+    !$omp end parallel do
+
+end subroutine fft_plan_inplace
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine fft_plan_outplace(input, ninputs, ndetectors, isize, istride, output, noutputs, osize, ostride, plan)
+
+    use module_tamasis, only : p
+    implicit none
 
     real(p), intent(in)    :: input(ninputs)
     real(p), intent(inout) :: output(noutputs)
@@ -495,7 +516,7 @@ subroutine fft_plan(input, ninputs, ndetectors, isize, istride, output, noutputs
     end do
     !$omp end parallel do
 
-end subroutine fft_plan
+end subroutine fft_plan_outplace
 
 
 !-----------------------------------------------------------------------------------------------------------------------------------
