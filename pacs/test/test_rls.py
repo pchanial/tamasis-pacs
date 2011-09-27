@@ -3,6 +3,7 @@ import tamasis
 
 from scipy.sparse.linalg import cgs
 from tamasis import *
+from tamasis.numpyutils import any_neq
 
 class TestFailure(Exception): pass
 
