@@ -39,7 +39,7 @@ def cg(A, b, x0, tol=1.e-5, maxiter=300, callback=None, M=None, comm=None):
 
     norm = norm2(b, comm=comm)
     if norm == 0:
-        return xfinal
+        return xfinal, 0
 
     r[:] = b
     r -= A.matvec(x)
