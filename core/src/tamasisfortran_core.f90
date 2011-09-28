@@ -522,22 +522,17 @@ end subroutine fft_plan_outplace
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine packing(input, mask, nx, ny, nvalids, output)
+subroutine packing(input, mask, ninputs, output, noutputs)
 
-    use iso_fortran_env, only : ERROR_UNIT
     use module_tamasis,  only : p
     implicit none
 
-    real(p), intent(in)    :: input(nx,ny)
-    logical*1, intent(in)  :: mask(nx,ny)
-    integer, intent(in)    :: nx, ny
-    integer, intent(in)    :: nvalids
-    real(p), intent(inout) :: output(nvalids)
+    real(p), intent(in)    :: input(ninputs)
+    logical*1, intent(in)  :: mask(ninputs)
+    integer, intent(in)    :: ninputs
+    real(p), intent(inout) :: output(noutputs)
+    integer, intent(in)    :: noutputs
 
-    if (count(.not. mask) /= nvalids) then
-        write (ERROR_UNIT,'(a)') 'UNPACK_TRANSPOSE: The mask is not compatible with the output size.'
-        return
-    endif
     output = pack(input, .not. mask)
 
 end subroutine packing
@@ -546,24 +541,28 @@ end subroutine packing
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine unpacking(input, nvalids, mask, nx, ny, output, field)
+subroutine unpacking(input, ninputs, mask, nmasks, output, noutputs)
 
-    use iso_fortran_env, only : ERROR_UNIT
     use module_tamasis,  only : p
     implicit none
 
-    real(p), intent(in)    :: input(nvalids)
-    integer, intent(in)    :: nvalids
-    logical*1, intent(in)  :: mask(nx,ny)
-    integer, intent(in)    :: nx, ny
-    real(p), intent(inout) :: output(nx,ny)
-    real(p), intent(in)    :: field
+    real(p), intent(in)    :: input(ninputs)
+    logical*1, intent(in)  :: mask(nmasks)
+    real(p), intent(inout) :: output(noutputs)
+    integer, intent(in)    :: ninputs, nmasks, noutputs
 
-    if (count(.not. mask) /= nvalids) then
-        write (ERROR_UNIT,'(a)') 'UNPACK_DIRECT: The mask is not compatible with the input size.'
-        return
-    endif
-    output = unpack(input, .not. mask, field)
+    integer :: ii, io
+
+    ! unlike unpack, the following works in-place
+    ii = ninputs
+    do io = noutputs, 1, -1
+        if (mask(io)) then
+            output(io) = 0
+        else
+            output(io) = input(ii)
+            ii = ii - 1
+        end if
+    end do
 
 end subroutine unpacking
 

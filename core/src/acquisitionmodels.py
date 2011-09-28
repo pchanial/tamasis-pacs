@@ -274,6 +274,7 @@ class InvNtt(Operator):
             tod_filter, status = \
                 tmf.fft_filter_uncorrelated2(filter.T, n)
             if status != 0: raise RuntimeError()
+            print '_get_diagonal:', n, tod_filter.shape
             np.maximum(tod_filter, 0, tod_filter)
             tod_filters.append(tod_filter)
         norm = var.comm_tod.allreduce(max([np.max(f) for f in tod_filters]),
@@ -700,7 +701,7 @@ class Packing(Operator):
 
     def transpose(self, input, output):
         tmf.unpacking(input.ravel(), self.mask.view(np.int8).ravel(),
-                      output.ravel(), 0.)
+                      output.ravel())
 
 
 @real
@@ -719,7 +720,7 @@ class Unpacking(Operator):
 
     def direct(self, input, output):
         tmf.unpacking(input.ravel(), self.mask.view(np.int8).ravel(),
-                      output.ravel(), 0.)
+                      output.ravel())
 
     def transpose(self, input, output):
         tmf.packing(input.ravel(), self.mask.view(np.int8).ravel(),
