@@ -15,7 +15,7 @@ from operators import AdditionOperator, DiagonalOperator, IdentityOperator, asop
 from .acquisitionmodels import DdTdd, DiscreteDifference, Masking
 from .datatypes import Map
 from .linalg import Function, norm2, norm2_ellipsoid
-from .quantity import Quantity, UnitError
+from .quantity import Quantity
 from .solvers import cg, nlcg, QuadraticStep
 
 __all__ = [ 'mapper_naive',
@@ -47,18 +47,13 @@ def mapper_naive(tod, model, unit=None, local_mask=None):
         compatible with the model's input unit model.unitin (usually pixel^-1)
     """
 
+    tod = Masking(getattr(tod, 'mask', None))(tod)
+
     # make sure the input is a surface brightness
     if 'detector' in tod._unit:
         tod = tod.tounit(tod.unit + ' detector / arcsec^2')
-        inplace = True
     elif 'detector_reference' in tod._unit:
         tod = tod.tounit(tod.unit + ' detector_reference / arcsec^2')
-        inplace = True
-    else:
-        inplace = False
-
-    mask = getattr(tod, 'mask', None)
-    Masking(mask)(tod, tod)
 
     # model.T expects a quantity / detector, we hide our units to 
     # prevent a unit validation exception
@@ -284,6 +279,8 @@ def _solver(A, b, tod, model, invntt, priors=[], hyper=0, x0=None, tol=1.e-5,
     if b.size != A.shape[1]:
         raise ValueError("Incompatible size for RHS: '" + str(b.size) + \
                          "' instead of '" + str(A.shape[1]) + "'.")
+    if np.min(b) == np.max(b) == 0:
+        print('Warning: in equation Ax=b, b is zero.')
 
     if comm_map is None:
         comm_map = var.comm_map
