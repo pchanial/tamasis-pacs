@@ -1565,6 +1565,10 @@ subroutine masking_outplace(input, m, mask, n, output)
             !$omp parallel workshare
             output = 0
             !$omp end parallel workshare
+        else
+            !$omp parallel workshare
+            output = input
+            !$omp end parallel workshare
         end if
     else
         o = m / n
