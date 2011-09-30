@@ -258,9 +258,11 @@ class InvNtt(Operator):
 
     def __new__(cls, obs, filename=None, **keywords):
         nsamples = obs.get_nsamples()
-        length = np.asarray(2**np.ceil(np.log2(np.array(nsamples) + 200)), int)
-        invntt = cls._get_diagonal(length, obs.get_filter_uncorrelated(
-                                    filename=filename, **keywords))
+        filter = obs.get_filter_uncorrelated(filename=filename, **keywords)
+        ncorrelations = filter.shape[-1] - 1
+        length = np.asarray(2**np.ceil(np.log2(np.array(nsamples) + \
+                            2 * ncorrelations)), int)
+        invntt = cls._get_diagonal(length, filter)
         fft = PartitionOperator([FftHalfComplex(n) for n in length],
                                 partitionin=length, axisin=-1)
         padding = Padding(left=invntt.ncorrelations, right=length - nsamples - \
@@ -268,13 +270,11 @@ class InvNtt(Operator):
         return padding.T * fft.T * invntt * fft * padding
 
     @staticmethod
-    def _get_diagonal(nsamples, filter, **keywords):
+    def _get_diagonal(nsamples, filter):
         tod_filters = []
         for n in nsamples:
-            tod_filter, status = \
-                tmf.fft_filter_uncorrelated2(filter.T, n)
+            tod_filter, status = tmf.fft_filter_uncorrelated(filter.T, n)
             if status != 0: raise RuntimeError()
-            print '_get_diagonal:', n, tod_filter.shape
             np.maximum(tod_filter, 0, tod_filter)
             tod_filters.append(tod_filter)
         norm = var.comm_tod.allreduce(max([np.max(f) for f in tod_filters]),

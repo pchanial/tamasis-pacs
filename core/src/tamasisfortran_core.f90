@@ -407,44 +407,7 @@ end subroutine filter_median
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine fft_filter_uncorrelated(data, nsamples, nsamples_tot, ncorrelations, ndetectors, nslices, tod_filter, status)
-
-    use iso_fortran_env,  only : ERROR_UNIT
-    use module_filtering, only : FilterUncorrelated, fft_filter => create_filter_uncorrelated
-    use module_tamasis,   only : p
-    implicit none
-
-    integer, intent(in)  :: nsamples_tot
-    integer, intent(in)  :: ncorrelations
-    integer, intent(in)  :: ndetectors
-    integer, intent(in)  :: nslices
-    real(p), intent(in)  :: data(ncorrelations+1,ndetectors,nslices)
-    integer, intent(in)  :: nsamples(nslices)
-    real(p), intent(out) :: tod_filter(nsamples_tot,ndetectors)
-    integer, intent(out) :: status
-
-    type(FilterUncorrelated), allocatable :: filter(:)
-    integer                               :: islice
-
-    allocate (filter(nslices))
-    filter%ncorrelations = ncorrelations
-    filter%bandwidth = 2 * ncorrelations + 1
-    filter%ndetectors = ndetectors
-    do islice = 1, nslices
-        allocate (filter(islice)%data(ncorrelations+1,ndetectors))
-        filter(islice)%data = data(:,:,islice)
-    end do
-
-    call fft_filter(filter, nsamples, ndetectors, tod_filter, status)
-    if (status /= 0) return
-
-end subroutine fft_filter_uncorrelated
-
-
-!-----------------------------------------------------------------------------------------------------------------------------------
-
-
-subroutine fft_filter_uncorrelated2(data, nsamples, ncorrelations, ndetectors, tod_filter, status)
+subroutine fft_filter_uncorrelated(data, nsamples, ncorrelations, ndetectors, tod_filter, status)
 
     use iso_fortran_env,  only : ERROR_UNIT
     use module_filtering, only : FilterUncorrelated, fft_filter => create_filter_uncorrelated
@@ -469,7 +432,7 @@ subroutine fft_filter_uncorrelated2(data, nsamples, ncorrelations, ndetectors, t
     call fft_filter(filter, [nsamples], ndetectors, tod_filter, status)
     if (status /= 0) return
 
-end subroutine fft_filter_uncorrelated2
+end subroutine fft_filter_uncorrelated
 
 
 !-----------------------------------------------------------------------------------------------------------------------------------
