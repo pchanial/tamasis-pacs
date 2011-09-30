@@ -90,6 +90,7 @@ def mapper_ls(tod, model, invntt=None, unpacking=None, x0=None, tol=1.e-5,
 
     A = model.T * invntt * model
     b = (model.T * invntt)(tod)
+
     if M is not None:
         M = asoperator(M, shapein=model.shapein, shapeout=model.shapein)
 
@@ -321,6 +322,7 @@ def _solver(A, b, tod, model, invntt, priors=[], hyper=0, x0=None, tol=1.e-5,
             print(M)
 
     time0 = time.time()
+
     if profile is not None:
 
         def run():
@@ -340,14 +342,12 @@ def _solver(A, b, tod, model, invntt, priors=[], hyper=0, x0=None, tol=1.e-5,
         os.system('dot -Tpng ' + profile + '.dot > ' + profile)
         os.system('rm -f ' + profile + '.prof' + ' ' + profile + '.dot')
         return None
-
     try:
         solution, info = solver(A, b, x0=x0, tol=tol, maxiter=maxiter, M=M,
                                 callback=callback, comm=comm_map)
     except TypeError:
         solution, info = solver(A, b, x0=x0, tol=tol, maxiter=maxiter, M=M,
                                 callback=callback)
-        
 
     time0 = time.time() - time0
     if info < 0:
