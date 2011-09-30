@@ -296,7 +296,6 @@ class norm2_ellipsoid(Function):
         return norm
 
     def __init__(self, A):
-        print '__init__'
         def f(x, out=None, inwork=None, outwork=None, comm=None):
             if out is None:
                 out = np.empty(())
