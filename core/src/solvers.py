@@ -26,10 +26,10 @@ def cg(A, b, x0, tol=1.e-5, maxiter=300, callback=None, M=None, comm=None):
 
     n = b.size
     x = np.empty(n)
-#   d = np.empty(n)
-#   q = np.empty(n)
+    d = np.empty(n)
+    q = np.empty(n)
     r = np.empty(n)
-#   s = np.empty(n)
+    s = np.empty(n)
     xfinal = np.zeros(n)
 
     if x0 is None:
@@ -46,7 +46,7 @@ def cg(A, b, x0, tol=1.e-5, maxiter=300, callback=None, M=None, comm=None):
     epsilon = norm2(r, comm=comm) / norm
     minEpsilon = epsilon
 
-    d = M.matvec(r)
+    M.matvec(r, d)
     delta0 = dot(r, d, comm=comm)
     deltaNew = delta0
 
@@ -54,8 +54,7 @@ def cg(A, b, x0, tol=1.e-5, maxiter=300, callback=None, M=None, comm=None):
         if epsilon <= maxRelError:
             break
         
-        q = d.copy()
-        A.matvec(q, q)
+        A.matvec(d, q)
 
         alpha = deltaNew / dot(d, q, comm=comm)
         x += alpha * d
@@ -71,8 +70,7 @@ def cg(A, b, x0, tol=1.e-5, maxiter=300, callback=None, M=None, comm=None):
             minEpsilon = epsilon
 
         qnorm = np.sqrt(norm2(q, comm=comm))
-        s = r.copy()
-        M.matvec(s, s)
+        M.matvec(r, s)
 
         deltaOld = deltaNew
 
