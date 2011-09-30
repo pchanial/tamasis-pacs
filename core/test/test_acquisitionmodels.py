@@ -21,7 +21,7 @@ def test_partitioning():
             self.arg3 = arg3
             self.mykey = mykey
         def direct(self, input, output):
-            output[:] = self.value * input
+            output[...] = self.value * input
         __str__ = Operator.__repr__
 
     arg1 = [1,2,3,4,5]
