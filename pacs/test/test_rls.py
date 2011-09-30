@@ -7,7 +7,8 @@ from tamasis.numpyutils import any_neq
 
 class TestFailure(Exception): pass
 
-tamasis.var.verbose = True
+operators.memory.verbose = False
+tamasis.var.verbose = False
 profile = None#'test_rls.png'
 data_dir = os.path.dirname(__file__) + '/data/'
 obs = PacsObservation(filename=data_dir+'frames_blue.fits',
