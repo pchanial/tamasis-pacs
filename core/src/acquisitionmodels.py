@@ -271,9 +271,16 @@ class InvNtt(Operator):
 
     @staticmethod
     def _get_diagonal(nsamples, filter):
+        if filter.ndim == 2:
+            filter = filter[newaxis,...]
+        nfilters = filter.shape[0]
+        if nfilters != 1 and nfilters != len(nsamples):
+            raise ValueError("Incompatible number of filters '{0}'. Expected nu"
+                             "mber is '{1}'".format(nfilters, len(nsamples)))
         tod_filters = []
-        for n in nsamples:
-            tod_filter, status = tmf.fft_filter_uncorrelated(filter.T, n)
+        for i, n in enumerate(nsamples):
+            i = min(i, nfilters-1)
+            tod_filter, status = tmf.fft_filter_uncorrelated(filter[i].T, n)
             if status != 0: raise RuntimeError()
             np.maximum(tod_filter, 0, tod_filter)
             tod_filters.append(tod_filter)
