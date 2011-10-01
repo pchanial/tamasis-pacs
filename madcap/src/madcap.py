@@ -9,8 +9,9 @@ import pyfits
 import re
 
 from . import var
-from tamasis.core import *
-from tamasis.observations import *
+from . import tmf
+from tamasis.datatypes import Tod
+from tamasis.observations import Instrument, Observation
 
 __all__ = [ 'MadMap1Observation' ]
 
@@ -28,22 +29,22 @@ class MadMap1Observation(Observation):
 
         m=re.search(r'(?P<filename>.*)\[(?P<extname>\w+)\]$', mapmaskfile)
         if m is None:
-            mask = pyfits.fitsopen(mapmaskfile)[0].data
+            mask = pyfits.open(mapmaskfile)[0].data
         else:
             filename = m.group('filename')
             extname  = m.group('extname')
-            mask = pyfits.fitsopen(filename)[extname].data
+            mask = pyfits.open(filename)[str(extname)].data #XXX Python3
         if mask is None:
             raise IOError('HDU '+mapmaskfile+' has no data.')
-        mapmask = np.zeros(mask.shape, dtype='int8')
+        mapmask = np.zeros(mask.shape, dtype=bool)
         if missing_value is None:
-            mapmask[mask != 0] = 1
+            mapmask[mask != 0] = True
         elif np.isnan(missing_value):
-            mapmask[np.isnan(mask)] = 1
+            mapmask[np.isnan(mask)] = True
         elif np.isinf(missing_value):
-            mapmask[np.isinf(mask)] = 1
+            mapmask[np.isinf(mask)] = True
         else:
-            mapmask[mask == missing_value] = 1
+            mapmask[mask == missing_value] = True
 
         # Store instrument information
         self.instrument = Instrument('Unknown', (ndetectors,))
@@ -103,11 +104,11 @@ class MadMap1Observation(Observation):
         header.update('bitpix', -64)
         header.update('extend', True)
         header.update('naxis', 1)
-        header.update('naxis1', np.sum(self.info.mapmask == 0))
+        header.update('naxis1', np.sum(~self.info.mapmask))
 
         ndetectors = self.get_ndetectors()
         nsamples   = self.get_nsamples()
-        tod = Tod.zeros((ndetectors,nsamples))
+        tod = np.empty((ndetectors,np.sum(nsamples)))
 
         sizeofpmatrix = self.info.npixels_per_sample * tod.size
         print('Info: Allocating '+str(sizeofpmatrix / 2**17)+' MiB for the pointing matrix.')
@@ -121,7 +122,7 @@ class MadMap1Observation(Observation):
         """
         Method to get the Tod from this observation
         """
-        tod = Tod.zeros((self.get_ndetectors(), np.sum(self.get_nsamples())))
+        tod = Tod.empty((self.get_ndetectors(), np.sum(self.get_nsamples())))
         sizeofpmatrix = self.info.npixels_per_sample * tod.size
         pmatrix = np.zeros(sizeofpmatrix, dtype=int)
         status = tmf.madmap1_read_tod(self.info.todfile, self.info.invnttfile,
