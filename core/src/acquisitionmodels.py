@@ -3,6 +3,7 @@ from __future__ import division
 import functools
 import inspect
 import numpy as np
+import operator
 
 import tamasisfortran as tmf
 
@@ -14,16 +15,18 @@ except:
 from mpi4py import MPI
 
 from operators import (Operator, IdentityOperator, DiagonalOperator,
-                       PartitionOperator)
+                       ExpansionOperator, PartitionOperator)
 from operators.decorators import (idempotent, linear, orthogonal, real, square,
-                                  symmetric, unitary)
+                                  symmetric, unitary, inplace)
 from operators.utils import isscalar, tointtuple, openmp_num_threads
 
 from . import var
 
 from .datatypes import Map, Tod
+from .observations import Observation
 from .utils import diff, diffT, diffTdiff, shift
 from .mpiutils import split_shape, split_work
+from .wcsutils import str2fitsheader
 
 __all__ = [
     'CompressionAverage',
@@ -40,6 +43,7 @@ __all__ = [
     'Packing',
     'Padding',
     'Projection',
+    'Projection_old',
     'ResponseTruncatedExponential',
     'RollOperator',
     'ShiftOperator',
@@ -122,14 +126,10 @@ def partitioned(*partition_args, **keywords):
                 shapein = keywords['shapein']
                 for keys, p in zip(keyss, partitionin):
                     keys['shapein'] = _reshape(shapein, p, axisin)
-            else:
-                shapein = None
             if 'shapeout' in keywords:
                 shapeout = keywords['shapeout']
                 for keys, p in zip(keyss, partitionin):
                     keys['shapeout'] = _reshape(shapeout, p, axisin)
-            else:
-                shapeout = None
 
             # instantiate the partitioned operators
             ops = [cls.__new_original__(cls_, *a, **k) \
@@ -141,7 +141,7 @@ def partitioned(*partition_args, **keywords):
                 return ops[0]
 
             return PartitionOperator(ops, partitionin=partitionin,
-                       axisin=axisin, shapein=shapein, shapeout=shapeout)
+                                     axisin=axisin)
 
         @functools.wraps(cls.__init__)
         def partition_init(self, *args, **keywords):
@@ -355,7 +355,7 @@ class Padding(Operator):
 
 @real
 @linear
-class Projection(Operator):
+class Projection_old(Operator):
     """
     This class handles operations by the pointing matrix
 
@@ -380,37 +380,42 @@ class Projection(Operator):
         self.comm_map = comm_map or var.comm_map
         self.comm_tod = observation.comm_tod
 
-        self.method, pmatrix, self.header, self.ndetectors, nsamples, \
+        if header is None:
+            header = observation.get_map_header(resolution=resolution,
+                                                oversampling=oversampling)
+        elif isinstance(header, str):
+            header = str2fitsheader(header)
+        self.header = header
+
+        pmatrix, self.method, self.ndetectors, nsamples, \
         self.npixels_per_sample, (self.unitout, self.unitin), \
         (self.duout, self.duin) = \
             observation.get_pointing_matrix(header,
-                                            resolution,
                                             npixels_per_sample,
                                             method=method,
                                             oversampling=oversampling)
 
         self.nsamples = nsamples
-        self.nsamples_tot = int(np.sum(nsamples))
         self._pmatrix = pmatrix
         if self.npixels_per_sample == 0:
             pmatrix = np.empty(0, dtype=np.int64)
         self.pmatrix = pmatrix.view([('weight', 'f4'), ('pixel', 'i4')]) \
                               .view(np.recarray)
-        self.pmatrix.shape = (self.ndetectors, self.nsamples_tot,
+        self.pmatrix.shape = (self.ndetectors, self.nsamples,
                               self.npixels_per_sample)
 
         shapein = tuple([self.header['NAXIS'+str(i+1)] for i in \
                          range(self.header['NAXIS'])])[::-1]
         mask = Map.empty(shapein, dtype=np.bool8, header=self.header)
         tmf.pointing_matrix_mask(self._pmatrix, mask.view(np.int8).T, 
-            self.npixels_per_sample, self.nsamples_tot, self.ndetectors)
+            self.npixels_per_sample, self.nsamples, self.ndetectors)
 
         ismapdistributed = self.comm_map.Get_size() > 1
         istoddistributed = self.comm_tod.Get_size() > 1
         self.ispacked = packed or ismapdistributed
         if self.ispacked:
             tmf.pointing_matrix_pack(self._pmatrix, mask.view(np.int8).T,
-                self.npixels_per_sample, self.nsamples_tot, self.ndetectors)
+                self.npixels_per_sample, self.nsamples, self.ndetectors)
             shapein = (int(np.sum(~mask)))
 
         if self.unitin:
@@ -439,26 +444,189 @@ class Projection(Operator):
         self.method = s.method
         self.ndetectors = s.ndetectors
         self.npixels_per_sample = s.npixels_per_sample
-        self.nsamples_tot = s.nsamples_tot
+        self.nsamples = s.nsamples
         self.pmatrix = s.pmatrix
 
     def direct(self, input, output):
-        output.__class__ = Tod
-        output.__array_finalize__(None)
-        output.unit = self.unitout
-        output.derived_units = self.duout
+#        output.__class__ = Tod
+#        output.__array_finalize__(None)
+#        output.unit = self.unitout
+#        output.derived_units = self.duout
         output.header = None
         tmf.pointing_matrix_direct(self._pmatrix, input.T, output.T,
                                    self.npixels_per_sample)
 
     def transpose(self, input, output):
-        output.__class__ = Map
-        output.__array_finalize__(None)
-        output.header = self.header
-        output.unit = self.unitin
-        output.derived_units = self.duin
+#        output.__class__ = Map
+#        output.__array_finalize__(None)
+#        output.header = self.header
+#        output.unit = self.unitin
+#        output.derived_units = self.duin
+        output[...] = 0
         tmf.pointing_matrix_transpose(self._pmatrix, input.T, output.T, 
                                       self.npixels_per_sample)
+
+    def get_ptp(self):
+        npixels = np.product(self.shapein)
+        return tmf.pointing_matrix_ptp(self._pmatrix, self.npixels_per_sample,
+            self.nsamples, self.ndetectors, npixels).T
+
+
+@real
+@linear
+class Projection(Operator):
+    """
+    This class handles operations by the pointing matrix
+
+    The input observation has the following required attributes/methods:
+        - nfinesamples
+        - nsamples
+        - ndetectors
+        - get_pointing_matrix()
+        - unit
+    The instance has the following specific attributes:
+        - header: the FITS header of the map
+        - pmatrix: transparent view of the pointing matrix
+        - _pmatrix: opaque representation of the pointing matrix
+        - npixels_per_sample: maximum number of sky map pixels that can be
+          intercepted by a detector
+    """
+
+    def __new__(cls, input, method=None, header=None, resolution=None,
+                npixels_per_sample=0, oversampling=True, **keywords):
+        if not isinstance(input, Observation) or len(input.slice) == 1:
+            instance = super(Projection, cls).__new__(cls)
+            return instance
+        obs = input
+        if header is None:
+            header = obs.get_map_header(resolution=resolution, oversampling=oversampling)
+        elif isinstance(header, str):
+            header = str2fitsheader(header)
+        operands = []
+        for islice in range(len(obs.slice)):
+            pmatrix, method, ndetectors, nsamples, npixels_per_sample, units, \
+                derived_units = obs.get_pointing_matrix(header,
+                npixels_per_sample, method=method, oversampling=oversampling,
+                islice=islice)
+            p = Projection(pmatrix, method=method, header=header, ndetectors=ndetectors, nsamples=nsamples,
+                           npixels_per_sample=npixels_per_sample, units=units, derived_units=derived_units, comm_tod=obs.comm_tod)
+            operands.append(p)
+        return ExpansionOperator(operands, partitionout=obs.get_nsamples(),
+                                 axisout=-1)
+        
+    def __init__(self, input, method=None, header=None, ndetectors=None,
+                 nsamples=None, npixels_per_sample=0, units=None,
+                 derived_units=None, resolution=None, oversampling=True,
+                 comm_map=None, comm_tod=None, packed=False):
+
+        self.comm_map = comm_map or var.comm_map
+
+        if isinstance(input, Observation):
+            if header is None:
+                header = input.get_map_header(resolution=resolution,
+                                              oversampling=oversampling)
+            elif isinstance(header, str):
+                header = str2fitsheader(header)
+
+            comm_tod = input.comm_tod
+            pmatrix, method, ndetectors, nsamples, npixels_per_sample, units, \
+                derived_units = input.get_pointing_matrix(
+                    header,
+                    npixels_per_sample,
+                    method=method,
+                    oversampling=oversampling)
+        else:
+            pmatrix = input
+
+        self.comm_tod = comm_tod
+        self.header = header
+        self.ndetectors = ndetectors
+        self.nsamples = nsamples
+        self.npixels_per_sample = npixels_per_sample
+        self.unitout, self.unitin = units
+        self.duout, self.duin = derived_units
+        self._pmatrix = pmatrix
+        if self.npixels_per_sample == 0:
+            pmatrix = np.empty(0, dtype=np.int64)
+        self.pmatrix = pmatrix.view([('weight', 'f4'), ('pixel', 'i4')]) \
+                              .view(np.recarray)
+        self.pmatrix.shape = (self.ndetectors, self.nsamples,
+                              self.npixels_per_sample)
+
+        shapein = tuple([self.header['NAXIS'+str(i+1)] for i in \
+                         range(self.header['NAXIS'])])[::-1]
+        mask = Map.empty(shapein, dtype=np.bool8, header=self.header)
+        tmf.pointing_matrix_mask(self._pmatrix, mask.view(np.int8).T, 
+            self.npixels_per_sample, self.nsamples, self.ndetectors)
+
+        ismapdistributed = self.comm_map.Get_size() > 1
+        istoddistributed = self.comm_tod.Get_size() > 1
+        self.ispacked = packed or ismapdistributed
+        if self.ispacked:
+            tmf.pointing_matrix_pack(self._pmatrix, mask.view(np.int8).T,
+                self.npixels_per_sample, self.nsamples, self.ndetectors)
+            shapein = (int(np.sum(~mask)))
+
+        if self.unitin:
+            self.unitin = 'Jy ' + self.unitin
+        if self.unitout:
+            self.unitout = 'Jy ' + self.unitout
+
+        shapeout = (self.ndetectors, self.nsamples)
+        Operator.__init__(self, shapein=shapein, shapeout=shapeout,
+                          dtype=var.FLOAT_DTYPE)
+        self.mask = mask
+        if not self.ispacked and not istoddistributed:
+            return
+
+        if self.ispacked:
+            if ismapdistributed:
+                self *= DistributionLocal(self.mask)
+            else:
+                self *= Packing(self.mask)
+        elif istoddistributed:
+            self *= DistributionGlobal(self.shapein, share=True,
+                                       comm=self.comm_tod)
+        s = self.blocks[0]
+        self.header = s.header
+        self.mask = s.mask
+        self.method = s.method
+        self.ndetectors = s.ndetectors
+        self.npixels_per_sample = s.npixels_per_sample
+        self.pmatrix = s.pmatrix
+
+    def direct(self, input, output):
+        #output.unit = self.unitout
+        #output.derived_units = self.duout
+        #output.header = None
+        if not output.flags.contiguous:
+            print 'Warning, Projection output is not contiguous.'
+            output_ = np.empty_like(output)
+        else:
+            output_ = output
+        tmf.pointing_matrix_direct(self._pmatrix, input.T, output_.T,
+                                   self.npixels_per_sample)
+        if not output.flags.contiguous:
+            output[...] = output_
+        #output.__class__ = Tod
+
+
+    def transpose(self, input, output, operation=None):
+        #output.header = self.header
+        #output.unit = self.unitin
+        #output.derived_units = self.duin
+        if not input.flags.contiguous:
+            print 'Warning, Projection input is not contiguous.'
+            input_ = np.ascontiguousarray(input)
+        else:
+            input_ = input
+        if operation is None:
+            output[...] = 0
+        elif operation is not operator.__iadd__:
+            raise ValueError('Invalid operation.')
+        tmf.pointing_matrix_transpose(self._pmatrix, input_.T, output.T, 
+                                      self.npixels_per_sample)
+        #output.__class__ = Map
 
     def get_ptp(self):
         npixels = np.product(self.shapein)
@@ -469,6 +637,7 @@ class Projection(Operator):
 @real
 @linear
 @square
+@inplace
 class ResponseTruncatedExponential(Operator):
     """
     ResponseTruncatedExponential(tau)
@@ -508,6 +677,7 @@ class ResponseTruncatedExponential(Operator):
 @real
 @linear
 @square
+@inplace
 class DiscreteDifference(Operator):
     """
     Discrete difference operator.
@@ -533,6 +703,7 @@ class DiscreteDifference(Operator):
 
 @real
 @symmetric
+@inplace
 class DdTdd(Operator):
     """Calculate operator dX.T dX along a given axis."""
 
@@ -652,6 +823,7 @@ class DistributionLocal(Operator):
 @real
 @symmetric
 @idempotent
+@inplace
 class Masking(Operator):
     """
     Mask operator.
@@ -690,6 +862,7 @@ class Masking(Operator):
 
 @real
 @linear
+@inplace
 class Packing(Operator):
     """
     Convert an nd array in a 1d map, under the control of a mask.
@@ -713,6 +886,7 @@ class Packing(Operator):
 
 @real
 @linear
+@inplace
 class Unpacking(Operator):
     """
     Convert 1d map into an nd array, under the control of a mask.
@@ -772,6 +946,7 @@ class Slicing(Operator):
 @real
 @linear
 @square
+@inplace
 class ShiftOperator(Operator):
 
     def __init__(self, n, axis=-1, **keywords):
@@ -795,6 +970,7 @@ class ShiftOperator(Operator):
 
 
 @orthogonal
+@inplace
 class RollOperator(Operator):
     
     def __init__(self, n, axis=-1, **keywords):
@@ -806,17 +982,18 @@ class RollOperator(Operator):
                              'd offsets.')
 
     def direct(self, input, output):
-        output[:] = np.roll(input, self.n[0], axis=self.axis[0])
+        output[...] = np.roll(input, self.n[0], axis=self.axis[0])
         for n, axis in zip(self.n, self.axis)[1:]:
-            output[:] = np.roll(output, n, axis=axis)
+            output[...] = np.roll(output, n, axis=axis)
 
     def transpose(self, input, output):
-        output[:] = np.roll(input, -self.n[0], axis=self.axis[0])
+        output[...] = np.roll(input, -self.n[0], axis=self.axis[0])
         for n, axis in zip(self.n, self.axis)[1:]:
-            output[:] = np.roll(output, -n, axis=axis)
+            output[...] = np.roll(output, -n, axis=axis)
 
 
 @unitary
+@inplace
 class Fft(Operator):
     """
     Performs complex fft
@@ -838,17 +1015,18 @@ class Fft(Operator):
                                        flags=flags, nthreads=nthreads)
 
     def direct(self, input, output):
-        self._in[:] = input
+        self._in[...] = input
         fftw3.execute(self.forward_plan)
-        output[:] = self._out
+        output[...] = self._out
 
     def transpose(self, input, output):
-        self._in[:] = input
+        self._in[...] = input
         fftw3.execute(self.backward_plan)
-        output[:] = self._out / self.n
+        output[...] = self._out / self.n
 
 @real
 @orthogonal
+@inplace
 class FftHalfComplex(Operator):
     """
     Performs real-to-half-complex fft
@@ -905,6 +1083,7 @@ class FftHalfComplex(Operator):
 
 @real
 @linear
+@inplace
 class Convolution(Operator):
     def __init__(self, shape, kernel, flags=['measure'], nthreads=None,
                  dtype=None, **keywords):
@@ -953,26 +1132,26 @@ class Convolution(Operator):
         self.kernel = self._out / kernel.size
         
     def direct(self, input, output):
-        self._in[:] = input
+        self._in[...] = input
         fftw3.execute(self.forward_plan)
         self._out *= self.kernel
         fftw3.execute(self.backward_plan)
-        output[:] = self._in
+        output[...] = self._in
         
     def transpose(self, input, output):
-        self._in[:] = input
+        self._in[...] = input
         fftw3.execute(self.forward_plan)
         # avoid temp array in 'self._out *= self.kernel.conjugate()'
         tmf.multiply_conjugate_complex(self._out.ravel(), self.kernel.ravel(),
                                        self._out.ravel())
         fftw3.execute(self.backward_plan)
-        output[:] = self._in
+        output[...] = self._in
 
 
 def _ravel_strided(array):
     # array_ = array.reshape((-1,array.shape[-1]))
     #XXX bug in numpy 1.5.1: reshape with -1 leads to bogus strides
-    array_ = array.reshape((-1, array.shape[-1]))
+    array_ = array.view(np.ndarray).reshape((-1, array.shape[-1]))
     n2, n1 = array_.shape
     if array_.flags.c_contiguous:
         return array_.ravel(), array_.shape, n1

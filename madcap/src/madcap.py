@@ -79,43 +79,43 @@ class MadMap1Observation(Observation):
             raise NotImplementedError('The parallelisation of the TOD is not ' \
                                       'implemented')
 
-    def get_pointing_matrix(self, header, resolution, npixels_per_sample,
-                            method=None, oversampling=False):
-        """
-        Method to get the pointing matrix.
-        """
-        if npixels_per_sample not in (0, self.info.npixels_per_sample):
-            raise ValueError('The npixels_per_sample value is incompatible wi' \
-                             'th the MADMAP1 file.')
-        if header is not None:
-            raise ValueError('The map header cannot be specified for MADmap1 ' \
-                             'observations.')
-        if resolution is not None:
-            raise ValueError('The map resolution cannot be specified for MADm' \
-                             'ap1 observations.')
-        if method is None:
-            method = 'default'
-        method = method.lower()
-        if method != 'default':
-            raise ValueError("Invalid pointing matrix method '" + method + "'.")
-
+    def get_map_header(self, resolution=None, **keywords):
         header = pyfits.Header()
         header.update('simple', True)
         header.update('bitpix', -64)
         header.update('extend', True)
         header.update('naxis', 1)
         header.update('naxis1', np.sum(~self.info.mapmask))
+        return header
+
+    def get_pointing_matrix(self, header, npixels_per_sample, method=None,
+                            oversampling=False, islice=None):
+        """
+        Method to get the pointing matrix.
+        """
+        if npixels_per_sample not in (0, self.info.npixels_per_sample):
+            raise ValueError('The npixels_per_sample value is incompatible wi' \
+                             'th the MADMAP1 file.')
+        if method is None:
+            method = 'default'
+        method = method.lower()
+        if method != 'default':
+            raise ValueError("Invalid pointing matrix method '" + method + "'.")
 
         ndetectors = self.get_ndetectors()
-        nsamples   = self.get_nsamples()
-        tod = np.empty((ndetectors,np.sum(nsamples)))
+        if islice is None:
+            nsamples = int(np.sum(self.get_nsamples()))
+            islice = -1
+        else:
+            nsamples = self.get_nsamples()[islice]
+        tod = np.empty((ndetectors, nsamples))
 
         sizeofpmatrix = self.info.npixels_per_sample * tod.size
         print('Info: Allocating '+str(sizeofpmatrix / 2**17)+' MiB for the pointing matrix.')
         pmatrix = np.zeros(sizeofpmatrix, dtype=np.int64)
-        status = tmf.madmap1_read_tod(self.info.todfile, self.info.invnttfile, self.info.convert, self.info.npixels_per_sample, tod.T, pmatrix)
+        status = tmf.madmap1_read_tod(self.info.todfile, self.info.invnttfile, self.info.convert, self.info.npixels_per_sample, islice + 1, tod.T, pmatrix)
         if status != 0: raise RuntimeError()
-        return method, pmatrix, header, ndetectors, nsamples, \
+        return pmatrix, method, ndetectors, nsamples, \
                self.info.npixels_per_sample, (None, None), (None, None)
 
     def get_tod(self, unit=None):
@@ -126,7 +126,7 @@ class MadMap1Observation(Observation):
         sizeofpmatrix = self.info.npixels_per_sample * tod.size
         pmatrix = np.zeros(sizeofpmatrix, dtype=int)
         status = tmf.madmap1_read_tod(self.info.todfile, self.info.invnttfile,
-            self.info.convert, self.info.npixels_per_sample, tod.T, pmatrix)
+            self.info.convert, self.info.npixels_per_sample, 0, tod.T, pmatrix)
         if status != 0: raise RuntimeError()
         if unit is not None:
             tod.unit = unit

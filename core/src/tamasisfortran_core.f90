@@ -54,7 +54,7 @@ end subroutine info_nbytes_real
 
 subroutine pointing_matrix_direct(pmatrix, map1d, signal, npixels_per_sample, nsamples, ndetectors, npixels)
 
-    use module_pointingmatrix, only : PointingElement, pmatrix_direct
+    use module_pointingmatrix, only : PointingElement, pmatrix_direct, pmatrix_direct_one_pixel_per_sample
     use module_tamasis,        only : p
     implicit none
 
@@ -68,7 +68,11 @@ subroutine pointing_matrix_direct(pmatrix, map1d, signal, npixels_per_sample, ns
     integer, intent(in)    :: ndetectors
     integer, intent(in)    :: npixels
 
-    call pmatrix_direct(pmatrix, map1d, signal)
+    if (npixels_per_sample == 1) then
+        call pmatrix_direct_one_pixel_per_sample(pmatrix(1,:,:), map1d, signal)
+    else
+        call pmatrix_direct(pmatrix, map1d, signal)
+    end if
 
 end subroutine pointing_matrix_direct
 
@@ -78,7 +82,7 @@ end subroutine pointing_matrix_direct
 
 subroutine pointing_matrix_transpose(pmatrix, signal, map1d, npixels_per_sample, nsamples, ndetectors, npixels)
 
-    use module_pointingmatrix, only : PointingElement, pmatrix_transpose
+    use module_pointingmatrix, only : PointingElement, pmatrix_transpose, pmatrix_transpose_one_pixel_per_sample
     use module_tamasis,        only : p
     implicit none
 
@@ -92,7 +96,11 @@ subroutine pointing_matrix_transpose(pmatrix, signal, map1d, npixels_per_sample,
     integer, intent(in)    :: ndetectors
     integer, intent(in)    :: npixels
 
-    call pmatrix_transpose(pmatrix, signal, map1d)
+    if (npixels_per_sample == 1) then
+        call pmatrix_transpose_one_pixel_per_sample(pmatrix(1,:,:), signal, map1d)
+    else
+        call pmatrix_transpose(pmatrix, signal, map1d)
+    end if
 
 end subroutine pointing_matrix_transpose
 
@@ -407,10 +415,10 @@ end subroutine filter_median
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine fft_filter_uncorrelated(data, nsamples, ncorrelations, ndetectors, tod_filter, status)
+subroutine fft_filter_uncorrelated(data, nsamples, ncorrelations, ndetectors, fft_filter, status)
 
     use iso_fortran_env,  only : ERROR_UNIT
-    use module_filtering, only : FilterUncorrelated, fft_filter => create_filter_uncorrelated
+    use module_filtering, only : FilterUncorrelated, create_filter_uncorrelated
     use module_tamasis,   only : p
     implicit none
 
@@ -418,7 +426,7 @@ subroutine fft_filter_uncorrelated(data, nsamples, ncorrelations, ndetectors, to
     integer, intent(in)  :: nsamples
     integer, intent(in)  :: ncorrelations
     integer, intent(in)  :: ndetectors
-    real(p), intent(out) :: tod_filter(nsamples,ndetectors)
+    real(p), intent(out) :: fft_filter(nsamples,ndetectors)
     integer, intent(out) :: status
 
     type(FilterUncorrelated) :: filter(1)
@@ -429,7 +437,7 @@ subroutine fft_filter_uncorrelated(data, nsamples, ncorrelations, ndetectors, to
     allocate (filter(1)%data(ncorrelations+1,ndetectors))
     filter(1)%data = data(:,:)
 
-    call fft_filter(filter, [nsamples], ndetectors, tod_filter, status)
+    call create_filter_uncorrelated(filter, [nsamples], ndetectors, fft_filter, status)
     if (status /= 0) return
 
 end subroutine fft_filter_uncorrelated

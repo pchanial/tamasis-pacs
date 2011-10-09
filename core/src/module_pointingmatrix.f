@@ -12,7 +12,9 @@ module module_pointingmatrix
 
     public :: pointingelement
     public :: pmatrix_direct
+    public :: pmatrix_direct_one_pixel_per_sample
     public :: pmatrix_transpose
+    public :: pmatrix_transpose_one_pixel_per_sample
     public :: pmatrix_ptp
     public :: pmatrix_mask
     public :: pmatrix_pack
@@ -61,6 +63,32 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
+    subroutine pmatrix_direct_one_pixel_per_sample(pmatrix, map, timeline)
+
+        type(pointingelement), intent(in) :: pmatrix(:,:)
+        real(p), intent(in)               :: map(0:)
+        real(p), intent(inout)            :: timeline(:,:)
+        integer                           :: isample, idetector, nsamples, ndetectors
+
+        nsamples   = size(pmatrix, 1)
+        ndetectors = size(pmatrix, 2)
+
+        !$omp parallel do private(idetector, isample)
+        do idetector = 1, ndetectors
+            do isample = 1, nsamples
+                if (pmatrix(isample,idetector)%pixel >= 0) then
+                    timeline(isample,idetector) = map(pmatrix(isample,idetector)%pixel) * pmatrix(isample,idetector)%weight
+                end if
+            end do
+        end do
+        !$omp end parallel do
+
+    end subroutine pmatrix_direct_one_pixel_per_sample
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
     subroutine pmatrix_transpose(pmatrix, timeline, map)
         type(pointingelement), intent(in) :: pmatrix(:,:,:)
         real(kind=p), intent(in)          :: timeline(:,:)
@@ -71,27 +99,50 @@ contains
         nsamples   = size(pmatrix, 2)
         ndetectors = size(pmatrix, 3)
 
-        map = 0
-#ifdef GFORTRAN
-        !$omp parallel do reduction(+:map) private(idetector, isample, ipixel)
-#else
-        !$omp parallel do private(idetector, isample, ipixel)
-#endif
+!!$#ifdef GFORTRAN
+!!$        !$omp parallel do reduction(+:map) private(idetector, isample, ipixel)
+!!$#else
+!!$        !$omp parallel do private(idetector, isample, ipixel)
+!!$#endif
         do idetector = 1, ndetectors
             do isample = 1, nsamples
                 do ipixel = 1, npixels
                     if (pmatrix(ipixel,isample,idetector)%pixel == -1) exit
-#ifndef GFORTRAN
-                    !$omp atomic
-#endif
+!!$#ifndef GFORTRAN
+!!$                    !$omp atomic
+!!$#endif
                     map(pmatrix(ipixel,isample,idetector)%pixel) = map(pmatrix(ipixel,isample,idetector)%pixel) +                  &
                         pmatrix(ipixel,isample,idetector)%weight * timeline(isample,idetector)
                 end do
             end do
         end do
-        !$omp end parallel do
+!!$        !$omp end parallel do
 
     end subroutine pmatrix_transpose
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine pmatrix_transpose_one_pixel_per_sample(pmatrix, timeline, map)
+        type(pointingelement), intent(in) :: pmatrix(:,:)
+        real(kind=p), intent(in)          :: timeline(:,:)
+        real(kind=p), intent(out)         :: map(0:)
+        integer                           :: idetector, isample, nsamples, ndetectors
+
+        nsamples   = size(pmatrix, 1)
+        ndetectors = size(pmatrix, 2)
+
+        do idetector = 1, ndetectors
+            do isample = 1, nsamples
+                if (pmatrix(isample,idetector)%pixel >= 0) then
+                    map(pmatrix(isample,idetector)%pixel) = map(pmatrix(isample,idetector)%pixel) +                                &
+                        pmatrix(isample,idetector)%weight * timeline(isample,idetector)
+                end if
+            end do
+        end do
+
+    end subroutine pmatrix_transpose_one_pixel_per_sample
 
 
     !-------------------------------------------------------------------------------------------------------------------------------

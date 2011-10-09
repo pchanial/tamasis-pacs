@@ -96,7 +96,7 @@ end subroutine madmap1_info
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine madmap1_read_tod(todfile, invnttfile, convert, npixels_per_sample, nsamples_tot, ndetectors, tod, pmatrix, status)
+subroutine madmap1_read_tod(todfile, invnttfile, convert, npixels_per_sample, nsamples_tot, ndetectors, islice, tod, pmatrix,status)
 
     use module_filtering,      only : FilterUncorrelated
     use module_madcap,         only : read_filter, read_tod
@@ -112,6 +112,7 @@ subroutine madmap1_read_tod(todfile, invnttfile, convert, npixels_per_sample, ns
     integer, intent(in)                  :: npixels_per_sample
     integer, intent(in)                  :: nsamples_tot
     integer, intent(in)                  :: ndetectors
+    integer, intent(in)                  :: islice
     real(p), intent(inout)               :: tod(nsamples_tot,ndetectors)
     type(PointingElement), intent(inout) :: pmatrix(npixels_per_sample,nsamples_tot,ndetectors)
     integer, intent(out)                 :: status
@@ -122,7 +123,7 @@ subroutine madmap1_read_tod(todfile, invnttfile, convert, npixels_per_sample, ns
     call read_filter(invnttfile, convert, ndetectors, filter, nsamples, status)
     if (status /= 0) return
 
-    call read_tod(todfile, convert, nsamples, tod, pmatrix, status)
+    call read_tod(todfile, convert, nsamples, islice, tod, pmatrix, status)
 
 end subroutine madmap1_read_tod
 

@@ -22,7 +22,7 @@ from . import var
 from tamasis.core import Quantity, Tod, MaskPolicy, Pointing, create_fitsheader,  tmf, CompressionAverage, Projection, Masking
 from tamasis.mpiutils import split_observation
 from tamasis.observations import Observation, Instrument, create_scan
-from tamasis.wcsutils import combine_fitsheader
+from tamasis.wcsutils import combine_fitsheader, str2fitsheader
 
 __all__ = [ 'PacsObservation',
             'PacsSimulation',
@@ -193,12 +193,12 @@ class PacsBase(Observation):
             self.instrument.distortion_yz.base.base.base,
             resolution)
         if status != 0: raise RuntimeError()
-        headers = var.comm_tod.allgather(_str2fitsheader(header))
+        headers = var.comm_tod.allgather(str2fitsheader(header))
         return combine_fitsheader(headers)
     get_map_header.__doc__ = Observation.get_map_header.__doc__
     
-    def get_pointing_matrix(self, header, resolution, npixels_per_sample=0,
-                            method=None, oversampling=True):
+    def get_pointing_matrix(self, header, npixels_per_sample=0, method=None,
+                            oversampling=True):
         if method is None:
             method = 'sharp'
         method = method.lower()
@@ -209,10 +209,6 @@ class PacsBase(Observation):
 
         nsamples = self.get_nfinesamples() if oversampling else \
             self.get_nsamples()
-        if header is None:
-            header = self.get_map_header(resolution, oversampling)
-        elif isinstance(header, str):
-            header = _str2fitsheader(header)
 
         ndetectors = self.get_ndetectors()
         nvalids = int(np.sum(nsamples))
@@ -262,10 +258,10 @@ class PacsBase(Observation):
         # the specified one, redo the computation of the pointing matrix
         if new_npixels_per_sample > npixels_per_sample:
             del pmatrix
-            return self.get_pointing_matrix(header, resolution,
-                new_npixels_per_sample, method, oversampling)
+            return self.get_pointing_matrix(header, new_npixels_per_sample,
+                                            method, oversampling)
 
-        return method, pmatrix, header, ndetectors, nsamples, \
+        return pmatrix, method, ndetectors, nsamples, npixels_per_sample, \
             npixels_per_sample, ('/detector','/pixel'), self.get_derived_units()
     get_pointing_matrix.__doc__ = Observation.get_pointing_matrix.__doc__
 
@@ -1486,27 +1482,6 @@ def _files2tmf(filename):
     for f in filename:
         filename_ += f + (length-len(f))*' '
     return filename_, nfilenames
-
-
-#-------------------------------------------------------------------------------
-
-
-def _str2fitsheader(string):
-    """
-    Convert a string into a pyfits.Header object
-
-    All cards are extracted from the input string until the END keyword is
-    reached.
-    """
-    header = pyfits.Header()
-    cards = header.ascardlist()
-    iline = 0
-    while (iline*80 < len(string)):
-        line = string[iline*80:(iline+1)*80]
-        if line[0:3] == 'END': break
-        cards.append(pyfits.Card().fromstring(line))
-        iline += 1
-    return header
 
 
 #-------------------------------------------------------------------------------

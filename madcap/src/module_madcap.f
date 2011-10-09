@@ -249,17 +249,18 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine read_tod_madmap1(filename, convert, nsamples, tod, pmatrix, status)
+    subroutine read_tod_madmap1(filename, convert, nsamples, islice, tod, pmatrix, status)
 
         character(len=*), intent(in)       :: filename
         character(len=*), intent(in)       :: convert
         integer, intent(in)                :: nsamples(:)
+        integer, intent(in)                :: islice
         real(p), intent(out)               :: tod(:,:)
         type(pointingelement), intent(out) :: pmatrix(:,:,:)
         integer, intent(out)               :: status
 
-        integer*8 :: filesize
-        integer   :: dest, idetector, isample, islice, ndetectors, npixels_per_sample, nsamples_tot, nslices
+        integer*8 :: filesize, pos
+        integer   :: dest, idetector, isample, islice_, ndetectors, npixels_per_sample, nsamples_tot, nslices
 #ifdef GFORTRAN
         integer*4 :: sarray(13)
 #else
@@ -290,15 +291,20 @@ contains
             return
         end if
 
-        if (nsamples_tot /= size(tod,1)) then
+        if (islice == 0 .and. nsamples_tot /= size(tod,1)) then
             status = 1
             write (ERROR_UNIT,'(a,2(i0,a))') "Error: Invalid number of samples in input tod ('", size(tod,1), "' instead of '",    &
                   nsamples_tot, "')."
             return
         end if
 
-        ! skip the header
-        read (11, iostat=status, pos=4*8+1)
+        ! skip the header and some slices
+        if (islice == 0) then
+            pos = 4 * 8 + 1
+        else
+            pos = 4 * 8 + 8 * (npixels_per_sample + 1) *  ndetectors * sum(nsamples(1:islice-1)) + 1
+        end if 
+        read (11, iostat=status, pos=pos)
         if (status /= 0) then
             write (ERROR_UNIT,'(a)') "Error: Failed to read data past header in '" // filename // "'."
             return
@@ -306,11 +312,13 @@ contains
 
         ! read the tod
         dest = 1
-        do islice = 1, nslices
+        do islice_ = 1, nslices
+
+            if (islice /= 0 .and. islice_ /= islice) cycle
 
             do idetector = 1, ndetectors
 
-                do isample = dest, dest + nsamples(islice) - 1
+                do isample = dest, dest + nsamples(islice_) - 1
 
                     read (11, iostat=status) tod(isample,idetector)
                     if (status /= 0) go to 999
@@ -328,7 +336,7 @@ contains
 
             end do
 
-            dest = dest + nsamples(islice)
+            dest = dest + nsamples(islice_)
 
         end do
 
