@@ -15,6 +15,7 @@ from kapteyn import wcs
 __all__ = [ 
     'angle_lonlat',
     'create_fitsheader',
+    'str2fitsheader',
 ]
 
 def angle_lonlat(lon1, lat1, lon2=None, lat2=None):
@@ -324,3 +325,24 @@ def minmax_degrees(array):
     by taking into account the discrepancy at 0 degree.
     """
     return tmf.minmax_degrees(np.asarray(array, dtype=var.FLOAT_DTYPE).ravel())
+
+
+#-------------------------------------------------------------------------------
+
+
+def str2fitsheader(string):
+    """
+    Convert a string into a pyfits.Header object
+
+    All cards are extracted from the input string until the END keyword is
+    reached.
+    """
+    header = pyfits.Header()
+    cards = header.ascardlist()
+    iline = 0
+    while (iline*80 < len(string)):
+        line = string[iline*80:(iline+1)*80]
+        if line[0:3] == 'END': break
+        cards.append(pyfits.Card().fromstring(line))
+        iline += 1
+    return header
