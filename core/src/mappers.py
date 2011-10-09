@@ -13,7 +13,7 @@ from mpi4py import MPI
 from . import var
 from operators import AdditionOperator, DiagonalOperator, IdentityOperator, asoperator
 from .acquisitionmodels import DdTdd, DiscreteDifference, Masking
-from .datatypes import Map
+from .datatypes import Map, Tod
 from .linalg import Function, norm2, norm2_ellipsoid
 from .quantity import Quantity
 from .solvers import cg, nlcg, QuadraticStep
@@ -49,6 +49,9 @@ def mapper_naive(tod, model, unit=None, local_mask=None):
 
     tod = Masking(getattr(tod, 'mask', None))(tod)
 
+    #XXX attribute/class is disabled
+    tod = Tod(tod, copy=False)
+
     # make sure the input is a surface brightness
     if 'detector' in tod._unit:
         tod = tod.tounit(tod.unit + ' detector / arcsec^2')
@@ -61,7 +64,9 @@ def mapper_naive(tod, model, unit=None, local_mask=None):
     tod.unit = ''
 
     # compute model.T(tod)/model.T(one)
-    mymap = model.T(tod)
+    #XXX attribute/class is disabled
+    #mymap = model.T(tod)
+    mymap = Map(model.T(tod), copy=False)
     tod[:] = 1
     map_weights = model.T(tod)
     old_settings = np.seterr(divide='ignore', invalid='ignore')
@@ -216,7 +221,7 @@ def mapper_nl(tod, model, unpacking=None, priors=[], hypers=[], norms=[],
 
     if unpacking is not None:
         solution = unpacking(solution)
-    coverage = Map(model.T(np.ones(tod.shape), True, True, True), copy=False)
+    coverage = model.T(np.ones(tod.shape))
     header = coverage.header
     header.update('likeliho', Js[0])
     header.update('criter', sum(Js))
@@ -363,11 +368,15 @@ def _solver(A, b, tod, model, invntt, priors=[], hyper=0, x0=None, tol=1.e-5,
     if unpacking is not None:
         solution = unpacking(solution)
 
-    coverage = model.T(np.ones(tod.shape))
-    unit = getattr(coverage, 'unit', None)
-    derived_units = getattr(coverage, 'derived_units', None)
+    #XXX attribute/class is disabled
+    #coverage = model.T(np.ones(tod.shape))
+    coverage = Map(model.T(np.ones(tod.shape)), copy=False)
+    unit = coverage.unit
+    derived_units = coverage.derived_units
 
-    header = coverage.header
+    header = getattr(coverage, 'header', None)
+    if header is None:
+        header = create_fitsheader(fromdata=coverage)
     header.update('likeliho', Js[0])
     header.update('criter', sum(Js))
     header.update('hyper', hyper)
