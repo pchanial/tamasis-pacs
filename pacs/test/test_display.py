@@ -21,7 +21,7 @@ pacs = PacsObservation([datafile[0]+'[6065:20000]', datafile[1]+'[6066:20001]'],
 
 telescope    = IdentityOperator()
 projection   = Projection(pacs, resolution=3.2, npixels_per_sample=5)
-multiplexing = CompressionAverage(1, description='Multiplexing')
+multiplexing = CompressionAverage(1)
 crosstalk    = IdentityOperator()
 compression  = CompressionAverage(4)
 
