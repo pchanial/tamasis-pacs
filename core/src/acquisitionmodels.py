@@ -256,42 +256,42 @@ class DownSampling(Compression):
 @symmetric
 class InvNtt(Operator):
 
-    def __new__(cls, obs, filename=None, **keywords):
+    def __new__(cls, obs, method='uncorrelated', filename=None, **keywords):
         nsamples = obs.get_nsamples()
-        filter = obs.get_filter_uncorrelated(filename=filename, **keywords)
-        ncorrelations = filter.shape[-1] - 1
-        length = np.asarray(2**np.ceil(np.log2(np.array(nsamples) + \
-                            2 * ncorrelations)), int)
-        invntt = cls._get_diagonal(length, filter)
-        fft = PartitionOperator([FftHalfComplex(n) for n in length],
-                                partitionin=length, axisin=-1)
-        padding = Padding(left=invntt.ncorrelations, right=length - nsamples - \
-                          invntt.ncorrelations, partition=nsamples)
-        return padding.T * fft.T * invntt * fft * padding
+        method = method.lower()
+        if method not in ('uncorrelated', 'uncorrelated python'):
+            raise ValueError("Invalid method '{0}'.".format(method))
 
-    @staticmethod
-    def _get_diagonal(nsamples, filter):
+        filter = obs.get_filter_uncorrelated(filename=filename, **keywords)
         if filter.ndim == 2:
-            filter = filter[newaxis,...]
+            filter = filter[np.newaxis,...]
         nfilters = filter.shape[0]
         if nfilters != 1 and nfilters != len(nsamples):
             raise ValueError("Incompatible number of filters '{0}'. Expected nu"
                              "mber is '{1}'".format(nfilters, len(nsamples)))
-        tod_filters = []
+        ncorrelations = filter.shape[-1] - 1
+        filter_length = np.asarray(2**np.ceil(np.log2(np.array(nsamples) + \
+                                   2 * ncorrelations)), int)
+        fft_filters = []
         for i, n in enumerate(nsamples):
             i = min(i, nfilters-1)
-            tod_filter, status = tmf.fft_filter_uncorrelated(filter[i].T, n)
+            fft_filter, status = tmf.fft_filter_uncorrelated(filter[i].T,
+                                                             filter_length)
             if status != 0: raise RuntimeError()
-            np.maximum(tod_filter, 0, tod_filter)
-            tod_filters.append(tod_filter)
-        norm = var.comm_tod.allreduce(max([np.max(f) for f in tod_filters]),
-                                      op=MPI.MAX)
-        for f in tod_filters:
+            np.maximum(fft_filter, 0, fft_filter)
+            fft_filters.append(fft_filter.T)
+            norm = var.comm_tod.allreduce(max([np.max(f) for f in fft_filters]),
+                                          op=MPI.MAX)
+        for f in fft_filters:
             np.divide(f, norm, f)
-        d = PartitionOperator([DiagonalOperator(f.T) for f in tod_filters],
-                              partitionin=nsamples, axisin=-1)
-        d.ncorrelations = filter.shape[-1] - 1
-        return d
+            
+        if method == 'uncorrelated':
+            cls = InvNttUncorrelated
+        else:
+            cls = InvNttUncorrelatedPython
+        #XXX should generate partitionoperator with no duplicates...
+        return PartitionOperator([cls(f, ncorrelations, n) \
+                   for f, n in zip(fft_filters, nsamples)], axisin=-1)
 
 
 @real
@@ -302,6 +302,45 @@ class SqrtInvNtt(InvNtt):
         self._tocomposite(op.Composition, invntt.blocks)
         data = self.blocks[2].data
         np.sqrt(data, data)
+
+
+@real
+@symmetric
+@inplace
+class InvNttUncorrelated(Operator):
+
+    def __init__(self, fft_filter, ncorrelations, nsamples,
+                 fftw_flags=['measure', 'unaligned']):
+        filter_length = fft_filter.shape[-1]
+        array = np.empty(filter_length, dtype=var.FLOAT_DTYPE)
+        self.fft_filter = fft_filter
+        self.filter_length = filter_length
+        self.left = filter_length - nsamples - ncorrelations
+        self.right = ncorrelations
+        self.fftw_flags = fftw_flags
+        self.fplan = fftw3.Plan(array, direction='forward', flags=fftw_flags,
+            realtypes=['halfcomplex r2c'], nthreads=1)
+        self.bplan = fftw3.Plan(array, direction='backward', flags=fftw_flags,
+            realtypes=['halfcomplex c2r'], nthreads=1)
+        Operator.__init__(self, shapein=(fft_filter.shape[0], nsamples))
+        
+    def direct(self, input, output):
+        input_, ishape, istride = _ravel_strided(input)
+        output_, oshape, ostride = _ravel_strided(output)
+        tmf.invntt_uncorrelated(input_, ishape[1], istride, output_, ostride, self.fft_filter.T, self.fplan._get_parameter(), self.bplan._get_parameter(), self.left, self.right)
+       
+
+@real
+@symmetric
+class InvNttUncorrelatedPython(Operator):
+
+    def __new__(cls, fft_filter, ncorrelations, nsamples):
+        filter_length = fft_filter.shape[-1]
+        invntt = DiagonalOperator(fft_filter)
+        fft = FftHalfComplex(filter_length)
+        padding = Padding(left=ncorrelations, right=filter_length - nsamples - \
+                              ncorrelations)
+        return padding.T * fft.T * invntt * fft * padding
 
 
 @partitioned('left', 'right', axis=-1)
