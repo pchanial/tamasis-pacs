@@ -1182,7 +1182,8 @@ class Convolution(Operator):
 def _ravel_strided(array):
     # array_ = array.reshape((-1,array.shape[-1]))
     #XXX bug in numpy 1.5.1: reshape with -1 leads to bogus strides
-    array_ = array.view(np.ndarray).reshape((-1, array.shape[-1]))
+    array_ = array.reshape(reduce(lambda x,y:x*y, array.shape[0:-1], 1),
+                           array.shape[-1])
     n2, n1 = array_.shape
     if array_.flags.c_contiguous:
         return array_.ravel(), array_.shape, n1
