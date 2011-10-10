@@ -213,16 +213,12 @@ class CompressionAverage(Compression):
         return super(CompressionAverage, self).__str__() + ' (x{})'.format(self.factor)
 
     def direct(self, input, output):
-        if hasattr(output, 'mask'):
-            output.mask = None
         input_, ishape, istride = _ravel_strided(input)
         output_, oshape, ostride = _ravel_strided(output)
         tmf.compression_average_direct(input_, ishape[0], ishape[1], istride,
             output_, oshape[1], ostride, self.factor)
 
     def transpose(self, input, output):
-        if hasattr(output, 'mask'):
-            output.mask = None
         input_, ishape, istride = _ravel_strided(input)
         output_, oshape, ostride = _ravel_strided(output)
         tmf.compression_average_transpose(input_, ishape[0], ishape[1],
@@ -236,16 +232,12 @@ class DownSampling(Compression):
     """
 
     def direct(self, input, output):
-        if hasattr(output, 'mask'):
-            output.mask = None
         input_, ishape, istride = _ravel_strided(input)
         output_, oshape, ostride = _ravel_strided(output)
         tmf.downsampling_direct(input_, ishape[0], ishape[1], istride, output_,
             oshape[1], ostride, self.factor)
 
     def transpose(self, input, output):
-        if hasattr(output, 'mask'):
-            output.mask = None
         input_, ishape, istride = _ravel_strided(input)
         output_, oshape, ostride = _ravel_strided(output)
         tmf.downsampling_transpose(input_, ishape[0], ishape[1], istride,
