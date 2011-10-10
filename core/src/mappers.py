@@ -11,7 +11,7 @@ import time
 
 from mpi4py import MPI
 from . import var
-from operators import AdditionOperator, DiagonalOperator, IdentityOperator, asoperator
+from pyoperators import AdditionOperator, DiagonalOperator, IdentityOperator, asoperator
 from .acquisitionmodels import DdTdd, DiscreteDifference, Masking
 from .datatypes import Map, Tod
 from .linalg import Function, norm2, norm2_ellipsoid

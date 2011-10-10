@@ -13,10 +13,10 @@ import re
 import scipy
 
 from mpi4py import MPI
-from operators import (Operator, ScalarOperator, IdentityOperator,
-                       RoundOperator, ClipOperator)
-from operators.core import CompositeOperator
-from operators.utils import strenum, strplural, openmp_num_threads
+from pyoperators import (Operator, ScalarOperator, IdentityOperator,
+                         RoundOperator, ClipOperator)
+from pyoperators.core import CompositeOperator
+from pyoperators.utils import strenum, strplural, openmp_num_threads
 
 from . import var
 from tamasis.core import Quantity, Tod, MaskPolicy, Pointing, create_fitsheader,  tmf, CompressionAverage, Projection, Masking

@@ -19,7 +19,7 @@ except:
 
 from functools import reduce
 from mpi4py import MPI
-from operators.utils import tointtuple
+from pyoperators.utils import tointtuple
 
 from .wcsutils import create_fitsheader
 from .mpiutils import read_fits, write_fits, split_shape, split_work

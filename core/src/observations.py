@@ -5,7 +5,7 @@
 from __future__ import division
 
 import numpy as np
-from operators.utils import strenum
+from pyoperators.utils import strenum
 
 from . import var
 from . import numpyutils as nu

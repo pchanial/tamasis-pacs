@@ -1,7 +1,7 @@
 from __future__ import division
 
 import numpy as np
-import operators as op
+import pyoperators as op
 import tamasisfortran as tmf
 from mpi4py import MPI
 from . import var

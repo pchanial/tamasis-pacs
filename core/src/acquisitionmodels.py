@@ -14,11 +14,11 @@ except:
 
 from mpi4py import MPI
 
-from operators import (Operator, IdentityOperator, DiagonalOperator,
-                       ExpansionOperator, PartitionOperator)
-from operators.decorators import (idempotent, linear, orthogonal, real, square,
-                                  symmetric, unitary, inplace)
-from operators.utils import isscalar, tointtuple, openmp_num_threads
+from pyoperators import (Operator, IdentityOperator, DiagonalOperator,
+                         ExpansionOperator, PartitionOperator)
+from pyoperators.decorators import (idempotent, linear, orthogonal, real,
+                                    square, symmetric, unitary, inplace)
+from pyoperators.utils import isscalar, tointtuple, openmp_num_threads
 
 from . import var
 

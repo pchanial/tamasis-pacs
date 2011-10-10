@@ -3,9 +3,9 @@
 #-------------------------------------------------------------
 import os
 from tamasis import *
-import operators
+import pyoperators
 
-operators.core.verbose = False
+pyoperators.memory.verbose = False
 
 # Specify the Frames observations as FITS files
 #path = os.getenv('PACS_DATA')+'transpScan/'

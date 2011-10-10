@@ -7,7 +7,7 @@ try:
     del pydebug
 except:
     pass
-from operators import *
+from pyoperators import *
 from .core import *
 from .madcap import *
 from .pacs import *

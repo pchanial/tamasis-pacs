@@ -2,8 +2,8 @@ import numpy as np
 import scipy
 import tamasis
 
-from operators import Operator, AdditionOperator, CompositionOperator, DiagonalOperator, PartitionOperator, ScalarOperator, asoperator, I
-from operators.utils import isscalar
+from pyoperators import Operator, AdditionOperator, CompositionOperator, DiagonalOperator, PartitionOperator, ScalarOperator, asoperator, I
+from pyoperators.utils import isscalar
 from nose.tools import assert_is
 from numpy.testing import assert_array_equal, assert_almost_equal, assert_raises
 from tamasis.acquisitionmodels import Convolution, CompressionAverage, DdTdd, DiscreteDifference, DownSampling, Fft, FftHalfComplex, Masking, Packing, Padding, ResponseTruncatedExponential, RollOperator, ShiftOperator, Unpacking, partitioned
