@@ -184,7 +184,8 @@ def write_fits(filename, data, header, shape_global, extension, comm,
         ftype = mtype.Create_subarray([nglobal*chunk], [nlocal*chunk],
                                       [s.start*chunk])
         ftype.Commit()
-        f = MPI.File.Open(newcomm, filename, amode=MPI.MODE_APPEND+MPI.MODE_WRONLY+MPI.MODE_CREATE)
+        f = MPI.File.Open(newcomm, filename, amode=MPI.MODE_APPEND + \
+                          MPI.MODE_WRONLY + MPI.MODE_CREATE)
         f.Set_view(data_loc, mtype, ftype, 'native', MPI.INFO_NULL)
         # mpi4py 1.2.2: pb with viewing data as big endian KeyError '>d'
         if sys.byteorder == 'little' and data.dtype.byteorder in ('=', '<'):
