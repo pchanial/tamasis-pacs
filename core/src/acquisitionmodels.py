@@ -1034,7 +1034,7 @@ class FftOperator(Operator):
     Performs complex fft
     """
 
-    def __init__(self, shape, flags=['estimate'], **keywords):
+    def __init__(self, shape, flags=['measure'], **keywords):
         Operator.__init__(self, shapein=shape,
                                 dtype=var.COMPLEX_DTYPE, **keywords)
         if fftw3.planning.lib_threads is None:
