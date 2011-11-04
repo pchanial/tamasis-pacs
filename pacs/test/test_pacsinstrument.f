@@ -192,6 +192,8 @@ program test_pacsinstrument
     write(*,*) 'minmaxV', minval(pacs%detector_corner(2,:)), maxval(pacs%detector_corner(2,:))
     write(*,*) 'minmaxY', minval(yz(1,:)), maxval(yz(1,:))
     write(*,*) 'minmaxZ', minval(yz(2,:)), maxval(yz(2,:))
+    write(*,*) 'minmaxRA', minval(ad(1,:)), maxval(ad(1,:))
+    write(*,*) 'minmaxDec', minval(ad(2,:)), maxval(ad(2,:))
     write(*,*) 'minmaxX', minval(xy(1,:)), maxval(xy(1,:))
     write(*,*) 'minmaxY', minval(xy(2,:)), maxval(xy(2,:))
 
