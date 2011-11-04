@@ -980,8 +980,10 @@ class Slicing(Operator):
 @inplace
 class ShiftOperator(Operator):
 
-    def __init__(self, n, axis=-1, **keywords):
+    def __init__(self, n, axis=None, **keywords):
         Operator.__init__(self, dtype=var.FLOAT_DTYPE, **keywords)
+        if axis is None:
+            axis = -1 if isscalar(n) else range(-len(n), 0)
         self.axis = (axis,) if isscalar(axis) else tuple(axis)
         self.n = (n,) * len(self.axis) if isscalar(n) else \
                  tuple([np.array(m,int) for m in n])
@@ -1004,8 +1006,10 @@ class ShiftOperator(Operator):
 @inplace
 class RollOperator(Operator):
     
-    def __init__(self, n, axis=-1, **keywords):
+    def __init__(self, n, axis=None, **keywords):
         Operator.__init__(self, **keywords)
+        if axis is None:
+            axis = -1 if isscalar(n) else range(-len(n), 0)
         self.axis = (axis,) if isscalar(axis) else tuple(axis)
         self.n = (n,) * len(self.axis) if isscalar(n) else tuple(n)
         if len(self.axis) != len(self.n):
