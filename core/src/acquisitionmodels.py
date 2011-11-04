@@ -36,7 +36,7 @@ __all__ = [
     'DdTdd',
     'DiscreteDifference',
     'DownSampling',
-    'Fft',
+    'FftOperator',
     'FftHalfComplex',
     'InvNtt',
     'Masking',
@@ -1029,7 +1029,7 @@ class RollOperator(Operator):
 
 @unitary
 @inplace
-class Fft(Operator):
+class FftOperator(Operator):
     """
     Performs complex fft
     """

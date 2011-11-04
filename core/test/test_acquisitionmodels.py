@@ -6,7 +6,7 @@ from pyoperators import Operator, AdditionOperator, CompositionOperator, Diagona
 from pyoperators.utils import isscalar
 from nose.tools import assert_is
 from numpy.testing import assert_array_equal, assert_almost_equal, assert_raises
-from tamasis.acquisitionmodels import Convolution, CompressionAverage, DdTdd, DiscreteDifference, DownSampling, Fft, FftHalfComplex, Masking, Packing, Padding, ResponseTruncatedExponential, RollOperator, ShiftOperator, Unpacking, partitioned
+from tamasis.acquisitionmodels import Convolution, CompressionAverage, DdTdd, DiscreteDifference, DownSampling, FftOperator, FftHalfComplex, Masking, Packing, Padding, ResponseTruncatedExponential, RollOperator, ShiftOperator, Unpacking, partitioned
 
 def test_partitioning():
 
@@ -378,7 +378,7 @@ def test_transpose():
 def test_dtype():
     CTYPE = tamasis.var.COMPLEX_DTYPE
     FTYPE = tamasis.var.FLOAT_DTYPE
-    a = Fft((3,4))
+    a = FftOperator((3,4))
     assert a.dtype is CTYPE
     a = ScalarOperator(complex(0,1))
     assert a.dtype is CTYPE
