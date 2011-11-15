@@ -37,7 +37,7 @@ drift = tod40Hz - tod40Hz_filtered
 tod40Hz = filter_median(tod40Hz_filtered, 10000)
 
 # second level deglitching
-tod40Hz.mask = deglitch_l2mad(tod40Hz, projection)
+tod40Hz.mask = deglitch_l2mad(tod40Hz, projection, nsigma=5)
 
 idetector=5
 plot_tod((tod40Hz+drift)[idetector])
