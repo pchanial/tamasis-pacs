@@ -137,7 +137,7 @@ class FitsArray(DistributedArray, Quantity):
         comm = comm or getattr(data, 'comm', MPI.COMM_SELF)
         shape_global = shape_global or getattr(data, 'shape_global', None)
 
-        if type(data) is str:
+        if isinstance(data, (str, unicode)):
             ihdu = 0
             fits = pyfits.open(data)
             while True:
@@ -508,7 +508,7 @@ class Map(FitsArray):
         if not subok and result.__class__ is not cls:
             result = result.view(cls)
 
-        if type(data) is str:
+        if isinstance(data, (str, unicode)):
             if 'DISPORIG' in result.header:
                 if origin is None:
                     origin = result.header['DISPORIG']
@@ -677,7 +677,7 @@ class Tod(FitsArray):
         if mask is np.ma.nomask:
             mask = None
 
-        if mask is None and isinstance(data, str):
+        if mask is None and isinstance(data, (str, unicode)):
             try:
                 mask, j, k = read_fits(pyfits.open(data)['Mask'], comm)
                 mask = mask.view(np.bool8)
