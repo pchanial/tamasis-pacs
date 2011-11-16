@@ -845,7 +845,7 @@ class Diagonal(Symmetric):
 
     def direct(self, input, inplace, cachein, cacheout):
         output = self.validate_input_inplace(input, inplace)
-        if self.dtype == var.FLOAT_DTYPE:
+        if self.dtype == input.dtype == var.FLOAT_DTYPE:
             tmf.multiply_inplace(output.T, self.data.T)
         else:
             output.T[:] *= self.data.T
