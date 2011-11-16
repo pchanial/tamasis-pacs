@@ -675,7 +675,7 @@ class Tod(FitsArray):
         if mask is np.ma.nomask:
             mask = None
 
-        if mask is None and isinstance(data, str):
+        if mask is None and isinstance(data, (str, unicode)):
             try:
                 mask, j, k = read_fits(pyfits.open(data)['Mask'], comm)
                 mask = mask.view(np.bool8)
