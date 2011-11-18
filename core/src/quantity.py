@@ -208,6 +208,9 @@ class Quantity(np.ndarray):
     0.5 broug^2
     """
 
+    _unit = None
+    _derived_units = None
+
     def __new__(cls, data, unit=None, derived_units=None, dtype=None, copy=True, order='C', subok=False, ndmin=0):
 
         if dtype is None:

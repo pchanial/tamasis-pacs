@@ -31,6 +31,10 @@ __all__ = [ 'FitsArray', 'Map', 'Tod' ]
 class DistributedArray(np.ndarray):
     """ndarray subclass, to handle MPI-distributed arrays.
     """
+
+    shape_global = None
+    comm = None
+
     def __new__(cls, data, shape_global=None, comm=MPI.COMM_SELF):
         if shape_global is None and comm.Get_size() > 1:
             raise ValueError('The global shape of the local array is not speci'\
@@ -126,6 +130,8 @@ class DistributedArray(np.ndarray):
 
 
 class FitsArray(DistributedArray, Quantity):
+
+    _header = None
 
     def __new__(cls, data, header=None, unit=None, derived_units=None,
                 dtype=None, copy=True, order='C', subok=False, ndmin=0,
@@ -493,6 +499,11 @@ class Map(FitsArray):
     """
     Represent a map, complemented with unit and FITS header.
     """
+
+    coverage = None
+    error = None
+    origin = None
+
     def __new__(cls, data,  header=None, unit=None, derived_units=None,
                 coverage=None, error=None, origin=None, dtype=None, copy=True,
                 order='C', subok=False, ndmin=0, shape_global=None, comm=None):
@@ -660,6 +671,8 @@ class Map(FitsArray):
 
 
 class Tod(FitsArray):
+
+    _mask = None
 
     def __new__(cls, data, mask=None, header=None, unit=None,
                 derived_units=None, dtype=None, copy=True, order='C',
