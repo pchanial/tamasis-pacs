@@ -11,12 +11,13 @@ import time
 
 from mpi4py import MPI
 from . import var
-from pyoperators import AdditionOperator, DiagonalOperator, IdentityOperator, asoperator
-from .acquisitionmodels import DdTdd, DiscreteDifference, Masking
+from pyoperators import AdditionOperator, DiagonalOperator, IdentityOperator, MaskOperator, asoperator
+from .acquisitionmodels import DdTdd, DiscreteDifference
 from .datatypes import Map, Tod
 from .linalg import Function, norm2, norm2_ellipsoid
 from .quantity import Quantity
 from .solvers import cg, nlcg, QuadraticStep
+from .wcsutils import create_fitsheader
 
 __all__ = [ 'mapper_naive',
             'mapper_ls',
@@ -29,9 +30,8 @@ def mapper_naive(tod, model, unit=None, local_mask=None):
     Returns a naive map, i.e.: map = model.T(tod) / model.T(1)
 
     This equation is valid for a map and a Time Ordered Data (TOD) expressed as
-    surface brightness. When the input Time Ordered Data (TOD) does not meet
-    this requirement, this method performs a unit conversion if the input is
-    a quantity per detector.
+    a surface brightness, so when the TOD does not meet this requirement and
+    is a quantity per detector, a unit conversion is attempted.
 
     Parameters
     ----------
@@ -39,44 +39,79 @@ def mapper_naive(tod, model, unit=None, local_mask=None):
     tod : Tod
         The input Time Ordered Data
 
-    model : LinearOperator
+    model : Operator
         The instrument model such as tod = model(map)
 
     unit : string
         Output map unit. By default, the output map unit is chosen to be
-        compatible with the model's input unit model.unitin (usually pixel^-1)
+        compatible with the model (usually pixel^-1)
     """
 
-    tod = Masking(getattr(tod, 'mask', None))(tod)
+    mask = getattr(tod, 'mask', None)
 
-    #XXX attribute/class is disabled
-    tod = Tod(tod, copy=False)
+    # get tod units
+    if not hasattr(tod, '_unit') or len(tod._unit) == 0:
+        attr = {'_unit' : {'?' : 1.}}
+        model.propagate_attributes(None, attr)
+        print 'XXXTOD attr', attr
+        u = getattr(attr, '_unit', {})
+        if 'detector' in u and u['detector'] == -1:
+            u = {'detector' : -1.}
+        elif u == {'?':1.}:
+            u = {}
+        elif len(u) > 1:
+            raise ValueError('The timeline units are not known and cannot be in'
+                             'ferred from the model.')
+        tod_du = getattr(attr, '_derived_units', {})
+        tod = Tod(tod.magnitude, unit=u, derived_units=tod_du, copy=False)
+    else:
+        attr = {'_unit' : {'?':1}}
+        model.T.propagate_attributes(None, attr)
+        u = attr['_unit']
+        if 'detector' not in tod._unit and 'detector' in u and u['detector']==1:
+            raise ValueError("The model is incompatible with input units '{0}'"\
+                             .format(tod.unit))
+
+    tod_unit = tod._unit
+    tod_du = tod._derived_units
 
     # make sure the input is a surface brightness
+    inplace = False
     if 'detector' in tod._unit:
         tod = tod.tounit(tod.unit + ' detector / arcsec^2')
+        inplace = True
     elif 'detector_reference' in tod._unit:
         tod = tod.tounit(tod.unit + ' detector_reference / arcsec^2')
+        inplace = True
 
-    # model.T expects a quantity / detector, we hide our units to 
-    # prevent a unit validation exception
-    todunit = tod.unit
-    tod.unit = ''
+    # apply mask
+    if mask is not None:
+        op = MaskOperator(mask)
+        if inplace:
+            op(tod, tod)
+        else:
+            tod = op(tod)
 
     # compute model.T(tod)/model.T(one)
-    #XXX attribute/class is disabled
-    #mymap = model.T(tod)
-    mymap = Map(model.T(tod), copy=False)
+    mymap = model.T(tod.magnitude)
     tod[:] = 1
-    map_weights = model.T(tod)
+    map_weights = model.T(tod.magnitude)
     old_settings = np.seterr(divide='ignore', invalid='ignore')
     mymap /= map_weights
-    mymap.unit = todunit
+    mymap.unit = tod.unit
     np.seterr(**old_settings)
     mymap.coverage = map_weights
    
     if unit is not None:
         mymap.inunit(unit)
+
+    # set map units according to model
+    attr = {'_unit' : tod_unit, '_derived_units' : tod_du}
+    model.T.propagate_attributes(None, attr)
+    if '_derived_units' in attr:
+        mymap.derived_units = attr['_derived_units']
+    if '_unit' in attr:
+        mymap.inunit(attr['_unit'])
 
     return mymap
 
@@ -254,9 +289,9 @@ def mapper_nl(tod, model, unpacking=None, priors=[], hypers=[], norms=[],
 
 def _validate_tod(tod, model):
     # make sure that the tod is masked
-    if hasattr(tod, 'mask'):
-        tod = Masking(tod.mask)(tod)
-    return tod
+    if hasattr(tod, 'mask') and tod.mask is not None:
+        return MaskOperator(tod.mask)(tod)
+    return tod.copy()
 
 
 #-------------------------------------------------------------------------------
@@ -275,7 +310,7 @@ def _solver(A, b, tod, model, invntt, priors=[], hyper=0, x0=None, tol=1.e-5,
         A = unpacking.T * A * unpacking
         b = unpacking.T(b)
         if x0 is not None:
-            x = unpacking.T(b)
+            x0 = unpacking.T(x0)
         if M is not None:
             M = unpacking.T * M * unpacking
 
@@ -368,11 +403,11 @@ def _solver(A, b, tod, model, invntt, priors=[], hyper=0, x0=None, tol=1.e-5,
     if unpacking is not None:
         solution = unpacking(solution)
 
-    #XXX attribute/class is disabled
-    #coverage = model.T(np.ones(tod.shape))
-    coverage = Map(model.T(np.ones(tod.shape)), copy=False)
+    tod[...] = 1
+    coverage = model.T(tod)
     unit = coverage.unit
     derived_units = coverage.derived_units
+    coverage = coverage.view(Map)
 
     header = getattr(coverage, 'header', None)
     if header is None:
@@ -393,7 +428,7 @@ def _solver(A, b, tod, model, invntt, priors=[], hyper=0, x0=None, tol=1.e-5,
 
     output = Map(solution.reshape(model.shapein),
                  header=header,
-                 coverage=Map(coverage, copy=False, unit=''),
+                 coverage=coverage,
                  unit=unit,
                  derived_units=derived_units,
                  comm=coverage.comm,
