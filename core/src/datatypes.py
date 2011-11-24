@@ -46,9 +46,7 @@ class DistributedArray(np.ndarray):
         return data
 
     def __array_finalize__(self, array):
-        if array is None:
-            return
-        self.shape_global = getattr(array, 'shape_global', array.shape)
+        self.shape_global = getattr(array, 'shape_global', self.shape)
         self.comm = getattr(array, 'comm', MPI.COMM_SELF)
 
     def __reduce__(self):
