@@ -37,16 +37,20 @@ def dot(x1, x2, comm=None):
 
 
 class Function(object):
-    def __init__(self, f, df=None):
+    def __init__(self, f, df=None, square=False):
+        self.square = square
         self.direct = f
         if df is not None:
-            self.D = Function(df)
+            self.D = Function(df, square=True)
     direct = None
     D = None
     def __call__(self, x, output=None, inwork=None, outwork=None, comm=None):
         if self.direct is None:
             raise NotImplementedError()
-        output = np.array(np.nan)
+        if self.square:
+            output = np.empty_like(x)
+        else:
+            output = np.array(np.nan)
         self.direct(x, output, inwork=inwork, outwork=outwork, comm=None)
         return output[()]
     def set_out(self, out, value):
