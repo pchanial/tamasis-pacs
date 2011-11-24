@@ -5,7 +5,6 @@
 from __future__ import division
 
 import numpy as np
-from . import var
 
 np.seterr(all='ignore')
 
@@ -26,17 +25,14 @@ def any_neq(a, b, rtol=None, atol=0.):
     # for dictionaries, look up the items
     if isinstance(a, dict):
         if not isinstance(b, dict):
-            if var.verbose:
-                print('First argument is a dict and the second one is not.')
+            print('First argument is a dict and the second one is not.')
             return True
         if set([k for k in a]) != set([k for k in b]):
-            if var.verbose:
-                print('Arguments are dictionaries of different items.')
+            print('Arguments are dictionaries of different items.')
             return True
         for k in a:
             if any_neq(a[k], b[k]):
-                if var.verbose:
-                    print('Arguments are dictionaries of different values')
+                print('Arguments are dictionaries of different values')
                 return True
         return False
 
@@ -64,29 +60,31 @@ def any_neq(a, b, rtol=None, atol=0.):
     aattr = get_attributes(a)
     battr = get_attributes(b)
     if set(aattr) != set(battr):
-        if var.verbose: print('The arguments do not have the same attributes.')
+        print('The arguments do not have the same attributes.')
         return True
 
     for k in aattr:
         if any_neq(getattr(a,k), getattr(b,k), rtol, atol):
-            if var.verbose: print("The argument attributes '" + k + "' differ.")
+            print("The argument attributes '" + k + "' differ.")
             return True
 
     # then compare the values of the array
     if akind not in 'bifc' or bkind not in 'bifc':
         if akind != bkind:
-            if var.verbose: print('The argument data types are incompatible.')
+            print('The argument data types are incompatible.')
             return True
         if akind == 'S':
             result = np.any(a != b)
-            if result and var.verbose: print('String arguments differ.')
+            if result:
+                print('String arguments differ.')
             return result
         else:
             raise NotImplemented('Kind ' + akind + ' is not implemented.')
     
     if akind in 'bi' and bkind in 'bi':
         result = np.any(a != b)
-        if result and var.verbose: print('Integer arguments differ.')
+        if result:
+            print('Integer arguments differ.')
         return result
     
     if rtol is None:
@@ -103,7 +101,7 @@ def any_neq(a, b, rtol=None, atol=0.):
 
     mask = np.isnan(a)
     if np.any(mask != np.isnan(b)):
-        if var.verbose: print('Argument NaNs differ.')
+        print('Argument NaNs differ.')
         return True
     if np.all(mask):
         return False
@@ -112,7 +110,7 @@ def any_neq(a, b, rtol=None, atol=0.):
     if not np.isscalar(result):
         result = np.any(result[~mask])
 
-    if var.verbose and result:
+    if result:
         factor = np.nanmax(abs(a-b) / (rtol * np.maximum(abs(a),abs(b)) + atol))
         print('Argument data difference exceeds tolerance by factor ' + \
               str(factor) + '.')
