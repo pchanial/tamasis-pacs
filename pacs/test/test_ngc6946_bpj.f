@@ -29,16 +29,12 @@ program test_ngc6946_bpj
     logical*1, allocatable              :: mask(:,:)
     character(len=2880)                 :: header
     integer                             :: nx, ny
-    integer                             :: status, count0, count1
-    integer                             :: count2, count_rate, count_max
+    integer                             :: status
     integer                             :: idetector, isample, ipointing
     integer                             :: new_npixels_per_sample
-    integer*8                           :: nsamples
     real(p), allocatable                :: map1d(:)
     type(pointingelement), allocatable  :: pmatrix(:,:,:)
     logical*1                           :: detector_mask(32,64)
-
-    call system_clock(count0, count_rate, count_max)
 
     ! initialise observation
     allocate (pacsobs)
@@ -48,12 +44,9 @@ program test_ngc6946_bpj
        stop
     end if
     if (status /= 0) call failure('pacsobservation%init')
-    call pacsobs%print()
 
-    call pacsobs2obs(pacsobs, obs, status)
+    call pacsobs2obs(pacsobs, 1, obs, status)
     if (status /= 0) call failure('pacsobs2obs')
-
-    nsamples = sum(obs%slice%nvalids)
 
     ! initialise pacs instrument
     allocate (pacs)
@@ -75,34 +68,26 @@ program test_ngc6946_bpj
     allocate (map1d(0:nx*ny-1))
 
     ! read the signal file
-    write (*,'(a)', advance='no') 'Reading tod file... '
-    call system_clock(count1, count_rate, count_max)
-    allocate (signal(nsamples, pacs%ndetectors))
-    allocate (mask  (nsamples, pacs%ndetectors))
-    call pacs%read(obs, [''], signal, mask, status)
+    allocate (signal(obs%nvalids, pacs%ndetectors))
+    allocate (mask  (obs%nvalids, pacs%ndetectors))
+    call pacs%read(pacsobs%slice(1)%filename, obs%pointing%masked, obs%pointing%removed, [''], signal, mask, status)
     if (status /= 0) call failure('read_tod')
-    call system_clock(count2, count_rate, count_max)
-    write (*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
 
     ! remove flat field
-    write (*,'(a)') 'Flat-fielding... '
     call divide_vectordim2(signal, pacs%flatfield_detector)
     where (mask) signal = 0
 
     ! remove mean value in timeline
-    write (*,'(a)') 'Removing mean value... '
     call subtract_meandim1(signal)
 
     ! compute the projector
-    allocate (pmatrix(npixels_per_sample,nsamples,pacs%ndetectors))
+    allocate (pmatrix(npixels_per_sample,obs%nvalids,pacs%ndetectors))
     call pacs%compute_projection(SHARP_EDGES, obs, .false., header, nx, ny, pmatrix, new_npixels_per_sample, status)
     if (status /= 0) call failure('compute_projection_sharp_edges.')
 
     ! check flux conservation during backprojection
-    write (*,'(a)', advance='no') 'Testing flux conservation...'
-    call system_clock(count1, count_rate, count_max)
-    allocate (surface1(nsamples, pacs%ndetectors))
-    allocate (surface2(nsamples, pacs%ndetectors))
+    allocate (surface1(obs%nvalids, pacs%ndetectors))
+    allocate (surface2(obs%nvalids, pacs%ndetectors))
     allocate (coords(NDIMS, pacs%ndetectors*NVERTICES))
     allocate (coords_yz(NDIMS, pacs%ndetectors*NVERTICES))
 
@@ -111,13 +96,12 @@ program test_ngc6946_bpj
 
     chop_old = pInf
 
-    write (*,*) 'surfaces:'
     !XXX IFORT bug
     !!$omp parallel do default(shared) firstprivate(chop_old) private(ipointing, isample, ra, dec, pa, chop, coords, coords_yz)
     isample = 1
-    do ipointing = 1, obs%slice(1)%nsamples
+    do ipointing = 1, obs%nsamples
         if (obs%pointing(ipointing)%removed) cycle
-        call obs%get_position_index(1, ipointing, 1, obs%slice(1)%offset, ra, dec, pa, chop)
+        call obs%get_position_index(ipointing, 1, obs%offset, ra, dec, pa, chop)
         if (abs(chop-chop_old) > 1.e-2_p) then
             coords_yz = pacs%uv2yz(pacs%detector_corner, pacs%distortion_yz, chop)
             chop_old = chop
@@ -133,35 +117,22 @@ program test_ngc6946_bpj
     end do
     !!$omp end parallel do
 
-    call system_clock(count2, count_rate, count_max)
-    write (*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
-    write (*,*) 'Difference: ', maxval(abs((surface1-surface2)/surface1))
-    write (*,*) 'Sum surfaces: ', sum_kahan(surface1), sum_kahan(surface2), nx, ny
-    write (*,*) 'Sum pmatrix weight: ', sum(pmatrix%weight), 'max:', maxval(pmatrix%weight)
-    write (*,*) 'Sum pmatrix pixel: ', sum(int(pmatrix%pixel,kind=4)), 'max:', maxval(pmatrix%pixel)
-    write (*,*) 'Sum signal: ', sum_kahan(signal), 'max:', maxval(signal)
+    if (neq_real(sum(real(pmatrix%weight, kind=p)), 840698.47972_p, 10._p * epsilon(1.0))) call failure('sum weight')
+    if (sum(int(pmatrix%pixel,kind=4)) /= 1974462425) call failure('sum pixel indices')
 
     ! back project the timeline
-    write (*,'(a)', advance='no') 'Computing the back projection... '
     signal = 1._p / surface1
-    call system_clock(count1, count_rate, count_max)
+    map1d = 0
     call pmatrix_transpose(pmatrix, signal, map1d)
-    call system_clock(count2, count_rate, count_max)
-    write (*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
 
     ! test the back projected map
-    write (OUTPUT_UNIT,*) 'Sum in map is ', sum_kahan(map1d), ' ...instead of ', strinteger(int(pacs%ndetectors*nsamples, kind=4))
-    if (neq_real(sum_kahan(map1d), real(pacs%ndetectors*nsamples,p), 10._p * epsilon(1.0))) then
+    if (neq_real(sum_kahan(map1d), real(pacs%ndetectors*obs%nvalids,p), 10._p * epsilon(1.0))) then
         stop 'FAILED:back projection'
     end if
 
     ! project the map
-    write (*,'(a)', advance='no') 'Computing the forward projection... '
     map1d = 1._p
-    call system_clock(count1, count_rate, count_max)
     call pmatrix_direct(pmatrix, map1d, signal)
-    call system_clock(count2, count_rate, count_max)
-    write (*,'(f6.2,a)') real(count2-count1)/count_rate, 's'
 
     ! test the back projected map
     if (any(neq_real(signal, surface1, 10._p * epsilon(1.0)))) then
@@ -171,9 +142,6 @@ program test_ngc6946_bpj
         call failure('wrong back projection.')
     end if
 
-    call system_clock(count2, count_rate, count_max)
-    write (*,'(a,f6.2,a)') 'Total elapsed time: ', real(count2-count0)/count_rate, 's'
-
 contains
 
     subroutine failure(errmsg)
@@ -182,34 +150,17 @@ contains
         stop 1
     end subroutine failure
 
-    subroutine pacsobs2obs(pacsobs, obs, status)
+    subroutine pacsobs2obs(pacsobs, islice, obs, status)
         class(PacsObservation), intent(in)           :: pacsobs
+        integer, intent(in)                          :: islice
         class(Observation), allocatable, intent(out) :: obs
         integer, intent(out)                         :: status
-        real(p), dimension(pacsobs%nsamples)   :: time, ra, dec, pa, chop
-        logical*1, dimension(pacsobs%nsamples) :: masked, removed
-        integer :: islice, nslices, nsamples_tot, dest1, dest2
-        ! delay is the instrument lag wrt the telescope
         
-        nslices = size(pacsobs%slice)
-        nsamples_tot = sum(pacsobs%slice%nsamples)
-        dest1 = 1
-        do islice = 1, nslices
-            dest2 = dest1 + pacsobs%slice(islice)%nsamples - 1
-            time   (dest1:dest2) = pacsobs%slice(islice)%p%time
-            ra     (dest1:dest2) = pacsobs%slice(islice)%p%ra
-            dec    (dest1:dest2) = pacsobs%slice(islice)%p%dec
-            pa     (dest1:dest2) = pacsobs%slice(islice)%p%pa
-            chop   (dest1:dest2) = pacsobs%slice(islice)%p%chop
-            masked (dest1:dest2) = pacsobs%slice(islice)%p%masked
-            removed(dest1:dest2) = pacsobs%slice(islice)%p%removed
-            dest1 = dest2 + 1
-        end do
-
         allocate (obs)
-        call obs%init(time, ra, dec, pa, chop, masked, removed, pacsobs%slice%nsamples, pacsobs%slice%compression_factor,          &
-                      (pacsobs%slice%compression_factor - 1) / (2._p * pacsobs%slice%compression_factor), status)
-        obs%slice%id = pacsobs%slice%filename
+        call obs%init(pacsobs%slice(islice)%p%time, pacsobs%slice(islice)%p%ra, pacsobs%slice(islice)%p%dec,                       &
+                      pacsobs%slice(islice)%p%pa, pacsobs%slice(islice)%p%chop, pacsobs%slice(islice)%p%masked,                    &
+                      pacsobs%slice(islice)%p%removed, pacsobs%slice(islice)%compression_factor,                                   &
+                      (pacsobs%slice(islice)%compression_factor - 1) / (2._p * pacsobs%slice(islice)%compression_factor), status)
 
     end subroutine pacsobs2obs
 

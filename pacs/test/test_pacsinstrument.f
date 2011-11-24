@@ -1,6 +1,6 @@
 program test_pacsinstrument
 
-    use iso_fortran_env,        only : ERROR_UNIT
+    use iso_fortran_env,        only : ERROR_UNIT, OUTPUT_UNIT
     use module_fitstools,       only : ft_read_keyword, ft_header2str
     use module_math,            only : mean, neq_real
     use module_observation,     only : MaskPolicy, Observation
@@ -107,10 +107,10 @@ program test_pacsinstrument
     allocate (pacsobs)
     call pacsobs%init(filename, policy, status)
     if (status /= 0) call failure('init_pacsobservation')
-    call pacsobs2obs(pacsobs, obs, status)
+    call pacsobs2obs(pacsobs, 1, obs, status)
     if (status /= 0) call failure('pacsobs2obs')
 
-    allocate(time(sum(obs%slice%nsamples)))
+    allocate(time(obs%nsamples))
     time = obs%pointing%time
     if (size(time) /= 360) call failure('nsamples')
 
@@ -118,7 +118,7 @@ program test_pacsinstrument
 
     allocate (signal(pacsobs%slice(1)%nvalids,pacs%ndetectors))
     allocate (mask  (pacsobs%slice(1)%nvalids,pacs%ndetectors))
-    call pacs%read(obs, ['master'], signal, mask, status)
+    call pacs%read(pacsobs%slice(1)%filename, obs%pointing%masked, obs%pointing%removed, ['master'], signal, mask, status)
     if (status /= 0) call failure('pacs%read')
 
     ! get a detector that has been hit by a glitch
@@ -136,10 +136,10 @@ program test_pacsinstrument
         do last = first, 360, 11
            obs%pointing%removed = .true.
            obs%pointing(first:last)%removed = .false.
-           obs%slice(1)%nvalids = last - first + 1
-           allocate(signal(obs%slice(1)%nvalids, pacs%ndetectors))
-           allocate(mask  (obs%slice(1)%nvalids, pacs%ndetectors))
-           call pacs%read(obs, ['master'], signal, mask, status)
+           obs%nvalids = last - first + 1
+           allocate(signal(obs%nvalids, pacs%ndetectors))
+           allocate(mask  (obs%nvalids, pacs%ndetectors))
+           call pacs%read(pacsobs%slice(1)%filename, obs%pointing%masked, obs%pointing%removed, ['master'], signal, mask, status)
            if (status /= 0) call failure('read_pacsobservation loop')
            if (any(signal(:,idetector) /= signal_ref(first:last))) call failure('read signal')
            if (any(mask(:,idetector) .neqv. mask_ref(first:last))) then
@@ -165,49 +165,49 @@ program test_pacsinstrument
     if (status /= 0) call failure('init_astrometry.')
 
     index = 0
-    call obs%get_position_time(1, time(1), ra, dec, pa, chop, index)
+    call obs%get_position_time(time(1), ra, dec, pa, chop, index)
 
     yz = pacs%uv2yz(pacs%detector_corner, pacs%distortion_yz, chop)
-
-    do i=1, 1
-       write (*,*) 'Y: ', i, (yz(1, (i-1)*4+j), j = 1,4)
-       write (*,*) 'Z: ', i, (yz(2, (i-1)*4+j), j = 1,4)
-    end do
-
     ad = pacs%yz2ad(yz, ra, dec, pa)
-
-    do i=1, 1
-       write (*,*) 'RA:  ', i, (ad(1, (i-1)*4+j), j = 1,4)
-       write (*,*) 'Dec: ', i, (ad(2, (i-1)*4+j), j = 1,4)
-    end do
-
     xy = ad2xy_gnomonic(ad)
 
-    do i=1, 1
-        write (*,*) 'x: ', i, (xy(1, (i-1)*4+j), j = 1,4)
-        write (*,*) 'y: ', i, (xy(2, (i-1)*4+j), j = 1,4)
-    end do
+    if (any(neq_real([(yz(1,j), j = 1,4)], [3.06059075250975504E-002_p,  2.98567567627381451E-002_p, &
+        2.98274651048868189E-002_p,  3.05767270814490018E-002_p]))) call failure('Y')
+    if (any(neq_real([(yz(2,j), j = 1,4)], [1.30515691627312649E-002_p,  1.30921308057738196E-002_p, &
+        1.23364621524597352E-002_p,  1.22964967432396752E-002_p]))) call failure('Z')
+    if (any(neq_real([(ad(1,j), j = 1,4)], [245.93544838257338_p, 245.93659969792549_p, 245.93766190786474_p, &
+        245.93650960929841_p]))) call failure('RA')
+    if (any(neq_real([(ad(2,j), j = 1,4)], [61.510272502550855_p, 61.509760799263510_p, 61.510321692744220_p, &
+        61.510833009997000_p]))) call failure('Dec')
+    if (any(neq_real([(xy(1,j), j = 1,4)], [33288.533194678035_p, 33288.643767997528_p, 33287.493446513588_p, &
+        33287.383783655569_p]))) call failure('x')
+    if (any(neq_real([(xy(2,j), j = 1,4)], [19107.874613006607_p, 19106.828248107082_p, 19106.616041863876_p, &
+        19107.662684113882_p]))) call failure('y')
 
-    write(*,*) 'minmaxU', minval(pacs%detector_corner(1,:)), maxval(pacs%detector_corner(1,:))
-    write(*,*) 'minmaxV', minval(pacs%detector_corner(2,:)), maxval(pacs%detector_corner(2,:))
-    write(*,*) 'minmaxY', minval(yz(1,:)), maxval(yz(1,:))
-    write(*,*) 'minmaxZ', minval(yz(2,:)), maxval(yz(2,:))
-    write(*,*) 'minmaxX', minval(xy(1,:)), maxval(xy(1,:))
-    write(*,*) 'minmaxY', minval(xy(2,:)), maxval(xy(2,:))
-
-    ! minmax(pa) 252.34927       297.83408
-    ! minmax(ra) 258.50445       309.04262
-    ! minmax(dec) 59.980161       67.110813
+    if (any(neq_real([minval(pacs%detector_corner(1,:)), maxval(pacs%detector_corner(1,:))], &
+        [-13.276956558227539_p, 13.294145584106445_p]))) call failure('minmaxU')
+    if (any(neq_real([minval(pacs%detector_corner(2,:)), maxval(pacs%detector_corner(2,:))], &
+        [-25.931186676025391_p, 25.915901184082031_p]))) call failure('minmaxV')
+    if (any(neq_real([minval(yz(1,:)), maxval(yz(1,:))], &
+        [-3.04914370632606777E-002_p, 3.06059075250975504E-002_p]))) call failure('minmaxY')
+    if (any(neq_real([minval(yz(2,:)), maxval(yz(2,:))], &
+        [-1.55613991289617025E-002_p, 1.61528327291844132E-002_p]))) call failure('minmaxZ')
+    if (any(neq_real([minval(ad(1,:)), maxval(ad(1,:))], &
+        [245.93544838257338_p, 246.06808069685269_p]))) call failure('minmaxRA')
+    if (any(neq_real([minval(ad(2,:)), maxval(ad(2,:))], &
+        [61.469595978715510_p, 61.531092935763752_p]))) call failure('minmaxDec')
+    if (any(neq_real([minval(xy(1,:)), maxval(xy(1,:))], [33245.023275401254_p, 33297.106116672716_p]))) call failure('minmaxx')
+    if (any(neq_real([minval(xy(2,:)), maxval(xy(2,:))], [19016.089802392329_p, 19107.874613006607_p]))) call failure('minmaxy')
 
     call obs%compute_center(ra0, dec0)
-    print *, 'ra0', ra0, mean(obs%pointing%ra)
-    print *, 'dec0', dec0, mean(obs%pointing%dec)
     if (neq_real(ra0,  mean(obs%pointing%ra), 1.e-8_p) .or. &
         neq_real(dec0, mean(obs%pointing%dec), 1.e-8_p)) call failure('compute_center')
 
     call pacs%find_minmax(obs, .false., xmin, xmax, ymin, ymax)
-    write (*,*) 'Xmin: ', xmin, ', Xmax: ', xmax
-    write (*,*) 'Ymin: ', ymin, ', Ymax: ', ymax
+    if (neq_real(xmin, 33215.245057167944_p)) call failure('xmin')
+    if (neq_real(xmax, 33297.106116672716_p)) call failure('xmax')
+    if (neq_real(ymin, 19008.137140577746_p)) call failure('ymin')
+    if (neq_real(ymax, 19141.196499174162_p)) call failure('ymax')
 
     call pacs%compute_map_header(obs, .false., 3._p, header, status)
     if (status /= 0) call failure('compute_map_header')
@@ -225,7 +225,7 @@ program test_pacsinstrument
     index = 0
     call system_clock(count1, count_rate, count_max)
     do i = 1, size(time)
-        call obs%get_position_time(1, time(i), ra, dec, pa, chop, index)
+        call obs%get_position_time(time(i), ra, dec, pa, chop, index)
         yz = pacs%uv2yz(pacs%detector_corner, pacs%distortion_yz, chop)
         ad = pacs%yz2ad(yz, ra, dec, pa)
         xy = ad2xy_gnomonic(ad)
@@ -276,11 +276,15 @@ program test_pacsinstrument
     if (status /= 0) call failure('pacs%init 3')
     call pacs%destroy()
 
+    write (OUTPUT_UNIT,'(a)') 'Testing error...'
     call pacs%init_with_calfiles('x', detector_mask_blue, 1, status)
     if (status == 0) call failure('pacs%init 4')
+    write (OUTPUT_UNIT,'(a,/)') 'OK.'
 
+    write (OUTPUT_UNIT,'(a)') 'Testing error...'
     call pacs%init_with_calfiles('blue', detector_mask_blue, 3, status)
     if (status == 0) call failure('pacs%init 5')
+    write (OUTPUT_UNIT,'(a,/)') 'OK.'
 
 contains
 
@@ -290,33 +294,18 @@ contains
         stop 1
     end subroutine failure
 
-    subroutine pacsobs2obs(pacsobs, obs, status)
+
+    subroutine pacsobs2obs(pacsobs, islice, obs, status)
         class(PacsObservation), intent(in)           :: pacsobs
+        integer, intent(in)                          :: islice
         class(Observation), allocatable, intent(out) :: obs
         integer, intent(out)                         :: status
-        real(p), dimension(pacsobs%nsamples)   :: time, ra, dec, pa, chop
-        logical*1, dimension(pacsobs%nsamples) :: masked, removed
-        integer :: islice, nslices, nsamples_tot, dest1, dest2
         
-        nslices = size(pacsobs%slice)
-        nsamples_tot = sum(pacsobs%slice%nsamples)
-        dest1 = 1
-        do islice = 1, nslices
-            dest2 = dest1 + pacsobs%slice(islice)%nsamples - 1
-            time   (dest1:dest2) = pacsobs%slice(islice)%p%time
-            ra     (dest1:dest2) = pacsobs%slice(islice)%p%ra
-            dec    (dest1:dest2) = pacsobs%slice(islice)%p%dec
-            pa     (dest1:dest2) = pacsobs%slice(islice)%p%pa
-            chop   (dest1:dest2) = pacsobs%slice(islice)%p%chop
-            masked (dest1:dest2) = pacsobs%slice(islice)%p%masked
-            removed(dest1:dest2) = pacsobs%slice(islice)%p%removed
-            dest1 = dest2 + 1
-        end do
-
         allocate (obs)
-        call obs%init(time, ra, dec, pa, chop, masked, removed, pacsobs%slice%nsamples, pacsobs%slice%compression_factor,          &
-                      (pacsobs%slice%compression_factor - 1) / (2._p * pacsobs%slice%compression_factor), status)
-        obs%slice%id = pacsobs%slice%filename
+        call obs%init(pacsobs%slice(islice)%p%time, pacsobs%slice(islice)%p%ra, pacsobs%slice(islice)%p%dec,                       &
+                      pacsobs%slice(islice)%p%pa, pacsobs%slice(islice)%p%chop, pacsobs%slice(islice)%p%masked,                    &
+                      pacsobs%slice(islice)%p%removed, pacsobs%slice(islice)%compression_factor,                                   &
+                      (pacsobs%slice(islice)%compression_factor - 1) / (2._p * pacsobs%slice(islice)%compression_factor), status)
 
     end subroutine pacsobs2obs
 

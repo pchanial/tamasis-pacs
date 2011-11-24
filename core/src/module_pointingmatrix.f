@@ -195,7 +195,6 @@ contains
         nsamples   = size(pmatrix, 2)
         ndetectors = size(pmatrix, 3)
 
-        mask = .true.
         !$omp parallel do private(pixel)
         do idetector = 1, ndetectors
             do isample = 1, nsamples

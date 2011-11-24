@@ -75,7 +75,6 @@ module module_pacsobservation
     contains
 
         procedure :: init
-        procedure :: print
 
     end type PacsObservation
 
@@ -835,58 +834,5 @@ contains
 
     end subroutine set_sampling_interval
 
-
-    !-------------------------------------------------------------------------------------------------------------------------------
-
-
-    subroutine print(this)
-
-        class(PacsObservation), intent(in) :: this
-
-        integer :: islice, nsamples
-
-        do islice = 1, this%nslices
-
-            nsamples = this%slice(islice)%nsamples
-
-            ! observation number & file name
-            write (OUTPUT_UNIT,'(a6,a)') strternary(this%nslices>1, '  #' // strinteger(islice,3), ''), 'Observation: ' //         &
-                  trim(this%slice(islice)%filename)
-            
-            ! band
-            write (OUTPUT_UNIT,'(a,$)') "      Band: "
-            select case (this%slice(islice)%band)
-                case ('blue')
-                    write (OUTPUT_UNIT,'(a)') 'Blue'
-                case ('green')
-                    write (OUTPUT_UNIT,'(a)') 'Green'
-                case ('red')
-                    write (OUTPUT_UNIT,'(a)') 'Red'
-                case default
-                    write (OUTPUT_UNIT,'(a)') 'Unknown'
-            end select
-
-            ! observing mode
-            write (OUTPUT_UNIT,'(a)') '      Observing mode: ' // trim(this%slice(islice)%observing_mode)
-
-            ! compression factor
-            write (OUTPUT_UNIT,'(a,i0)') '      Compression factor: ', this%slice(islice)%compression_factor
-
-            ! unit
-            write (OUTPUT_UNIT,'(a)') '      Unit: ' // trim(this%slice(islice)%unit)
-
-            ! print mask information
-            write (OUTPUT_UNIT,'(a,i0,a)') '      In-scan:    ', count(this%slice(islice)%p%inscan),     ' ' //                    &
-                  strpolicy(this%policy%inscan)
-            write (OUTPUT_UNIT,'(a,i0,a)') '      Turnaround: ', count(this%slice(islice)%p%turnaround), ' ' //                    &
-                  strpolicy(this%policy%turnaround)
-            write (OUTPUT_UNIT,'(a,i0,a)') '      Other:      ', count(this%slice(islice)%p%other),      ' ' //                    &
-                  strpolicy(this%policy%other)
-            write (OUTPUT_UNIT,'(a,i0,a)') '      Invalid:    ', count(this%slice(islice)%p%invalid),    ' ' //                    &
-                  strpolicy(this%policy%invalid)
-
-        end do
-
-    end subroutine print
 
  end module module_pacsobservation

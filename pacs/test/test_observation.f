@@ -17,13 +17,13 @@ program test_observation
 
     ! test interpolation (evenly spaced sampling)
     allocate (obs)
-    call obs%init([1._p, 2._p], [0._p, 1._p], [3._p, 3._p], [2._p, 1._p], [0._p, 0._p], [FALSE, FALSE], [FALSE, FALSE], [2], [1],  &
-                  [0._p], status)
+    call obs%init([1._p, 2._p], [0._p, 1._p], [3._p, 3._p], [2._p, 1._p], [0._p, 0._p], [FALSE, FALSE], [FALSE, FALSE], 1, 0._p,   &
+                  status)
     if (status /= 0) call failure('init 1')
 
     index = 0
     do i = 1, size(time)
-       call obs%get_position_time(1, time(i), ra(i), dec(i), pa(i), chop(i), index)
+       call obs%get_position_time(time(i), ra(i), dec(i), pa(i), chop(i), index)
     end do
     if (any(neq_real(ra,  [nan, nan,-1.0_p,-0.5_p, 0.0_p, 0.5_p, 1.0_p, 1.5_p, 2.0_p, nan, nan, nan]) .or.                         &
             neq_real(dec, [nan, nan, 3.0_p, 3.0_p, 3.0_p, 3.0_p, 3.0_p, 3.0_p, 3.0_p, nan, nan, nan]) .or.                         &
@@ -31,15 +31,14 @@ program test_observation
         call failure('get_position_time 1')
 
     ! test slow interpolation (unevenly spaced sampling)
-    deallocate (obs%slice, obs%pointing)
+    deallocate (obs%pointing)
     call obs%init([0.5_p, 1.5_p, 2.5_p, 3._p], [0._p, 1._p, 2._p, 2.5_p], [3._p, 3._p, 3._p, 3._p],                                &
-                  [3._p, 2._p, 1._p, 0.5_p], [0._p, 0._p, 0._p, 1._p], [(FALSE, i=1, 4)], [(FALSE, i=1, 4)], [4],                  &
-                  [1], [0._p], status)
+                  [3._p, 2._p, 1._p, 0.5_p], [0._p, 0._p, 0._p, 1._p], [(FALSE, i=1, 4)], [(FALSE, i=1, 4)], 1, 0._p, status)
     if (status /= 0) call failure('init 2')
 
     index = 0
     do i = 1, size(time)
-        call obs%get_position_time(1, time(i), ra(i), dec(i), pa(i), chop(i), index)
+        call obs%get_position_time(time(i), ra(i), dec(i), pa(i), chop(i), index)
     end do
 
     ! time starts from -1 to 4.5
@@ -51,7 +50,7 @@ program test_observation
     end if
 
     do i = 1, size(time)
-        call obs%get_position_index(1, i, 3, 0._p, ra(i), dec(i), pa(i), chop(i))
+        call obs%get_position_index(i, 3, 0._p, ra(i), dec(i), pa(i), chop(i))
     end do
 
     if (any( neq_real(ra, [(0+i/3._p,i=0,2), (1+i/3._p,i=0,2), (2+0.5_p*i/3._p,i=0,2),(2.5_p+0.5_p*i/3._p,i=0,2)])                 &

@@ -4,20 +4,18 @@ import os
 import tamasis
 from tamasis import *
 
-class TestFailure(Exception): pass
-
 pyoperators.memory.verbose = False
 tamasis.var.verbose = False
 profile = None#'test_ls.png'
 data_dir = os.path.dirname(__file__) + '/data/'
-obs = PacsObservation(data_dir+'frames_blue.fits', fine_sampling_factor=1)
+obs = PacsObservation(data_dir + 'frames_blue.fits', fine_sampling_factor=1)
 tod = obs.get_tod(flatfielding=False)
 
-telescope    = IdentityOperator()
-projection   = Projection(obs, oversampling=False, npixels_per_sample=6)
-compression  = CompressionAverage(obs.slice.compression_factor)
-masking_tod  = Masking(tod.mask)
-masking_map  = Masking(projection.mask)
+telescope   = IdentityOperator()
+projection  = Projection(obs, oversampling=False, npixels_per_sample=6)
+compression = CompressionAverage(obs.slice.compression_factor)
+masking_tod = Masking(tod.mask)
+masking_map = Masking(projection.get_mask())
 
 model = masking_tod * projection * telescope * masking_map
 print(model)
@@ -26,7 +24,7 @@ print(model)
 map_naive = mapper_naive(tod, model)
 
 # iterative map, restricting oneself to observed map pixels
-unpacking = Unpacking(projection.mask)
+unpacking = Unpacking(projection.get_mask())
 old_settings = np.seterr(divide='ignore')
 M = DiagonalOperator(unpacking.T(1./map_naive.coverage))
 np.seterr(**old_settings)
@@ -40,18 +38,19 @@ class Callback():
         self.niterations = 0
     def __call__(self, x):
         self.niterations += 1
+callback = Callback()
 
 import scipy
+
 map_iter2 = mapper_ls(tod, model,
                       tol=1.e-4,
                       maxiter=10 if profile else 300,
                       M=DiagonalOperator(masking_map(1./map_naive.coverage)),
-                      callback=Callback(),
+                      callback=callback,
                       solver=scipy.sparse.linalg.bicgstab,
                       profile=profile)
-
-print('Elapsed time:', map_iter2.header['TIME'])
 if profile is None:
-    print(map_iter2.header['time'])
-    if map_iter2.header['NITER'] > 11:
-        raise TestFailure()
+    print 'Elapsed time:', map_iter2.header['TIME']
+
+def test():
+    assert map_iter2.header['NITER'] <= 10

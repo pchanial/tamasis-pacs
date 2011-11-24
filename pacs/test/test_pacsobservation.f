@@ -1,6 +1,6 @@
 program test_pacsobservation
 
-    use iso_fortran_env,        only : ERROR_UNIT
+    use iso_fortran_env,        only : ERROR_UNIT, OUTPUT_UNIT
     use module_math,            only : neq_real
     use module_observation,     only : MaskPolicy, Observation
     use module_pacsobservation, only : PacsObservation
@@ -61,30 +61,43 @@ program test_pacsobservation
     if (status /= 0 .or. first /= 1 .or. last /= 360) call failure('init6')
    
     ! invalid calls
+    write (OUTPUT_UNIT,'(a)') 'Testing error...'
     afilename(1) = filename // '[32:23]'
     call pacsobs%init(afilename, policy, status)
     if (status == 0) call failure('badinit1')
+    write (OUTPUT_UNIT,'(a,/)') 'OK.'
 
+    write (OUTPUT_UNIT,'(a)') 'Testing error...'
     afilename(1) = filename // '[32:361]'
     call pacsobs%init(afilename, policy, status)
     if (status == 0) call failure('badinit2')
+    write (OUTPUT_UNIT,'(a,/)') 'OK.'
 
+    write (OUTPUT_UNIT,'(a)') 'Testing error...'
     afilename(1) = filename // '[ljdf]'
     call pacsobs%init(afilename, policy, status)
     if (status == 0) call failure('badinit4')
+    write (OUTPUT_UNIT,'(a,/)') 'OK.'
 
+    write (OUTPUT_UNIT,'(a)') 'Testing error...'
     afilename(1) = filename // '[:l+]'
     call pacsobs%init(afilename, policy, status)
     if (status == 0) call failure('badinit5')
+    write (OUTPUT_UNIT,'(a,/)') 'OK.'
 
+    write (OUTPUT_UNIT,'(a)') 'Testing error...'
     afilename(1) = filename // '[370:]'
     call pacsobs%init(afilename, policy, status)
     if (status == 0) call failure('badinit6')
+    write (OUTPUT_UNIT,'(a,/)') 'OK.'
+
     deallocate (afilename)
 
+    write (OUTPUT_UNIT,'(a)') 'Testing error...'
     allocate(afilename(0))
     call pacsobs%init(afilename, policy, status)
     if (status == 0) call failure('ainit2')
+    write (OUTPUT_UNIT,'(a,/)') 'OK.'
     deallocate (afilename)
 
     ! calls with array
@@ -101,12 +114,12 @@ program test_pacsobservation
     deallocate(afilename)
  
     ! test get_position_time
-    call pacsobs2obs(pacsobs, obs, status)
+    call pacsobs2obs(pacsobs, 1, obs, status)
     if (status /= 0) call failure('pacsobs2obs')
 
     index = 0
     do itime = 1, 6
-        call obs%get_position_time(1, timetest(itime)-timetest(1), ra(itime), dec(itime), pa(itime), chop(itime), index)
+        call obs%get_position_time(timetest(itime)-timetest(1), ra(itime), dec(itime), pa(itime), chop(itime), index)
     end do
     if (any(neq_real(ra  (1:6), ratest))) call failure('ra')
     if (any(neq_real(dec (1:6), dectest))) call failure('dec')
@@ -143,33 +156,17 @@ contains
         stop 1
     end subroutine failure
 
-    subroutine pacsobs2obs(pacsobs, obs, status)
+    subroutine pacsobs2obs(pacsobs, islice, obs, status)
         class(PacsObservation), intent(in)           :: pacsobs
+        integer, intent(in)                          :: islice
         class(Observation), allocatable, intent(out) :: obs
         integer, intent(out)                         :: status
-        real(p), dimension(pacsobs%nsamples)   :: time, ra, dec, pa, chop
-        logical*1, dimension(pacsobs%nsamples) :: masked, removed
-        integer :: islice, nslices, nsamples_tot, dest1, dest2
         
-        nslices = pacsobs%nslices
-        nsamples_tot = pacsobs%nsamples
-        dest1 = 1
-        do islice = 1, nslices
-            dest2 = dest1 + pacsobs%slice(islice)%nsamples - 1
-            time   (dest1:dest2) = pacsobs%slice(islice)%p%time
-            ra     (dest1:dest2) = pacsobs%slice(islice)%p%ra
-            dec    (dest1:dest2) = pacsobs%slice(islice)%p%dec
-            pa     (dest1:dest2) = pacsobs%slice(islice)%p%pa
-            chop   (dest1:dest2) = pacsobs%slice(islice)%p%chop
-            masked (dest1:dest2) = pacsobs%slice(islice)%p%masked
-            removed(dest1:dest2) = pacsobs%slice(islice)%p%removed
-            dest1 = dest2 + 1
-        end do
-
         allocate (obs)
-        call obs%init(time, ra, dec, pa, chop, masked, removed, pacsobs%slice%nsamples, pacsobs%slice%compression_factor,          &
-                      (pacsobs%slice%compression_factor - 1) / (2._p * pacsobs%slice%compression_factor), status)
-        obs%slice%id = pacsobs%slice%filename
+        call obs%init(pacsobs%slice(islice)%p%time, pacsobs%slice(islice)%p%ra, pacsobs%slice(islice)%p%dec,                       &
+                      pacsobs%slice(islice)%p%pa, pacsobs%slice(islice)%p%chop, pacsobs%slice(islice)%p%masked,                    &
+                      pacsobs%slice(islice)%p%removed, pacsobs%slice(islice)%compression_factor,                                   &
+                      (pacsobs%slice(islice)%compression_factor - 1) / (2._p * pacsobs%slice(islice)%compression_factor), status)
 
     end subroutine pacsobs2obs
 

@@ -92,7 +92,6 @@ module module_pacsinstrument
 
         procedure :: compute_projection_nearest_neighbour
         procedure :: compute_projection_sharp_edges
-        procedure :: read_one
         procedure, public, nopass :: read_calibration_files
 
     end type PacsInstrument
@@ -600,7 +599,7 @@ contains
         real(p)              :: ra, dec, pa, chop, offset
         real(p), allocatable :: hull_uv(:,:), hull(:,:)
         integer, allocatable :: ihull(:)
-        integer              :: sampling_factor, isample, islice, itime
+        integer              :: sampling_factor, isample, itime
 
         xmin = pInf
         xmax = mInf
@@ -613,41 +612,37 @@ contains
         allocate(hull(NDIMS, size(ihull)))
         hull_uv = this%detector_corner(:,ihull)
 
-        do islice = 1, size(obs%slice)
-
-            ! check if it is required to interpolate pointing positions
-            if (oversampling) then
-                sampling_factor = this%fine_sampling_factor * obs%slice(islice)%factor
-                offset = obs%slice(islice)%offset
-            else
-                sampling_factor = 1
-                offset = 0
-            end if
+        ! check if it is required to interpolate pointing positions
+        if (oversampling) then
+            sampling_factor = this%fine_sampling_factor * obs%factor
+            offset = obs%offset
+        else
+            sampling_factor = 1
+            offset = 0
+        end if
 
 #ifndef IFORT
-            !$omp parallel do default(shared) reduction(min:xmin,ymin) reduction(max:xmax,ymax) &
-            !$omp private(itime,isample,ra,dec,pa,chop,hull)
+        !$omp parallel do default(shared) reduction(min:xmin,ymin) reduction(max:xmax,ymax) &
+        !$omp private(itime,isample,ra,dec,pa,chop,hull)
 #endif
-            do itime = 1, obs%slice(islice)%nsamples * sampling_factor
+        do itime = 1, obs%nsamples * sampling_factor
 
-                isample = (itime - 1) / sampling_factor + obs%slice(islice)%first
-                if (obs%pointing(isample)%removed .or. obs%pointing(isample)%masked) cycle
+            isample = (itime - 1) / sampling_factor + 1
+            if (obs%pointing(isample)%removed .or. obs%pointing(isample)%masked) cycle
 
-                call obs%get_position_index(islice, itime, sampling_factor, offset, ra, dec, pa, chop)
-                hull = this%uv2yz(hull_uv, this%distortion_yz, chop)
-                hull = this%yz2ad(hull, ra, dec, pa)
-                hull = ad2xy_gnomonic(hull)
-                xmin = min(xmin, minval(hull(1,:)))
-                xmax = max(xmax, maxval(hull(1,:)))
-                ymin = min(ymin, minval(hull(2,:)))
-                ymax = max(ymax, maxval(hull(2,:)))
-
-            end do
-#ifndef IFORT
-            !$omp end parallel do
-#endif
+            call obs%get_position_index(itime, sampling_factor, offset, ra, dec, pa, chop)
+            hull = this%uv2yz(hull_uv, this%distortion_yz, chop)
+            hull = this%yz2ad(hull, ra, dec, pa)
+            hull = ad2xy_gnomonic(hull)
+            xmin = min(xmin, minval(hull(1,:)))
+            xmax = max(xmax, maxval(hull(1,:)))
+            ymin = min(ymin, minval(hull(2,:)))
+            ymax = max(ymax, maxval(hull(2,:)))
 
         end do
+#ifndef IFORT
+        !$omp end parallel do
+#endif
 
     end subroutine find_minmax
 
@@ -721,76 +716,67 @@ contains
         real(p) :: coords(NDIMS,this%ndetectors), coords_yz(NDIMS,this%ndetectors)
         real(p) :: x(this%ndetectors), y(this%ndetectors), s(this%ndetectors)
         real(p) :: ra, dec, pa, chop, chop_old, reference_area, offset
-        integer :: ifine, isample, islice, itime, ivalid, nsamples, nvalids, sampling_factor, dest
+        integer :: ifine, isample, itime, ivalid, sampling_factor
         integer, allocatable :: valids(:)
 
         npixels_per_sample = 1
         reference_area = refpix_area()
 
-        dest = 0
         out = .false.
 
-        ! loop over the observations
-        do islice = 1, size(obs%slice)
+        chop_old = pInf
 
-            nsamples = obs%slice(islice)%nsamples
-            nvalids  = obs%slice(islice)%nvalids
+        ! check if it is required to interpolate pointing positions
+        if (oversampling) then
+            sampling_factor = this%fine_sampling_factor * obs%factor
+            offset = obs%offset
+        else
+            sampling_factor = 1
+            offset = 0
+        end if
 
-            chop_old = pInf
-
-            ! check if it is required to interpolate pointing positions
-            if (oversampling) then
-                sampling_factor = this%fine_sampling_factor * obs%slice(islice)%factor
-                offset = obs%slice(islice)%offset
-            else
-                sampling_factor = 1
-                offset = 0
-            end if
-
-            allocate (valids(nvalids))
-            ivalid = 1
-            do isample = obs%slice(islice)%first, obs%slice(islice)%last
-                if (obs%pointing(isample)%removed) cycle
-                valids(ivalid) = isample
-                ivalid = ivalid + 1
-            end do
-
-            !$omp parallel do default(shared) firstprivate(chop_old)                            &
-            !$omp private(ifine, isample, itime, ra, dec, pa, chop, coords, coords_yz, x, y, s) &
-            !$omp reduction(max : npixels_per_sample) reduction(.or. : out)
-
-            ! loop over the samples which have not been removed
-            do ivalid = 1, nvalids
-                isample = valids(ivalid)
-                if (obs%pointing(isample)%masked) then
-                    pmatrix(1,(ivalid-1)*sampling_factor+1+dest:ivalid*sampling_factor+dest,:)%pixel = -1
-                    pmatrix(1,(ivalid-1)*sampling_factor+1+dest:ivalid*sampling_factor+dest,:)%weight = 0
-                    cycle
-                end if
-                do ifine = 1, sampling_factor
-                    itime = (isample - obs%slice(islice)%first) * sampling_factor + ifine
-                    call obs%get_position_index(islice, itime, sampling_factor, offset, ra, dec, pa, chop)
-                    if (abs(chop-chop_old) > 1.e-2_p) then
-                        coords_yz = this%uv2yz(this%detector_center, this%distortion_yz, chop)
-                        chop_old = chop
-                    end if
-                    coords = this%yz2ad(coords_yz, ra, dec, pa)
-                    call ad2xys_gnomonic(coords, x, y, s)
-                    itime  = (ivalid-1) * sampling_factor + ifine + dest
-                    ! the input map has flux densities, not surface brightness
-                    ! f_idetector = f_imap * weight
-                    ! with weight = detector_area / pixel_area
-                    ! and pixel_area = reference_area / s
-                    call xy2pmatrix(x, y, nx, ny, out, pmatrix(1,itime,:))
-                    pmatrix(1,itime,:)%weight = s * this%detector_area / reference_area
-                end do
-            end do
-
-            !$omp end parallel do
-            dest = dest + nvalids * sampling_factor
-            deallocate (valids)
-
+        allocate (valids(obs%nvalids))
+        ivalid = 1
+        do isample = 1, obs%nsamples
+            if (obs%pointing(isample)%removed) cycle
+            valids(ivalid) = isample
+            ivalid = ivalid + 1
         end do
+
+        !$omp parallel do default(shared) firstprivate(chop_old)                            &
+        !$omp private(ifine, isample, itime, ra, dec, pa, chop, coords, coords_yz, x, y, s) &
+        !$omp reduction(max : npixels_per_sample) reduction(.or. : out)
+
+        ! loop over the samples which have not been removed
+        do ivalid = 1, obs%nvalids
+            isample = valids(ivalid)
+            if (obs%pointing(isample)%masked) then
+                pmatrix(1,(ivalid-1)*sampling_factor+1:ivalid*sampling_factor,:)%pixel = -1
+                pmatrix(1,(ivalid-1)*sampling_factor+1:ivalid*sampling_factor,:)%weight = 0
+                cycle
+            end if
+            do ifine = 1, sampling_factor
+                itime = (isample - 1) * sampling_factor + ifine
+                call obs%get_position_index(itime, sampling_factor, offset, ra, dec, pa, chop)
+                if (abs(chop-chop_old) > 1.e-2_p) then
+                    coords_yz = this%uv2yz(this%detector_center, this%distortion_yz, chop)
+                    chop_old = chop
+                end if
+                coords = this%yz2ad(coords_yz, ra, dec, pa)
+                call ad2xys_gnomonic(coords, x, y, s)
+                itime  = (ivalid-1) * sampling_factor + ifine
+                ! the input map has flux densities, not surface brightness
+                ! f_idetector = f_imap * weight
+                ! with weight = detector_area / pixel_area
+                ! and pixel_area = reference_area / s
+                call xy2pmatrix(x, y, nx, ny, out, pmatrix(1,itime,:))
+                pmatrix(1,itime,:)%weight = s * this%detector_area / reference_area
+            end do
+        end do
+
+        !$omp end parallel do
+
+        deallocate (valids)
 
         pmatrix(2:,:,:)%pixel  = -1
         pmatrix(2:,:,:)%weight = 0
@@ -814,70 +800,60 @@ contains
         real(p) :: coords(NDIMS,this%ndetectors*NVERTICES), coords_yz(NDIMS,this%ndetectors*NVERTICES)
         real(p) :: ra, dec, pa, chop, chop_old, offset
         integer :: roi(NDIMS,2,this%ndetectors)
-        integer :: ifine, isample, islice, itime, ivalid, nsamples, nvalids, sampling_factor, dest
+        integer :: ifine, isample, itime, ivalid, sampling_factor
         integer, allocatable :: valids(:)
 
         npixels_per_sample = 0
-        dest = 0
         out = .false.
 
-        ! loop over the observations
-        do islice = 1, size(obs%slice)
+        chop_old = pInf
 
-            nsamples = obs%slice(islice)%nsamples
-            nvalids  = obs%slice(islice)%nvalids
+        ! check if it is required to interpolate pointing positions
+        if (oversampling) then
+            sampling_factor = this%fine_sampling_factor * obs%factor
+            offset = obs%offset
+        else
+            sampling_factor = 1
+            offset = 0
+        end if
 
-            chop_old = pInf
-
-            ! check if it is required to interpolate pointing positions
-            if (oversampling) then
-                sampling_factor = this%fine_sampling_factor * obs%slice(islice)%factor
-                offset = obs%slice(islice)%offset
-            else
-                sampling_factor = 1
-                offset = 0
-            end if
-
-            allocate (valids(nvalids))
-            ivalid = 1
-            do isample = obs%slice(islice)%first, obs%slice(islice)%last
-                if (obs%pointing(isample)%removed) cycle
-                valids(ivalid) = isample
-                ivalid = ivalid + 1
-            end do
-
-            !$omp parallel do default(shared) firstprivate(chop_old)                        &
-            !$omp private(ifine, isample, itime, ra, dec, pa, chop, coords, coords_yz, roi) &
-            !$omp reduction(max : npixels_per_sample) reduction(.or. : out)
-
-            ! loop over the samples which have not been removed
-            do ivalid = 1, nvalids
-                isample = valids(ivalid)
-                if (obs%pointing(isample)%masked) then
-                    pmatrix(:,(ivalid-1)*sampling_factor+1+dest:ivalid*sampling_factor+dest,:)%pixel = -1
-                    pmatrix(:,(ivalid-1)*sampling_factor+1+dest:ivalid*sampling_factor+dest,:)%weight = 0
-                    cycle
-                end if
-                do ifine = 1, sampling_factor
-                    itime = (isample - obs%slice(islice)%first) * sampling_factor + ifine
-                    call obs%get_position_index(islice, itime, sampling_factor, offset, ra, dec, pa, chop)
-                    if (abs(chop-chop_old) > 1.e-2_p) then
-                        coords_yz = this%uv2yz(this%detector_corner, this%distortion_yz, chop)
-                        chop_old = chop
-                    end if
-                    itime  = (ivalid-1) * sampling_factor + ifine + dest
-                    coords = this%yz2ad(coords_yz, ra, dec, pa)
-                    coords = ad2xy_gnomonic(coords)
-                    roi    = xy2roi(coords, NVERTICES)
-                    call roi2pmatrix(roi, NVERTICES, coords, nx, ny, npixels_per_sample, out, pmatrix(:,itime,:))
-                end do
-            end do
-
-            !$omp end parallel do
-            dest = dest + nvalids * sampling_factor
-            deallocate (valids)
-
+        allocate (valids(obs%nvalids))
+        ivalid = 1
+        do isample = 1, obs%nsamples
+            if (obs%pointing(isample)%removed) cycle
+            valids(ivalid) = isample
+            ivalid = ivalid + 1
         end do
+
+        !$omp parallel do default(shared) firstprivate(chop_old)                        &
+        !$omp private(ifine, isample, itime, ra, dec, pa, chop, coords, coords_yz, roi) &
+        !$omp reduction(max : npixels_per_sample) reduction(.or. : out)
+
+        ! loop over the samples which have not been removed
+        do ivalid = 1, obs%nvalids
+            isample = valids(ivalid)
+            if (obs%pointing(isample)%masked) then
+                pmatrix(:,(ivalid-1)*sampling_factor+1:ivalid*sampling_factor,:)%pixel = -1
+                pmatrix(:,(ivalid-1)*sampling_factor+1:ivalid*sampling_factor,:)%weight = 0
+                cycle
+            end if
+            do ifine = 1, sampling_factor
+                itime = (isample - 1) * sampling_factor + ifine
+                call obs%get_position_index(itime, sampling_factor, offset, ra, dec, pa, chop)
+                if (abs(chop-chop_old) > 1.e-2_p) then
+                    coords_yz = this%uv2yz(this%detector_corner, this%distortion_yz, chop)
+                    chop_old = chop
+                end if
+                itime  = (ivalid-1) * sampling_factor + ifine
+                coords = this%yz2ad(coords_yz, ra, dec, pa)
+                coords = ad2xy_gnomonic(coords)
+                roi    = xy2roi(coords, NVERTICES)
+                call roi2pmatrix(roi, NVERTICES, coords, nx, ny, npixels_per_sample, out, pmatrix(:,itime,:))
+            end do
+        end do
+
+        !$omp end parallel do
+        deallocate (valids)
 
     end subroutine compute_projection_sharp_edges
 
@@ -885,70 +861,19 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine read(this, obs, selected_masks, signal, mask, status, verbose)
+    subroutine read(this, filename, masked, removed, selected_mask, signal, mask, status)
 
         class(PacsInstrument), intent(in) :: this
-        class(Observation), intent(in)    :: obs
-        character(len=*), intent(in)      :: selected_masks(:)
-        real(p), intent(out)              :: signal(:,:)
-        logical(1), intent(out)           :: mask(:,:)
-        integer, intent(out)              :: status
-        logical, intent(in), optional     :: verbose
-
-        integer :: dest
-        integer :: islice
-        integer :: count_start
-        logical :: verbose_
-
-        verbose_ = .false.
-        if (present(verbose)) verbose_ = verbose
-
-        call system_clock(count_start)
-
-        status = 1
-
-        ! check that the total number of samples in the observations is equal
-        ! to the number of samples in the signal and mask arrays
-        if (sum(obs%slice%nvalids) /= size(signal,1) .or. size(signal,1) /= size(mask,1)) then
-            write (ERROR_UNIT,'(a)') 'Error: read: invalid dimensions.'
-            return
-        end if
-
-        ! set mask to ok
-        mask = .false.
-
-        ! loop over the PACS observations
-        dest = 1
-        do islice = 1, size(obs%slice)
-            call this%read_one(obs, islice, selected_masks, signal(dest:dest+obs%slice(islice)%nvalids-1,:),                       &
-                               mask(dest:dest+obs%slice(islice)%nvalids-1,:), status)
-            if (status /= 0) return
-            dest = dest + obs%slice(islice)%nvalids
-        end do
-
-        if (verbose_) then
-            call info_time('Reading timeline', count_start)
-        end if
-
-    end subroutine read
-
-
-    !-------------------------------------------------------------------------------------------------------------------------------
-
-
-    subroutine read_one(this, obs, islice, selected_mask, signal, mask, status)
-
-        class(PacsInstrument), intent(in) :: this
-        class(Observation), intent(in)    :: obs
-        integer, intent(in)               :: islice
+        character(len=*), intent(in)      :: filename
+        logical*1, intent(in)             :: masked(:), removed(:)
         character(len=*), intent(in)      :: selected_mask(:)
         real(p), intent(out)              :: signal(:,:)
         logical*1, intent(out)            :: mask  (:,:)
         integer, intent(out)              :: status
 
-        integer                   :: pfirst, plast, sfirst, slast
+        integer                   :: nsamples, idetector, ndetectors, unit
+        integer                   :: first, last
         integer                   :: ip, iq
-        integer                   :: idetector, ndetectors, unit
         integer, allocatable      :: signal_shape(:), mask_shape(:)
         integer                   :: imask, isample, icompressed, ibit
         integer                   :: firstcompressed, lastcompressed
@@ -963,44 +888,46 @@ contains
         integer                   :: hdutype, naxis1
         integer                   :: ncompressed
 
+        nsamples = size(masked, 1)
         ndetectors = size(signal, 2)
 
         ! get first and last valid pointing, to decrease I/O
-        do pfirst = obs%slice(islice)%first, obs%slice(islice)%last
-            if (.not. obs%pointing(pfirst)%removed) exit
+        do first = 1, nsamples
+            if (.not. removed(first)) exit
         end do
-        do plast = obs%slice(islice)%last, obs%slice(islice)%first, -1
-            if (.not. obs%pointing(plast)%removed) exit
+        do last = nsamples, 1, -1
+            if (.not. removed(last)) exit
         end do
 
         ! test if all samples are removed in this slice
-        if (pfirst > plast) then
+        if (first > last) then
             status = 0
             return
         end if
 
-        sfirst = pfirst - obs%slice(islice)%first + 1
-        slast  = plast  - obs%slice(islice)%first + 1
-
-        mask = spread(pack(obs%pointing(pfirst:plast)%masked, .not. obs%pointing(pfirst:plast)%removed), 2, ndetectors)
+        ! apply timeline and detector mask
+        mask = spread(pack(masked(first:last), .not. removed(first:last)), 2, ndetectors)
+        do idetector = 1, size(mask, 2)
+            if (this%detector_bad(idetector)) mask(:,idetector) = .true.
+        end do
 
         ! read signal HDU
-        call ft_open_image(trim(obs%slice(islice)%id) // '[Signal]', unit, 3, signal_shape, status)
+        call ft_open_image(filename // '[Signal]', unit, 3, signal_shape, status)
         if (status /= 0) return
 
         allocate (mask_shape(size(signal_shape)))
         mask_shape(1)  = (signal_shape(1) - 1) / 32 + 1
         mask_shape(2:) = signal_shape(2:)
 
-        allocate (signal_(slast - sfirst + 1), mask_(slast - sfirst + 1))
+        allocate (signal_(last - first + 1), mask_(last - first + 1))
         do idetector = 1, ndetectors
 
             ip = this%pq(1,idetector)
             iq = this%pq(2,idetector)
-            call ft_read_slice(unit, sfirst, slast, iq+1, ip+1, signal_shape, signal_, status)
+            call ft_read_slice(unit, first, last, iq+1, ip+1, signal_shape, signal_, status)
             if (status /= 0) return
 
-            signal(:,idetector) = pack(signal_, .not. obs%pointing(pfirst:plast)%removed)
+            signal(:,idetector) = pack(signal_, .not. removed(first:last))
 
         end do
 
@@ -1008,7 +935,7 @@ contains
         if (status /= 0) return
 
         ! get the mask tree
-        call ft_open(trim(obs%slice(islice)%id) // '[MASK]', unit, mask_found, status)
+        call ft_open(filename // '[MASK]', unit, mask_found, status)
         if (status /= 0 .or. .not. mask_found) return
 
         call ft_read_keyword(unit, 'DSETS___', nmasks, status=status)
@@ -1020,8 +947,8 @@ contains
             if (status /= 0) return
         end do
 
-        firstcompressed = (sfirst - 1) / 32 + 1
-        lastcompressed  = (slast  - 1) / 32 + 1
+        firstcompressed = (first - 1) / 32 + 1
+        lastcompressed  = (last  - 1) / 32 + 1
         ncompressed     = lastcompressed - firstcompressed + 1
         allocate (maskcompressed(ncompressed))
 
@@ -1029,7 +956,7 @@ contains
         do imask=1, nmasks
 
             call FTMAHD(unit, mask_extension(imask)+1, hdutype, status)
-            if (ft_check_error_cfitsio(status, unit, trim(obs%slice(islice)%id))) return
+            if (ft_check_error_cfitsio(status, unit, filename)) return
 
             call ft_read_keyword(unit, 'EXTNAME', mask_name, status=status)
             if (status /= 0) return
@@ -1042,8 +969,8 @@ contains
             if (status /= 0) return            
             if (mask_shape(1) /= naxis1) then
                 status = 1
-                write (ERROR_UNIT, '(a,2(i0,a))') "The observation '" // trim(obs%slice(islice)%id) // "', has an incompatible dime&
-                      &nsion in mask '" // trim(mask_name) // "' (", naxis1, ' instead of ', mask_shape(1), ').'
+                write (ERROR_UNIT, '(a,2(i0,a))') "The observation '" // filename // "', has an incompatible dimension in mask '"  &
+                      // trim(mask_name) // "' (", naxis1, ' instead of ', mask_shape(1), ').'
                 return
             end if
 
@@ -1064,16 +991,16 @@ contains
                     maskval = maskcompressed(icompressed-firstcompressed+1)
                     if (maskval == 0) cycle
 
-                    isample = (icompressed-1)*32 - sfirst + 2
+                    isample = (icompressed-1)*32 - first + 2
 
                     ! loop over the bits of a compressed mask byte
-                    do ibit = max(0, sfirst - (icompressed-1)*32 - 1), min(31, slast - (icompressed-1)*32 - 1)
-                        mask_(isample+ibit) = btest(maskval,ibit)
+                    do ibit = max(0, first - (icompressed-1)*32 - 1), min(31, last - (icompressed-1)*32 - 1)
+                        mask_(isample+ibit) = btest(maskval, ibit)
                     end do
 
                 end do
 
-                mask(:,idetector) = mask(:,idetector) .or. pack(mask_, .not. obs%pointing(pfirst:plast)%removed)
+                mask(:,idetector) = mask(:,idetector) .or. pack(mask_, .not. removed(first:last))
 
             end do
 
@@ -1081,12 +1008,7 @@ contains
 
         call ft_close(unit, status)
 
-        ! apply bad detector mask
-        do idetector = 1, size(mask,2)
-            if (this%detector_bad(idetector)) mask(:,idetector) = .true.
-        end do
-
-    end subroutine read_one
+    end subroutine read
 
 
     !-------------------------------------------------------------------------------------------------------------------------------

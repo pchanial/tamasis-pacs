@@ -329,9 +329,9 @@ end subroutine pacs_read_filter_uncorrelated
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine pacs_map_header(band, nslices, npointings, nsamples_tot, compression_factor, delay, fine_sampling_factor,               &
-                           oversampling, time, ra, dec, pa, chop, masked, removed, detector_mask, nrows, ncolumns, detector_bad,   &
-                           detector_corner, distortion_yz, resolution, header, status)
+subroutine pacs_map_header(band, compression_factor, delay, fine_sampling_factor, oversampling, time, ra, dec, pa, chop,           &
+                           masked, removed, npointings, detector_masked, detector_removed, nrows, ncolumns, detector_corner,       &
+                           distortion_yz, resolution, header, status)
 
     use module_pacsinstrument, only : SAMPLING_PERIOD, PacsInstrument
     use module_observation,    only : Observation
@@ -339,40 +339,38 @@ subroutine pacs_map_header(band, nslices, npointings, nsamples_tot, compression_
     implicit none
 
     character(len=*), intent(in)                   :: band
-    integer, intent(in)                            :: nslices
-    integer, intent(in)                            :: npointings(nslices)
-    integer*8, intent(in)                          :: nsamples_tot
-    integer, intent(in)                            :: compression_factor(nslices)
-    real(p), intent(in)                            :: delay(nslices)
+    integer, intent(in)                            :: compression_factor
+    real(p), intent(in)                            :: delay
     integer, intent(in)                            :: fine_sampling_factor
     logical, intent(in)                            :: oversampling
-    real(p), intent(in), dimension(nsamples_tot)   :: time, ra, dec, pa, chop
-    logical*1, intent(in), dimension(nsamples_tot) :: masked, removed
-    logical*1, intent(in)                          :: detector_mask(nrows,ncolumns)
+    real(p), intent(in), dimension(npointings)     :: time, ra, dec, pa, chop
+    logical*1, intent(in), dimension(npointings)   :: masked, removed
+    integer, intent(in)                            :: npointings
+    logical*1, intent(in)                          :: detector_masked(nrows,ncolumns)
+    logical*1, intent(in)                          :: detector_removed(nrows,ncolumns)
     integer, intent(in)                            :: nrows
     integer, intent(in)                            :: ncolumns
-    logical*1, intent(in)                          :: detector_bad(nrows,ncolumns)
     real(p), intent(in)                            :: detector_corner(2,4,nrows,ncolumns)
     real(p), intent(in)                            :: distortion_yz(2,3,3,3)
     real(p), intent(in)                            :: resolution
     character(len=2880), intent(out)               :: header
     integer, intent(out)                           :: status
 
-    class(Observation), allocatable     :: obs
-    class(PacsInstrument), allocatable  :: pacs
+    class(Observation), allocatable    :: obs
+    class(PacsInstrument), allocatable :: pacs
 
     ! initialise observations
     allocate(obs)
     ! offset of the fine time of the compressed frame wrt the fine time of the first frame
     ! the fine time of a compressed frame is the average of the fine times of the contributing frames
     ! the offset is in fraction of sampling interval
-    call obs%init(time, ra, dec, pa, chop, masked, removed, npointings, compression_factor,                                        &
+    call obs%init(time, ra, dec, pa, chop, masked, removed, compression_factor,                                                    &
          (compression_factor - 1) / (2._p * compression_factor) +  delay / (1000 * SAMPLING_PERIOD * compression_factor), status)
     if (status /= 0) return
 
     ! initialise pacs instrument
     allocate (pacs)
-    call pacs%init_with_variables(band, detector_mask, fine_sampling_factor, status, detector_bad_all=detector_bad,                &
+    call pacs%init_with_variables(band, detector_removed, fine_sampling_factor, status, detector_bad_all=detector_masked,          &
                                   detector_corner_all=detector_corner, distortion_yz=distortion_yz)
     if (status /= 0) return
 
@@ -385,10 +383,9 @@ end subroutine pacs_map_header
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine pacs_tod(signal, mask, band, filename, nslices, npointings, nsamples_tot, compression_factor, delay,                    &
-                    fine_sampling_factor, time, ra, dec, pa, chop, masked, removed, detector_mask, detector_bad,                   &
-                    flatfield_detector, do_flatfielding, do_subtraction_mean, nvalids, ndetectors, selected_mask, nrows, ncolumns, &
-                    status)
+subroutine pacs_read_tod(signal, mask, first, last, band, filename, nvalids_tot, nsamples_all, masked, removed, detector_masked,   &
+                         detector_removed, flatfield_detector, do_flatfielding, do_subtraction_mean, ndetectors, selected_mask,    &
+                         nrows, ncolumns, status)
 
     use iso_fortran_env,        only : ERROR_UNIT
     use module_observation,     only : Observation
@@ -398,52 +395,28 @@ subroutine pacs_tod(signal, mask, band, filename, nslices, npointings, nsamples_
     use module_string,          only : strsplit
     implicit none
 
-    real(p), intent(inout)                         :: signal(nvalids, ndetectors)
-    logical*1, intent(inout)                       :: mask(nvalids, ndetectors)
-    character(len=*), intent(in)                   :: band
-    character(len=*), intent(in)                   :: filename
-    integer, intent(in)                            :: nslices
-    integer, intent(in)                            :: npointings(nslices)
-    integer*8, intent(in)                          :: nsamples_tot
-    integer, intent(in)                            :: compression_factor(nslices)
-    real(p), intent(in)                            :: delay(nslices)
-    integer, intent(in)                            :: fine_sampling_factor
-    real(p), intent(in), dimension(nsamples_tot)   :: time, ra, dec, pa, chop
-    logical*1, intent(in), dimension(nsamples_tot) :: masked, removed
-    logical*1, intent(in)                          :: detector_mask(nrows,ncolumns)
-    logical*1, intent(in)                          :: detector_bad(nrows,ncolumns)
-    real(p), intent(in)                            :: flatfield_detector(nrows,ncolumns)
-    logical, intent(in)                            :: do_flatfielding, do_subtraction_mean
-    integer, intent(in)                            :: nvalids
-    integer, intent(in)                            :: ndetectors
-    integer, intent(in)                            :: nrows
-    integer, intent(in)                            :: ncolumns
-    character(len=*), intent(in)                   :: selected_mask
-    integer, intent(out)                           :: status
+    real(p), intent(inout)       :: signal(nvalids_tot, ndetectors)
+    logical*1, intent(inout)     :: mask(nvalids_tot, ndetectors)
+    integer*8, intent(in)        :: first, last
+    character(len=*), intent(in) :: band
+    character(len=*), intent(in) :: filename
+    integer, intent(in)          :: nvalids_tot, nsamples_all
+    logical*1, intent(in)        :: masked(nsamples_all), removed(nsamples_all)
+    logical*1, intent(in)        :: detector_masked(nrows,ncolumns), detector_removed(nrows,ncolumns)
+    real(p), intent(in)          :: flatfield_detector(nrows,ncolumns)
+    logical, intent(in)          :: do_flatfielding, do_subtraction_mean
+    integer, intent(in)          :: ndetectors
+    integer, intent(in)          :: nrows
+    integer, intent(in)          :: ncolumns
+    character(len=*), intent(in) :: selected_mask
+    integer, intent(out)         :: status
 
-    class(Observation), allocatable                :: obs
     class(PacsInstrument), allocatable             :: pacs
-    integer                                        :: iobs, destination, filename_len
     character(len=len(selected_mask)), allocatable :: selected_mask_(:)
-
-    ! initialise observations
-    allocate(obs)
-    call obs%init(time, ra, dec, pa, chop, masked, removed, npointings, compression_factor,                                        &
-         (compression_factor - 1) / (2._p * compression_factor) +  delay / (1000 * SAMPLING_PERIOD * compression_factor), status)
-    if (status /= 0) return
-
-    ! split input filename
-    if (mod(len(filename), nslices) /= 0) then
-        stop 'PACS_TOD: Invalid filename length.'
-    end if
-    filename_len = len(filename) / nslices
-    do iobs = 1, nslices
-        obs%slice(iobs)%id = filename((iobs-1)*filename_len+1:iobs*filename_len)
-    end do
 
     ! initialise pacs instrument
     allocate (pacs)
-    call pacs%init_with_variables(band, detector_mask, fine_sampling_factor, status, detector_bad_all=detector_bad,                &
+    call pacs%init_with_variables(band, detector_removed, 1, status, detector_bad_all=detector_masked,                             &
                                   flatfield_detector_all=flatfield_detector)
     if (status /= 0) return
 
@@ -459,34 +432,29 @@ subroutine pacs_tod(signal, mask, band, filename, nslices, npointings, nsamples_
     call strsplit(selected_mask, ',', selected_mask_)
 
     ! read timeline
-    call pacs%read(obs, selected_mask_, signal, mask, status, verbose=.true.)
+    call pacs%read(filename, masked, removed, selected_mask_, signal(first:last,:), mask(first:last,:), status)
     if (status /= 0) return
 
     ! detector flat fielding
     if (do_flatfielding) then
-        call divide_vectordim2(signal, pacs%flatfield_detector)
+        call divide_vectordim2(signal(first:last,:), pacs%flatfield_detector)
     end if
 
     ! subtract the mean of each detector timeline
     if (do_subtraction_mean) then
-        destination = 1
-        do iobs=1, nslices
-            call subtract_meandim1(signal(destination:destination+obs%slice(iobs)%nvalids-1,:),                                    &
-                                   mask(destination:destination+obs%slice(iobs)%nvalids-1,:))
-            destination = destination + obs%slice(iobs)%nvalids
-        end do
+        call subtract_meandim1(signal(first:last,:), mask(first:last,:))
     end if
     
-end subroutine pacs_tod
+end subroutine pacs_read_tod
 
 
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine pacs_pointing_matrix(band, nslices, nvalids, npointings, nsamples_tot, compression_factor, delay, fine_sampling_factor, &
-                                oversampling, time, ra, dec, pa, chop, masked, removed, method, detector_mask, nrows, ncolumns,    &
-                                ndetectors, detector_center, detector_corner, detector_area, distortion_yz, npixels_per_sample,    &
-                                header, pmatrix, new_npixels_per_sample, status)
+subroutine pacs_pointing_matrix(band, nvalids, nsamples, compression_factor, delay, fine_sampling_factor, oversampling,            &
+                                time, ra, dec, pa, chop, masked, removed, method, detector_mask, nrows, ncolumns, ndetectors,      &
+                                detector_center, detector_corner, detector_area, distortion_yz, npixels_per_sample, header,        &
+                                pmatrix, new_npixels_per_sample, status)
 
     use iso_fortran_env,        only : ERROR_UNIT
     use module_fitstools,       only : ft_read_keyword
@@ -496,19 +464,16 @@ subroutine pacs_pointing_matrix(band, nslices, nvalids, npointings, nsamples_tot
     use module_tamasis,         only : p
     implicit none
 
-    !f2py integer*8, intent(inout),depend(npixels_per_sample,nvalids,ndetectors) :: pmatrix(npixels_per_sample*nvalids*ndetectors)
+    !f2py integer*8, depend(npixels_per_sample,nvalids,ndetectors) :: pmatrix(npixels_per_sample*nvalids*ndetectors)
 
     character(len=*), intent(in)                   :: band
-    integer, intent(in)                            :: nslices
-    integer*8, intent(in)                          :: nvalids
-    integer, intent(in)                            :: npointings(nslices)
-    integer, intent(in)                            :: nsamples_tot
-    integer, intent(in)                            :: compression_factor(nslices)
-    real(p), intent(in)                            :: delay(nslices)
+    integer*8, intent(in)                          :: nvalids, nsamples
+    integer, intent(in)                            :: compression_factor
+    real(p), intent(in)                            :: delay
     integer, intent(in)                            :: fine_sampling_factor
     logical, intent(in)                            :: oversampling
-    real(p), intent(in), dimension(nsamples_tot)   :: time, ra, dec, pa, chop
-    logical*1, intent(in), dimension(nsamples_tot) :: masked, removed
+    real(p), intent(in), dimension(nsamples)       :: time, ra, dec, pa, chop
+    logical*1, intent(in), dimension(nsamples)     :: masked, removed
     character(len=*), intent(in)                   :: method
     logical*1, intent(in)                          :: detector_mask(nrows,ncolumns)
     integer, intent(in)                            :: nrows
@@ -526,11 +491,11 @@ subroutine pacs_pointing_matrix(band, nslices, nvalids, npointings, nsamples_tot
 
     class(Observation), allocatable     :: obs
     class(PacsInstrument), allocatable  :: pacs
-    integer                             :: nx, ny, nsamples_expected, method_
+    integer                             :: nx, ny, nvalids_expected, method_
 
     ! initialise observations
     allocate(obs)
-    call obs%init(time, ra, dec, pa, chop, masked, removed, npointings, compression_factor,                                        &
+    call obs%init(time, ra, dec, pa, chop, masked, removed, compression_factor,                                                    &
          (compression_factor - 1) / (2._p * compression_factor) +  delay / (1000 * SAMPLING_PERIOD * compression_factor), status)
     if (status /= 0) return
 
@@ -550,14 +515,15 @@ subroutine pacs_pointing_matrix(band, nslices, nvalids, npointings, nsamples_tot
 
     ! check number of fine samples
     if (oversampling) then
-        nsamples_expected = sum(obs%slice%nvalids * compression_factor)*fine_sampling_factor
+        nvalids_expected = obs%nvalids * compression_factor * fine_sampling_factor
     else
-        nsamples_expected = sum(obs%slice%nvalids)
+        nvalids_expected = obs%nvalids
     end if
-    if (nvalids /= nsamples_expected) then
+
+    if (nvalids /= nvalids_expected) then
         status = 1
-        write (ERROR_UNIT,'(a,2(i0,a))') "The specified total number of samples '", nvalids, "' is incompatible with that from the &
-              &observations '", nsamples_expected, "'."
+        write (ERROR_UNIT,'(a,2(i0,a))') "The specified total number of samples '", nvalids, "' is incompatible with that from the&
+              & observations '", nvalids_expected, "'."
         return
     end if
 

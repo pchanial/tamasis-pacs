@@ -1,11 +1,13 @@
 import os
 import tamasis
+import pyoperators
 
 from tamasis import *
 from tamasis.linalg import norm2, norm2_ellipsoid
 
 class TestFailure(Exception): pass
 
+pyoperators.memory.verbose = False
 tamasis.var.verbose = False
 profile = None#'test_rls.png'
 data_dir = os.path.dirname(__file__) + '/data/'
@@ -28,14 +30,18 @@ class Callback():
         self.niterations += 1
 
 invntt = DiagonalOperator(1/obs.get_detector_stddev(100)**2, broadcast='fast')
-invntt = IdentityOperator()
-map_nl = mapper_nl(tod, model, hypers=2*[1.],
-                   norms=[norm2_ellipsoid(invntt)] + 2*[norm2],
-                   tol=1.e-4, maxiter=1000,
-                   callback=None if tamasis.var.verbose else Callback(),
-                   )
 
-print 'Elapsed time: ' + str(map_nl.header['TIME']) + ' after ' + \
-    str(map_nl.header['NITER']) + ' iterations.'
-#if map_nl.header['NITER'] > 48:
-#    raise TestFailure()
+def test():
+    map_nl = mapper_nl(tod, model, hypers=2*[1.],
+                       norms=[norm2_ellipsoid(invntt)] + 2*[norm2],
+                       tol=1.e-4, maxiter=1000,
+                       callback=None if tamasis.var.verbose else Callback(),
+                       )
+
+    print 'Elapsed time: ' + str(map_nl.header['TIME']) + ' after ' + \
+        str(map_nl.header['NITER']) + ' iterations.'
+    if map_nl.header['NITER'] > 150:
+        raise TestFailure()
+
+if __name__ == '__main__':
+    test()

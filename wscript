@@ -346,6 +346,7 @@ def test_python_fun(bld):
         for file in files:
             file = file.abspath()
             if 'test_mpi' in file: continue
+            if '_nl_' in file: continue
             bld(rule='${NOSETESTS} ' + file, always=True)
             bld.add_group()
 

@@ -8,6 +8,7 @@ import numpy as np
 import scipy
 import tamasisfortran as tmf
 from .datatypes import Tod
+from acquisitionmodels import Projection
 
 __all__ = [ 'deglitch_l2std',
             'deglitch_l2mad',
@@ -16,6 +17,36 @@ __all__ = [ 'deglitch_l2std',
             'interpolate_linear',
             'remove_nonfinite' ]
 
+def _deglitch(tod, projection, nsigma, func):
+    if isinstance(projection, Projection):
+        pmatrix = projection._pmatrix
+        npixels_per_sample = projection.npixels_per_sample
+    elif hasattr(projection, 'operands') and \
+         all([isinstance(p, Projection) for p in projection.operands]):
+        ops = projection.operands
+        npixels_per_sample = max([p.npixels_per_sample for p in ops])
+        ndetectors = ops[0].ndetectors
+        nsamples = sum([p.nsamples for p in ops])
+        pmatrix = np.zeros((ndetectors, nsamples, npixels_per_sample),
+                           ops[0].pmatrix.dtype)
+        pmatrix['pixel'] = -1
+        dest = 0
+        for p in ops:
+            pmatrix[:,dest:dest+p.nsamples,:p.npixels_per_sample] = p.pmatrix
+            dest += p.nsamples
+    else:
+        raise TypeError('The operator is not a projection.')
+
+    nx = projection.header['naxis1']
+    ny = projection.header['naxis2']
+    if tod.mask is None:
+        mask = np.zeros(tod.shape, np.bool8)
+    else:
+        mask = tod.mask.copy()
+    func(pmatrix.view(int).ravel(), nx, ny, tod.T, mask.view(np.int8).T,
+         nsigma, npixels_per_sample)
+    return mask
+    
 def deglitch_l2std(tod, projection, nsigma=5.):
     """
     Second level deglitching (standard deviation).
@@ -25,22 +56,13 @@ def deglitch_l2std(tod, projection, nsigma=5.):
     mean. In case of rejection (i. e. at a given time), each detector sample
     which contributes to the sky pixel value in the frame is masked.
     """
-    nx = projection.header['naxis1']
-    ny = projection.header['naxis2']
-    npixels_per_sample = projection.npixels_per_sample
-    if tod.mask is None:
-        mask = np.zeros(tod.shape, np.bool8)
-    else:
-        mask = tod.mask.copy()
-    tmf.deglitch_l2b_std(projection._pmatrix, nx, ny, tod.T,
-                         mask.view(np.int8).T, nsigma, npixels_per_sample)
-    return mask
+    return _deglitch(tod, projection, nsigma, tmf.deglitch_l2b_std)
 
 
 #-------------------------------------------------------------------------------
 
 
-def deglitch_l2mad(tod, projection, nsigma=5.):
+def deglitch_l2mad(tod, projection, nsigma=25.):
     """
     Second level deglitching (MAD).
 
@@ -50,16 +72,7 @@ def deglitch_l2mad(tod, projection, nsigma=5.):
     each detector sample which contributes to the sky pixel value in the frame
     is masked.
     """
-    nx = projection.header['naxis1']
-    ny = projection.header['naxis2']
-    npixels_per_sample = projection.npixels_per_sample
-    if tod.mask is None:
-        mask = np.zeros(tod.shape, np.bool8)
-    else:
-        mask = tod.mask.copy()
-    tmf.deglitch_l2b_mad(projection._pmatrix, nx, ny, tod.T,
-                         mask.view(np.int8).T, nsigma, npixels_per_sample)
-    return mask
+    return _deglitch(tod, projection, nsigma, tmf.deglitch_l2b_mad)
 
 
 #-------------------------------------------------------------------------------

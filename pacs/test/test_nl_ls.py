@@ -4,14 +4,13 @@ from tamasis import *
 
 class TestFailure(Exception): pass
 
-tamasis.var.verbose = False
 data_dir = os.path.dirname(__file__) + '/data/'
 obs = PacsObservation(data_dir+'frames_blue.fits', fine_sampling_factor=1)
 tod = obs.get_tod(flatfielding=False)
 
 projection   = Projection(obs, oversampling=False, npixels_per_sample=6)
 masking_tod  = Masking(tod.mask)
-masking_map  = Masking(projection.mask)
+masking_map  = Masking(projection.get_mask())
 
 model = masking_tod * projection * masking_map
 
@@ -33,7 +32,7 @@ map_nl = mapper_nl(tod, model,
                    tol=1.e-6,
                    maxiter=1000,
                    norms=[norm],
-                   M=Diagonal(precond),
+                   M=DiagonalOperator(precond),
                    callback=Callback())
 
 print('Elapsed time:', map_nl.header['TIME'])

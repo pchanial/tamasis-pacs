@@ -11,6 +11,7 @@ import os
 import pyfits
 import re
 import scipy
+import time
 
 from mpi4py import MPI
 from pyoperators import (Operator, ScalarOperator, IdentityOperator,
@@ -43,6 +44,7 @@ CALIBFILE_INV = [var.path + '/pacs/PCalPhotometer_Invntt{0}_FM_v1.fits' \
                  .format(b) for b in ('BS', 'BL', 'Red')]
 
 class PacsBase(Observation):
+    """ Abstract class for PacsObservation and PacsSimulation. """
 
     ACCELERATION = Quantity(4., '"/s^2')
     DEFAULT_RESOLUTION = {'blue':3.2, 'green':3.2, 'red':6.4}
@@ -168,37 +170,48 @@ class PacsBase(Observation):
         return data.T
 
     def get_map_header(self, resolution=None, oversampling=True):
+        """
+        Return the FITS header of the smallest map that encompasses
+        the observation.
+        """
         if resolution is None:
             resolution = self.DEFAULT_RESOLUTION[self.instrument.band]
         
         detector = self.instrument.detector
 
-        header, status = tmf.pacs_map_header(
-            self.instrument.band,
-            np.ascontiguousarray(self.slice.nsamples_all, np.int32),
-            np.ascontiguousarray(self.slice.compression_factor, np.int32),
-            np.ascontiguousarray(self.slice.delay),
-            self.instrument.fine_sampling_factor,
-            oversampling,
-            np.ascontiguousarray(self.pointing.time),
-            np.ascontiguousarray(self.pointing.ra),
-            np.ascontiguousarray(self.pointing.dec),
-            np.ascontiguousarray(self.pointing.pa),
-            np.ascontiguousarray(self.pointing.chop),
-            np.ascontiguousarray(self.pointing.masked, np.int8),
-            np.ascontiguousarray(self.pointing.removed,np.int8),
-            np.asfortranarray(self.instrument.detector.removed, np.int8),
-            np.asfortranarray(self.instrument.detector.masked, np.int8),
-            detector.corner.swapaxes(0,1).view((float,2)).copy().T,
-            self.instrument.distortion_yz.base.base.base,
-            resolution)
-        if status != 0: raise RuntimeError()
-        headers = var.comm_tod.allgather(str2fitsheader(header))
+        headers_ = []
+        for s in self.slice:
+            sl = slice(s.start, s.stop)
+            header, status = tmf.pacs_map_header(
+                self.instrument.band,
+                s.compression_factor,
+                s.delay,
+                self.instrument.fine_sampling_factor,
+                oversampling,
+                np.asfortranarray(self.pointing.time[sl]),
+                np.asfortranarray(self.pointing.ra[sl]),
+                np.asfortranarray(self.pointing.dec[sl]),
+                np.asfortranarray(self.pointing.pa[sl]),
+                np.asfortranarray(self.pointing.chop[sl]),
+                np.asfortranarray(self.pointing.masked[sl], np.int8),
+                np.asfortranarray(self.pointing.removed[sl],np.int8),
+                np.asfortranarray(self.instrument.detector.removed, np.int8),
+                np.asfortranarray(self.instrument.detector.masked, np.int8),
+                detector.corner.swapaxes(0,1).view((float,2)).copy().T,
+                self.instrument.distortion_yz.base.base.base,
+                resolution)
+            if status != 0: raise RuntimeError()
+            headers_.append(str2fitsheader(header))
+        headers_ = var.comm_tod.allgather(headers_)
+        headers = []
+        for h in headers_:
+            headers.extend(h)
         return combine_fitsheader(headers)
     get_map_header.__doc__ = Observation.get_map_header.__doc__
     
     def get_pointing_matrix(self, header, npixels_per_sample=0, method=None,
-                            oversampling=True):
+                            oversampling=True, islice=None):
+        """ Return the pointing matrix. """
         if method is None:
             method = 'sharp'
         method = method.lower()
@@ -207,11 +220,15 @@ class PacsBase(Observation):
             raise ValueError("Invalid method '" + method + \
                 "'. Expected values are " + strenum(choices) + '.')
 
-        nsamples = self.get_nfinesamples() if oversampling else \
+        nvalids = self.get_nfinesamples() if oversampling else \
             self.get_nsamples()
+        if islice is None:
+            if len(self.slice) != 1:
+                raise ValueError('The slicing is not specified.')
+            islice = -1
+        nvalids = nvalids[islice]
 
         ndetectors = self.get_ndetectors()
-        nvalids = int(np.sum(nsamples))
         if npixels_per_sample != 0:
             sizeofpmatrix = npixels_per_sample * nvalids * ndetectors
             print('Info: Allocating '+str(sizeofpmatrix / 2**17)+' MiB for the '
@@ -227,21 +244,22 @@ class PacsBase(Observation):
 
         detector = self.instrument.detector
 
+        s = self.slice[islice]
+        sl = slice(s.start, s.stop)
         new_npixels_per_sample, status = tmf.pacs_pointing_matrix(
             self.instrument.band,
             nvalids,
-            np.ascontiguousarray(self.slice.nsamples_all, np.int32),
-            np.ascontiguousarray(self.slice.compression_factor, np.int32),
-            np.ascontiguousarray(self.slice.delay),
+            s.compression_factor,
+            s.delay,
             self.instrument.fine_sampling_factor,
             oversampling,
-            np.ascontiguousarray(self.pointing.time),
-            np.ascontiguousarray(self.pointing.ra),
-            np.ascontiguousarray(self.pointing.dec),
-            np.ascontiguousarray(self.pointing.pa),
-            np.ascontiguousarray(self.pointing.chop),
-            np.ascontiguousarray(self.pointing.masked, np.int8),
-            np.ascontiguousarray(self.pointing.removed,np.int8),
+            np.asfortranarray(self.pointing.time[sl]),
+            np.asfortranarray(self.pointing.ra[sl]),
+            np.asfortranarray(self.pointing.dec[sl]),
+            np.asfortranarray(self.pointing.pa[sl]),
+            np.asfortranarray(self.pointing.chop[sl]),
+            np.asfortranarray(self.pointing.masked[sl], np.int8),
+            np.asfortranarray(self.pointing.removed[sl],np.int8),
             method,
             np.asfortranarray(self.instrument.detector.removed, np.int8),
             self.get_ndetectors(),
@@ -259,10 +277,10 @@ class PacsBase(Observation):
         if new_npixels_per_sample > npixels_per_sample:
             del pmatrix
             return self.get_pointing_matrix(header, new_npixels_per_sample,
-                                            method, oversampling)
+                                            method, oversampling, islice)
 
-        return pmatrix, method, ndetectors, nsamples, npixels_per_sample, \
-            npixels_per_sample, ('/detector','/pixel'), self.get_derived_units()
+        return pmatrix, method, ndetectors, nvalids, npixels_per_sample, \
+            ('/detector','/pixel'), self.get_derived_units()
     get_pointing_matrix.__doc__ = Observation.get_pointing_matrix.__doc__
 
     def get_random(self, flatfielding=True, subtraction_mean=True):
@@ -801,27 +819,27 @@ class PacsObservation(PacsBase):
                         unit=self.slice[0].unit,
                         derived_units=self.get_derived_units()[0])
 
-        status = tmf.pacs_tod(tod.T, tod.mask.view(np.int8).T,
-            self.instrument.band,
-            _files2tmf(self.slice.filename)[0],
-            np.asarray(self.slice.nsamples_all, np.int32),
-            np.asarray(self.slice.compression_factor, np.int32),
-            np.ascontiguousarray(self.slice.delay),
-            self.instrument.fine_sampling_factor,
-            np.ascontiguousarray(self.pointing.time),
-            np.ascontiguousarray(self.pointing.ra),
-            np.ascontiguousarray(self.pointing.dec),
-            np.ascontiguousarray(self.pointing.pa),
-            np.ascontiguousarray(self.pointing.chop),
-            np.ascontiguousarray(self.pointing.masked, np.int8),
-            np.ascontiguousarray(self.pointing.removed,np.int8),
-            np.asfortranarray(self.instrument.detector.removed, np.int8),
-            np.asfortranarray(self.instrument.detector.masked, np.int8),
-            np.asfortranarray(self.instrument.detector.flat_detector),
-            flatfielding,
-            subtraction_mean,
-            sel_masks)
-        if status != 0: raise RuntimeError()
+        time0 = time.time()
+        first = 1
+        for s in self.slice:
+            masked = self.pointing.masked[s.start:s.stop]
+            removed = self.pointing.removed[s.start:s.stop]
+            last = first + int(np.sum(~removed)) - 1
+            status = tmf.pacs_read_tod(tod.T, tod.mask.view(np.int8).T,
+                first, last,
+                self.instrument.band,
+                s.filename,
+                np.asfortranarray(masked, np.int8),
+                np.asfortranarray(removed, np.int8),
+                np.asfortranarray(self.instrument.detector.masked, np.int8),
+                np.asfortranarray(self.instrument.detector.removed, np.int8),
+                np.asfortranarray(self.instrument.detector.flat_detector),
+                flatfielding,
+                subtraction_mean,
+                sel_masks)
+            if status != 0: raise RuntimeError()
+            first = last + 1
+        print('Reading timeline... {0:.2f}'.format(time.time()-time0))
 
         tmf.remove_nonfinite_mask(tod.ravel(), tod.mask.view(np.int8).ravel())
 

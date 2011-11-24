@@ -849,7 +849,7 @@ end subroutine sum
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine dot(array1, array2, n, output)
+subroutine dot(array1, array2, n, m, output)
 
     use omp_lib,        only : omp_get_max_threads
     use module_math,    only : d => dot
@@ -857,8 +857,8 @@ subroutine dot(array1, array2, n, output)
     implicit none
 
     real(p), intent(in)  :: array1(n)
-    real(p), intent(in)  :: array2(n)
-    integer, intent(in)  :: n
+    real(p), intent(in)  :: array2(m)
+    integer, intent(in)  :: n, m
     real(p), intent(out) :: output
 
     integer :: nthreads, work, i, a, z

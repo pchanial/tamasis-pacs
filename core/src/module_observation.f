@@ -45,18 +45,12 @@ module module_observation
         logical*1 :: notused2
     end type ObservationPointing
 
-    type ObservationSlice
+    type Observation
         character(len=512) :: id
-        integer            :: first
-        integer            :: last
         integer            :: nsamples
         integer            :: nvalids
         integer            :: factor
         real(p)            :: offset
-    end type ObservationSlice
-
-    type Observation
-        type(ObservationSlice), allocatable    :: slice(:)
         type(ObservationPointing), allocatable :: pointing(:)
     contains
         procedure :: init
@@ -71,92 +65,53 @@ module module_observation
 contains
 
 
-    !-------------------------------------------------------------------------------------------------------------------------------
-
-
-    subroutine init(this, time, ra, dec, pa, chop, masked, removed, nsamples, factor, offset, status, id)
+    subroutine init(this, time, ra, dec, pa, chop, masked, removed, factor, offset, status)
         ! delay is the instrument lag wrt the telescope
 
         class(Observation), intent(inout) :: this
         real(p), intent(in)               :: time(:), ra(:), dec(:), pa(:), chop(:)
         logical*1, intent(in)             :: masked(:), removed(:)
-        integer, intent(in)               :: nsamples(:)
-        integer, intent(in)               :: factor(:)
-        real(p), intent(in)               :: offset(:)
+        integer, intent(in)               :: factor
+        real(p), intent(in)               :: offset
         integer, intent(out)              :: status
-        character(len=512), optional, intent(in) :: id(:)
 
-        integer :: nslices, islice, dest, nsamples_tot
+        integer :: nsamples
 
         status = 1
 
         ! check conformity of time, ra, dec, pa, etc.
-        nslices = size(nsamples)
-        nsamples_tot = sum(nsamples)
-
-        if (size(time) /= nsamples_tot) then
-            write (ERROR_UNIT,'(a)') "INIT: Input argument 'time' has an invalid number of samples."
-            return
-        end if
-        if (size(ra) /= nsamples_tot) then
+        nsamples = size(time)
+        if (size(ra) /= nsamples) then
             write (ERROR_UNIT,'(a)') "INIT: Input argument 'ra' has an invalid number of samples."
             return
         end if
-        if (size(dec) /= nsamples_tot) then
+        if (size(dec) /= nsamples) then
             write (ERROR_UNIT,'(a)') "INIT: Input argument 'dec' has an invalid number of samples."
             return
         end if
-        if (size(pa) /= nsamples_tot) then
+        if (size(pa) /= nsamples) then
             write (ERROR_UNIT,'(a)') "INIT: Input argument 'pa' has an invalid number of samples."
             return
         end if
-        if (size(chop) /= nsamples_tot) then
+        if (size(chop) /= nsamples) then
             write (ERROR_UNIT,'(a)') "INIT: Input argument 'chop' has an invalid number of samples."
             return
         end if
-        if (size(masked) /= nsamples_tot) then
+        if (size(masked) /= nsamples) then
             write (ERROR_UNIT,'(a)') "INIT: Input argument 'masked' has an invalid number of samples."
             return
         end if
-        if (size(removed) /= nsamples_tot) then
+        if (size(removed) /= nsamples) then
             write (ERROR_UNIT,'(a)') "INIT: Input argument 'removed' has an invalid number of samples."
             return
         end if
-        if (size(factor) /= nslices) then
-            write (ERROR_UNIT,'(a)') "INIT: Input argument 'factor' has an invalid number of elements."
-            return
-        end if
-        if (size(offset) /= nslices) then
-            write (ERROR_UNIT,'(a)') "INIT: Input argument 'offset' has an invalid number of elements."
-            return
-        end if
-        if (present(id)) then
-            if (size(id) /= nslices) then
-                write (ERROR_UNIT,'(a)') "INIT: Input argument 'id' has an invalid number of elements."
-                return
-            end if
-        end if
 
-        allocate (this%slice(nslices))
-        allocate (this%pointing(nsamples_tot))
+        allocate (this%pointing(nsamples))
 
-        this%slice%nsamples = nsamples
-        this%slice%factor = factor
-        this%slice%offset = offset
-        if (present(id)) then
-            this%slice%id = id
-        else
-            this%slice%id = ''
-        end if
-
-        dest = 1
-        do islice = 1, nslices
-            this%slice(islice)%first = dest
-            this%slice(islice)%last = dest+nsamples(islice)-1
-            this%slice(islice)%nvalids = count(.not. removed(dest:dest+nsamples(islice)-1))
-            dest = dest + nsamples(islice)
-        end do
-
+        this%nsamples = nsamples
+        this%factor = factor
+        this%offset = offset
+        this%nvalids = count(.not. removed)
         this%pointing%time    = time
         this%pointing%ra      = ra
         this%pointing%dec     = dec
@@ -175,27 +130,18 @@ contains
 
     ! linear interpolation based on time values, useful if time samples are not evenly spaced.
     ! for the first call, index should be set to zero
-    subroutine get_position_time(this, islice, time, ra, dec, pa, chop, index)
+    subroutine get_position_time(this, time, ra, dec, pa, chop, index)
 
         class(Observation), intent(in) :: this
-        integer, intent(in)            :: islice
         real(p), intent(in)            :: time
         real(p), intent(out)           :: ra, dec, pa, chop
         integer, intent(inout)         :: index
 
-        integer                        :: first, last, i
+        integer                        :: i
         real(p)                        :: frac
 
-        if (islice < 1 .or. islice > size(this%slice)) then
-            write (ERROR_UNIT,'(a,i0,a)') "GET_POSITION_TIME: Invalid slice number '", islice, "'."
-            stop
-        end if
-
-        first = this%slice(islice)%first
-        last = this%slice(islice)%last
-
-        if (time > 2._p * this%pointing(last)%time - this%pointing(last-1)%time .or.                                               &
-            time < 2._p * this%pointing(first)%time - this%pointing(first+1)%time) then
+        if (time > 2._p * this%pointing(this%nsamples)%time - this%pointing(this%nsamples-1)%time .or.                             &
+            time < 2._p * this%pointing(1)%time - this%pointing(2)%time) then
             ra   = NaN
             dec  = NaN
             pa   = NaN
@@ -203,13 +149,13 @@ contains
             return
         end if
 
-        if (index < first .or. index-1 > last) then
-            index = first + 1
+        if (index < 1 .or. index-1 > this%nsamples) then
+            index = 2
         else if (time <= this%pointing(index-1)%time) then
-            index = first + 1
+            index = 2
         end if
 
-        do i = index, last
+        do i = index, this%nsamples
             if (time <= this%pointing(i)%time) go to 100
         end do
         i = i - 1
@@ -226,7 +172,7 @@ contains
     end subroutine get_position_time
 
 
-    !-------------------------------------------------------------------------------------------------------------------------------
+   !-------------------------------------------------------------------------------------------------------------------------------
 
 
     ! The sampling factor is the compression factor times the fine sampling
@@ -234,31 +180,26 @@ contains
     ! if there is a gap in the timeline (which should not happen in one slice, and should be
     ! corrected beforehand), it will not be taken into account so that finer
     ! sampling will be interpolated using the start and end of the gap.
-    subroutine get_position_index(this, islice, itime, sampling_factor, offset, ra, dec, pa, chop)
+    subroutine get_position_index(this, itime, sampling_factor, offset, ra, dec, pa, chop)
 
         class(Observation), intent(in) :: this
-        integer, intent(in)            :: islice, itime, sampling_factor
+        integer, intent(in)            :: itime, sampling_factor
         real(p), intent(in)            :: offset
         real(p), intent(out)           :: ra, dec, pa, chop
 
         integer                        :: i, itime_max
         real(p)                        :: frac
 
-        if (islice < 1 .or. islice > size(this%slice)) then
-            write (ERROR_UNIT,'(a,i0,a)') "GET_POSITION_INDEX: Invalid slice number '", islice, "'."
-            stop
-        end if
-
-        itime_max = this%slice(islice)%nsamples * sampling_factor
+        itime_max = this%nsamples * sampling_factor
         if (itime < 1 .or. itime > itime_max) then
             write (ERROR_UNIT,'(a,i0,a,i0,a)') "GET_POSITION_INDEX: Invalid time index '", itime, "'. Valid range is [1:",         &
                   itime_max,"]."
             stop
         end if
 
-        i    = min((itime - 1) / sampling_factor, this%slice(islice)%nsamples-2)
+        i    = min((itime - 1) / sampling_factor, this%nsamples-2)
         frac = real(itime - 1 - sampling_factor * i, p) / sampling_factor - offset
-        i    = i + this%slice(islice)%first
+        i    = i + 1
 
         ra   = this%pointing(i)%ra   * (1 - frac) + this%pointing(i+1)%ra   * frac
         dec  = this%pointing(i)%dec  * (1 - frac) + this%pointing(i+1)%dec  * frac

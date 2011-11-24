@@ -7,20 +7,17 @@ program test_compression
     implicit none
 
     integer, parameter :: factor = 5
-    real(p) :: tod(10,2)
-    real(p) :: compressed(size(tod,1)/factor,size(tod,2))
+    real(p) :: tod(10)
+    real(p) :: compressed(size(tod,1)/factor)
     integer :: i
 
-    tod(:,1) = [(real( i,p), i=1, size(tod,1))]
-    tod(:,2) = [(real(-i,p), i=1, size(tod,1))]
+    tod = [(real( i,p), i=1, size(tod))]
 
     call downsampling_direct(tod, compressed, factor)
-    if (any(neq_real(compressed(:,1),  [1._p,6._p])) .or.                                                                          &
-        any(neq_real(compressed(:,2), -[1._p,6._p]))) call failure('downsampling_direct')
+    if (any(neq_real(compressed(:),  [1._p,6._p]))) call failure('downsampling_direct')
     
     call downsampling_transpose(compressed, tod, factor)
-    if (any(neq_real(tod(:,1),  [1._p,0._p,0._p,0._p,0._p,6._p,0._p,0._p,0._p,0._p])) .or.                                         &
-        any(neq_real(tod(:,2), -[1._p,0._p,0._p,0._p,0._p,6._p,0._p,0._p,0._p,0._p]))) call failure('downsampling_transpose')
+    if (any(neq_real(tod(:),  [1._p,0._p,0._p,0._p,0._p,6._p,0._p,0._p,0._p,0._p]))) call failure('downsampling_transpose')
 
 contains
 
