@@ -69,7 +69,7 @@ def any_neq(a, b, rtol=None, atol=0.):
             return True
 
     # then compare the values of the array
-    if akind not in 'bifc' or bkind not in 'bifc':
+    if akind not in 'biufc' or bkind not in 'biufc':
         if akind != bkind:
             print('The argument data types are incompatible.')
             return True
@@ -92,7 +92,7 @@ def any_neq(a, b, rtol=None, atol=0.):
         else:
             raise NotImplementedError('Kind ' + akind + ' is not implemented.')
     
-    if akind in 'bi' and bkind in 'bi':
+    if akind in 'biu' and bkind in 'biu':
         result = np.any(a != b)
         if result:
             print('Integer arguments differ.')
