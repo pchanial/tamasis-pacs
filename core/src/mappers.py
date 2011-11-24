@@ -15,7 +15,6 @@ from pyoperators import AdditionOperator, DiagonalOperator, IdentityOperator, Ma
 from .acquisitionmodels import DdTdd, DiscreteDifference
 from .datatypes import Map, Tod
 from .linalg import Function, norm2, norm2_ellipsoid
-from .quantity import Quantity
 from .solvers import cg, nlcg, QuadraticStep
 from .wcsutils import create_fitsheader
 
@@ -47,13 +46,13 @@ def mapper_naive(tod, model, unit=None, local_mask=None):
         compatible with the model (usually pixel^-1)
     """
 
-    mask = getattr(tod, 'mask', None)
+    # apply mask
+    tod = _validate_tod(tod)
 
     # get tod units
     if not hasattr(tod, '_unit') or len(tod._unit) == 0:
         attr = {'_unit' : {'?' : 1.}}
         model.propagate_attributes(None, attr)
-        print 'XXXTOD attr', attr
         u = getattr(attr, '_unit', {})
         if 'detector' in u and u['detector'] == -1:
             u = {'detector' : -1.}
@@ -76,21 +75,10 @@ def mapper_naive(tod, model, unit=None, local_mask=None):
     tod_du = tod._derived_units
 
     # make sure the input is a surface brightness
-    inplace = False
     if 'detector' in tod._unit:
-        tod = tod.tounit(tod.unit + ' detector / arcsec^2')
-        inplace = True
+        tod.inunit(tod.unit + ' detector / arcsec^2')
     elif 'detector_reference' in tod._unit:
-        tod = tod.tounit(tod.unit + ' detector_reference / arcsec^2')
-        inplace = True
-
-    # apply mask
-    if mask is not None:
-        op = MaskOperator(mask)
-        if inplace:
-            op(tod, tod)
-        else:
-            tod = op(tod)
+        tod.inunit(tod.unit + ' detector_reference / arcsec^2')
 
     # compute model.T(tod)/model.T(one)
     mymap = model.T(tod.magnitude)
@@ -100,7 +88,7 @@ def mapper_naive(tod, model, unit=None, local_mask=None):
     mymap /= map_weights
     mymap.unit = tod.unit
     np.seterr(**old_settings)
-    mymap.coverage = map_weights
+    mymap.coverage = Map(map_weights.magnitude, header=mymap.header, copy=False)
    
     if unit is not None:
         mymap.inunit(unit)
@@ -123,7 +111,7 @@ def mapper_ls(tod, model, invntt=None, unpacking=None, x0=None, tol=1.e-5,
               maxiter=300, M=None, solver=None, verbose=True, callback=None,
               criterion=True, profile=None, comm_map=None):
 
-    tod = _validate_tod(tod, model)
+    tod = _validate_tod(tod)
 
     if invntt is None:
         invntt = IdentityOperator()
@@ -147,7 +135,7 @@ def mapper_rls(tod, model, invntt=None, unpacking=None, hyper=1.0, x0=None,
                tol=1.e-5, maxiter=300, M=None, solver=None, verbose=True,
                callback=None, criterion=True, profile=None, comm_map=None):
 
-    tod = _validate_tod(tod, model)
+    tod = _validate_tod(tod)
 
     if invntt is None:
         invntt = IdentityOperator()
@@ -186,6 +174,8 @@ def mapper_nl(tod, model, unpacking=None, priors=[], hypers=[], norms=[],
               linesearch=None, descent_method='pr', M=None, verbose=True,
               callback=None, profile=None):
 
+    tod = _validate_tod(tod)
+
     if len(priors) == 0 and len(hypers) != 0:
         npriors = len(model.shapein)
         priors = [ DiscreteDifference(axis=axis, shapein=model.shapein,
@@ -215,7 +205,6 @@ def mapper_nl(tod, model, unpacking=None, priors=[], hypers=[], norms=[],
     hypers /= nmaps
     hypers = np.hstack([1/ntods, hypers])
     
-    tod = _validate_tod(tod, model)
     y = tod.view(np.ndarray).ravel()
 
     class ObjectiveFunction(Function):
@@ -256,8 +245,14 @@ def mapper_nl(tod, model, unpacking=None, priors=[], hypers=[], norms=[],
 
     if unpacking is not None:
         solution = unpacking(solution)
-    coverage = model.T(np.ones(tod.shape))
+
+    tod[...] = 1
+    coverage = model.T(tod)
     header = coverage.header
+    unit = coverage.unit
+    derived_units = coverage.derived_units
+    coverage = Map(coverage.magnitude, header=header, copy=False)
+
     header.update('likeliho', Js[0])
     header.update('criter', sum(Js))
     header.update('hyper', str(hypers))
@@ -275,8 +270,8 @@ def mapper_nl(tod, model, unpacking=None, priors=[], hypers=[], norms=[],
     output = Map(solution.reshape(model.shapein),
                  header=header,
                  coverage=coverage,
-                 unit=tod.unit + ' ' + (1/Quantity(1, model.unitout)).unit + \
-                      ' ' + Quantity(1, model.unitin).unit,
+                 unit=unit,
+                 derived_units=derived_units,
                  comm=coverage.comm,
                  shape_global=coverage.shape_global,
                  copy=False)
@@ -287,7 +282,7 @@ def mapper_nl(tod, model, unpacking=None, priors=[], hypers=[], norms=[],
 #-------------------------------------------------------------------------------
 
 
-def _validate_tod(tod, model):
+def _validate_tod(tod):
     # make sure that the tod is masked
     if hasattr(tod, 'mask') and tod.mask is not None:
         return MaskOperator(tod.mask)(tod)
