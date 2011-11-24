@@ -3,13 +3,13 @@ import pyfits
 import os
 import tamasis
 from tamasis import (MadMap1Observation, DiagonalOperator, InvNtt, Packing,
-                     Projection, Projection_old, mapper_naive, mapper_ls, Tod)
+                     Projection, mapper_naive, mapper_ls, Tod)
 from tamasis.numpyutils import all_eq
 
 class TestFailure(Exception): pass
 
 tamasis.var.verbose = False
-profile='test_madcap.png'
+profile=None#'test_madcap.png'
 path = os.path.abspath(os.path.dirname(__file__)) + '/data/madmap1/'
 obs = MadMap1Observation(path+'todSpirePsw_be', path+'invnttSpirePsw_be', 
                          path+'madmapSpirePsw.fits[coverage]', 'big_endian',
@@ -18,11 +18,10 @@ obs.instrument.name = 'SPIRE/PSW'
 
 tod = obs.get_tod(unit='Jy/beam')
 projection = Projection(obs)
-projection_old = Projection_old(obs)
 packing = Packing(obs.info.mapmask)
 
-model = projection_old*packing
-map_naive = mapper_naive(tod, projection_old*packing)
+model = projection*packing
+map_naive = mapper_naive(tod, model)
 map_ref = pyfits.open(path+'naivemapSpirePsw.fits')['image'].data
 
 def test_madcap1():
