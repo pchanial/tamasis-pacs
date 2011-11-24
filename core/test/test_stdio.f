@@ -1,6 +1,7 @@
 program test_stdio
 
-    use, intrinsic :: ISO_C_BINDING
+    use iso_c_binding
+    use iso_fortran_env, only : OUTPUT_UNIT
     use module_stdio
     use module_cfitsio, only : fits_report_error
     implicit none
@@ -12,10 +13,9 @@ program test_stdio
 
     ! test stdout & stderr
     status = 1
+    write (OUTPUT_UNIT,'(a)') 'Testing stdout/stderr...'
     call fits_report_error(stdout, status)
     call fits_report_error(stderr, status)
-    status = 301
-    call fits_report_error(stdout, status)
-    call fits_report_error(stderr, status)
+    write (OUTPUT_UNIT,'(a)') 'OK.'
 
 end program test_stdio
