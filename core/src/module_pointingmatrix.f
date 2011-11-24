@@ -99,24 +99,24 @@ contains
         nsamples   = size(pmatrix, 2)
         ndetectors = size(pmatrix, 3)
 
-!!$#ifdef GFORTRAN
-!!$        !$omp parallel do reduction(+:map) private(idetector, isample, ipixel)
-!!$#else
-!!$        !$omp parallel do private(idetector, isample, ipixel)
-!!$#endif
+#ifdef GFORTRAN
+        !$omp parallel do reduction(+:map) private(idetector, isample, ipixel)
+#else
+        !$omp parallel do private(idetector, isample, ipixel)
+#endif
         do idetector = 1, ndetectors
             do isample = 1, nsamples
                 do ipixel = 1, npixels
                     if (pmatrix(ipixel,isample,idetector)%pixel == -1) exit
-!!$#ifndef GFORTRAN
-!!$                    !$omp atomic
-!!$#endif
+#ifndef GFORTRAN
+                    !$omp atomic
+#endif
                     map(pmatrix(ipixel,isample,idetector)%pixel) = map(pmatrix(ipixel,isample,idetector)%pixel) +                  &
                         pmatrix(ipixel,isample,idetector)%weight * timeline(isample,idetector)
                 end do
             end do
         end do
-!!$        !$omp end parallel do
+        !$omp end parallel do
 
     end subroutine pmatrix_transpose
 
