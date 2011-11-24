@@ -78,8 +78,19 @@ def any_neq(a, b, rtol=None, atol=0.):
             if result:
                 print('String arguments differ.')
             return result
+        if akind == 'V':
+            if set(a.dtype.names) != set(b.dtype.names):
+                print('The names of the argument dtypes are different.')
+                return True
+            result = False
+            for name in a.dtype.names:
+                result_ = any_neq(a[name], b[name])
+                if result_:
+                    print("Values for '{0}' are different.".format(name))
+                result = result or result_
+            return result
         else:
-            raise NotImplemented('Kind ' + akind + ' is not implemented.')
+            raise NotImplementedError('Kind ' + akind + ' is not implemented.')
     
     if akind in 'bi' and bkind in 'bi':
         result = np.any(a != b)
