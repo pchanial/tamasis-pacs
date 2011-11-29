@@ -9,6 +9,7 @@ import tamasisfortran as tmf
 
 try:
     import fftw3
+    MAX_FFTW_NUM_THREADS = 1 if fftw3.planning.lib_threads is None else None
 except:
     print('Warning: Library PyFFTW3 is not installed.')
 
@@ -940,13 +941,10 @@ class FftOperator(Operator):
     Performs complex fft
     """
 
-    def __init__(self, shape, flags=['measure'], **keywords):
+    def __init__(self, shape, flags=['measure'], nthreads=None, **keywords):
         Operator.__init__(self, shapein=shape,
                                 dtype=var.COMPLEX_DTYPE, **keywords)
-        if fftw3.planning.lib_threads is None:
-            nthreads = 1
-        else:
-            nthreads = openmp_num_threads()
+        nthreads = min(nthreads or openmp_num_threads(), MAX_FFTW_NUM_THREADS)
         self.n = np.product(shape)
         self._in  = np.zeros(shape, dtype=var.COMPLEX_DTYPE)
         self._out = np.zeros(shape, dtype=var.COMPLEX_DTYPE)
@@ -1043,7 +1041,7 @@ class Convolution(Operator):
         if any([ks > s for ks,s in zip(kernel.shape, shape)]):
             raise ValueError('The kernel must not be larger than the input.')
 
-        nthreads = nthreads or openmp_num_threads()
+        nthreads = min(nthreads or openmp_num_threads(), MAX_FFTW_NUM_THREADS)
 
         ker_origin = (np.array(kernel.shape)-1) / 2
         if any([int(o) != o for o in ker_origin]):
