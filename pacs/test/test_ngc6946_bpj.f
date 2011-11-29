@@ -47,6 +47,7 @@ program test_ngc6946_bpj
 
     call pacsobs2obs(pacsobs, 1, obs, status)
     if (status /= 0) call failure('pacsobs2obs')
+    obs%pointing%chop = 0
 
     ! initialise pacs instrument
     allocate (pacs)
@@ -118,7 +119,7 @@ program test_ngc6946_bpj
     !!$omp end parallel do
 
     if (neq_real(sum(real(pmatrix%weight, kind=p)), 840698.47972_p, 10._p * epsilon(1.0))) call failure('sum weight')
-    if (sum(int(pmatrix%pixel,kind=4)) /= 1974462425) call failure('sum pixel indices')
+    if (sum(int(pmatrix%pixel,kind=4)) /= 1974986011) call failure('sum pixel indices')
 
     ! back project the timeline
     signal = 1._p / surface1
