@@ -480,8 +480,8 @@ subroutine invntt_uncorrelated(input, ninputs, nsamples, istride, output, noutpu
     real(p), intent(inout) :: output(noutputs)
     integer, intent(in)    :: noutputs
     integer, intent(in)    :: ostride
-    real(p), intent(in)    :: fft_filter(filter_length, ndetectors)
     integer, intent(in)    :: filter_length, ndetectors
+    real(p), intent(in)    :: fft_filter(filter_length, ndetectors)
     integer*8, intent(in)  :: fplan, bplan
     integer, intent(in)    :: left, right
 
@@ -495,7 +495,7 @@ subroutine invntt_uncorrelated(input, ninputs, nsamples, istride, output, noutpu
         buffer(left+1:filter_length-right) = input((i-1)*istride+1:(i-1)*istride+nsamples)
         buffer(filter_length-right+1:) = 0
         call dfftw_execute_r2r(fplan, buffer, buffer)
-        buffer = buffer * fft_filter(:, i)
+        buffer = buffer * fft_filter(:,i)
         call dfftw_execute_r2r(bplan, buffer, buffer)
         output((i-1)*ostride+1:(i-1)*ostride+nsamples) = buffer(left+1:filter_length-right)
     end do
