@@ -2,14 +2,14 @@ import numpy as np
 import scipy
 import tamasis
 
-from pyoperators import Operator, AdditionOperator, CompositionOperator, DiagonalOperator, PartitionOperator, ScalarOperator, asoperator, I
+from pyoperators import Operator, AdditionOperator, CompositionOperator, DiagonalOperator, BlockDiagonalOperator, ScalarOperator, asoperator, I
 from pyoperators.utils import isscalar, assert_is
 from numpy.testing import assert_array_equal, assert_almost_equal, assert_raises
-from tamasis.acquisitionmodels import Convolution, CompressionAverage, DdTdd, DiscreteDifference, DownSampling, FftOperator, FftHalfComplex, Masking, Packing, Padding, ResponseTruncatedExponential, RollOperator, ShiftOperator, Unpacking, partitioned
+from tamasis.acquisitionmodels import Convolution, CompressionAverage, DdTdd, DiscreteDifference, DownSampling, FftOperator, FftHalfComplex, Masking, Packing, Padding, ResponseTruncatedExponential, RollOperator, ShiftOperator, Unpacking, block_diagonal
 
 def test_partitioning():
 
-    @partitioned('value', 'mykey')
+    @block_diagonal('value', 'mykey')
     class MyOp(Operator):
         """ Bla1. """
         def __init__(self, arg1, value, arg3, mykey=None, **keywords):
@@ -41,7 +41,7 @@ def test_partitioning():
                 output = op(input)
                 assert_array_equal(output, v)
         else:
-            assert op.__class__ is PartitionOperator
+            assert op.__class__ is BlockDiagonalOperator
             v = len(n) * [v] if isscalar(v) else v[0:len(n)]
             k = len(n) * [k] if isscalar(k) else k[0:len(n)]
             for i, p in enumerate(n):
@@ -166,7 +166,7 @@ def test_ffthalfcomplex2():
 def test_ffthalfcomplex3():
     partition = (100,300,5,1000-100-300-5)
     ffts = [FftHalfComplex(p) for p in partition]
-    fft = PartitionOperator(ffts, partitionin=partition, axisin=-1)
+    fft = BlockDiagonalOperator(ffts, partitionin=partition, axisin=-1)
     a = np.random.random((10,np.sum(partition)))+1
     b = fft(a)
     b_ = np.hstack([ffts[0](a[:,:100]), ffts[1](a[:,100:400]), ffts[2](a[:,400:405]), ffts[3](a[:,405:])])

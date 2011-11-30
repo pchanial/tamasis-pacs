@@ -53,7 +53,7 @@ __all__ = [
     'Unpacking',
 ]
 
-def partitioned(*partition_args, **keywords):
+def block_diagonal(*partition_args, **keywords):
     """
     Class decorator that partitions an Operator along a specified axis.
     It adds a 'partition' keyed argument to the class constructor.
@@ -69,7 +69,7 @@ def partitioned(*partition_args, **keywords):
 
     Example
     -------
-    >>> @partitioned('value')
+    >>> @block_diagonal('value')
     >>> @linear
     >>> class MyOp(Operator):
     >>>     def __init__(self, value, shapein=None):
@@ -119,7 +119,7 @@ def partitioned(*partition_args, **keywords):
                 not isscalar(v) else (k,v) for k,v in keywords.iteritems()) \
                 for i in range(n))
             
-            # the input shapein/out describe the PartitionOperator
+            # the input shapein/out describe the BlockDiagonalOperator
             def _reshape(s, p, a):
                 s = list(tointtuple(s))
                 s[a] = p
@@ -142,8 +142,8 @@ def partitioned(*partition_args, **keywords):
             if len(ops) == 1:
                 return ops[0]
 
-            return PartitionOperator(ops, partitionin=partitionin,
-                                     axisin=axisin)
+            return BlockDiagonalOperator(ops, partitionin=partitionin,
+                                         axisin=axisin)
 
         @functools.wraps(cls.__init__)
         def partition_init(self, *args, **keywords):
@@ -163,7 +163,7 @@ def partitioned(*partition_args, **keywords):
     return func
 
 
-@partitioned('factor', axis=-1)
+@block_diagonal('factor', axis=-1)
 @real
 @linear
 class Compression(Operator):
@@ -283,8 +283,8 @@ class InvNtt(Operator):
             cls = InvNttUncorrelated
         else:
             cls = InvNttUncorrelatedPython
-        #XXX should generate partitionoperator with no duplicates...
-        return PartitionOperator([cls(f, ncorrelations, n) \
+        #XXX should generate BlockDiagonalOperator with no duplicates...
+        return BlockDiagonalOperator([cls(f, ncorrelations, n) \
                    for f, n in zip(fft_filters, nsamples)], axisin=-1)
 
 
@@ -337,7 +337,7 @@ class InvNttUncorrelatedPython(Operator):
         return padding.T * fft.T * invntt * fft * padding
 
 
-@partitioned('left', 'right', axis=-1)
+@block_diagonal('left', 'right', axis=-1)
 @real
 @linear
 class Padding(Operator):
@@ -427,8 +427,8 @@ class Projection(Operator):
                            derived_units=derived_units, comm_tod=obs.comm_tod)
             operands.append(p)
             partitionout.append(nsamples)
-        result = ExpansionOperator(operands, partitionout=partitionout,
-                                   axisout=-1)
+        result = BlockColumnOperator(operands, partitionout=partitionout,
+                                     axisout=-1)
         def get_mask(output=None):
             if output is None:
                 shapein = tuple([header['NAXIS'+str(i+1)] for i in \
