@@ -7,16 +7,10 @@ import operator
 
 import tamasisfortran as tmf
 
-try:
-    import fftw3
-    MAX_FFTW_NUM_THREADS = 1 if fftw3.planning.lib_threads is None else None
-except:
-    print('Warning: Library PyFFTW3 is not installed.')
-
 from mpi4py import MPI
 
 from pyoperators import (Operator, IdentityOperator, DiagonalOperator,
-                         ExpansionOperator, PartitionOperator)
+                         BlockColumnOperator, BlockDiagonalOperator)
 from pyoperators.decorators import (idempotent, linear, orthogonal, real,
                                     square, symmetric, unitary, inplace)
 from pyoperators.utils import isscalar, tointtuple, openmp_num_threads
@@ -29,6 +23,13 @@ from .quantity import Quantity, _divide_unit, _multiply_unit
 from .utils import diff, diffT, diffTdiff, shift
 from .mpiutils import split_shape, split_work
 from .wcsutils import str2fitsheader
+
+try:
+    import fftw3
+    MAX_FFTW_NUM_THREADS = 1 if fftw3.planning.lib_threads is None \
+        else openmp_num_threads()
+except:
+    print('Warning: Library PyFFTW3 is not installed.')
 
 __all__ = [
     'CompressionAverage',
