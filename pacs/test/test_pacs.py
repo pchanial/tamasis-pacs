@@ -3,38 +3,16 @@ import pyfits
 import os
 import tamasis
 
+from glob import glob
 from tamasis import PacsObservation, PacsSimulation, Pointing, Projection, Map, Tod, IdentityOperator, MaskOperator, mapper_naive
-from tamasis.numpyutils import all_eq, any_neq, minmax
+from tamasis.numpyutils import all_eq, minmax
 from uuid import uuid1
-
-class TestFailure(Exception): pass
 
 tamasis.var.verbose = True
 data_dir = os.path.dirname(__file__) + '/data/'
+uuid = str(uuid1())
 
 def test():
-    # slice[10:19]
-    obs = PacsObservation(data_dir+'frames_blue.fits[11:20]')
-    tod = obs.get_tod(flatfielding=False)
-
-    filename = 'obs-'+str(uuid1())+'.fits'
-    try:
-        obs.save(filename, tod)
-        obs2 = PacsObservation(filename)
-        tod2 = obs2.get_tod(raw=True)
-        status2 = obs2.status
-    finally:
-        try:
-            os.remove(filename)
-        except:
-            pass
-    for field in obs.status.dtype.names:
-        status = obs.status[10:20]
-        if isinstance(status[field][0], str):
-            if np.any(status[field] != status2[field]): raise TestFailure('Status problem with: '+field)
-        elif any_neq(status[field], status2[field]): raise TestFailure('Status problem with: '+field)
-    if any_neq(tod, tod2): raise TestFailure()
-
     # all observation
     obs = PacsObservation(data_dir+'frames_blue.fits', reject_bad_line=False)
     obs.pointing.chop[:] = 0
@@ -43,7 +21,7 @@ def test():
     proj = Projection(obs, npixels_per_sample=6, oversampling=False)
     o = Tod.ones(proj.shapeout)
     nocoverage = mapper_naive(o, proj).coverage == 0
-    if any_neq(nocoverage, proj.get_mask()): raise TestFailure()
+    assert all_eq(nocoverage, proj.get_mask())
     tod = obs.get_tod()
 
     # packed projection
@@ -55,22 +33,12 @@ def test():
     #proj2 = Projection(obs, npixels_per_sample=6, packed=True, oversampling=False)
     #if any_neq(proj.T(tod), proj2.T(tod), 1.e-12): raise TestFailure()
 
-    filename = 'obs-'+str(uuid1())+'.fits'
-    try:
-        obs.save(filename, tod)
-        obs2 = PacsObservation(filename, reject_bad_line=False)
-        tod2 = obs2.get_tod(raw=True)
-        status2 = obs2.status
-    finally:
-        try:
-            os.remove(filename)
-        except:
-            pass
-    for field in obs.status.dtype.names:
-        if isinstance(obs.status[field][0], str):
-            if np.any(obs.status[field] != status2[field]): raise TestFailure('Status problem with: '+field)
-        elif any_neq(obs.status[field], status2[field]): raise TestFailure('Status problem with: '+field)
-    if any_neq(tod, tod2): raise TestFailure()
+    filename = 'obs-' + uuid + '.fits'
+    obs.save(filename, tod)
+    obs2 = PacsObservation(filename, reject_bad_line=False)
+    tod2 = obs2.get_tod(raw=True)
+    assert all_eq(obs.status, obs2.status)
+    assert all_eq(tod, tod2)
 
     telescope  = IdentityOperator()
     projection = Projection(obs, resolution=3.2, oversampling=False,
@@ -96,7 +64,7 @@ def test():
     map_naive2 = mapper_naive(tod, MaskOperator(tod.mask) * projection2)
     map_naive2.inunit('Jy/arcsec^2')
     map_naive3 = map_naive2[:,250:header['NAXIS1']+250]
-    if any_neq(map_naive.tounit('Jy/arcsec^2'), map_naive3, 2.e-7): raise TestFailure('mapper_naive, with custom header')
+    assert all_eq(map_naive.tounit('Jy/arcsec^2'), map_naive3, 2.e-7)
 
     # test compatibility with photproject
     tod = obs.get_tod(flatfielding=False, subtraction_mean=False)
@@ -105,27 +73,31 @@ def test():
     map_ref = Map(hdu_ref.data, hdu_ref.header, unit=hdu_ref.header['qtty____']+'/pixel')
     std_naive = np.std(map_naive4[40:60,40:60])
     std_ref = np.std(map_ref[40:60,40:60])
-    relerror = abs(std_naive-std_ref) / std_ref
-    if relerror > 0.025: raise TestFailure('Incompatibility with HCSS photproject: ' + str(relerror*100)+'%.')
+    assert abs(std_naive-std_ref) / std_ref < 0.025
 
+def test_detector_policy():
     map_naive_ref = Map(data_dir + '../../../core/test/data/frames_blue_map_naive.fits')
     obs = PacsObservation(data_dir + 'frames_blue.fits', reject_bad_line=False)
     obs.pointing.chop[:] = 0
-    projection = Projection(obs, header=map_naive_ref.header, oversampling=False, npixels_per_sample=6)
+    projection = Projection(obs, header=map_naive_ref.header,
+                            oversampling=False, npixels_per_sample=6)
     tod = obs.get_tod(flatfielding=False)
     masking = MaskOperator(tod.mask)
     model = masking * projection
     map_naive = mapper_naive(tod, model)
-    if any_neq(map_naive, map_naive_ref, 1.e-11): raise TestFailure()
+    assert all_eq(map_naive, map_naive_ref, 1.e-11)
 
-    obs_rem = PacsObservation(data_dir + 'frames_blue.fits', policy_bad_detector='remove', reject_bad_line=False)
+    obs_rem = PacsObservation(data_dir + 'frames_blue.fits',
+                              policy_bad_detector='remove',
+                              reject_bad_line=False)
     obs_rem.pointing.chop[:] = 0
-    projection_rem = Projection(obs_rem, header=map_naive.header, oversampling=False, npixels_per_sample=7)
+    projection_rem = Projection(obs_rem, header=map_naive.header,
+                                oversampling=False, npixels_per_sample=7)
     tod_rem = obs_rem.get_tod(flatfielding=False)
     masking_rem = MaskOperator(tod_rem.mask)
     model_rem = masking_rem * projection_rem
     map_naive_rem = mapper_naive(tod_rem, model_rem)
-    if any_neq(map_naive, map_naive_rem, 1.e-11): raise TestFailure()
+    assert all_eq(map_naive, map_naive_rem, 1.e-11)
 
 def test_pack():
     for channel, nrows, ncolumns in ('red',16,32), ('blue',32,64):
@@ -150,7 +122,18 @@ def test_npixels_per_sample_is_zero():
     t[:] = 1
     assert all_eq(minmax(proj2.T(t)), [0,0])
 
-def test_slice():
+def test_slice1():
+    obs = PacsObservation(data_dir+'frames_blue.fits[11:20]')
+    tod = obs.get_tod(flatfielding=False)
+
+    filename = 'obs-' + uuid + '.fits'
+    obs.save(filename, tod)
+    obs2 = PacsObservation(filename)
+    tod2 = obs2.get_tod(raw=True)
+    assert all_eq(obs.status[10:20], obs2.status)
+    assert all_eq(tod, tod2)
+
+def test_slice2():
     obs1 = PacsObservation(data_dir + 'frames_blue.fits')
     obs2 = PacsObservation([data_dir + 'frames_blue.fits[1:41]',
                             data_dir + 'frames_blue.fits[42:43]',
@@ -176,3 +159,10 @@ def test_slice():
     assert all_eq(m1, m2, 1e-12)
     assert all_eq(proj1(m1), proj2(m1))
     
+def tearDown():
+    files = glob('*' + uuid + '.fits')
+    for f in files:
+        try:
+            os.remove(f)
+        except IOError:
+            pass
