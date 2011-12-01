@@ -108,8 +108,8 @@ class Observation(object):
         newshape = np.concatenate((self.instrument.detector.shape, (nsamples,)))
         if nvalids != tod.shape[0]:
             raise ValueError("The detector mask has a number of valid detecto" \
-                "rs '" + str(np.sum(mask == 0)) + "' incompatible with the pac" \
-                "ked input '" + str(tod.shape[0]) + "'.")
+                "rs '{0}' incompatible with the packed input '{1}'.".format(
+                nvalids, tod.shape[0]))
 
         # return a view if all detectors are valid
         if nvalids == ndetectors:
@@ -404,13 +404,12 @@ def create_scan(ra0, dec0, scan_acceleration, sampling_period, scan_angle=0.,
     # compute the different times and the total number of points
     # acceleration time at the beginning of a leg, and deceleration time
     # at the end
+    # The time needed to turn around is 2 * (extra_time1 + extra_time2)
     extra_time1 = scan_speed / scan_acceleration
     # corresponding length 
     extralength = 0.5 * scan_acceleration * extra_time1 * extra_time1
     # Time needed to go from a scan line to the next 
     extra_time2 = np.sqrt(scan_step / scan_acceleration)
-    # Time needed to turn around (not used)
-    turnaround_time = 2 * (extra_time1 + extra_time2)
 
     # Time needed to go along the scanline at constant speed
     line_time = scan_length / scan_speed
