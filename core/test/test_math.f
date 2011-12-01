@@ -64,15 +64,15 @@ program test_math
 
     allocate (x(size(mresults)+1))
     x = [mresults, -999._p]
-    if (median(x) /= mresults(2)) call failure('median')
+    if (median_copy(x, .false.) /= mresults(2)) call failure('median')
     deallocate (x)
-    val = median([NaN, NaN, NaN])
+    val = median_copy([NaN, NaN, NaN], .true.)
     if (val == val) call failure('median 2')
-    val = median([1._p, 3._p, 3._p], logical([.true., .true., .true.], 1))
+    val = median_copy([1._p, 3._p, 3._p], .false., logical([.true., .true., .true.], 1))
     if (val == val) call failure('median 3')
-    val = median([1._p, NaN, 3._p], logical([.true., .false., .true.], 1))
+    val = median_copy([1._p, NaN, 3._p], .true., logical([.true., .false., .true.], 1))
     if (val == val) call failure('median 4')
-    val = median([3._p, 2._p, 1._p], logical([.true., .true., .false.], 1))
+    val = median_copy([3._p, 2._p, 1._p], .false., logical([.true., .true., .false.], 1))
     if (neq_real(val, 1._p)) call failure('median 4')
 
     allocate (x(100))

@@ -20,7 +20,7 @@ module module_pacsobservation
     use iso_fortran_env,       only : ERROR_UNIT, OUTPUT_UNIT
     use module_fitstools,      only : FLEN_VALUE, ft_close, ft_open, ft_open_bintable, ft_read_column, ft_read_image,              &
                                       ft_read_keyword, ft_read_keyword_hcss, ft_check_error_cfitsio
-    use module_math,           only : median, neq_real
+    use module_math,           only : median_copy, neq_real
     use module_observation,    only : MaskPolicy, ObservationPointing, strpolicy
     use module_pacsinstrument, only : SAMPLING_PERIOD
     use module_string,         only : strinteger, strreal, strsection, strternary
@@ -776,7 +776,7 @@ contains
         ! check that the input time is monotonous (and increasing)
         allocate(delta(this%nsamples-1))
         delta = this%p(2:this%nsamples)%time - this%p(1:this%nsamples-1)%time
-        this%sampling_interval = median(delta)
+        this%sampling_interval = median_copy(delta, .false.)
         njumps = 0
         do isample = 2, this%nsamples
             if (delta(isample-1) <= 0) then

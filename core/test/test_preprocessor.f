@@ -2,7 +2,7 @@ program test_preprocessor
 
     use iso_fortran_env,  only : ERROR_UNIT
     use module_fitstools, only : ft_read_image
-    use module_math,      only : NaN, median, neq_real
+    use module_math,      only : NaN, median_copy, neq_real
     use module_preprocessor
     use module_tamasis,   only : p
     implicit none
@@ -43,7 +43,7 @@ program test_preprocessor
     write(*,'(f6.3,a)') real(count2-count1)/count_rate, 's'
 
     do i=1, size(timeline)
-        reference(i) = median(timeline(max(i-49,1):min(i+49,size(timeline))))
+        reference(i) = median_copy(timeline(max(i-49,1):min(i+49,size(timeline))), .false.)
     end do
 
     do i=1, size(timeline)
@@ -67,7 +67,7 @@ program test_preprocessor
 
     
     do i=1, size(timeline_NaN)
-        reference(i) = median(timeline_NaN(max(i-1,1):min(i+1,size(timeline_NaN))))
+        reference(i) = median_copy(timeline_NaN(max(i-1,1):min(i+1,size(timeline_NaN))), .true.)
     end do
     call interpolate_linear(reference)
 

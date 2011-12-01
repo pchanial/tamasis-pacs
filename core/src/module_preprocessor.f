@@ -3,7 +3,7 @@
 !
 module module_preprocessor
 
-    use module_math,    only : NaN, mInf, pInf, mean, median, sum_kahan
+    use module_math,    only : NaN, mInf, pInf, mean, median_copy, sum_kahan
     use module_sort,    only : histogram, reorder
     use module_tamasis, only : p
     implicit none
@@ -275,7 +275,7 @@ contains
         ndata = size(data)
 
         if (ndata <= length) then
-           data = data - median(data, mask)
+           data = data - median_copy(data, .true., mask)
            return
         end if
 

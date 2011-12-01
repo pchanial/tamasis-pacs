@@ -26,7 +26,7 @@ module module_math
     public :: minmax_degrees
     public :: angle_lonlat
     public :: barycenter_lonlat
-    public :: median
+    public :: median_copy
     public :: median_nocopy
     public :: moment
     public :: nint_down
@@ -64,10 +64,6 @@ module module_math
 
     interface sum_kahan
         module procedure sum_kahan_1d, sum_kahan_2d, sum_kahan_3d
-    end interface
-
-    interface median
-        module procedure median_nomask, median_mask
     end interface
 
     real(p), parameter :: PI = 4._p * atan(1._p)
@@ -802,40 +798,38 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    function median_nomask(array) result (median) 
+    function median_copy(array, remove_nan, mask) result (median) 
 
         real(p)             :: median
         real(p), intent(in) :: array(:)
+        logical, intent(in) :: remove_nan
+        logical*1, intent(in), optional :: mask(size(array))
 
         real(p), allocatable :: array_copy(:)
 
 #ifdef IFORT
-        allocate (array_copy(count(array == array)))
+        if (remove_nan .and. present(mask)) then
+            allocate (array_copy(count(array == array .and. .not. mask)))
+        else if (present(mask)) then
+            allocate array_copy(count(.not. mask))
+        else if (remove_nan) then
+            allocate array_copy(count(array == array))
+        end if
 #endif
-        array_copy = pack(array, array == array)
-        median = median_nocopy(array_copy)
+        if (remove_nan .and. present(mask)) then
+            array_copy = pack(array, array == array .and. .not. mask)
+        else if (present(mask)) then
+            array_copy = pack(array, .not. mask)
+        else if (remove_nan) then
+            array_copy = pack(array, array == array)
+        else
+            allocate (array_copy(size(array)))
+            array_copy = array
+        end if
 
-    end function median_nomask
+        median = median_nocopy(array_copy, .false.)
 
-
-    !-------------------------------------------------------------------------------------------------------------------------------
-
-
-    function median_mask(array, mask) result (median) 
-
-        real(p)               :: median
-        real(p), intent(in)   :: array(:)
-        logical*1, intent(in) :: mask(size(array))
-
-        real(p), allocatable  :: array_copy(:)
-
-#ifdef IFORT
-        allocate (array_copy(count(array == array .and. .not. mask)))
-#endif
-        array_copy = pack(array, array == array .and. .not. mask)
-        median = median_nocopy(array_copy)
-
-    end function median_mask
+    end function median_copy
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
@@ -846,20 +840,41 @@ contains
     ! Cambridge University Press, 1992, Section 8.5, ISBN 0-521-43108-5
     ! input array may be reordered
     ! This code by Nicolas Devillard - 1998. Public domain.
-    function median_nocopy(arr) result (median)
+    function median_nocopy(arr, remove_nan, mask) result (median)
 
         real(p)                :: median
         real(p), intent(inout) :: arr(0:)
+        logical, intent(in)    :: remove_nan
+        logical*1, intent(in), optional :: mask(0:size(arr)-1)
 
-        integer                :: low, high, imedian, middle, ll, hh
+        integer :: low, high, imedian, middle, ll, hh
 
-        if (size(arr) == 0) then
+        low = 0
+        high = size(arr)-1
+
+        if (remove_nan .or. present(mask)) then
+            ! remove NaN or masked elements from input array
+            ll = 0
+            do
+                if (ll > high) exit
+                if (remove_nan .and. arr(ll) /= arr(ll)) go to 99
+                if (present(mask)) then
+                    if (mask(ll)) go to 99
+                end if
+                ! element is ok, let's check the next one
+                ll = ll + 1
+                cycle
+                ! we remove the element by copying the last one into it
+99              arr(ll) = arr(high)
+                high = high - 1
+            end do
+        end if
+
+        if (high < 0) then
             median = NaN
             return
         end if
 
-        low = 0
-        high = size(arr)-1
         imedian = (low + high) / 2
         do
             if (high <= low) then
@@ -927,9 +942,9 @@ contains
         real(p)                        :: x_(size(x)), med
 
         x_ = x
-        med = median_nocopy(x_)
+        med = median_nocopy(x_, .true.)
         x_ = abs(x_ - med)
-        mad = median_nocopy(x_)
+        mad = median_nocopy(x_, .true.)
 
         if (present(m)) m = med
 
