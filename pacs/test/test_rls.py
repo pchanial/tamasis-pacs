@@ -11,7 +11,7 @@ tamasis.var.verbose = False
 profile = None#'test_rls.png'
 data_dir = os.path.dirname(__file__) + '/data/'
 obs = PacsObservation(filename=data_dir+'frames_blue.fits',
-                      fine_sampling_factor=1)
+                      fine_sampling_factor=1, reject_bad_line=False)
 obs.pointing.chop[:] = 0
 tod = obs.get_tod(flatfielding=False)
 

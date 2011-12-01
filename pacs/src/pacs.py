@@ -576,7 +576,7 @@ class PacsObservation(PacsBase):
     the observations to be processed.
     """
     def __init__(self, filename, fine_sampling_factor=1,
-                 policy_bad_detector='mask', reject_bad_line=False,
+                 policy_bad_detector='mask', reject_bad_line=True,
                  policy_inscan='keep', policy_turnaround='keep',
                  policy_other='remove', policy_invalid='mask',
                  active_fraction=0, delay=0., calblock_extension_time=None,
@@ -898,7 +898,7 @@ class PacsSimulation(PacsBase):
     This class creates a simulated PACS observation.
     """
     def __init__(self, pointings, band, mode=None, fine_sampling_factor=1,
-                 policy_bad_detector='mask', reject_bad_line=False,
+                 policy_bad_detector='mask', reject_bad_line=True,
                  policy_inscan='keep', policy_turnaround='keep',
                  policy_other='keep', policy_invalid='keep', active_fraction=0,
                  delay=0., comm_tod=None):

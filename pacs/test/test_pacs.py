@@ -36,7 +36,7 @@ def test():
     if any_neq(tod, tod2): raise TestFailure()
 
     # all observation
-    obs = PacsObservation(data_dir+'frames_blue.fits')
+    obs = PacsObservation(data_dir+'frames_blue.fits', reject_bad_line=False)
     obs.pointing.chop[:] = 0
 
     # get mask
@@ -58,7 +58,7 @@ def test():
     filename = 'obs-'+str(uuid1())+'.fits'
     try:
         obs.save(filename, tod)
-        obs2 = PacsObservation(filename)
+        obs2 = PacsObservation(filename, reject_bad_line=False)
         tod2 = obs2.get_tod(raw=True)
         status2 = obs2.status
     finally:
@@ -109,7 +109,7 @@ def test():
     if relerror > 0.025: raise TestFailure('Incompatibility with HCSS photproject: ' + str(relerror*100)+'%.')
 
     map_naive_ref = Map(data_dir + '../../../core/test/data/frames_blue_map_naive.fits')
-    obs = PacsObservation(data_dir + 'frames_blue.fits')
+    obs = PacsObservation(data_dir + 'frames_blue.fits', reject_bad_line=False)
     obs.pointing.chop[:] = 0
     projection = Projection(obs, header=map_naive_ref.header, oversampling=False, npixels_per_sample=6)
     tod = obs.get_tod(flatfielding=False)
@@ -118,7 +118,7 @@ def test():
     map_naive = mapper_naive(tod, model)
     if any_neq(map_naive, map_naive_ref, 1.e-11): raise TestFailure()
 
-    obs_rem = PacsObservation(data_dir + 'frames_blue.fits', policy_bad_detector='remove')
+    obs_rem = PacsObservation(data_dir + 'frames_blue.fits', policy_bad_detector='remove', reject_bad_line=False)
     obs_rem.pointing.chop[:] = 0
     projection_rem = Projection(obs_rem, header=map_naive.header, oversampling=False, npixels_per_sample=7)
     tod_rem = obs_rem.get_tod(flatfielding=False)
