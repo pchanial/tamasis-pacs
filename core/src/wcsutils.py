@@ -38,10 +38,10 @@ def angle_lonlat(lon1, lat1, lon2=None, lat2=None):
     if lon2 is None and lat2 is None:
         lon2, lat2 = lat1
         lon1, lat1 = lon1
-    lon1 = np.array(lon1, dtype=var.FLOAT_DTYPE, ndmin=1, copy=False).ravel()
-    lat1 = np.array(lat1, dtype=var.FLOAT_DTYPE, ndmin=1, copy=False).ravel()
-    lon2 = np.array(lon2, dtype=var.FLOAT_DTYPE, ndmin=1, copy=False).ravel()
-    lat2 = np.array(lat2, dtype=var.FLOAT_DTYPE, ndmin=1, copy=False).ravel()
+    lon1 = np.array(lon1, var.FLOAT_DTYPE, ndmin=1, copy=False).ravel()
+    lat1 = np.array(lat1, var.FLOAT_DTYPE, ndmin=1, copy=False).ravel()
+    lon2 = np.array(lon2, var.FLOAT_DTYPE, ndmin=1, copy=False).ravel()
+    lat2 = np.array(lat2, var.FLOAT_DTYPE, ndmin=1, copy=False).ravel()
     angle = tmf.angle_lonlat(lon1, lat1, lon2, lat2)
     if angle.size == 1:
         angle = float(angle)
@@ -62,8 +62,8 @@ def barycenter_lonlat(lon, lat):
     lat : array of numbers
         latitude in degrees
     """
-    lon = np.asarray(lon, dtype=var.FLOAT_DTYPE).ravel()
-    lat = np.asarray(lat, dtype=var.FLOAT_DTYPE).ravel()
+    lon = np.array(lon, var.FLOAT_DTYPE, ndmin=1, copy=False).ravel()
+    lat = np.array(lat, var.FLOAT_DTYPE, ndmin=1, copy=False).ravel()
     return tmf.barycenter_lonlat(lon, lat)
 
 
