@@ -76,7 +76,7 @@ def combine_fitsheader(headers, cdelt=None, pa=None):
     """
 
     if not isinstance(headers, (list, tuple)):
-        header = (headers,)
+        headers = (headers,)
 
     if len(headers) == 1 and cdelt is None and pa is None:
         return headers[0]
@@ -187,7 +187,7 @@ def create_fitsheader(naxis=None, dtype=None, fromdata=None, extname=None,
         if naxis is None:
             naxis = tuple(reversed(array.shape))
         if dtype is not None:
-            array = arrays.astype(dtype)
+            array = array.astype(dtype)
         if array.dtype.itemsize == 1:
             typename = 'uint8'
         elif array.dtype.names is not None:
