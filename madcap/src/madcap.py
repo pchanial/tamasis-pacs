@@ -4,6 +4,7 @@
 
 from __future__ import division
 
+import gc
 import numpy as np
 import pyfits
 import re
@@ -11,7 +12,8 @@ import re
 from . import var
 from . import tmf
 from tamasis.datatypes import Tod
-from tamasis.observations import Instrument, Observation
+from tamasis.instruments import Instrument
+from tamasis.observations import Observation
 
 __all__ = [ 'MadMap1Observation' ]
 
@@ -110,13 +112,21 @@ class MadMap1Observation(Observation):
             nsamples = self.get_nsamples()[islice]
         tod = np.empty((ndetectors, nsamples))
 
-        sizeofpmatrix = self.info.npixels_per_sample * tod.size
-        print('Info: Allocating '+str(sizeofpmatrix / 2**17)+' MiB for the pointing matrix.')
-        pmatrix = np.zeros(sizeofpmatrix, dtype=np.int64)
-        status = tmf.madmap1_read_tod(self.info.todfile, self.info.invnttfile, self.info.convert, self.info.npixels_per_sample, islice + 1, tod.T, pmatrix)
+        shape = (ndetectors, nsamples, self.info.npixels_per_sample)
+        dtype = [('weight', 'f4'), ('pixel', 'i4')]
+        if npixels_per_sample != 0:
+            print('Info: Allocating ' + str(np.product(shape) / 2**17) + ' MiB '
+                  'for the pointing matrix.')
+        try:
+            pmatrix = np.empty(shape, dtype).view(np.recarray)
+        except MemoryError:
+            gc.collect()
+            pmatrix = np.empty(shape, dtype).view(np.recarray)
+        status = tmf.madmap1_read_tod(self.info.todfile, self.info.invnttfile,
+            self.info.convert, self.info.npixels_per_sample, islice + 1, tod.T,
+            pmatrix.ravel().view(np.int64))
         if status != 0: raise RuntimeError()
-        return pmatrix, method, ndetectors, nsamples, \
-               self.info.npixels_per_sample, (None, None), (None, None)
+        return pmatrix, method, None, None
 
     def get_tod(self, unit=None):
         """

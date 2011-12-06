@@ -15,6 +15,7 @@ from .utils import *
 from .processing import *
 from .acquisitionmodels import *
 from .mappers import *
-from .observations import MaskPolicy, Pointing
+from .instruments import *
+from .observations import *
 
 __all__ = [x for x in dir() if not x.startswith('_') or x == '__version__']

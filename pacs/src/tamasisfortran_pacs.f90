@@ -558,33 +558,230 @@ end subroutine pacs_pointing_matrix
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine pacs_uv2ad(u, v, ncoords, ra, dec, pa, chop, nsamples, distortion_yz, a, d)
+subroutine pacs_uv2yz(uv, ncoords, distortion_yz, chop, yz)
+    ! Convert coordinates in the (u,v) plane into the (y,z) plane, assuming a chop angle.
+    ! Input units are in millimeters, output units in degrees.
+
+    use module_pacsinstrument, only : uv2yz
+    use module_tamasis,        only : p
+    implicit none
+
+    real(p), intent(in)    :: uv(2,ncoords)
+    integer, intent(in)    :: ncoords
+    real(p), intent(in)    :: distortion_yz(2,3,3,3)
+    real(p), intent(in)    :: chop
+    real(p), intent(inout) :: yz(2,ncoords)
+
+    yz = uv2yz(uv, distortion_yz, chop)
+
+end subroutine pacs_uv2yz
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine pacs_uv2ad(uv, ncoords, ra, dec, pa, chop, nsamples, distortion_yz, ad)
+    ! Convert coordinates in the (u,v) plane into celestial coordinates,
+    ! assuming a pointing direction and a position angle.
+    ! The routine is not accurate at the poles.
+    ! Input units are in millimeters, output units in degrees.
 
     use module_pacsinstrument, only : uv2yz, yz2ad
     use module_tamasis,        only : p
     implicit none
 
-    integer, intent(in)  :: ncoords, nsamples
-    real(p), intent(in)  :: u(ncoords), v(ncoords), ra(nsamples), dec(nsamples), pa(nsamples), chop(nsamples)
-    real(p), intent(in)  :: distortion_yz(2,3,3,3)
-    real(p), intent(out) :: a(ncoords,nsamples), d(ncoords,nsamples)
+    integer, intent(in)    :: ncoords, nsamples
+    real(p), intent(in)    :: uv(2,ncoords), ra(nsamples), dec(nsamples), pa(nsamples), chop(nsamples)
+    real(p), intent(in)    :: distortion_yz(2,3,3,3)
+    real(p), intent(inout) :: ad(2,ncoords,nsamples)
 
-    real(p) :: coords(2,ncoords), coords_uv(2,ncoords)
     integer :: isample
 
-    coords_uv(1,:) = u
-    coords_uv(2,:) = v
-    !$omp parallel do private(coords)
+    !$omp parallel do
     do isample = 1, nsamples
-        coords = uv2yz(coords_uv, distortion_yz, chop(isample))
-        coords = yz2ad(coords, ra(isample), dec(isample), pa(isample))
-        a(:,isample) = coords(1,:)
-        d(:,isample) = coords(2,:)
+        ad(:,:,isample) = uv2yz(uv, distortion_yz, chop(isample))
+        ad(:,:,isample) = yz2ad(ad(:,:,isample), ra(isample), dec(isample), pa(isample))
     end do
     !$omp end parallel do
 
 end subroutine pacs_uv2ad
 
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+module pacs
+
+    use module_fitstools,      only : ft_read_keyword
+    use module_math,           only : mInf, pInf
+    use module_pacsinstrument, only : uv2yz, yz2ad
+    use module_pointingmatrix, only : PointingElement, xy2pmatrix, xy2roi, roi2pmatrix
+    use module_projection,     only : convex_hull
+    use module_tamasis,        only : p
+    use module_wcs,            only : ad2xy_gnomonic, ad2xys_gnomonic, init_astrometry
+    implicit none
+    private
+
+    public :: uv2xy_minmax
+    public :: uv2pmatrix_nearest_neighbour
+    public :: uv2pmatrix_sharp_edges
+
+contains
+
+    subroutine uv2xy_minmax(coords, ncoords, ra, dec, pa, chop, npointings, distortion_yz, header, xmin, ymin, xmax, ymax, status)
+        ! Return the minimum and maximum sky pixel coordinate values for a set of coordinates in the (u,v) plane.
+
+        real(p), intent(in)                        :: coords(2,ncoords)       ! instrument frame coordinates
+        real(p), intent(in), dimension(npointings) :: ra, dec, pa, chop       ! input pointings in celestial coordinates
+        integer, intent(in)                        :: ncoords, npointings     ! #coordinates, #detectors
+        real(p), intent(in)                        :: distortion_yz(2,3,3,3)  ! distortion coefficients
+        character(len=2880), intent(in)            :: header                  ! input FITS header
+        real(p), intent(out)                       :: xmin, ymin, xmax, ymax  ! min and max values of the map coordinates
+        integer, intent(out)                       :: status                  ! status flag
+
+        real(p), allocatable :: hull(:,:)
+        integer, allocatable :: ihull(:)
+        integer              :: ipointing
+        external :: pacs_uv2ad
+
+        call init_astrometry(header, status=status)
+        if (status /= 0) return
+
+        call convex_hull(coords, ihull)
+        allocate (hull(2, size(ihull)))
+
+        xmin = pInf
+        xmax = mInf
+        ymin = pInf
+        ymax = mInf
+
+        !$omp parallel do reduction(min:xmin,ymin) reduction(max:xmax,ymax) private(hull)
+        do ipointing = 1, npointings
+
+            hull = uv2yz(coords(:,ihull), distortion_yz, chop(ipointing))
+            hull = yz2ad(hull, ra(ipointing), dec(ipointing), pa(ipointing))
+            hull = ad2xy_gnomonic(hull)
+            xmin = min(xmin, minval(hull(1,:)))
+            ymin = min(ymin, minval(hull(2,:)))
+            xmax = max(xmax, maxval(hull(1,:)))
+            ymax = max(ymax, maxval(hull(2,:)))
+
+        end do
+        !$omp end parallel do
+
+    end subroutine uv2xy_minmax
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine uv2pmatrix_nearest_neighbour(coords, ncoords, area, ra, dec, pa, chop, masked, npointings, distortion_yz, header,   &
+                                            pmatrix, out, status)
+        !f2py integer*8, depend(npointings,ncoords) :: pmatrix(npointings*ncoords)
+        real(p), intent(in)                          :: coords(2,ncoords)      ! instrument frame coordinates
+        real(p), intent(in)                          :: area(ncoords)          ! detector area / reference_area
+        real(p), intent(in), dimension(npointings)   :: ra, dec, pa, chop      ! input pointings in celestial coordinates
+        logical*1, intent(in), dimension(npointings) :: masked                 ! pointing flags: true if masked, removed
+        integer, intent(in)                          :: ncoords, npointings    ! #coordinates, #pointings
+        real(p), intent(in)                          :: distortion_yz(2,3,3,3) ! distortion coefficients
+        character(len=*), intent(in)                 :: header
+        type(PointingElement), intent(inout)         :: pmatrix(1,npointings,ncoords)
+        logical, intent(out)                         :: out
+        integer, intent(out)                         :: status
+
+        real(p) :: coords2(2,ncoords), x(ncoords), y(ncoords), s(ncoords)
+        integer :: ipointing, nx, ny
+
+        out = .false.
+        call init_astrometry(header, status=status)
+        if (status /= 0) return
+        ! get the size of the map
+        call ft_read_keyword(header, 'naxis1', nx, status=status)
+        if (status /= 0) return
+        call ft_read_keyword(header, 'naxis2', ny, status=status)
+        if (status /= 0) return
+
+        !$omp parallel do private(coords2, x, y, s) reduction(.or. : out)
+        ! loop over the samples which have not been removed
+        do ipointing = 1, npointings
+
+            if (masked(ipointing)) then
+                pmatrix(1,ipointing,:)%pixel = -1
+                pmatrix(1,ipointing,:)%weight = 0
+                cycle
+            end if
+
+            coords2 = uv2yz(coords, distortion_yz, chop(ipointing))
+            coords2 = yz2ad(coords2, ra(ipointing), dec(ipointing), pa(ipointing))
+            call ad2xys_gnomonic(coords2, x, y, s)
+
+            ! the input map has flux densities, not surface brightness
+            ! f_idetector = f_imap * weight
+            ! with weight = detector_area / pixel_area
+            ! and pixel_area = reference_area / s
+            call xy2pmatrix(x, y, nx, ny, out, pmatrix(1,ipointing,:))
+            pmatrix(1,ipointing,:)%weight = s * area
+
+        end do
+        !$omp end parallel do
+
+    end subroutine uv2pmatrix_nearest_neighbour
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine uv2pmatrix_sharp_edges(coords, ncoords, ra, dec, pa, chop, masked, npointings, distortion_yz, header, pmatrix,      &
+                                      npixels_per_sample, new_npixels_per_sample, out, status)
+        !f2py integer*8, depend(npixels_per_sample,npointings,ncoords) :: pmatrix(npixels_per_sample*npointings*ncoords/4)
+        real(p), intent(in)                          :: coords(2,ncoords)      ! instrument frame coordinates
+        real(p), intent(in), dimension(npointings)   :: ra, dec, pa, chop      ! input pointings in celestial coordinates
+        logical*1, intent(in), dimension(npointings) :: masked                 ! pointing flags: true if masked, removed
+        integer, intent(in)                          :: ncoords, npointings    ! #coordinates, #pointings
+        real(p), intent(in)                          :: distortion_yz(2,3,3,3) ! distortion coefficients
+        character(len=*), intent(in)                 :: header                 ! sky map FITS header
+        type(PointingElement), intent(inout)         :: pmatrix(npixels_per_sample,npointings,ncoords/4) ! the pointing matrix
+        integer, intent(in)  :: npixels_per_sample     ! input maximum number of sky pixels intersected by a detector
+        integer, intent(out) :: new_npixels_per_sample ! actual maximum number of sky pixels intersected by a detector
+        logical, intent(out) :: out                    ! true if some coordinates fall outside of the map
+        integer, intent(out) :: status
+
+        real(p) :: coords2(2,ncoords)
+        integer :: roi(2,2,ncoords/4)
+        integer :: ipointing, nx, ny
+
+        new_npixels_per_sample = 0
+        out = .false.
+        call init_astrometry(header, status=status)
+        if (status /= 0) return
+        ! get the size of the map
+        call ft_read_keyword(header, 'naxis1', nx, status=status)
+        if (status /= 0) return
+        call ft_read_keyword(header, 'naxis2', ny, status=status)
+        if (status /= 0) return
+
+        !$omp parallel do private(ipointing, coords2, roi) &
+        !$omp reduction(max : npixels_per_sample) reduction(.or. : out)
+        do ipointing = 1, npointings
+
+            if (masked(ipointing)) then
+                pmatrix(:,ipointing,:)%pixel = -1
+                pmatrix(:,ipointing,:)%weight = 0
+                cycle
+            end if
+
+            coords2 = uv2yz(coords, distortion_yz, chop(ipointing))
+            coords2 = yz2ad(coords2, ra(ipointing), dec(ipointing), pa(ipointing))
+            coords2 = ad2xy_gnomonic(coords2)
+            roi = xy2roi(coords2, 4)
+            call roi2pmatrix(roi, 4, coords2, nx, ny, new_npixels_per_sample, out, pmatrix(:,ipointing,:))
+
+        end do
+        !$omp end parallel do
+
+    end subroutine uv2pmatrix_sharp_edges
+
+end module pacs
 
 !-----------------------------------------------------------------------------------------------------------------------------------
 
@@ -650,76 +847,3 @@ subroutine pacs_bitmask(mask, nsamples, ndetectors, bitmask)
     !$omp end parallel do
 
 end subroutine pacs_bitmask
-
-
-!-----------------------------------------------------------------------------------------------------------------------------------
-
-
-subroutine pacs_pack(input, ndata, ncolumns, nrows, ndetectors, mask, output)
-
-    use module_tamasis, only : p
-    implicit none
-
-    integer, intent(in)    :: ndata, ncolumns, nrows, ndetectors
-    integer*1, intent(in)  :: input(ndata,ncolumns,nrows)
-    logical*1, intent(in)  :: mask(ncolumns,nrows)
-    integer*1, intent(out) :: output(ndata,ndetectors)
-
-    integer :: nblocks, idetector, i, j, k
-
-    if (nrows == 32) then
-        nblocks = 8
-    else
-        nblocks = 2
-    end if
-
-    idetector = 1
-    do k = 1, nblocks
-        do i = (k - 1) / 4 * 16 + 1, (k - 1) / 4 * 16 + 16
-            do j = modulo(k - 1, 4) * 16 + 1, modulo(k - 1, 4) * 16 + 16 
-                if (mask(j,i)) cycle
-                output(:,idetector) = input(:,j,i)
-                idetector = idetector + 1
-            end do
-        end do
-    end do
-    
-end subroutine pacs_pack
-
-
-!-----------------------------------------------------------------------------------------------------------------------------------
-
-
-subroutine pacs_unpack(input, ndata, ndetectors, ncolumns, nrows, mask, output)
-
-    use module_tamasis, only : p
-    implicit none
-
-    integer, intent(in)    :: ndata, ndetectors, ncolumns, nrows
-    integer*1, intent(in)  :: input(ndata,ndetectors)
-    logical*1, intent(in)  :: mask(ncolumns,nrows)
-    integer*1, intent(out) :: output(ndata,ncolumns,nrows)
-
-    integer :: nblocks, idetector, i, j, k
-
-    if (nrows == 32) then
-        nblocks = 8
-    else
-        nblocks = 2
-    end if
-
-    idetector = 1
-    do k = 1, nblocks
-        do i = (k - 1) / 4 * 16 + 1, (k - 1) / 4 * 16 + 16
-            do j = modulo(k - 1, 4) * 16 + 1, modulo(k - 1, 4) * 16 + 16 
-                if (mask(j,i)) then
-                    output(:,j,i) = 0
-                    cycle
-                end if
-                output(:,j,i) = input(:,idetector)
-                idetector = idetector + 1
-            end do
-        end do
-    end do
-
-end subroutine pacs_unpack

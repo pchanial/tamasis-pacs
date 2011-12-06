@@ -239,6 +239,7 @@ def build(bld):
     # Python extension tamasisfortran.so
     target = 'tamasisfortran.so'
     source = [bld.srcnode.find_node('%s/src/tamasisfortran_%s.f90' % (s,s)) for s in subdirs]
+    source += bld.srcnode.ant_glob('core/src/tamasisfortran_core_*.f90')
 
     #XXX this should be a Task...
     cmd = 'OMPI_FC=' + '${FC} ${F2PY} --fcompiler=${F2PYFCOMPILER} --f90exec=mpif90'

@@ -397,8 +397,8 @@ class Projection(Operator):
         - unit
     The instance has the following specific attributes:
         - header: the FITS header of the map
-        - pmatrix: transparent view of the pointing matrix
-        - _pmatrix: opaque representation of the pointing matrix
+        - pmatrix: the pointing matrix as a flexible dtype
+        - _pmatrix: opaque view of the pointing matrix
         - npixels_per_sample: maximum number of sky map pixels that can be
           intercepted by a detector
     """
@@ -417,16 +417,13 @@ class Projection(Operator):
         operands = []
         partitionout = []
         for islice in range(len(obs.slice)):
-            pmatrix, method, ndetectors, nsamples, npixels_per_sample, units, \
-                derived_units = obs.get_pointing_matrix(header,
-                npixels_per_sample, method=method, oversampling=oversampling,
-                islice=islice)
-            p = Projection(pmatrix, method=method, header=header,
-                           ndetectors=ndetectors, nsamples=nsamples,
-                           npixels_per_sample=npixels_per_sample, units=units,
+            pmatrix, method, units, derived_units = obs.get_pointing_matrix(
+                header, npixels_per_sample, method=method, oversampling= \
+                oversampling, islice=islice)
+            p = Projection(pmatrix, method=method, header=header, units=units,
                            derived_units=derived_units, comm_tod=obs.comm_tod)
             operands.append(p)
-            partitionout.append(nsamples)
+            partitionout.append(pmatrix.shape[1])
         result = BlockColumnOperator(operands, partitionout=partitionout,
                                      axisout=-1)
         def get_mask(output=None):
@@ -442,10 +439,9 @@ class Projection(Operator):
         result.get_mask = get_mask
         return result
         
-    def __init__(self, input, method=None, header=None, ndetectors=None,
-                 nsamples=None, npixels_per_sample=0, units=None,
-                 derived_units=None, resolution=None, oversampling=True,
-                 comm_map=None, comm_tod=None, packed=False):
+    def __init__(self, input, method=None, header=None, npixels_per_sample=0,
+                 units=None, derived_units=None, resolution=None,
+                 oversampling=True, comm_map=None, comm_tod=None, packed=False):
 
         self.comm_map = comm_map or var.comm_map
 
@@ -457,15 +453,31 @@ class Projection(Operator):
                 header = str2fitsheader(header)
 
             comm_tod = input.comm_tod
-            pmatrix, method, ndetectors, nsamples, npixels_per_sample, units, \
-                derived_units = input.get_pointing_matrix(
+            pmatrix, method, units, derived_units = input.get_pointing_matrix(
                     header,
                     npixels_per_sample,
                     method=method,
                     oversampling=oversampling)
         else:
+            if input.ndim != 3:
+                raise ValueError('The input pointing matrix has not 3 dimension'
+                                 's.')
             pmatrix = input
 
+        if pmatrix.size == 0:
+            # f2py doesn't accept zero-sized opaque arguments
+            _pmatrix = np.empty(1, np.int64)
+        else:
+            _pmatrix = pmatrix.ravel().view(np.int64)
+
+        if units is None:
+            units = ('', '')
+        if derived_units is None:
+            derived_units = ({}, {})
+        ndetectors, nsamples, npixels_per_sample = pmatrix.shape
+
+        self.pmatrix = pmatrix
+        self._pmatrix = _pmatrix
         self.comm_tod = comm_tod
         self.header = header
         self.ndetectors = ndetectors
@@ -474,18 +486,12 @@ class Projection(Operator):
         self.unit = _divide_unit(Quantity(1, units[0])._unit,
                                  Quantity(1, units[1])._unit)
         self.duout, self.duin = derived_units
-        self._pmatrix = pmatrix
-        if self.npixels_per_sample == 0:
-            pmatrix = np.empty(0, dtype=np.int64)
-        self.pmatrix = pmatrix.view([('weight', 'f4'), ('pixel', 'i4')]) \
-                              .view(np.recarray)
-        self.pmatrix.shape = (ndetectors, nsamples, npixels_per_sample)
 
         shapein = tuple([self.header['NAXIS'+str(i+1)] for i in \
                          range(self.header['NAXIS'])])[::-1]
         shapeout = (ndetectors, nsamples)
         mask = Map.empty(shapein, dtype=np.bool8, header=self.header)
-        tmf.pointing_matrix_mask(self._pmatrix, mask.view(np.int8).T, 
+        tmf.pointing_matrix_mask(self._pmatrix, mask.view(np.int8).T,
             self.npixels_per_sample, self.nsamples, self.ndetectors)
 
         ismapdistributed = self.comm_map.Get_size() > 1
@@ -516,7 +522,6 @@ class Projection(Operator):
         self.method = s.method
         self.ndetectors = s.ndetectors
         self.npixels_per_sample = s.npixels_per_sample
-        self.pmatrix = s.pmatrix
 
     def direct(self, input, output):
         if not output.flags.contiguous:
@@ -539,7 +544,7 @@ class Projection(Operator):
             output[...] = 0
         elif operation is not operator.__iadd__:
             raise ValueError('Invalid operation.')
-        tmf.pointing_matrix_transpose(self._pmatrix, input_.T, output.T, 
+        tmf.pointing_matrix_transpose(self._pmatrix, input_.T, output.T,
                                       self.npixels_per_sample)
 
     def get_mask(self, output=None):

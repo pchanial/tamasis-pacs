@@ -20,10 +20,9 @@ from pyoperators.core import CompositeOperator
 from pyoperators.utils import strenum, strplural, openmp_num_threads
 
 from . import var
-from tamasis.core import Quantity, Tod, MaskPolicy, Pointing, create_fitsheader,  tmf, CompressionAverage, Projection, Masking
+from tamasis.core import Quantity, Tod, MaskPolicy, Instrument, Pointing, create_fitsheader,  tmf, CompressionAverage, Projection, Masking
 from tamasis.mpiutils import split_observation
-from tamasis.observations import Observation, Instrument, create_scan
-from tamasis.wcsutils import combine_fitsheader, str2fitsheader
+from tamasis.observations import Observation, create_scan
 
 __all__ = [ 'PacsObservation',
             'PacsSimulation',
@@ -43,6 +42,150 @@ CALIBFILE_STD = var.path + '/pacs/PCalPhotometer_Stddev_Tamasis_v1.fits'
 CALIBFILE_INV = [var.path + '/pacs/PCalPhotometer_Invntt{0}_FM_v1.fits' \
                  .format(b) for b in ('BS', 'BL', 'Red')]
 
+class PacsInstrument(Instrument):
+
+    def get_valid_detectors(self, masked=False):
+        mask = ~self.detector.removed
+        if masked:
+            mask &= ~self.detector.masked
+        i, j = np.mgrid[0:16,0:16]
+        i = i.ravel()
+        j = j.ravel()
+        if self.band == 'red':
+            i, j = (np.hstack([i,i]),
+                    np.hstack([j,j+16]))
+        else:
+            i, j = (np.hstack([i + (k // 4) * 16 for k in range(8)]),
+                    np.hstack([j + k*16 % 64 for k in range(8)]))
+        mask = mask[(i,j)]
+        return i[mask], j[mask]
+    get_valid_detectors.__doc__ = Instrument.get_valid_detectors.__doc__
+
+    def uv2yz(self, coords, chop=0):
+        """
+        Convert coordinates in the (u,v) plane into the (y,z) plane,
+        assuming a chop angle.
+
+        Parameters
+        ----------
+        coords : float array (last dimension is 2, for u and v)
+            Coordinates in the (u,v) plane in millimeters.
+        chop : float
+            Chop angle.
+
+        Returns
+        -------
+        coords_converted : float array (last dimension is 2, for y and z)
+            Converted coordinates, in arc seconds.
+        """
+        coords = np.array(coords, float, order='c', copy=False)
+        yz = np.empty_like(coords)
+        distortion = self.distortion_yz.base.base.base
+        tmf.pacs_uv2yz(coords.reshape((-1,2)).T, distortion, chop,
+                       yz.reshape((-1,2)).T)
+        yz *= 3600
+        return yz
+                
+    def uv2ad(self, coords, pointing):
+        """
+        Convert coordinates in the (u,v) plane into celestial coordinates,
+        assuming a pointing direction and a position angle.
+
+        Parameters
+        ----------
+        coords : float array (last dimension is 2, for u and v)
+            Coordinates in the (u,v) plane in millimeters.
+        pointing : array with flexible dtype including 'ra', 'dec', 'pa', 'chop'
+            Pointing direction, in degrees.
+
+        Returns
+        -------
+        coords_converted : float array (last dimension is 2, for Ra and Dec)
+            Converted coordinates, in degrees.
+
+        Notes
+        -----
+        The routine is not accurate at the poles.
+        """
+        coords = np.array(coords, float, order='c', copy=False)
+        ad = np.empty(pointing.shape + coords.shape, float)
+        coords = coords.reshape((-1,2))
+        distortion = self.distortion_yz.base.base.base
+        tmf.pacs_uv2ad(coords.T, pointing['ra'].ravel(),
+                       pointing['dec'].ravel(), pointing['pa'].ravel(),
+                       pointing['chop'].ravel(), distortion,
+                       ad.reshape((-1,)+coords.shape).T)
+        for dim in range(pointing.ndim):
+            ad = np.rollaxis(ad, 0, -1)
+        return ad
+
+    def yz2ad(self, coords, pointing):
+        """
+        Convert coordinates in the (y,z) plane into celestial coordinates,
+        assuming a pointing direction and a position angle.
+
+        Parameters
+        ----------
+        coords : float array (last dimension is 2)
+            Coordinates in the (y,z) plane in arc seconds.
+        pointing : array with flexible dtype including 'ra', 'dec', 'pa', 'chop'
+            Pointing direction, in degrees.
+
+        Returns
+        -------
+        coords_converted : float array (last dimension is 2, for Ra and Dec)
+            Converted coordinates, in degrees.
+
+        Notes
+        -----
+        The routine is not accurate at the poles.
+        """
+        return super(PacsInstrument, self).instrument2ad(coords, pointing)
+
+    instrument2ad = uv2ad
+
+    def instrument2xy_minmax(self, coords, pointing, header):
+        """
+        Return the minimum and maximum sky pixel coordinate values for a set of
+        coordinates specified in the (u,v) frame.
+        """
+        coords = np.array(coords, float, order='c', copy=False)
+        xmin, ymin, xmax, ymax, status = tmf.pacs.uv2xy_minmax(
+            coords.reshape((-1,2)).T, pointing['ra'].ravel(),
+            pointing['dec'].ravel(), pointing['pa'].ravel(),
+            pointing['chop'].ravel(), self.distortion_yz.base.base.base,
+            str(header).replace('\n',''))
+        if status != 0:
+            raise RuntimeError()
+        return xmin, ymin, xmax, ymax
+
+    def instrument2pmatrix_sharp_edges(self, coords, pointing, header, pmatrix,
+                                       npixels_per_sample):
+        """
+        Return the dense pointing matrix whose values are intersection between
+        detectors and map pixels.
+        """
+        coords = coords.reshape((-1,2))
+        ra = pointing['ra'].ravel()
+        dec = pointing['dec'].ravel()
+        pa = pointing['pa'].ravel()
+        chop = pointing['chop'].ravel()
+        masked = pointing['masked'].ravel().view(np.int8)
+        if pmatrix.size == 0:
+            # f2py doesn't accept zero-sized opaque arguments
+            pmatrix = np.empty(1, np.int64)
+        else:
+            pmatrix = pmatrix.ravel().view(np.int64)
+        header = str(header).replace('\n','')
+        distortion = self.distortion_yz.base.base.base
+
+        new_npixels_per_sample, out, status = tmf.pacs.uv2pmatrix_sharp_edges(
+            coords.T, ra, dec, pa, chop, masked, distortion, header, pmatrix,
+            npixels_per_sample)
+        if status != 0: raise RuntimeError()
+
+        return new_npixels_per_sample, out
+
 class PacsBase(Observation):
     """ Abstract class for PacsObservation and PacsSimulation. """
 
@@ -56,8 +199,8 @@ class PacsBase(Observation):
     DETECTOR_DTYPE = [
         ('masked', np.bool8), ('removed', np.bool8),
         ('column', int), ('row', int), ('p', int), ('q', int), ('matrix', int),
-        ('center', [('u',var.FLOAT_DTYPE),('v',var.FLOAT_DTYPE)]),
-        ('corner', [('u',var.FLOAT_DTYPE),('v',var.FLOAT_DTYPE)], 4),
+        ('center', var.FLOAT_DTYPE, 2),
+        ('corner', var.FLOAT_DTYPE, (4,2)),
         ('area', var.FLOAT_DTYPE), ('time_constant', var.FLOAT_DTYPE),
         ('flat_total', var.FLOAT_DTYPE), ('flat_detector', var.FLOAT_DTYPE),
         ('flat_optical', var.FLOAT_DTYPE)]
@@ -93,8 +236,9 @@ class PacsBase(Observation):
         detector_center = detector_center.T.swapaxes(0,1)
         detector_corner = detector_corner.T.swapaxes(0,1)
 
-        instrument = Instrument('PACS/' + band.capitalize(), shape,
-                                self.DETECTOR_DTYPE)
+        instrument = PacsInstrument('PACS/' + band.capitalize(), shape,
+            detector_corner=detector_corner, default_resolution=\
+            self.DEFAULT_RESOLUTION[band], dtype=self.DETECTOR_DTYPE)
         instrument.band = band
         instrument.active_fraction = active_fraction
         instrument.reject_bad_line = reject_bad_line
@@ -110,10 +254,8 @@ class PacsBase(Observation):
             instrument.detector.matrix[0:16,:] += 4
         else:
             instrument.detector.matrix = 10 - instrument.detector.matrix
-        instrument.detector.center.u = detector_center[:,:,0]
-        instrument.detector.center.v = detector_center[:,:,1]
-        instrument.detector.corner.u = detector_corner[:,:,:,0]
-        instrument.detector.corner.v = detector_corner[:,:,:,1]
+        instrument.detector.center = detector_center
+        instrument.detector.corner = detector_corner
         instrument.detector.time_constant = pyfits.open(CALIBFILE_DTC) \
             [{'red':1, 'green':2, 'blue':3}[band]].data / 1000 # 's'
         instrument.detector.time_constant[detector_bad] = np.nan
@@ -169,48 +311,14 @@ class PacsBase(Observation):
 
         return data.T
 
-    def get_map_header(self, resolution=None, oversampling=True):
-        """
-        Return the FITS header of the smallest map that encompasses
-        the observation.
-        """
-        if resolution is None:
-            resolution = self.DEFAULT_RESOLUTION[self.instrument.band]
-        
-        detector = self.instrument.detector
-
-        headers_ = []
-        for s in self.slice:
-            sl = slice(s.start, s.stop)
-            header, status = tmf.pacs_map_header(
-                self.instrument.band,
-                s.compression_factor,
-                s.delay,
-                self.instrument.fine_sampling_factor,
-                oversampling,
-                np.asfortranarray(self.pointing.time[sl]),
-                np.asfortranarray(self.pointing.ra[sl]),
-                np.asfortranarray(self.pointing.dec[sl]),
-                np.asfortranarray(self.pointing.pa[sl]),
-                np.asfortranarray(self.pointing.chop[sl]),
-                np.asfortranarray(self.pointing.masked[sl], np.int8),
-                np.asfortranarray(self.pointing.removed[sl],np.int8),
-                np.asfortranarray(self.instrument.detector.removed, np.int8),
-                np.asfortranarray(self.instrument.detector.masked, np.int8),
-                detector.corner.swapaxes(0,1).view((float,2)).copy().T,
-                self.instrument.distortion_yz.base.base.base,
-                resolution)
-            if status != 0: raise RuntimeError()
-            headers_.append(str2fitsheader(header))
-        headers_ = var.comm_tod.allgather(headers_)
-        headers = []
-        for h in headers_:
-            headers.extend(h)
-        return combine_fitsheader(headers)
+    def get_map_header(self, resolution=None, oversampling=False):
+        if oversampling:
+            print 'get_map_header: oversampling=True is not implemented.'
+        return Observation.get_map_header(self, resolution=resolution)
     get_map_header.__doc__ = Observation.get_map_header.__doc__
     
-    def get_pointing_matrix(self, header, npixels_per_sample=0, method=None,
-                            oversampling=True, islice=None):
+    def get_pointing_matrix_old(self, header, npixels_per_sample=0, method=None,
+                                oversampling=True, islice=None):
         """ Return the pointing matrix. """
         if method is None:
             method = 'sharp'
@@ -234,16 +342,25 @@ class PacsBase(Observation):
             print('Info: Allocating '+str(sizeofpmatrix / 2**17)+' MiB for the '
                   'pointing matrix.')
         else:
-            # f2py doesn't accept zero-sized opaque arguments
+            
             sizeofpmatrix = 1
+        shape = (ndetectors, nvalids, npixels_per_sample)
+        dtype = [('weight', 'f4'), ('pixel', 'i4')]
+        if npixels_per_sample != 0:
+            print('Info: Allocating ' + str(np.product(shape) / 2**17) + ' MiB '
+                  'for the pointing matrix.')
         try:
-            pmatrix = np.empty(sizeofpmatrix, dtype=np.int64)
+            pmatrix = np.empty(shape, dtype).view(np.recarray)
         except MemoryError:
             gc.collect()
-            pmatrix = np.empty(sizeofpmatrix, dtype=np.int64)
+            pmatrix = np.empty(shape, dtype).view(np.recarray)
+        if pmatrix.size == 0:
+            # f2py doesn't accept zero-sized opaque arguments
+            pmatrix_ = np.empty(1, np.int64)
+        else:
+            pmatrix_ = pmatrix.ravel().view(np.int64)
 
         detector = self.instrument.detector
-
         s = self.slice[islice]
         sl = slice(s.start, s.stop)
         new_npixels_per_sample, status = tmf.pacs_pointing_matrix(
@@ -263,25 +380,42 @@ class PacsBase(Observation):
             method,
             np.asfortranarray(self.instrument.detector.removed, np.int8),
             self.get_ndetectors(),
-            detector.center.swapaxes(0,1).view((float,2)).copy().T,
-            detector.corner.swapaxes(0,1).view((float,2)).copy().T,
+            detector.center.swapaxes(0,1).copy().T,
+            detector.corner.swapaxes(0,1).copy().T,
             np.asfortranarray(self.instrument.detector.area),
             self.instrument.distortion_yz.base.base.base,
             npixels_per_sample,
             str(header).replace('\n',''),
-            pmatrix)
+            pmatrix_)
         if status != 0: raise RuntimeError()
 
         # if the actual number of pixels per sample is greater than
         # the specified one, redo the computation of the pointing matrix
-        if new_npixels_per_sample > npixels_per_sample:
-            del pmatrix
-            return self.get_pointing_matrix(header, new_npixels_per_sample,
-                                            method, oversampling, islice)
+        if new_npixels_per_sample <= npixels_per_sample:
+            return pmatrix, method, ('/detector','/pixel'), \
+                   self.get_derived_units()
 
-        return pmatrix, method, ndetectors, nvalids, npixels_per_sample, \
-            ('/detector','/pixel'), self.get_derived_units()
-    get_pointing_matrix.__doc__ = Observation.get_pointing_matrix.__doc__
+        del pmatrix_, pmatrix
+        return self.get_pointing_matrix(header, new_npixels_per_sample,
+                                        method, oversampling, islice)
+    get_pointing_matrix_old.__doc__ = Observation.get_pointing_matrix.__doc__
+
+    def get_pointing_matrix(self, header, npixels_per_sample=0, method=None,
+                            oversampling=True, islice=None):
+        if oversampling or np.any(self.slice.delay != 0) or \
+           method and method != 'sharp':
+            return self.get_pointing_matrix_old(header,
+                npixels_per_sample=npixels_per_sample, method=method,
+                oversampling=oversampling, islice=islice)
+        pointing = self.pointing
+        if islice is not None:
+            s = self.slice[islice]
+            pointing = pointing[s.start:s.stop]
+
+        pmatrix, method, units, dus = self.instrument.get_pointing_matrix(
+            pointing, header, npixels_per_sample, method)
+
+        return pmatrix, method, units, self.get_derived_units()
 
     def get_random(self, flatfielding=True, subtraction_mean=True):
         """
@@ -340,73 +474,6 @@ class PacsBase(Observation):
                        stddevs[...,-1])
         s[np.isnan(s)] = np.inf
         return self.pack(s)
-
-    def pack(self, input):
-        input = np.array(input, order='c', copy=False, subok=True)
-        if input.ndim == 2:
-            input = input.reshape((input.shape[0], input.shape[1], 1))
-        elif input.ndim != 3:
-            raise ValueError('Invalid number of dimensions.')
-        m = np.ascontiguousarray(self.instrument.detector.removed).view(np.int8)
-        n = self.get_ndetectors()
-        output = tmf.pacs_pack(input.view(np.int8).T, n, m.T).T
-        if type(input) == np.ndarray:
-            return output.view(dtype=input.dtype).squeeze()
-        output = output.view(type=input.__class__, dtype=input.dtype).squeeze()
-        if hasattr(input, '_unit'):
-            output._unit = input._unit
-            output._derived_units = input._derived_units.copy()
-        if isinstance(input, Tod):
-            if input.mask is not None:
-                mask = input.mask.view(np.int8)
-                output.mask = tmf.pacs_pack_int8(mask.T, n, m.T).T
-            if 'detector' in input.derived_units:
-                output.derived_units['detector'] = self.pack(
-                    output.derived_units['detector'])
-        return output
-
-    def unpack(self, input):
-        input = np.array(input, order='c', copy=False, subok=True)
-        if input.ndim == 1:
-            input = input.reshape((-1, 1))
-        elif input.ndim != 2:
-            raise ValueError('Invalid number of dimensions.')
-        m = np.ascontiguousarray(self.instrument.detector.removed).view(np.int8)
-        output = tmf.pacs_unpack(input.view(np.int8).T, m.T).T
-        if type(input) == np.ndarray:
-            return output.view(dtype=input.dtype).squeeze()
-        output = output.view(type=input.__class__, dtype=input.dtype).squeeze()
-        if hasattr(input, '_unit'):
-            output._unit = input._unit
-            output._derived_units = input._derived_units.copy()
-        if isinstance(input, Tod):
-            if input.mask is not None:
-                mask = input.mask.view(np.int8)
-                output.mask = tmf.pacs_unpack(mask.T, m.T).T
-            if 'detector' in input.derived_units:
-                output.derived_units['detector'] = self.unpack(
-                    output.derived_units['detector'])
-        return output
-                
-    def uv2ad(self, u, v, ra=None, dec=None, pa=None, chop=None):
-        def validate(input, attr):
-            if input is None:
-                return getattr(self.pointing, attr)[~self.pointing.removed]
-            return np.ascontiguousarray(input, var.FLOAT_DTYPE)
-        u = np.array(u, var.FLOAT_DTYPE, order='c', ndmin=1, copy=False)
-        v = np.array(v, var.FLOAT_DTYPE, order='c', ndmin=1, copy=False)
-        if ra is not None and dec is not None:
-            if pa is None:
-                pa = ra * 0.
-            if chop is None:
-                chop = ra * 0.
-        elif (ra is None) ^ (dec is None):
-            raise ValueError('Both R.A. and Dec must be set.')
-            
-        ra, dec = tmf.pacs_uv2ad(u, v, validate(ra, 'ra'), validate(dec, 'dec'),
-            validate(pa, 'pa'), validate(chop, 'chop'), self.instrument \
-            .distortion_yz.base.base.base)
-        return ra.squeeze(), dec.squeeze()
 
     def save(self, filename, tod, fitskw={}):
         
@@ -1059,15 +1126,14 @@ class PacsSimulation(PacsBase):
             ('FINETIME', np.int64), ('BAND', 'S2'), ('CHOPFPUANGLE', np.float64),
             ('RaArray', np.float64), ('DecArray', np.float64),
             ('PaArray', np.float64)])
-        status.BAND     = {'blue':'BS', 'green':'BL', 'red':'R '} \
-            [self.instrument.band]
+        band = self.instrument.band
+        status.BAND = {'blue':'BS', 'green':'BL', 'red':'R '}[band]
         status.FINETIME = np.round(p.time*1000000.)
         status.RaArray  = p.ra
         status.DecArray = p.dec
         status.PaArray  = p.pa
         status.CHOPFPUANGLE = 0. if not hasattr(p, 'chop') else p.chop
         status.BBID = 0
-        #XXX N ticket #1645
         status.BBID[p.info == Pointing.INSCAN] = 0xcd2 << 16
         status.BBID[p.info == Pointing.TURNAROUND] = 0x4000 << 16
         self._status = status

@@ -9,10 +9,11 @@ from pyoperators.utils import strenum
 
 from . import var
 from . import numpyutils as nu
-from .datatypes import FitsArray, Map, Tod, create_fitsheader
+from .datatypes import FitsArray, create_fitsheader
+from .instruments import Instrument
 from .quantity import Quantity
 
-__all__ = ['Observation', 'Instrument', 'MaskPolicy', 'Pointing']
+__all__ = ['Observation', 'MaskPolicy', 'Pointing']
 
 class Observation(object):
 
@@ -23,10 +24,8 @@ class Observation(object):
         self.slice = None
 
     def get_ndetectors(self):
-        """
-        Return the number of detectors, according to the detector mask.
-        """
-        return int(np.sum(~self.instrument.detector.removed))
+        return self.instrument.get_ndetectors()
+    get_ndetectors.__doc__ = Instrument.get_ndetectors.__doc__
 
     def get_filter_uncorrelated(self):
         """
@@ -34,11 +33,23 @@ class Observation(object):
         """
         raise NotImplementedError()
 
-    def get_map_header(self, resolution=None, oversampling=True):
+    def get_map_header(self, resolution=None):
         """
-        Return the map FITS header which encompasses this observation.
+        Return the FITS header of the smallest map that encompasses
+        the observation, by taking into account the instrument geometry.
+
+        Parameters
+        ----------
+        resolution : float
+            Sky pixel increment, in arc seconds. Default is .default_resolution.
+
+        Returns
+        -------
+        header : pyfits.Header
+            The resulting FITS header.
         """
-        raise NotImplementedError()
+        return self.instrument.get_map_header(self.pointing,
+                                              resolution=resolution)
 
     def get_pointing_matrix(self, header, resolution, npixels_per_sample,
                             method=None, oversampling=True):
@@ -77,144 +88,13 @@ class Observation(object):
         """
         raise NotImplementedError()
 
-    def unpack(self, tod):
-        """
-        Convert a Tod which only includes the valid detectors into 
-        another Tod which contains all the detectors under the control
-        of the detector mask
+    def pack(self, input, masked=False):
+        return self.instrument.pack(input, masked=masked)
+    pack.__doc__ = Instrument.pack.__doc__
 
-        Parameters
-        ----------
-        tod : Tod
-              rank-2 Tod to be unpacked.
-
-        Returns
-        -------
-        unpacked_tod : Tod
-              This will be a new view object if possible; otherwise, it will
-              be a copy.
-
-        See Also
-        --------
-        pack: inverse method
-
-        """
-        if np.rank(tod) != 2:
-            raise ValueError('The input Tod is not packed.')
-        ndetectors = self.instrument.detector.size
-        nvalids  = self.get_ndetectors()
-        nsamples = tod.shape[-1]
-
-        newshape = np.concatenate((self.instrument.detector.shape, (nsamples,)))
-        if nvalids != tod.shape[0]:
-            raise ValueError("The detector mask has a number of valid detecto" \
-                "rs '{0}' incompatible with the packed input '{1}'.".format(
-                nvalids, tod.shape[0]))
-
-        # return a view if all detectors are valid
-        if nvalids == ndetectors:
-            return tod.reshape(newshape)
-
-        # otherwise copy the detector timelines one by one
-        mask = self.instrument.detector.removed.ravel()
-        utod = Tod.empty(newshape, unit=tod.unit, derived_units= \
-                         tod.derived_units, dtype=tod.dtype,
-                         mask=np.empty(newshape, dtype='int8'))
-        rtod = utod.reshape((ndetectors, nsamples))
-        
-        i = 0
-        for iall in range(mask.size):
-            if mask[iall] != 0:
-                rtod[iall,:] = 0
-                rtod.mask[iall,:] = 1
-                continue
-            rtod[iall,:] = tod[i,:]
-            if tod.mask is not None:
-                rtod.mask[iall,:] = tod.mask[i,:]
-            else:
-                rtod.mask[iall,:] = 0
-            i += 1
-        return utod
-
-    def pack(self, tod):
-        """
-        Convert a Tod which only includes all the detectors into 
-        another Tod which contains only the valid ones under the control
-        of the detector mask
-
-        Parameters
-        ----------
-        tod : Tod
-              rank-2 Tod to be packed.
-
-        Returns
-        -------
-        packed_tod : Tod
-              This will be a new view object if possible; otherwise, it will
-              be a copy.
-
-        See Also
-        --------
-        unpack: inverse method
-
-        """
-        if np.rank(tod) != np.rank(self.instrument.detector.removed)+1:
-            raise ValueError('The input Tod is not unpacked.')
-        ndetectors = self.instrument.detector.size
-        nvalids = self.get_ndetectors()
-        nsamples = tod.shape[-1]
-
-        newshape = (nvalids, nsamples)
-        if tod.shape[0:-1] != self.instrument.shape:
-            raise ValueError("The detector mask has a shape '" + \
-                str(self.instrument.shape) + "' incompatible with the unpacke" \
-                "d input '" + str(tod.shape[0:-1]) + "'.")
-
-        # return a view if all detectors are valid
-        if nvalids == ndetectors:
-            return tod.reshape((ndetectors, nsamples))
-
-        # otherwise copy the detector timelines one by one
-        mask = self.instrument.detector.removed.ravel()
-        ptod = Tod.empty(newshapeunit=tod.unit,derived_units=tod.derived_units,
-                         dtype=tod.dtype, mask=np.empty(newshape, dtype='int8'))
-        rtod = tod.reshape((ndetectors, nsamples))
-        
-        i = 0
-        for iall in range(mask.size):
-            if mask[iall] != 0:
-                 continue
-            ptod[i,:] = rtod[iall,:]
-            if tod.mask is not None:
-                ptod.mask[i,:] = rtod.mask[iall,:]
-            else:
-                ptod.mask[i,:] = 0
-            i += 1
-        return ptod
-
-
-#-------------------------------------------------------------------------------
-
-
-class Instrument(object):
-    """
-    Class storing information about the instrument.
-    Attributes include: name, detector
-    """
-    def __init__(self, name, shape, dtype=None):
-
-        if dtype is None:
-            dtype = [('masked', np.bool8), ('removed', np.bool8)]
-        self.name = name
-        self.detector = Map.zeros(shape, dtype=dtype, origin='upper')
-
-    def __getattribute__(self, name):
-        table = {'detector_time_constant':'time_constant',
-                 'detector_mask':'removed', 'detector_bad':'masked'}
-        if name in table:
-            print("\nXXXXXX\nPlease update your script: 'obs.instrument." + name + "' is DEPRECATED and will be removed in the next version of Tamasis. Use 'obs.instrument.detector." + table[name] + "' instead.\nXXXXXX\n")
-            return self.detector[table[name]]
-        return object.__getattribute__(self, name)
+    def unpack(self, input, masked=False):
+        return self.instrument.unpack(input, masked=masked)
+    unpack.__doc__ = Instrument.unpack.__doc__
 
 
 #-------------------------------------------------------------------------------
