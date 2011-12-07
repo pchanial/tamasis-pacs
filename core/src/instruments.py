@@ -2,6 +2,7 @@ from __future__ import division
 import gc
 import numpy as np
 import tamasisfortran as tmf
+from kapteyn import wcs
 from mpi4py import MPI
 from pyoperators.utils import strenum, strshape
 from .datatypes import Map
@@ -378,6 +379,16 @@ class Instrument(object):
         for dim in range(pointing.ndim):
             result = np.rollaxis(result, 0, -1)
         return result
+
+    def instrument2xy(self, coords, pointing, header):
+        """
+        Convert coordinates in the instrument frame into sky pixel coordinates,
+        assuming a pointing direction and a position angle.
+        """
+        coords = np.array(coords, float, order='c', copy=False)
+        proj = wcs.Projection(header)
+        return proj.topixel(self.instrument2ad(coords, pointing))
+        
 
     @staticmethod
     def instrument2xy_minmax(coords, pointing, header):
