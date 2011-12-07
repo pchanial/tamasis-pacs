@@ -28,7 +28,7 @@ class Observation(object):
         """
         raise NotImplementedError()
 
-    def get_map_header(self, resolution=None):
+    def get_map_header(self, resolution=None, downsampling=False):
         """
         Return the FITS header of the smallest map that encompasses
         the observation, by taking into account the instrument geometry.
@@ -46,12 +46,13 @@ class Observation(object):
         return self.instrument.get_map_header(self.pointing,
                                               resolution=resolution)
 
-    def get_pointing_matrix(self, header, resolution, npixels_per_sample,
-                            method=None, oversampling=True):
+    def get_pointing_matrix(self, header, npixels_per_sample=0, method=None,
+                            downsampling=False):
         """
         Return the pointing matrix.
         """
-        raise NotImplementedError()
+        return self.instrument.get_pointing_matrix(self.pointing, header,
+            npixels_per_sample, method)
 
     def get_nsamples(self):
         """

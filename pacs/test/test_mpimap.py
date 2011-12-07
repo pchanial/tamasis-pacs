@@ -17,7 +17,7 @@ map_ref = Map(data_dir + '../../../core/test/data/frames_blue_map_naive.fits')
 obs = PacsObservation(data_dir + 'frames_blue.fits')
 tod = obs.get_tod(flatfielding=False)
 
-proj = Projection(obs, oversampling=False, packed=True, header=map_ref.header,
+proj = Projection(obs, downsampling=True, packed=True, header=map_ref.header,
                   npixels_per_sample=6).blocks[0]
 masking = Masking(tod.mask)
 packing = Packing(proj.mask, attrin = {'header':proj.header})

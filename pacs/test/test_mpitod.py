@@ -25,7 +25,7 @@ map_ref = Map(data_dir + 'frames_blue_map_rls_cgs_tol1e-6.fits')
 masking_tod  = Masking(tod.mask)
 multiplexing = CompressionAverage(obs.instrument.fine_sampling_factor,
                                   description='Multiplexing')
-projection   = Projection(obs, resolution=3.2, oversampling=False,
+projection   = Projection(obs, resolution=3.2, downsampling=True,
                           npixels_per_sample=6, header=map_ref.header)
 telescope    = IdentityOperator()
 

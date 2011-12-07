@@ -91,7 +91,7 @@ class MadMap1Observation(Observation):
         return header
 
     def get_pointing_matrix(self, header, npixels_per_sample, method=None,
-                            oversampling=False, islice=None):
+                            downsampling=False, islice=None):
         """
         Method to get the pointing matrix.
         """

@@ -18,12 +18,12 @@ obs = PacsObservation(frames_files,
                       policy_other='remove',
                       policy_invalid='mask')
 
-# Get the projection matrix
-# 'oversampling=False' means that the acquisition model will not
-# try to sample at a frequency higher than that of the observation
+# Get the projection matrix used for the map-level deglitching
+# 'downsampling=True' means that the acquisition model will not
+# sample at the instrument frequency of 40Hz, but at the compressed frequency
 # (10Hz for prime mode, 5Hz for parallel mode)
 projection = Projection(obs, 
-                        oversampling=False,
+                        downsampling=True,
                         npixels_per_sample=6)
 
 # Read the Time Ordered Data: the signal and mask

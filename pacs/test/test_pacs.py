@@ -18,7 +18,7 @@ def test():
     obs.pointing.chop[:] = 0
 
     # get mask
-    proj = Projection(obs, npixels_per_sample=6, oversampling=False)
+    proj = Projection(obs, npixels_per_sample=6, downsampling=True)
     o = Tod.ones(proj.shapeout)
     nocoverage = mapper_naive(o, proj).coverage == 0
     assert all_eq(nocoverage, proj.get_mask())
@@ -30,7 +30,7 @@ def test():
     print 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
     print
 
-    #proj2 = Projection(obs, npixels_per_sample=6, packed=True, oversampling=False)
+    #proj2 = Projection(obs, npixels_per_sample=6, packed=True, downsampling=True)
     #if any_neq(proj.T(tod), proj2.T(tod), 1.e-12): raise TestFailure()
 
     filename = 'obs-' + uuid + '.fits'
@@ -41,7 +41,7 @@ def test():
     assert all_eq(tod, tod2)
 
     telescope  = IdentityOperator()
-    projection = Projection(obs, resolution=3.2, oversampling=False,
+    projection = Projection(obs, resolution=3.2, downsampling=True,
                             npixels_per_sample=6)
     crosstalk  = IdentityOperator()
     masking    = MaskOperator(tod.mask)
@@ -60,7 +60,7 @@ def test():
     header2 = header.copy()
     header2['NAXIS1'] += 500
     header2['CRPIX1'] += 250
-    projection2 = Projection(obs, header=header2, oversampling=False)
+    projection2 = Projection(obs, header=header2, downsampling=True)
     map_naive2 = mapper_naive(tod, MaskOperator(tod.mask) * projection2)
     map_naive2.inunit('Jy/arcsec^2')
     map_naive3 = map_naive2[:,250:header['NAXIS1']+250]
@@ -80,7 +80,7 @@ def test_detector_policy():
     obs = PacsObservation(data_dir + 'frames_blue.fits', reject_bad_line=False)
     obs.pointing.chop[:] = 0
     projection = Projection(obs, header=map_naive_ref.header,
-                            oversampling=False, npixels_per_sample=6)
+                            downsampling=True, npixels_per_sample=6)
     tod = obs.get_tod(flatfielding=False)
     masking = MaskOperator(tod.mask)
     model = masking * projection
@@ -92,7 +92,7 @@ def test_detector_policy():
                               reject_bad_line=False)
     obs_rem.pointing.chop[:] = 0
     projection_rem = Projection(obs_rem, header=map_naive.header,
-                                oversampling=False, npixels_per_sample=7)
+                                downsampling=True, npixels_per_sample=7)
     tod_rem = obs_rem.get_tod(flatfielding=False)
     masking_rem = MaskOperator(tod_rem.mask)
     model_rem = masking_rem * projection_rem
@@ -148,8 +148,8 @@ def test_slice2():
 
     header = obs1.get_map_header()
 
-    proj1 = Projection(obs1, header=header, oversampling=False)
-    proj2 = Projection(obs2, header=header, oversampling=False)
+    proj1 = Projection(obs1, header=header, downsampling=True)
+    proj2 = Projection(obs2, header=header, downsampling=True)
     assert all_eq(proj1.get_mask(), proj2.get_mask())
     assert all_eq(proj1.pmatrix,
                   np.concatenate([p.pmatrix for p in proj2.operands], axis=1))

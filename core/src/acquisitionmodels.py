@@ -404,22 +404,23 @@ class Projection(Operator):
     """
 
     def __new__(cls, input, method=None, header=None, resolution=None,
-                npixels_per_sample=0, oversampling=True, **keywords):
+                npixels_per_sample=0, units=None, derived_units=None,
+                downsampling=False, comm_map=None, comm_tod=None, packed=False):
         if not isinstance(input, Observation) or len(input.slice) == 1:
             instance = super(Projection, cls).__new__(cls)
             return instance
         obs = input
         if header is None:
             header = obs.get_map_header(resolution=resolution,
-                                        oversampling=oversampling)
+                                        downsampling=downsampling)
         elif isinstance(header, str):
             header = str2fitsheader(header)
         operands = []
         partitionout = []
         for islice in range(len(obs.slice)):
             pmatrix, method, units, derived_units = obs.get_pointing_matrix(
-                header, npixels_per_sample, method=method, oversampling= \
-                oversampling, islice=islice)
+                header, npixels_per_sample, method=method, downsampling= \
+                downsampling, islice=islice)
             p = Projection(pmatrix, method=method, header=header, units=units,
                            derived_units=derived_units, comm_tod=obs.comm_tod)
             operands.append(p)
@@ -438,17 +439,18 @@ class Projection(Operator):
         result.header = header
         result.get_mask = get_mask
         return result
-        
-    def __init__(self, input, method=None, header=None, npixels_per_sample=0,
-                 units=None, derived_units=None, resolution=None,
-                 oversampling=True, comm_map=None, comm_tod=None, packed=False):
+
+    def __init__(self, input, method=None, header=None, resolution=None,
+                 npixels_per_sample=0, units=None, derived_units=None,
+                 downsampling=False, comm_map=None, comm_tod=None,
+                 packed=False):
 
         self.comm_map = comm_map or var.comm_map
 
         if isinstance(input, Observation):
             if header is None:
                 header = input.get_map_header(resolution=resolution,
-                                              oversampling=oversampling)
+                                              downsampling=downsampling)
             elif isinstance(header, str):
                 header = str2fitsheader(header)
 
@@ -457,7 +459,7 @@ class Projection(Operator):
                     header,
                     npixels_per_sample,
                     method=method,
-                    oversampling=oversampling)
+                    downsampling=downsampling)
         else:
             if input.ndim != 3:
                 raise ValueError('The input pointing matrix has not 3 dimension'

@@ -314,14 +314,15 @@ class PacsBase(Observation):
 
         return data.T
 
-    def get_map_header(self, resolution=None, oversampling=False):
-        if oversampling:
-            print 'get_map_header: oversampling=True is not implemented.'
-        return Observation.get_map_header(self, resolution=resolution)
+    def get_map_header(self, resolution=None, downsampling=False):
+        if not downsampling:
+            print 'get_map_header: downsampling=False is not implemented.'
+        return Observation.get_map_header(self, resolution=resolution,
+                                          downsampling=downsampling)
     get_map_header.__doc__ = Observation.get_map_header.__doc__
     
     def get_pointing_matrix_old(self, header, npixels_per_sample=0, method=None,
-                                oversampling=True, islice=None):
+                                downsampling=False, islice=None):
         """ Return the pointing matrix. """
         if method is None:
             method = 'sharp'
@@ -331,7 +332,7 @@ class PacsBase(Observation):
             raise ValueError("Invalid method '" + method + \
                 "'. Expected values are " + strenum(choices) + '.')
 
-        nvalids = self.get_nfinesamples() if oversampling else \
+        nvalids = self.get_nfinesamples() if not downsampling else \
             self.get_nsamples()
         if islice is None:
             if len(self.slice) != 1:
@@ -372,7 +373,7 @@ class PacsBase(Observation):
             s.compression_factor,
             s.delay,
             self.instrument.fine_sampling_factor,
-            oversampling,
+            not downsampling,
             np.asfortranarray(self.pointing.time[sl]),
             np.asfortranarray(self.pointing.ra[sl]),
             np.asfortranarray(self.pointing.dec[sl]),
@@ -400,16 +401,16 @@ class PacsBase(Observation):
 
         del pmatrix_, pmatrix
         return self.get_pointing_matrix(header, new_npixels_per_sample,
-                                        method, oversampling, islice)
+                                        method, downsampling, islice)
     get_pointing_matrix_old.__doc__ = Observation.get_pointing_matrix.__doc__
 
     def get_pointing_matrix(self, header, npixels_per_sample=0, method=None,
-                            oversampling=True, islice=None):
-        if oversampling or np.any(self.slice.delay != 0) or \
+                            downsampling=False, islice=None):
+        if not downsampling or np.any(self.slice.delay != 0) or \
            method and method != 'sharp':
             return self.get_pointing_matrix_old(header,
                 npixels_per_sample=npixels_per_sample, method=method,
-                oversampling=oversampling, islice=islice)
+                downsampling=downsampling, islice=islice)
         pointing = self.pointing
         if islice is not None:
             s = self.slice[islice]
@@ -1263,7 +1264,7 @@ def pacs_plot_scan(patterns, title=None, new_figure=True, **kw):
 def pacs_preprocess(obs, tod,
                     projection_method='sharp',
                     header=None,
-                    oversampling=True,
+                    downsampling=False,
                     npixels_per_sample=0,
                     deglitching_hf_length=20,
                     deglitching_nsigma=5.,
@@ -1276,7 +1277,7 @@ def pacs_preprocess(obs, tod,
     projection = Projection(obs,
                             method='sharp',
                             header=header,
-                            oversampling=False,
+                            downsampling=True,
                             npixels_per_sample=npixels_per_sample)
     tod_filtered = filter_median(tod, deglitching_hf_length)
     tod.mask = deglitch_l2mad(tod_filtered,
@@ -1288,18 +1289,18 @@ def pacs_preprocess(obs, tod,
     
     # get the proper projector if necessary
     if projection is None or projection_method != 'sharp' or \
-       oversampling and np.any(obs.slice.compression_factor * \
+       not downsampling and np.any(obs.slice.compression_factor * \
        obs.instrument.fine_sampling_factor > 1):
         projection = Projection(obs,
                                 method=projection_method,
-                                oversampling=oversampling,
+                                downsampling=downsampling,
                                 header=header,
                                 npixels_per_sample=npixels_per_sample)
 
     # bail out if not in transparent mode
     if all(obs.slice[0].compression_factor != 1) or \
        transparent_mode_compression_factor == 1:
-        if oversampling:
+        if not downsampling:
             compression = CompressionAverage(obs.slice.compression_factor)
             model = compression * projection
         else:
@@ -1733,7 +1734,7 @@ def step_deglitching(obs, tod, length=100, nsigma=25., method="mad"):
     """
     Include all the deglitching steps : 
 
-       - define a sharp projector without oversampling and with
+       - define a sharp projector with downsampling and with
          default resolution.
 
        - perform tod filtering
@@ -1767,7 +1768,7 @@ def step_deglitching(obs, tod, length=100, nsigma=25., method="mad"):
     # special deglitching projector
     proj_glitch = tm.Projection(obs,
                                 method='sharp',
-                                oversampling=False,
+                                downsampling=True,
                                 npixels_per_sample=6)
     # filter tod with narrow window
     tod_glitch = tm.filter_median(tod, length=length)

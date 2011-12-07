@@ -24,12 +24,12 @@ tod = obs.get_tod(flatfielding=True,
                   unit='Jy/detector')
 
 # Get the projection matrix used for the map-level deglitching
-# 'oversampling=False' means that the acquisition model will not
-# try to sample at a frequency higher than that of the observation
+# 'downsampling=True' means that the acquisition model will not
+# sample at the instrument frequency of 40Hz, but at the compressed frequency
 # (10Hz for prime mode, 5Hz for parallel mode)
 projection = Projection(obs,
                         method='sharp',
-                        oversampling=False,
+                        downsampling=True,
                         npixels_per_sample=6)
 
 # Remove low frequency drifts. The specified window length is the
@@ -54,7 +54,7 @@ tod.save('tod_preprocessed.fits')
 # M y == M H x, M is the mask operator which sets bad samples values to 0
 projection = Projection(obs,
                         method='nearest',
-                        oversampling=False)
+                        downsampling=True)
 masking = Masking(tod.mask)
 model = masking * projection
 

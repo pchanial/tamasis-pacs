@@ -23,7 +23,7 @@ tamasis.var.comm_map = MPI.COMM_SELF
 obs_ref = PacsObservation(data_dir + 'frames_blue.fits')
 tod_ref = obs_ref.get_tod(flatfielding=False)
 model_ref = Masking(tod_ref.mask) * \
-            Projection(obs_ref, oversampling=False, npixels_per_sample=6)
+            Projection(obs_ref, downsampling=True, npixels_per_sample=6)
 map_naive_ref = mapper_naive(tod_ref, model_ref, unit='Jy/arcsec^2')
 map_ls_ref = mapper_ls(tod_ref, model_ref, tol=tol, maxiter=maxiter,
                        solver=solver, M=DiagonalOperator(1/map_naive_ref.coverage))
@@ -35,7 +35,7 @@ tamasis.var.comm_map = MPI.COMM_SELF
 obs = PacsObservation(data_dir + 'frames_blue.fits')
 tod = obs.get_tod(flatfielding=False)
 masking = Masking(tod.mask)
-proj = Projection(obs, oversampling=False, npixels_per_sample=6,
+proj = Projection(obs, downsampling=True, npixels_per_sample=6,
                   header=header_ref)
 #proj_global = DistributionGlobal(proj_tod.mask.shape, share=True,
 #                                 comm=MPI.COMM_WORLD)
@@ -48,7 +48,7 @@ map_ls_g1 = mapper_ls(tod, model, tol=tol, maxiter=maxiter, solver=solver,
 # LS map, sliced
 tamasis.var.comm_tod = MPI.COMM_WORLD
 tamasis.var.comm_map = MPI.COMM_WORLD
-proj = Projection(obs, oversampling=False, npixels_per_sample=6,
+proj = Projection(obs, downsampling=True, npixels_per_sample=6,
                   header=header_ref)
 model = masking * proj
 

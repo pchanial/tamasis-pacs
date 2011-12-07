@@ -8,7 +8,7 @@ data_dir = os.path.dirname(__file__) + '/data/'
 obs = PacsObservation(data_dir+'frames_blue.fits', fine_sampling_factor=1)
 tod = obs.get_tod(flatfielding=False)
 
-projection   = Projection(obs, oversampling=False, npixels_per_sample=6)
+projection   = Projection(obs, downsampling=True, npixels_per_sample=6)
 masking_tod  = Masking(tod.mask)
 masking_map  = Masking(projection.get_mask())
 

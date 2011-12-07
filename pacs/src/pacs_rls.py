@@ -64,7 +64,7 @@ def main():
                               "raw"):
                     get = config.getboolean
             if section == "Projection":
-                if option in ("oversampling",
+                if option in ("downsampling",
                               "packed"):
                     get = config.getboolean
                 if option == "npixels_per_sample":

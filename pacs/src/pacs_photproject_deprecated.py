@@ -89,13 +89,13 @@ tod = obs.get_tod(flatfielding=options.do_flatfielding,
 if options.median_filtering is not None:
     tod = filter_median(tod, length)
 
-# Set up the acquisition model. oversampling is set to False because
+# Set up the acquisition model. downsampling is set to True because
 # photproject does not attempt to sample better than what is transmitted
 if options.deglitching != 'none' or options.do_outputmap:
     projection = Projection(obs,
                             header=options.header,
                             resolution=options.resolution,
-                            oversampling=False,
+                            downsampling=True,
                             npixels_per_sample=options.npixels_per_sample)
 
 # Deglitch

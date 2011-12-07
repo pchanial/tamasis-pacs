@@ -22,7 +22,7 @@ def test1():
 
     # build the acquisition model
     model = CompressionAverage(simul.slice.compression_factor) * \
-            Projection(simul, header=header, oversampling=True, npixels_per_sample=49)
+            Projection(simul, header=header, npixels_per_sample=49)
 
     # get the noiseless tod
     tod = model(mymap)

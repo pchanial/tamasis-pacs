@@ -26,12 +26,12 @@ tod = obs.get_tod(flatfielding=False,
 		  masks='saturation')
 
 # Get the projection matrix used for the map-level deglitching
-# 'oversampling=False' means that the acquisition model will not
-# try to sample at a frequency higher than that of the observation
+# 'downsampling=True' means that the acquisition model will not
+# sample at the instrument frequency of 40Hz, but at the compressed frequency
 # (10Hz for prime mode, 5Hz for parallel mode)
 projection = Projection(obs,
                         method='sharp',
-                        oversampling=False,
+                        downsampling=True,
                         npixels_per_sample=5)
 
 # Map-level deglitching using the MAD (median absolute deviation to
