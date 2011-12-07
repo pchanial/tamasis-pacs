@@ -4,7 +4,6 @@
 
 from __future__ import division
 
-import kapteyn
 import numpy as np
 import scipy.special
 import tamasisfortran as tmf
@@ -15,8 +14,7 @@ from mpi4py import MPI
 
 from . import var
 from . import numpyutils as nu
-from .wcsutils import angle_lonlat, barycenter_lonlat
-from .datatypes import Map, create_fitsheader
+from .datatypes import Map
 
 __all__ = [ 
     'airy_disk',
@@ -26,7 +24,6 @@ __all__ = [
     'gaussian',
     'hs',
     'phasemask_fourquadrant',
-    'plot_scan',
     'plot_tod',
     'profile',
     'psd2',
@@ -118,107 +115,6 @@ def hs(arg):
 #-------------------------------------------------------------------------------
 
 
-def plot_scan(input, map=None, title=None, new_figure=True, linewidth=2, **kw):
-
-    def plot_scan_(ra, dec, nsamples, image, linewidth=linewidth, **kw):
-        x, y = image.topixel(ra, dec)
-        dest = 0
-        for n in nsamples:
-            p = pyplot.plot(x[dest:dest+n], y[dest:dest+n],
-                            linewidth=linewidth, **kw)
-            for i in xrange(dest, dest+n):
-                if np.isfinite(x[i]) and np.isfinite(y[i]):
-                    pyplot.plot(x[i], y[i], 'o', color=p[0]._color)
-                    break
-            dest += n
-
-    if type(input) not in (list, tuple):
-        input = [input]
-    else:
-        input = list(input)
-
-    # format the input as a list of (ra, dec, nsamples)
-    for islice, slice in enumerate(input):
-        if hasattr(slice, 'pointing'):
-            slice = slice.pointing
-        if hasattr(slice, 'ra') and hasattr(slice, 'dec'):
-            ra = slice.ra
-            dec = slice.dec
-            if hasattr(slice, 'removed'):
-                ra = ra.copy()
-                dec = dec.copy()
-                ra [slice.removed] = np.nan
-                dec[slice.removed] = np.nan
-            nsamples = getattr(slice, 'nsamples', (ra.size,))
-            input[islice] = (ra, dec, nsamples)
-        elif type(slice) not in (list,tuple) or len(slice) != 2:
-            raise TypeError('Invalid input.')
-        else:
-            ra = np.array(slice[0], ndmin=1, copy=False)
-            dec = np.array(slice[1], ndmin=1, copy=False)
-            if ra.shape != dec.shape:
-                raise ValueError('Input R.A. and Dec do not have the same len' \
-                                 'gth.')
-            input[islice] = (ra, dec, (ra.size,))
-
-    npointings = sum([s[0].size for s in input])
-    ra = np.empty(npointings)
-    dec = np.empty(npointings)
-
-    dest = 0
-    nsamples = []
-    for slice in input:
-        n = slice[0].size
-        ra [dest:dest+n] = slice[0]
-        dec[dest:dest+n] = slice[1]
-        nsamples += slice[2]
-        dest += n
-
-    nvalids = np.sum(np.isfinite(ra*dec))
-    if nvalids == 0:
-        raise ValueError('There is no valid coordinates.')
-
-    if isinstance(map, Map) and map.has_wcs():
-        image = map.imshow(title=title)
-        plot_scan_(ra, dec, nsamples, image, linewidth=linewidth, **kw)
-        return image
-
-    crval = barycenter_lonlat(ra, dec)
-    angles = angle_lonlat((ra,dec), crval)
-    angle_max = np.nanmax(angles)
-    if angle_max >= 90.:
-        print('Warning: some coordinates have an angular distance to the proj' \
-              'ection point greater than 90 degrees.')
-        mask = angles >= 90
-        ra[mask] = np.nan
-        dec[mask] = np.nan
-        angles[mask] = np.nan
-        angle_max = np.nanmax(angles)
-    cdelt = np.rad2deg(np.tan(np.deg2rad(angle_max))) / 100
-    header = create_fitsheader(naxis=[201,201], cdelt=cdelt, crval=crval,
-                               crpix=[101,101])
-
-    fitsobj = kapteyn.maputils.FITSimage(externalheader=header)
-    if new_figure:
-        fig = pyplot.figure()
-        frame = fig.add_axes((0.1, 0.1, 0.8, 0.8))
-    else:
-        frame = pyplot.gca()
-    if title is not None:
-        frame.set_title(title)
-    image = fitsobj.Annotatedimage(frame, blankcolor='w')
-    grat = image.Graticule()
-    image.plot()
-    image.interact_toolbarinfo()
-    image.interact_writepos()
-    pyplot.show()
-    plot_scan_(ra, dec, nsamples, image, linewidth=linewidth, **kw)
-    return image
-
-
-#-------------------------------------------------------------------------------
-
-
 def plot_tod(tod, mask=None, **kw):
     """Plot the signal timelines in a Tod and show masked samples.
 
@@ -242,7 +138,7 @@ def plot_tod(tod, mask=None, **kw):
     if unit:
         pyplot.ylabel('Signal [' + unit + ']')
     else:
-        pytplot.ylabel('Signal')
+        pyplot.ylabel('Signal')
     pyplot.xlabel('Time sample')
 
 
@@ -573,7 +469,6 @@ def _distance_slow(shape, origin, resolution, dtype):
     Refer to `tamasis.distance` for full documentation.
     """
 
-    dim = []
     index = []
     for n, o, r in zip(reversed(shape), origin, resolution):
         index.append(slice(0,n))

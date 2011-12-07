@@ -20,9 +20,12 @@ from pyoperators.core import CompositeOperator
 from pyoperators.utils import strenum, strplural, openmp_num_threads
 
 from . import var
-from tamasis.core import Quantity, Tod, MaskPolicy, Instrument, Pointing, create_fitsheader,  tmf, CompressionAverage, Projection, Masking
+from tamasis.core import (Quantity, Tod, MaskPolicy, Instrument, Pointing, tmf,
+                          CompressionAverage, Projection, Masking, create_fitsheader,
+                          plot_scan)
 from tamasis.mpiutils import split_observation
-from tamasis.observations import Observation, create_scan
+from tamasis.observations import Observation
+from tamasis.pointings import create_scan
 
 __all__ = [ 'PacsObservation',
             'PacsSimulation',
@@ -730,7 +733,7 @@ class PacsObservation(PacsBase):
         # store observation information
         if calblock_extension_time is None:
             calblock_extension_time = 40. if band == 'red' else 20.
-        obsid, mode, compression_factor, unit, ra, dec, cam_angle, scan_angle, \
+        obsid, mode, compression_factor, unit, ra, dec, instrument_angle, scan_angle, \
             scan_length, scan_step, scan_nlegs, frame_time, frame_ra, \
             frame_dec, frame_pa, frame_chop, frame_info, frame_masked, \
             frame_removed, nmasks, mask_name_flat, mask_activated, status = \
@@ -778,7 +781,7 @@ class PacsObservation(PacsBase):
             ('unit', 'S32'),
             ('ra', float),
             ('dec', float),
-            ('cam_angle', float),
+            ('instrument_angle', float),
             ('scan_angle', float),
             ('scan_length', float),
             ('scan_nlegs', int),
@@ -807,7 +810,7 @@ class PacsObservation(PacsBase):
         self.slice.unit = unit
         self.slice.ra = ra
         self.slice.dec = dec
-        self.slice.cam_angle = cam_angle
+        self.slice.instrument_angle = instrument_angle
         self.slice.scan_angle = scan_angle
         self.slice.scan_length = scan_length
         self.slice.scan_nlegs = scan_nlegs
@@ -1078,7 +1081,7 @@ class PacsSimulation(PacsBase):
             ('unit', 'S32'),
             ('ra', float),
             ('dec', float),
-            ('cam_angle', float),
+            ('instrument_angle', float),
             ('scan_angle', float),
             ('scan_length', float),
             ('scan_nlegs', int),
@@ -1098,7 +1101,7 @@ class PacsSimulation(PacsBase):
         
         for s, p in zip(self.slice, pointings):
             if p.header is not None:
-                for field in ('ra', 'dec', 'cam_angle', 'scan_angle',
+                for field in ('ra', 'dec', 'instrument_angle', 'scan_angle',
                               'scan_nlegs', 'scan_length', 'scan_step'):
                     s[field] = p.header[field] if field in p.header else 0
             s.scan_speed = _scan_speed(p)
@@ -1323,75 +1326,53 @@ def pacs_preprocess(obs, tod,
 #-------------------------------------------------------------------------------
 
 
-def pacs_create_scan(ra0, dec0, cam_angle=45., scan_angle=0., scan_length=30.,
-                     scan_nlegs=3, scan_step=148., scan_speed=20., 
-                     compression_factor=4, cross_scan=False):
-    """Returns pointing information for a PACS scan.
+def pacs_create_scan(ra0, dec0, length, step=148, sampling_period=None, speed=20,
+                     acceleration=PacsBase.ACCELERATION, nlegs=3, angle=0,
+                     instrument_angle=45, compression_factor=4, cross_scan=True):
+    """
+    Return a sky scan for the PACS instrument.
 
     The output is a Pointing instance that can be handed to PacsSimulation to
     create a simulation.
 
     Parameters
     ----------
-    ra0: float
-        Right Ascension of the scan center
-    dec0: float
-        Declination of the scan center
-    cam_angle: float
+    ra0 : float
+        Right Ascension of the scan center.
+    dec0 : float
+        Declination of the scan center.
+    length : float
+        Length of the scan lines, in arcseconds.
+    step : float
+        Separation between scan legs, in arcseconds.
+    sampling_period : float
+        Duration between two pointings.
+    speed : float
+        Scan speed, in arcsec/s.
+    acceleration : float
+        Acceleration, in arcsec/s^2.
+    nlegs : integer
+        Number of scan legs.
+    angle : float
+        Angle between the scan line direction and the North minus 90 degrees,
+        in degrees.
+    instrument_angle : float
         Angle between the scan line direction and the PACS instrument Z-axis
-        (called array-to-map angle in the PACS user's manual)
-    scan_angle: float
-        Angle between the scan line direction and the North minus 90 degrees
-    scan_length: float
-        Length of the scan lines, in arcseconds
-    scan_nlegs: integer
-        Number of scan legs
-    scan_step: float
-        Separation between scan legs, in arcseconds
-    scan_speed: float
-        Scan speed, in arcsec/s
-    compression_factor: 1, 4 or 8
-        On board compression factor
-    cross_scan: boolean
-        Set to True to append a cross-scan
+        (called array-to-map angle in the PACS user's manual).
+    compression_factor : int
+        Compression factor.
+    cross_scan : boolean
+        If true, a cross-scan is appended to the pointings.
     """
 
-    if int(compression_factor) not in (1, 4, 8):
-        raise ValueError("Input compression_factor must be 1, 4 or 8.")
+    if sampling_period is None:
+        if int(compression_factor) not in (1, 4, 8):
+            raise ValueError("Input compression_factor must be 1, 4 or 8.")
+        sampling_period = PacsBase.SAMPLING_PERIOD * compression_factor
 
-    scan = create_scan(ra0, dec0,
-                       PacsBase.ACCELERATION,
-                       PacsBase.SAMPLING_PERIOD * compression_factor,
-                       scan_angle=scan_angle,
-                       scan_length=scan_length,
-                       scan_nlegs=scan_nlegs,
-                       scan_step=scan_step,
-                       scan_speed=scan_speed,
-                       dtype=PacsBase.POINTING_DTYPE)
-    if cross_scan:
-        cross = create_scan(ra0, dec0,
-                       PacsBase.ACCELERATION,
-                       PacsBase.SAMPLING_PERIOD * compression_factor,
-                       scan_angle=scan_angle + 90,
-                       scan_length=scan_length,
-                       scan_nlegs=scan_nlegs,
-                       scan_step=scan_step,
-                       scan_speed=scan_speed,
-                       dtype=PacsBase.POINTING_DTYPE)
-        cross.time += scan.time[-1] + PacsBase.SAMPLING_PERIOD * \
-                      compression_factor
-        header = scan.header
-        scan, scan.header = Pointing(np.hstack([scan.time, cross.time]),
-                                     np.hstack([scan.ra, cross.ra]),
-                                     np.hstack([scan.dec, cross.dec]),
-                                     0.,
-                                     info=np.hstack([scan.info, cross.info]),
-                                     dtype=PacsBase.POINTING_DTYPE), scan.header
-
-    scan.pa = scan_angle + cam_angle
-    scan.header.update('HIERARCH cam_angle', cam_angle)
-    scan.chop = 0.
-    return scan
+    s = create_scan(ra0, dec0, length, step, sampling_period, speed, acceleration,
+                    nlegs, angle, instrument_angle, cross_scan, PacsBase.POINTING_DTYPE)
+    return s
 
 
 #-------------------------------------------------------------------------------
