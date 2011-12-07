@@ -5,6 +5,7 @@
 from __future__ import division
 
 import numpy as np
+from mpi4py import MPI
 from pyoperators.utils import isscalar, strenum
 from .instruments import Instrument
 
@@ -17,6 +18,9 @@ class Observation(object):
         self.pointing = None
         self.policy = None
         self.slice = None
+
+    comm_map = MPI.COMM_WORLD
+    comm_tod = MPI.COMM_WORLD
 
     def get_ndetectors(self):
         return self.instrument.get_ndetectors()
