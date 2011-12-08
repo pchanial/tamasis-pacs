@@ -23,7 +23,7 @@ class Instrument(object):
     """
     def __init__(self, name, shape, removed=None, masked=None,
                  detector_center=None, detector_corner=None,
-                 default_resolution=1., dtype=None, comm_tod=MPI.COMM_WORLD):
+                 default_resolution=None, dtype=None, comm_tod=MPI.COMM_WORLD):
 
         self.name = str(name)
         shape = tuple(shape)
@@ -421,7 +421,7 @@ class Instrument(object):
             # f2py doesn't accept zero-sized opaque arguments
             pmatrix = np.empty(1, np.int64)
         else:
-            pmatrix = pmatrix.ravel().view(np.int8)
+            pmatrix = pmatrix.ravel().view(np.int64)
         header = str(header).replace('\n','')
 
         new_npixels_per_sample, out, status = tmf.pointing. \
