@@ -811,9 +811,9 @@ contains
         if (remove_nan .and. present(mask)) then
             allocate (array_copy(count(array == array .and. .not. mask)))
         else if (present(mask)) then
-            allocate array_copy(count(.not. mask))
+            allocate (array_copy(count(.not. mask)))
         else if (remove_nan) then
-            allocate array_copy(count(array == array))
+            allocate (array_copy(count(array == array)))
         end if
 #endif
         if (remove_nan .and. present(mask)) then
