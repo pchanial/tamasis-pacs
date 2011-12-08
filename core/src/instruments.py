@@ -413,7 +413,6 @@ class Instrument(object):
         detectors and map pixels.
         """
         coords = coords.reshape((-1,2))
-        ncoords = coords.shape[0]
         ra = pointing['ra'].ravel()
         dec = pointing['dec'].ravel()
         pa = pointing['pa'].ravel()
@@ -426,8 +425,8 @@ class Instrument(object):
         header = str(header).replace('\n','')
 
         new_npixels_per_sample, out, status = tmf.pointing. \
-            instrument2pmatrix_sharp_edges(coords.T, ncoords, ra, dec, pa,
-            masked, pointing.size, header, pmatrix, npixels_per_sample)
+            instrument2pmatrix_sharp_edges(coords.T, ra, dec, pa, masked,
+            header, pmatrix, npixels_per_sample)
         if status != 0: raise RuntimeError()
 
         return new_npixels_per_sample, out
