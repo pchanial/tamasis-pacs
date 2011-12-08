@@ -105,7 +105,7 @@ contains
         real(p), intent(in)                          :: area(ncoords)           ! detector area / reference_area
         real(p), intent(in), dimension(npointings)   :: ra, dec, pa             ! input pointings in celestial coordinates
         logical*1, intent(in), dimension(npointings) :: masked                  ! pointing flags: true if masked, removed
-        integer, intent(in)                          :: ncoords, npointings     ! #coordinates, #pointings
+        integer*8, intent(in)                        :: ncoords, npointings     ! #coordinates, #pointings
         character(len=*), intent(in)                 :: header
         type(PointingElement), intent(inout)         :: pmatrix(1,npointings,ncoords)
         logical, intent(out)                         :: out
@@ -133,7 +133,7 @@ contains
                 cycle
             end if
 
-            call instrument2ad(coords, coords2, ncoords, ra(isample), dec(isample), pa(isample))
+            call instrument2ad(coords, coords2, int(ncoords), ra(isample), dec(isample), pa(isample))
             
             call ad2xys_gnomonic(coords2, x, y, s)
 
@@ -159,7 +159,7 @@ contains
         real(p), intent(in)                          :: coords(2,ncoords)   ! instrument frame coordinates
         real(p), intent(in), dimension(npointings)   :: ra, dec, pa         ! input pointings in celestial coordinates
         logical*1, intent(in), dimension(npointings) :: masked              ! pointing flags: true if masked, removed
-        integer, intent(in)                          :: ncoords, npointings ! #coordinates, #pointings
+        integer*8, intent(in)                        :: ncoords, npointings ! #coordinates, #pointings
         character(len=*), intent(in)                 :: header              ! sky map FITS header
         type(PointingElement), intent(inout)         :: pmatrix(npixels_per_sample,npointings,ncoords/4) ! the pointing matrix
         integer, intent(in)  :: npixels_per_sample     ! input maximum number of sky pixels intersected by a detector
@@ -191,7 +191,7 @@ contains
                 cycle
             end if
 
-            call instrument2ad(coords, coords2, ncoords, ra(isample), dec(isample), pa(isample))
+            call instrument2ad(coords, coords2, int(ncoords), ra(isample), dec(isample), pa(isample))
             
             coords2 = ad2xy_gnomonic(coords2)
             roi = xy2roi(coords2, 4)
@@ -201,5 +201,6 @@ contains
         !$omp end parallel do
 
     end subroutine instrument2pmatrix_sharp_edges
+
 
 end module pointing
