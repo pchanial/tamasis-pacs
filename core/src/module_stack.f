@@ -4,7 +4,7 @@
 ! A stack implementation
 module module_stack
 
-    use iso_fortran_env
+    use iso_fortran_env, only : ERROR_UNIT
     implicit none
     private
 
