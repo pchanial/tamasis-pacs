@@ -101,11 +101,11 @@ contains
     subroutine instrument2pmatrix_nearest_neighbour(coords, ncoords, area, ra, dec, pa, masked, npointings, header, pmatrix, out,  &
                                                     status)
         !f2py integer*8, depend(npointings,ncoords) :: pmatrix(npointings*ncoords)
+        integer*8, intent(in)                        :: ncoords, npointings     ! #coordinates, #pointings
         real(p), intent(in)                          :: coords(2,ncoords)       ! instrument frame coordinates
         real(p), intent(in)                          :: area(ncoords)           ! detector area / reference_area
         real(p), intent(in), dimension(npointings)   :: ra, dec, pa             ! input pointings in celestial coordinates
         logical*1, intent(in), dimension(npointings) :: masked                  ! pointing flags: true if masked, removed
-        integer*8, intent(in)                        :: ncoords, npointings     ! #coordinates, #pointings
         character(len=*), intent(in)                 :: header
         type(PointingElement), intent(inout)         :: pmatrix(1,npointings,ncoords)
         logical, intent(out)                         :: out
@@ -156,10 +156,10 @@ contains
     subroutine instrument2pmatrix_sharp_edges(coords, ncoords, ra, dec, pa, masked, npointings, header, pmatrix,                   &
                                               npixels_per_sample, new_npixels_per_sample, out, status)
         !f2py integer*8, depend(npixels_per_sample,npointings,ncoords) :: pmatrix(npixels_per_sample*npointings*ncoords/4)
+        integer*8, intent(in)                        :: ncoords, npointings ! #coordinates, #pointings
         real(p), intent(in)                          :: coords(2,ncoords)   ! instrument frame coordinates
         real(p), intent(in), dimension(npointings)   :: ra, dec, pa         ! input pointings in celestial coordinates
         logical*1, intent(in), dimension(npointings) :: masked              ! pointing flags: true if masked, removed
-        integer*8, intent(in)                        :: ncoords, npointings ! #coordinates, #pointings
         character(len=*), intent(in)                 :: header              ! sky map FITS header
         type(PointingElement), intent(inout)         :: pmatrix(npixels_per_sample,npointings,ncoords/4) ! the pointing matrix
         integer, intent(in)  :: npixels_per_sample     ! input maximum number of sky pixels intersected by a detector
