@@ -87,7 +87,8 @@ def configure(conf):
         conf.env.F2PYFCOMPILER = 'gnu95'
         conf.env.LIB_LAPACK = ['lapack', 'blas']
     elif conf.env.FC_NAME == 'IFORT':
-        conf.env.FCFLAGS = ['-fpp', '-fPIC', '-free', '-ftz', '-fp-model', 'precise', '-ftrapuv', '-fast', '-warn', 'all']
+        conf.env.FCFLAGS = ['-fpp', '-fPIC', '-free', '-ftz', '-fp-model',
+                            'precise', '-ftrapuv', '-fast', '-warn', 'all']
         if conf.options.debug:
             conf.env.FCFLAGS += ['-debug', '-check', 'all', '-traceback']
         if 'OPENMP' in libraries:
