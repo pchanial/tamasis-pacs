@@ -1,26 +1,26 @@
 program test_cfitsio
 
     use, intrinsic :: ISO_C_BINDING
-    use, intrinsic :: ISO_FORTRAN_ENV
+    use, intrinsic :: ISO_FORTRAN_ENV, only : ERROR_UNIT
     use            :: module_cfitsio
     implicit none
 
     character(len=*), parameter    :: filename = 'core/test/data/pih.fits'
     character(len=80*1000+1,kind=C_CHAR), pointer :: header
-    integer(kind=C_INT)            :: nkeyrec, status
+    integer(C_INT)                 :: nkeyrec, status
     type(C_PTR)                    :: fptr, c_header
     integer                        :: i
 
     status = 0
     call fits_open_file(fptr, filename // C_NULL_CHAR, CFITSIO_READONLY, status)
     if (status /= 0) then
-        call cfitsio_report_error(status)
+        call cfitsio_report_error(int(status))
         call failure('fits_open_file')
     end if
 
-    call fits_hdr2str(fptr, 1, C_NULL_PTR, 0, c_header, nkeyrec, status)
+    call fits_hdr2str(fptr, 1_C_INT, C_NULL_PTR, 0_C_INT, c_header, nkeyrec, status)
     if (status /= 0) then
-        call cfitsio_report_error(status)
+        call cfitsio_report_error(int(status))
         call failure('fits_hdr2str')
     end if
 
@@ -31,7 +31,7 @@ program test_cfitsio
 
     call fits_close_file(fptr, status)
     if (status /= 0) then
-        call cfitsio_report_error(status)
+        call cfitsio_report_error(int(status))
         call failure('fits_close_file')
     end if
 

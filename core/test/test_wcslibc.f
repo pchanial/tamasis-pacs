@@ -8,9 +8,9 @@ program test_wcslibc
     implicit none
 
     character(len=*), parameter       :: filename_header = 'core/test/data/pih.fits'
-    integer                           :: status, i, iwcs, ifix
+    integer                           :: i, iwcs, ifix
     integer(kind=C_INT)               :: alts(27), stat(NWCSFIX)
-    integer(kind=C_INT)               :: nkeyrec, relax, ctrl, nreject, nwcs, status2
+    integer(kind=C_INT)               :: nkeyrec, relax, ctrl, nreject, nwcs, status
     type(C_PTR)                       :: c_wcs, c_header, fptr
     character(len=80*1000+1), pointer :: header => null()
     type(wcsprm), pointer             :: wcs(:) => null()
@@ -29,7 +29,7 @@ program test_wcslibc
         stop
     end if
 
-    call fits_hdr2str(fptr, 1, c_null_ptr, 0, c_header, nkeyrec, status)
+    call fits_hdr2str(fptr, 1_C_INT, c_null_ptr, 0_C_INT, c_header, nkeyrec, status)
     if (status /= 0) then
         call fits_report_error(stderr, status)
         stop
@@ -49,7 +49,7 @@ program test_wcslibc
     relax = WCSHDR_all
     ctrl = -2_C_INT
 
-    status2 = wcspih(header, nkeyrec, relax, ctrl, nreject, nwcs, c_wcs)
+    status = wcspih(header, nkeyrec, relax, ctrl, nreject, nwcs, c_wcs)
 
     call c_f_pointer(c_wcs, wcs, shape = [nwcs])
 
@@ -99,7 +99,7 @@ program test_wcslibc
       write (*,*)
       write (*,'(a)') '------------------------------------------------------------------------'
       ! fix non-standard WCS keyvalues
-      status = wcsfix(7, c_null_ptr, c_loc(wcs(iwcs)), stat)
+      status = wcsfix(7_C_INT, c_null_ptr, c_loc(wcs(iwcs)), stat)
       if (status /= 0) then
           write (*,'(a,$)') "wcsfix ERROR, status returns: ("
           do ifix = 1, NWCSFIX

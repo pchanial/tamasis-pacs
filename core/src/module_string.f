@@ -364,7 +364,7 @@ contains
 
     function strsection_int4(first, last) result(str)
 
-        integer, intent(in)                            :: first, last
+        integer*4, intent(in)                          :: first, last
         character(len=strsection_int4_len(first,last)) :: str
         
         if (first == 0 .and. last == 0) then
@@ -393,8 +393,8 @@ contains
     ! 0 means unbound
     pure function strsection_int4_len(first, last) result(length)
 
-        integer             :: length
-        integer, intent(in) :: first, last
+        integer               :: length
+        integer*4, intent(in) :: first, last
 
         length = len(strinteger(first)) + len(strinteger(last)) + 1
         if (first == 0) length = length - 1

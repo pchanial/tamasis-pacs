@@ -417,7 +417,8 @@ contains
         character(len=*), intent(in) :: header
         integer, intent(out)         :: status
 
-        integer                      :: wcs(WCSLEN), nx, ny
+        integer(C_INT)               :: wcs(WCSLEN)
+        integer                      :: nx, ny
         common /wcslib/ wcs
 
         call header2wcslib(header, wcs, nx, ny, status)

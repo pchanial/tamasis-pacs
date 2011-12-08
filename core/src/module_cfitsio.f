@@ -5,15 +5,14 @@
 module module_cfitsio
 
     use, intrinsic :: ISO_C_BINDING
-    use, intrinsic :: ISO_FORTRAN_ENV
     implicit none
 
-    integer, parameter :: CFITSIO_IMAGE_HDU  =  0
-    integer, parameter :: CFITSIO_ASCII_TBL  =  1
-    integer, parameter :: CFITSIO_BINARY_TBL =  2
-    integer, parameter :: CFITSIO_ANY_HDU    = -1
-    integer, parameter :: CFITSIO_READONLY   =  0
-    integer, parameter :: CFITSIO_READWRITE  =  1
+    integer(C_INT), parameter :: CFITSIO_IMAGE_HDU  =  0
+    integer(C_INT), parameter :: CFITSIO_ASCII_TBL  =  1
+    integer(C_INT), parameter :: CFITSIO_BINARY_TBL =  2
+    integer(C_INT), parameter :: CFITSIO_ANY_HDU    = -1
+    integer(C_INT), parameter :: CFITSIO_READONLY   =  0
+    integer(C_INT), parameter :: CFITSIO_READWRITE  =  1
 
     interface
 

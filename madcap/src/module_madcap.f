@@ -41,7 +41,7 @@ contains
         logical   :: exist
 !XXX gfortran 4.5 inquire size does not work
 #ifdef GFORTRAN
-        integer*4 :: sarray(13)
+        integer   :: sarray(13)
 #endif
 
         status = 1
@@ -125,7 +125,7 @@ contains
         integer*8 :: npixels_map, npixels_per_sample_, filesize, first, last
         logical   :: exist
 #ifdef GFORTRAN
-        integer*4 :: sarray(13)
+        integer   :: sarray(13)
 #endif
 
         status = 1
@@ -262,7 +262,7 @@ contains
         integer*8 :: filesize, pos
         integer   :: dest, idetector, isample, islice_, ndetectors, npixels_per_sample, nsamples_tot, nslices
 #ifdef GFORTRAN
-        integer*4 :: sarray(13)
+        integer   :: sarray(13)
 #else
         integer   :: ipixel
 #endif
@@ -359,7 +359,7 @@ contains
         integer   :: filesize
         integer*8 :: ncorrelations_
 #ifdef GFORTRAN
-        integer*4 :: sarray(13)
+        integer   :: sarray(13)
 #endif
     
         status = 1

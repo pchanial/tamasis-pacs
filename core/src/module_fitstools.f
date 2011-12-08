@@ -1769,16 +1769,19 @@ contains
 
         character(len=len(header)), pointer :: f_header
         type(C_PTR)                         :: fptr, c_header
-        integer                             :: nkeyrec
+        integer(C_INT)                      :: nkeyrec, status_
 
-        status = 0
-        call fits_open_file(fptr, filename // C_NULL_CHAR, CFITSIO_READONLY, status)
+        status_ = 0
+        call fits_open_file(fptr, filename // C_NULL_CHAR, CFITSIO_READONLY, status_)
+        status = status_
         if (ft_check_error_cfitsio(status, filename=filename)) return
 
-        call fits_hdr2str(fptr, 1, C_NULL_PTR, 0, c_header, nkeyrec, status)
+        call fits_hdr2str(fptr, 1_C_INT, C_NULL_PTR, 0_C_INT, c_header, nkeyrec, status_)
+        status = status_
         if (ft_check_error_cfitsio(status, filename=filename)) return
 
-        call fits_close_file(fptr, status)
+        call fits_close_file(fptr, status_)
+        status = status_
         if (ft_check_error_cfitsio(status, filename=filename)) return
 
         ! check we can hold the header in memory
@@ -2103,7 +2106,7 @@ contains
 
         integer, intent(in)                                :: unit
         character(len=*), intent(in)                       :: keyword
-        logical*4, intent(out)                             :: value
+        logical, intent(out)                               :: value
         logical, intent(out), optional                     :: found
         integer, intent(out)                               :: status
         character(len=FLEN_COMMENT), optional, intent(out) :: comment
