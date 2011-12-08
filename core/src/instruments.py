@@ -416,7 +416,7 @@ class Instrument(object):
         ra = pointing['ra'].ravel()
         dec = pointing['dec'].ravel()
         pa = pointing['pa'].ravel()
-        masked = pointing['masked'].ravel()
+        masked = pointing['masked'].view(np.int8).ravel()
         if pmatrix.size == 0:
             # f2py doesn't accept zero-sized opaque arguments
             pmatrix = np.empty(1, np.int64)
