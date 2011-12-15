@@ -29,7 +29,7 @@ class MadMap1Observation(Observation):
         else:
             filename = m.group('filename')
             extname  = m.group('extname')
-            mask = pyfits.fitsopen(filename)[extname].data
+            mask = pyfits.fitsopen(filename)[str(extname)].data #XXX Python3
         if mask is None:
             raise IOError('HDU '+mapmaskfile+' has no data.')
         mapmask = np.zeros(mask.shape, dtype='int8')
