@@ -10,7 +10,8 @@ import tamasisfortran as tmf
 from mpi4py import MPI
 
 from pyoperators import (Operator, IdentityOperator, DiagonalOperator,
-                         BlockColumnOperator, BlockDiagonalOperator)
+                         BlockColumnOperator, BlockDiagonalOperator,
+                         NumexprOperator)
 from pyoperators.decorators import (idempotent, linear, orthogonal, real,
                                     square, symmetric, unitary, inplace)
 from pyoperators.utils import isscalar, tointtuple, openmp_num_threads
@@ -32,6 +33,7 @@ except:
     print('Warning: Library PyFFTW3 is not installed.')
 
 __all__ = [
+    'BlackBodyOperator',
     'CompressionAverage',
     'Convolution',
     'DistributionGlobal',
@@ -161,6 +163,69 @@ def block_diagonal(*partition_args, **keywords):
         return cls
 
     return func
+
+
+class BlackBodyOperator(Operator):
+    """
+    Instanceless class whose __new__ method specialises in
+    BlackBodyFixedTemperatureOperator and BlackBodyFreeTemperatureOperator.
+    """
+    def __new__(cls, wavelength, wavelength0, temperature=None, beta=0.):
+        if temperature is not None:
+            return BlackBodyFixedTemperatureOperator(temperature, wavelength,
+                                                     wavelength0, beta)
+        raise NotImplementedError()
+
+
+@symmetric
+class BlackBodyFixedTemperatureOperator(NumexprOperator):
+    """
+    Diagonal operator whose normalised values follow the Planck equation,
+    optionnally modified by a power-law emissivity of given slope.
+    """
+    def __new__(cls, temperature, wavelength, wavelength0=None, beta=0.):
+        if not isscalar(wavelength):
+            return BlockColumnOperator([BlackBodyFixedTemperatureOperator(
+                temperature, w, wavelength0, beta) for w in wavelength],
+                new_axisout=0)
+        return super(BlackBodyFixedTemperatureOperator, cls).__new__(cls)
+
+    def __init__(self, temperature, wavelength, wavelength0=None, beta=0.):
+        """
+        Parameters
+        ----------
+        temperature : float
+            Black body temperature, in Kelvin.
+        wavelength : float
+            Wavelength, in meters, at which black body values will be
+            computed.
+        wavelength0 : float
+            Reference wavelength, in meters, for which the operator returns 1.
+        beta : float
+            Slope of the emissivity (the spectrum is multiplied by nu**beta)
+            The default value is 0 (non-modified black body).
+        """
+        self.temperature = np.array(temperature, float, copy=False)
+        self.wavelength = float(wavelength)
+        self.wavelength0 = float(wavelength0)
+        self.beta = float(beta)
+        c = 2.99792458e8
+        h = 6.626068e-34
+        k = 1.380658e-23
+        if self.temperature.size == 1:
+            coef = (self.wavelength0/self.wavelength)**(3+self.beta) * \
+                   (np.exp(h*c/(self.wavelength0*k*self.temperature))-1) / \
+                   (np.exp(h*c/(self.wavelength*k*self.temperature))-1)
+            expr = 'coef * input'
+            global_dict = {'coef':coef}
+        else:
+            coef1 = (self.wavelength0/self.wavelength)**(3+self.beta)
+            coef2 = h*c/(self.wavelength0*k)
+            coef3 = h*c/(self.wavelength*k)
+            expr = 'coef1 * (exp(coef2/T) - 1) / (exp(coef3/T) - 1)'
+            global_dict = {'coef1':coef1, 'coef2':coef2, 'coef3':coef3,
+                           'T':self.temperature}
+        NumexprOperator.__init__(self, expr, global_dict, dtype=float)
 
 
 @block_diagonal('factor', axis=-1)

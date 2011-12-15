@@ -31,7 +31,8 @@ required_modules = ['numpy',
                     'fftw3',
                     'pyfits',
                     'kapteyn',
-                    'mpi4py']
+                    'mpi4py',
+                    'numexpr']
 
 
 
