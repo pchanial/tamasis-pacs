@@ -62,7 +62,7 @@ tod = filter_polynomial(tod, 3)
 # Inspect the tod by displaying the Tod as an image: X for time and Y for
 # the detector number. In the following a example a stride of 10 is used
 # to display one sample out of 10, because the display is memory intensive
-tod[::10].imshow()
+tod[:,::10].imshow()
 
 # Save the Tod as a FITS file
 tod.save('tod_preprocessed.fits')
