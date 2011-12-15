@@ -7,6 +7,7 @@ class TestFailure(Exception): pass
 
 tamasis.var.verbose = False
 profile = None#'test_ls.png'
+tol = 1.e-6 if profile else 1.e-4
 data_dir = os.path.dirname(__file__) + '/data/'
 obs = PacsObservation(data_dir+'frames_blue.fits', fine_sampling_factor=1)
 tod = obs.get_tod(flatfielding=False)
@@ -43,14 +44,12 @@ class Callback():
 
 import scipy
 map_iter2 = mapper_ls(tod, model,
-                      tol=1.e-4,
-                      maxiter=10 if profile else 300,
+                      tol=tol,
                       M=Diagonal(masking_map(1./map_naive.coverage)),
                       callback=Callback(),
                       solver=scipy.sparse.linalg.bicgstab,
                       profile=profile)
 
-print('Elapsed time:', map_iter2.header['TIME'])
 if profile is None:
     print(map_iter2.header['time'])
     if map_iter2.header['NITER'] > 11:

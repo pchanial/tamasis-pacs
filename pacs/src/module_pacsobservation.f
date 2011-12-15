@@ -885,6 +885,8 @@ contains
             write (OUTPUT_UNIT,'(a,i0,a)') '      Invalid:    ', count(this%slice(islice)%p%invalid),    ' ' //                    &
                   strpolicy(this%policy%invalid)
 
+            write (OUTPUT_UNIT,'(a,i0,a)') '      Masked:    ', count(this%slice(islice)%p%masked)
+            write (OUTPUT_UNIT,'(a,i0,a)') '      Removed:    ', count(this%slice(islice)%p%removed)
         end do
 
     end subroutine print

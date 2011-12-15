@@ -109,6 +109,7 @@ end program test""",
     conf.find_program(['ipython'  + sys.version[0:3], 
                        'ipython-' + sys.version[0:3],
                        'ipython'], var='IPYTHON')
+    conf.env.IPYTHON_VERSION = _get_version(conf.env.IPYTHON, flag='-Version')
 
     conf.find_program(['f2py'  + sys.version[0:3], 
                        'f2py-' + sys.version[0:3],
@@ -319,8 +320,12 @@ class test_python(BuildContext):
     fun = 'test_python_fun'
 
 def test_python_fun(bld):
-    bld(rule   = '${IPYTHON} -noconfirm_exit ' + bld.path.find_node('core/test/test_broken_locale.py').abspath(),
-        always = True)
+    if bld.env.IPYTHON_VERSION >= '0.12':
+        options = '--no-confirm-exit --i '
+    else:
+        options = '-noconfirm_exit '
+    bld(rule='${IPYTHON} ' + options + bld.path.find_node(
+        'core/test/test_broken_locale.py').abspath(), always=True)
 
     for subdir in subdirs:
         files = bld.path.ant_glob(subdir+'/test/test_*.py')
@@ -420,6 +425,18 @@ def check_wcslib_external(env):
     version = env.DEFINES[i].split('=')[1].replace('"', '')
     env.DEFINES[i] = wme + '=' + str(int(version < '4.5'))
     env.define_key[i] = wme
+
+def _get_version(progname, flag=None):
+    p = subprocess.Popen([progname, '--version'], stdout=subprocess.PIPE,
+                         stderr=subprocess.PIPE)
+    stdout, stderr = p.communicate()
+    if stderr != '' and flag is not None:
+        p = subprocess.Popen([progname, '-Version'], stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE)
+        stdout, stderr = p.communicate()
+    if stderr != '':
+        raise RuntimeError(stderr)
+    return stdout[:-1]
 
 def check_git_version(ctx):
     global VERSION
