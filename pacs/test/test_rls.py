@@ -30,15 +30,14 @@ class Callback():
 
 map_rls = mapper_rls(tod, model, hyper=1., tol=1.e-4, profile=profile,
                      callback=None if tamasis.var.verbose else Callback(),
-                     maxiter=10 if profile else 1000, solver=cgs)
+                     solver=cgs)
 
 if profile is None:
     print 'Elapsed time: ' + str(map_rls.header['TIME'])
     if map_rls.header['NITER'] > 48:
         raise TestFailure()
-
-ref = Map(data_dir + 'frames_blue_map_rls_cgs_tol1e-6.fits')
-cov = ref.coverage > 80
-if any_neq(ref[cov], map_rls[cov], 1.e-1): raise TestFailure()
-cov = ref.coverage > 125
-if any_neq(ref[cov], map_rls[cov], 1.e-2): raise TestFailure()
+    ref = Map(data_dir + 'frames_blue_map_rls_cgs_tol1e-6.fits')
+    cov = ref.coverage > 80
+    if any_neq(ref[cov], map_rls[cov], 1.e-1): raise TestFailure()
+    cov = ref.coverage > 125
+    if any_neq(ref[cov], map_rls[cov], 1.e-2): raise TestFailure()
