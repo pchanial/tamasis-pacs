@@ -639,7 +639,7 @@ contains
         real(p), intent(out)                       :: xmin, ymin, xmax, ymax  ! min and max values of the map coordinates
         integer, intent(out)                       :: status                  ! status flag
 
-        real(p), allocatable :: hull(:,:)
+        real(p), allocatable :: hull_instrument(:,:), hull(:,:)
         integer, allocatable :: ihull(:)
         integer              :: ipointing
         external :: pacs_uv2ad
@@ -648,17 +648,20 @@ contains
         if (status /= 0) return
 
         call convex_hull(coords, ihull)
-        allocate (hull(2, size(ihull)))
+        allocate (hull_instrument(2,size(ihull)), hull(2, size(ihull)))
+        hull_instrument = coords(:,ihull)
 
         xmin = pInf
         xmax = mInf
         ymin = pInf
         ymax = mInf
 
+#ifndef IFORT
         !$omp parallel do reduction(min:xmin,ymin) reduction(max:xmax,ymax) private(hull)
+#endif
         do ipointing = 1, npointings
 
-            hull = uv2yz(coords(:,ihull), distortion_yz, chop(ipointing))
+            hull = uv2yz(hull_instrument, distortion_yz, chop(ipointing))
             hull = yz2ad(hull, ra(ipointing), dec(ipointing), pa(ipointing))
             hull = ad2xy_gnomonic(hull)
             xmin = min(xmin, minval(hull(1,:)))
@@ -667,7 +670,9 @@ contains
             ymax = max(ymax, maxval(hull(2,:)))
 
         end do
+#ifndef IFORT
         !$omp end parallel do
+#endif
 
     end subroutine uv2xy_minmax
 
