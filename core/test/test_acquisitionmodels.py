@@ -5,7 +5,8 @@ import tamasis
 from pyoperators import Operator, AdditionOperator, CompositionOperator, DiagonalOperator, BlockDiagonalOperator, ScalarOperator, asoperator, I
 from pyoperators.utils import isscalar, assert_is
 from numpy.testing import assert_array_equal, assert_almost_equal, assert_raises
-from tamasis.acquisitionmodels import Convolution, CompressionAverage, DdTdd, DiscreteDifference, DownSampling, FftOperator, FftHalfComplex, Masking, Packing, Padding, ResponseTruncatedExponential, RollOperator, ShiftOperator, Unpacking, block_diagonal
+from tamasis.acquisitionmodels import BlackBodyOperator, Convolution, CompressionAverage, DdTdd, DiscreteDifference, DownSampling, FftOperator, FftHalfComplex, Masking, Packing, Padding, ResponseTruncatedExponential, RollOperator, ShiftOperator, Unpacking, block_diagonal
+from tamasis.numpyutils import all_eq
 
 def test_partitioning():
 
@@ -63,6 +64,28 @@ def test_partitioning():
                     yield func, myop, n, v, k
 
 
+def test_blackbody():
+    def bb(w,T):
+        c = 2.99792458e8
+        h = 6.626068e-34
+        k = 1.380658e-23
+        nu = c/w
+        return 2*h*nu**3/c**2 / (np.exp(h*nu/(k*T))-1)
+
+    w = np.arange(90.,111) * 1e-6
+    T = 15.
+    flux = bb(w, T) / bb(w[10], T)
+    ops = [BlackBodyOperator(wave, 100e-6, T) for wave in w]
+    flux2 = [op(1.) for op in ops]
+    assert all_eq(flux, flux2)
+
+    w, T = np.ogrid[90:111,15:20]
+    w = w * 1.e-6
+    flux = bb(w, T) / bb(w[10], T)
+    ops = [BlackBodyOperator(wave, 100e-6, T.squeeze()) for wave in w]
+    flux2 = np.array([op(np.ones(T.size)) for op in ops])
+    assert all_eq(flux, flux2)
+    
 def test_compression_average1():
     data = np.array([1., 2., 2., 3.])
     compression = CompressionAverage(2)
