@@ -3,7 +3,8 @@ import java
 import os
 import time
 
-from java.lang import Double, Integer, String
+from java.lang import Double, Integer, String, System
+from java.util import Date
 from org.python.core import PyList, PyTuple
 from herschel.ia.dataset.image import SimpleImage
 from herschel.ia.dataset.image.wcs import Wcs
@@ -12,26 +13,23 @@ from herschel.ia.gui.kernel.Tool import Category
 from herschel.ia.numeric import Bool2d
 from herschel.ia.task.all import *
 from herschel.ia.task.views import TaskToolRegistry
-from herschel.pacs.signal import Frames
+from herschel.pacs.cal import *
 from herschel.pacs.spg import *
+from herschel.pacs.spg.common import *
+from herschel.pacs.spg.phot import *
+
 
 __all__ = [ 'tamasisPrepareFrames', 'tamasisPreprocessor', 'tamasisPhotProject' ]
 
 python_path = '/home/pchanial/software/lib/python2.6/site-packages'
 tamasis_path = python_path + '/tamasis/'
 ld_library_path = '/opt/core-3.1-amd64/ifc/2011.0.084/composerxe-2011.0.084/composerxe-2011.1.107/compiler/lib/intel64:/opt/core-3.1-amd64/ifc/2011.0.084/composerxe-2011.0.084/composerxe-2011.1.107/mpirt/lib/intel64:/opt/core-3.1-amd64/ifc/2011.0.084/composerxe-2011.0.084/composerxe-2011.1.107/compiler/lib/intel64:/opt/core-3.1-amd64/ifc/2011.0.084/composerxe-2011.0.084/composerxe-2011.1.107/mkl/lib/intel64:/opt/core-3.1-amd64/openmpi/1.4.1-gcc45/lib:/opt/core-3.1-amd64/cfitsio/3.25/lib:/opt/core-3.1-amd64/pgplot/5.2/:/opt/core-3.1-amd64/gcc/4.5/lib64:/opt/core-3.1-amd64/libelf/0.8.13-gcc45/lib:/opt/core-3.1-amd64/cloog-ppl/0.15.7-gcc45/lib:/opt/core-3.1-amd64/polylib/5.22.4-gcc45/lib:/opt/core-3.1-amd64/ppl/0.10.2-gcc45/lib:/opt/core-3.1-amd64/mpc/0.8.1-gcc45/lib:/opt/core-3.1-amd64/mpfr/2.4.2-gcc45/lib:/opt/core-3.1-amd64/gmp/4.3.2-gcc45/lib:/opt/core-3.1-amd64/fftw3/3.2.2/lib:/opt/core-3.1-amd64/python/2.6/lib:/opt/core-3.1-amd64/ifc/12.0/lib/intel64:/opt/core-3.1-amd64/ifc/12.0/mkl/lib/em64t:/opt/core-3.1-amd64/cfitsio/3.23/lib'
-False = 0
 
-fa                     = herschel.ia.io.fits.FitsArchive()
-simpleFitsReader       = herschel.ia.toolbox.util.SimpleFitsReaderTask()
-#getCalTree             = herschel.pacs.cal.GetPacsCalTask()
-#findBlocks             = FindBlocksTask()
-#photFlagBadPixels      = PhotFlagBadPixelsTask()
-#photFlagSaturation     = PhotFlagSaturationTask()
-#photConvDigit2Volts    = PhotConvDigit2VoltsTask()
-#convertChopper2Angle   = ConvertChopper2AngleTask()
-#photAddInstantPointing = PhotAddInstantPointingTask()
-#cleanPlateauFrames     = CleanPlateauFramesTask()
+False = 0
+True  = 1
+
+fa               = herschel.ia.io.fits.FitsArchive()
+simpleFitsReader = herschel.ia.toolbox.util.SimpleFitsReaderTask()
 
 class TamasisPrepareFrames(JTask):
     """
@@ -72,7 +70,7 @@ class TamasisPrepareFrames(JTask):
             try:
                 frames = fa.load(self.filename + '_' + band + '_level0Frames.fits')
             except java.io.IOException:
-                pass
+                continue
 
             print "running findBlocks", Date()
             frames = findBlocks(frames)
