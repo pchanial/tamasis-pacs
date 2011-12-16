@@ -34,6 +34,12 @@ def any_neq(a, b, rtol=None, atol=0.):
                 return True
         return False
 
+    # restrict comparisons to some classes
+    class_ok = (np.ndarray, int, float, complex, list, tuple, str, unicode)
+    if not isinstance(a, class_ok) or not isinstance(b, class_ok):
+        return not isinstance(a, type(b)) and a is not None and \
+               not isinstance(b, type(a)) and b is not None
+
     a = np.asanyarray(a)
     b = np.asanyarray(b)
 
@@ -47,13 +53,8 @@ def any_neq(a, b, rtol=None, atol=0.):
     a = a.view(cls)
     b = b.view(cls)
     
-    # first, lookup __slots__ and __dict__
     akind = a.dtype.kind
     bkind = b.dtype.kind
-
-    # do not compare objects
-    if akind == 'O' or bkind == 'O':
-        return False
 
     aattr = get_attributes(a)
     battr = get_attributes(b)
