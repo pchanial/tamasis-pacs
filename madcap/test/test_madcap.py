@@ -19,7 +19,7 @@ packing = Unpacking(obs.info.mapmask, field=np.nan).T
 
 map_naive = mapper_naive(tod, projection)
 map_naive = mapper_naive(tod, projection*packing)
-map_ref = pyfits.fitsopen(path+'naivemapSpirePsw.fits')['image'].data
+map_ref = pyfits.open(path+'naivemapSpirePsw.fits')['image'].data
 if any_neq(map_naive,map_ref): raise TestFailure('mapper_naive madcap 1')
 
 map_naive_1d = mapper_naive(tod, projection)
