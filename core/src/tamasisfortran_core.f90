@@ -904,7 +904,7 @@ subroutine round_rhs(array, n)
     call random_seed(put=seed)
     deallocate(seed)
 
-    !$omp parallel do
+    !$omp parallel do private(x, rnd)
     do i = 1, n
         x = anint(array(i))
         if (abs(x-array(i)) == 0.5_p) then
