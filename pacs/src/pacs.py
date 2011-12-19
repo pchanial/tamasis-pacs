@@ -1609,7 +1609,7 @@ def _write_status(obs, filename, fitskw=None):
     fits = pyfits.HDUList()
 
     # Primary header
-    cc = pyfits.createCard
+    cc = pyfits.create_card
     
     header = pyfits.Header([
         cc('simple', True), 

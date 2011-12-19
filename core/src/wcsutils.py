@@ -200,9 +200,9 @@ def create_fitsheader(naxis=None, dtype=None, fromdata=None, extname=None,
     numaxis = len(naxis)
 
     if extname is None:
-        card = pyfits.createCard('simple', True)
+        card = pyfits.create_card('simple', True)
     else:
-        card = pyfits.createCard('xtension', 'IMAGE', 'Image extension')
+        card = pyfits.create_card('xtension', 'IMAGE', 'Image extension')
     header = pyfits.Header([card])
     if typename is not None:
         header.update('bitpix', pyfits.PrimaryHDU.ImgCode[typename],
@@ -338,7 +338,7 @@ def str2fitsheader(string):
     reached.
     """
     header = pyfits.Header()
-    cards = header.ascardlist()
+    cards = header.ascard()
     iline = 0
     while (iline*80 < len(string)):
         line = string[iline*80:(iline+1)*80]
