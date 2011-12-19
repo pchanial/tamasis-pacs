@@ -10,6 +10,9 @@ np.seterr(all='ignore')
 
 __all__ = [ 'minmax' ]
 
+def assert_all_eq(a, b, rtol=None, atol=0., msg=None):
+    assert all_eq(a, b, rtol=rtol, atol=atol), msg
+
 def all_eq(a, b, rtol=None, atol=0.):
     return not any_neq(a, b, rtol=rtol, atol=atol)
 
