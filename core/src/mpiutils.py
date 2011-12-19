@@ -104,28 +104,27 @@ def read_fits(hdu, comm=None, sequential=False):
     if comm is None:
         comm = MPI.COMM_SELF
     header = hdu.header
-    naxis = [header['NAXIS'+str(i)] for i in range(1, header['NAXIS']+1)]
+    naxis = tuple(header['NAXIS'+str(i)] for i in range(1, header['NAXIS']+1))
     s = split_work(naxis[-1], comm=comm)
     n = s.stop - s.start
     nmax = int(np.ceil(naxis[-1] / comm.Get_size()))
-    shape_extra = list(reversed(naxis))
-    shape_extra[0] = nmax - n
     fitsdtype = {8:'uint8', 16:'>i2', 32:'>i4', 64:'>i8', -32:'>f4', -64:'>f8'}
 
     for iproc in range(comm.Get_size()):
         if iproc == comm.Get_rank():
-            if n == 0:
-                output = np.zeros(shape_extra,dtype=fitsdtype[header['BITPIX']])
+            if n < nmax:
+                shape = (nmax,) + naxis[-2::-1]
+                output = np.zeros(shape,dtype=fitsdtype[header['BITPIX']])
+                output[0:n,...] = pyfits.Section(hdu)[s]
             else:
                 output = pyfits.Section(hdu)[s]
-                if n < nmax:
-                    extra = np.zeros(shape_extra, dtype=output.dtype)
-                    output = np.concatenate([output, extra])
         if sequential:
             comm.Barrier()
     comm.Barrier()
+    if not output.dtype.isnative:
+        output = output.byteswap().newbyteorder('=')
 
-    return output, header, tuple(naxis)[::-1]
+    return output, header, naxis[::-1]
 
 def write_fits(filename, data, header, shape_global, extension, comm,
                extname=None):
@@ -187,15 +186,17 @@ def write_fits(filename, data, header, shape_global, extension, comm,
         f = MPI.File.Open(newcomm, filename, amode=MPI.MODE_APPEND+MPI.MODE_WRONLY+MPI.MODE_CREATE)
         f.Set_view(data_loc, mtype, ftype, 'native', MPI.INFO_NULL)
         # mpi4py 1.2.2: pb with viewing data as big endian KeyError '>d'
-        if sys.byteorder == 'little' and data.dtype.byteorder in ('=', '<'):
-            data = data.byteswap()
-        else:
-            data = data.newbyteorder('=')
+        if sys.byteorder == 'little' and data.dtype.byteorder == '=' or \
+           data.dtype.byteorder == '<':
+            data = data.byteswap().newbyteorder('=')
         f.Write_all(data[0:nlocal])
         f.Close()
 
     if rank == 0:
-        shdu._ffo = pyfits.core._File(filename, 'append')
+        try:
+            shdu._ffo = pyfits.core._File(filename, 'append')
+        except AttributeError:
+            shdu._ffo = pyfits.file._File(filename, 'append')
         shdu._ffo.getfile().seek(0,2)
         pyfitstype = {8:'uint8', 16:'int16', 32:'int32', 64:'int64', -32:'float32', -64:'float64'}[header['BITPIX']]
         completed = shdu.write(np.empty(0, dtype=pyfitstype))
