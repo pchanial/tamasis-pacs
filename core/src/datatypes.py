@@ -83,7 +83,7 @@ class DistributedArray(np.ndarray):
         output.__array_finalize__(self)
         t = MPI.BYTE.Create_contiguous(self.dtype.itemsize)
         t.Commit()
-        self.comm.Allgatherv([self[0:n], t], [output.view(np.byte), (counts, offsets), t])
+        self.comm.Allgatherv([self[0:n], t], [output, (counts, offsets), t])
 
         for a in attr:
             i = getattr(self, a, None)
