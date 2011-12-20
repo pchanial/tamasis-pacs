@@ -308,9 +308,9 @@ class norm2_ellipsoid(Function):
             
             if outwork is not None:
                 if len(outwork) == 0:
-                    outwork.append(self.A * x)
+                    outwork.append(self.A(x))
                 else:
-                    outwork[0][:] = self.A * x
+                    outwork[0][:] = self.A(x)
                 Ax = outwork[0]
             else:
                 Ax = self.A(x)
