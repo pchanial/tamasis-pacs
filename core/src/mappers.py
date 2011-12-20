@@ -243,14 +243,15 @@ def mapper_nl(tod, model, unpacking=None, priors=[], hypers=[], norms=[],
     time0 = time.time() - time0
     Js = objfunc(solution)
 
-    if unpacking is not None:
-        solution = unpacking(solution)
+    solution = unpacking(solution)
 
     tod[...] = 1
     coverage = model.T(tod)
-    header = coverage.header
-    unit = coverage.unit
-    derived_units = coverage.derived_units
+    header = getattr(coverage, 'header', None)
+    if header is None:
+        header = create_fitsheader(fromdata=coverage)
+    unit = getattr(coverage, 'unit', None)
+    derived_units = getattr(coverage, 'derived_units', None)
     coverage = Map(coverage.magnitude, header=header, copy=False)
 
     header.update('likeliho', Js[0])
@@ -339,8 +340,6 @@ def _solver(A, b, tod, model, invntt, priors=[], hyper=0, x0=None, tol=1.e-5,
         return Js
 
     if callback is None:
-        if comm_map.Get_rank() == 0 and verbose:
-            print('Iteration\tResiduals' + ('\tCriterion' if criterion else ''))
         callback = CgCallback(verbose=verbose, objfunc=criter if criterion \
             else None)
 
@@ -399,8 +398,8 @@ def _solver(A, b, tod, model, invntt, priors=[], hyper=0, x0=None, tol=1.e-5,
 
     tod[...] = 1
     coverage = model.T(tod)
-    unit = coverage.unit
-    derived_units = coverage.derived_units
+    unit = getattr(coverage, 'unit', None)
+    derived_units = getattr(coverage, 'derived_units', None)
     coverage = coverage.view(Map)
 
     header = getattr(coverage, 'header', None)
@@ -446,7 +445,7 @@ class CgCallback():
         if self.niterations == 0 and self.comm.Get_rank() == 0:
             docriterion = self.objfunc is not None or 'info' in plocals and \
                 isinstance(plocals['info'], dict) and 'terms' in plocals['info']
-            if MPI.COMM_WORLD.Get_rank() == 0:
+            if MPI.COMM_WORLD.Get_rank() == 0 and self.verbose:
                 print('Iteration\tResiduals' + ('\tCriterion' if docriterion \
                       else ''))
         if self.verbose: 
