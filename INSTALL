@@ -33,6 +33,11 @@ By default, the tamasis package will be installed in /usr/local, which requires
 admin privilege. To install it elsewhere:
 ./waf configure --prefix=~/local build install test
 
+To make sure that the stack size of an OpenMP thread is large enough to handle
+a map, you should add in your .bashrc file the following lines:
+export OMP_STACKSIZE=2g
+ulimit -s unlimited
+In this example, you will be able to process maps up to 2 Gigabytes.
 
 Troubleshooting:
 ================
