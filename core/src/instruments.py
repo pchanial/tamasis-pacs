@@ -3,6 +3,7 @@ import gc
 import numpy as np
 import tamasisfortran as tmf
 from kapteyn import wcs
+from matplotlib import pyplot
 from mpi4py import MPI
 from pyoperators.utils import strenum, strshape
 from .datatypes import Map
@@ -161,7 +162,6 @@ class Instrument(object):
                 except (ValueError, TypeError):
                     output.__dict__[k] = v
         return output
-        
 
     def unpack(self, input, masked=False):
         """
@@ -276,7 +276,7 @@ class Instrument(object):
         # gather and combine the FITS headers
         headers = self.comm_tod.allgather(header)
         return combine_fitsheader(headers)
-        
+
     def get_pointing_matrix(self, pointing, header, npixels_per_sample=0,
                             method=None):
         if method is None:
@@ -430,3 +430,97 @@ class Instrument(object):
         if status != 0: raise RuntimeError()
 
         return new_npixels_per_sample, out
+
+    @classmethod
+    def create_grid(cls, nrows, ncolumns, size, active_fraction=1.,
+                    focal_distance=None, inversion=False):
+        """
+        Return the physical positions of the corners of square detectors in a
+        matrix of shape (nrows, ncolumns).
+        If the focal distance is provided, the detector positions are then
+        expressed in arc seconds, provided that the focal distance units are
+        the same as that of the size argument.
+
+        Parameters
+        ----------
+        nrows : int
+            Number of rows of detectors.
+        ncolumns : int
+            Number of columns of detectors.
+        size : float
+            Detector size, in the same units as the focal distance.
+        active_fraction : float
+            Fraction of the detector surface that transmits light.
+        focal_distance : float
+            The focal distance, in the same units as the detector size.
+        inversion : boolean
+            If set the true, the detector positions are inversed through
+            the detector center.
+        """
+        corners = np.empty((nrows, ncolumns, 4, 2), float)
+        i, j = np.ogrid[0:nrows,0:ncolumns]
+        corners[:,:,0,0] = size * j
+        corners[:,:,0,1] = size * i
+        corners[:,:,1,0] = size * (j+1)
+        corners[:,:,1,1] = size * i
+        corners[:,:,2,0] = size * (j+1)
+        corners[:,:,2,1] = size * (i+1)
+        corners[:,:,3,0] = size * j
+        corners[:,:,3,1] = size * (i+1)
+        corners[...,0] -= np.mean(corners[...,0])
+        corners[...,1] -= np.mean(corners[...,1])
+        if active_fraction != 1:
+            coef = np.sqrt(active_fraction)
+            for i in range(nrows):
+                for j in range(ncolumns):
+                    u0, v0 = np.mean(corners[i,j,:,0]),np.mean(corners[i,j,:,1])
+                    corners[i,j,:,0] = (corners[i,j,:,0] - u0) * coef + u0
+                    corners[i,j,:,1] = (corners[i,j,:,1] - v0) * coef + v0
+
+        corners[...,0], corners[...,1] = \
+            np.rad2deg(corners[...,0] / focal_distance), \
+            np.rad2deg(corners[...,1] / focal_distance)
+        corners *= 3600
+
+        if inversion:
+            corners = -corners
+
+        return corners
+
+    @classmethod
+    def plot_grid(cls, corners, update_axes=True):
+        """
+        Plot a detector grid.
+
+        Parameters
+        ----------
+        corners : float ndarray [...,4,2]
+            The detector corners the penultimate dimension is for the vertices,
+            and the last one is for x and y, as defined in the current graphic
+            axis instance.
+        update_axes : boolean
+            If true, the axes of the plot will updated to match the boundaries
+            of the input detector corners.
+
+        Example
+        -------
+        # overlay the detector grid on the observation pointings
+        obs = MyObservation(...)
+        annim = plot_scan(obs.pointing)
+        xy = obs.instrument.instrument2xy(obs.instrument.detector.corner,
+                                          obs.pointing[0], annim.hdr)
+        plot_detector_grid(xy)
+
+        """
+        a = pyplot.gca()
+        corners = corners.view(float).reshape(-1,4,2)
+        for i in range(corners.shape[0]):
+            a.add_patch(pyplot.Polygon(corners[i], closed=True, fill=False))
+        if update_axes:
+            xlim = a.get_xlim()
+            ylim = a.get_ylim()
+            pyplot.xlim((min(xlim[0], np.min(corners[...,0])),
+                         max(xlim[1], np.max(corners[...,0]))))
+            pyplot.ylim((min(ylim[0], np.min(corners[...,1])),
+                         max(ylim[1], np.max(corners[...,1]))))
+        pyplot.show()
