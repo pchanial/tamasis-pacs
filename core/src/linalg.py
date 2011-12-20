@@ -313,7 +313,7 @@ class norm2_ellipsoid(Function):
                     outwork[0][:] = self.A * x
                 Ax = outwork[0]
             else:
-                Ax = self.A * x
+                Ax = self.A(x)
             out.flat = dot(x, Ax, comm=comm)
             return float(out)
         def df(x, out=None, inwork=None, outwork=None, comm=None):
@@ -322,7 +322,7 @@ class norm2_ellipsoid(Function):
             if inwork is not None:
                 Ax = inwork[0]
             else:
-                Ax = self.A * x
+                Ax = self.A(x)
             if out is not None:
                 out[:] = 2 * Ax
                 return out
