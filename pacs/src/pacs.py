@@ -5,7 +5,6 @@
 from __future__ import division
 
 import gc
-import glob
 import numpy as np
 import os
 import pyfits
@@ -21,20 +20,17 @@ from pyoperators.utils import strenum, strplural, openmp_num_threads
 
 from . import var
 from tamasis.core import (Quantity, Tod, MaskPolicy, Instrument, Pointing, tmf,
-                          CompressionAverage, Projection, Masking, create_fitsheader,
-                          plot_scan)
+                          CompressionAverage, Projection, Masking,
+                          create_fitsheader)
 from tamasis.mpiutils import split_observation
 from tamasis.observations import Observation
-from tamasis.pointings import create_scan
 
 __all__ = [ 'PacsObservation',
             'PacsSimulation',
             'PacsConversionAdu',
             'PacsConversionVolts',
-            'pacs_create_scan',
             'pacs_compute_delay',
             'pacs_get_psf',
-            'pacs_plot_scan',
             'pacs_preprocess',
             'step_scanline_masking',
             'step_deglitching']
@@ -506,7 +502,55 @@ class PacsBase(Observation):
         if tod.mask is not None:
             _write_mask(self, tod.mask, filename)
     save.__doc__ = Observation.save.__doc__
-        
+
+    @classmethod
+    def create_scan(cls, center, length, step=148, sampling_period=None,
+                    speed=20, acceleration=ACCELERATION, nlegs=3,
+                    angle=0, instrument_angle=45, compression_factor=4,
+                    cross_scan=True):
+        """
+        Return a sky scan for the PACS instrument.
+
+        The output is a Pointing instance that can be handed to PacsSimulation to
+        create a simulation.
+
+        Parameters
+        ----------
+        center : tuple
+            (Right Ascension, declination) of the scan center.
+        length : float
+            Length of the scan lines, in arcseconds.
+        step : float
+            Separation between scan legs, in arcseconds.
+        sampling_period : float
+            Duration between two pointings.
+        speed : float
+            Scan speed, in arcsec/s.
+        acceleration : float
+            Acceleration, in arcsec/s^2.
+        nlegs : integer
+            Number of scan legs.
+        angle : float
+            Angle between the scan line direction and the North minus
+            90 degrees, in degrees.
+        instrument_angle : float
+            Angle between the scan line direction and the PACS instrument Z-axis
+            (called array-to-map angle in the PACS user's manual).
+        compression_factor : int
+            Compression factor.
+        cross_scan : boolean
+            If true, a cross-scan is appended to the pointings.
+        """
+
+        if sampling_period is None:
+            if int(compression_factor) not in (1, 4, 8):
+                raise ValueError("Input compression_factor must be 1, 4 or 8.")
+            sampling_period = PacsBase.SAMPLING_PERIOD * compression_factor
+
+        return Observation.create_scan(center, length, step, sampling_period,
+            speed, acceleration, nlegs, angle, instrument_angle, cross_scan,
+            PacsBase.POINTING_DTYPE)
+
     def __str__(self):
 
         # some helpers
@@ -1228,39 +1272,6 @@ def PacsConversionVolts(obs):
 #-------------------------------------------------------------------------------
 
 
-def pacs_plot_scan(patterns, title=None, new_figure=True, **kw):
-
-    if type(patterns) not in (tuple, list):
-        patterns = (patterns,)
-
-    files = []
-    scans = []
-    for pattern in patterns:
-        files.extend(glob.glob(pattern))
-
-    for ifile, file in enumerate(files):
-        try:
-            hdu = pyfits.open(file)['STATUS']
-        except Exception as error:
-            print("Warning: Cannot extract status from file '" + file + \
-                  "': " + str(error))
-            continue
-
-        while True:
-            try:
-                status = hdu.data
-                break
-            except IndexError:
-                pass
-
-        scans.append((status.RaArray, status.DecArray))
-    
-    plot_scan(scans, **kw)
-
-
-#-------------------------------------------------------------------------------
-
-
 def pacs_preprocess(obs, tod,
                     projection_method='sharp',
                     header=None,
@@ -1325,55 +1336,6 @@ def pacs_preprocess(obs, tod,
 
 
 #-------------------------------------------------------------------------------
-
-
-def pacs_create_scan(ra0, dec0, length, step=148, sampling_period=None, speed=20,
-                     acceleration=PacsBase.ACCELERATION, nlegs=3, angle=0,
-                     instrument_angle=45, compression_factor=4, cross_scan=True):
-    """
-    Return a sky scan for the PACS instrument.
-
-    The output is a Pointing instance that can be handed to PacsSimulation to
-    create a simulation.
-
-    Parameters
-    ----------
-    ra0 : float
-        Right Ascension of the scan center.
-    dec0 : float
-        Declination of the scan center.
-    length : float
-        Length of the scan lines, in arcseconds.
-    step : float
-        Separation between scan legs, in arcseconds.
-    sampling_period : float
-        Duration between two pointings.
-    speed : float
-        Scan speed, in arcsec/s.
-    acceleration : float
-        Acceleration, in arcsec/s^2.
-    nlegs : integer
-        Number of scan legs.
-    angle : float
-        Angle between the scan line direction and the North minus 90 degrees,
-        in degrees.
-    instrument_angle : float
-        Angle between the scan line direction and the PACS instrument Z-axis
-        (called array-to-map angle in the PACS user's manual).
-    compression_factor : int
-        Compression factor.
-    cross_scan : boolean
-        If true, a cross-scan is appended to the pointings.
-    """
-
-    if sampling_period is None:
-        if int(compression_factor) not in (1, 4, 8):
-            raise ValueError("Input compression_factor must be 1, 4 or 8.")
-        sampling_period = PacsBase.SAMPLING_PERIOD * compression_factor
-
-    s = create_scan(ra0, dec0, length, step, sampling_period, speed, acceleration,
-                    nlegs, angle, instrument_angle, cross_scan, PacsBase.POINTING_DTYPE)
-    return s
 
 
 #-------------------------------------------------------------------------------

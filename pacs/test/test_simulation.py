@@ -2,7 +2,8 @@ import numpy as np
 import os
 import tamasis
 
-from tamasis import *
+from tamasis import (CompressionAverage, PacsObservation, PacsSimulation,
+                     Projection, create_fitsheader, gaussian)
 from tamasis.numpyutils import all_eq
 from uuid import uuid1
 
@@ -17,7 +18,8 @@ def test1():
     mymap.header = header
 
     # creation of the simulation
-    scan = pacs_create_scan(header['CRVAL1'], header['CRVAL2'], instrument_angle=0., length=60, nlegs=1, angle=20.)
+    scan = PacsObservation.create_scan((header['CRVAL1'], header['CRVAL2']),
+               instrument_angle=0., length=60, nlegs=1, angle=20.)
     simul = PacsSimulation(scan, 'red', policy_bad_detector='keep')
 
     # build the acquisition model
@@ -127,10 +129,10 @@ def test_multiple_pointings():
     compression_factor = (4, 4)
     acc = PacsSimulation.ACCELERATION
 
-    pointings = [pacs_create_scan(r,d,sl,sst,None,ssp,acc,sn,sa,ia,cf,False) \
-                 for r,d,ia,sa,sl,sn,sst,ssp,cf in zip(ra,dec,instrument_angle,
-                 scan_angle,scan_length,scan_nlegs,scan_step,scan_speed,
-                 compression_factor)]
+    pointings = [PacsObservation.create_scan((r,d),sl,sst,None,ssp,acc,sn,sa,ia,
+                 cf,False) for r,d,ia,sa,sl,sn,sst,ssp,cf in zip(ra,dec,
+                 instrument_angle,scan_angle,scan_length,scan_nlegs,scan_step,
+                 scan_speed,compression_factor)]
     simul = PacsSimulation(pointings, 'blue')
     s = simul.slice
     assert len(s) == 2
