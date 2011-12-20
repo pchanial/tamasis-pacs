@@ -11,7 +11,7 @@ import time
 
 from mpi4py import MPI
 from . import var
-from pyoperators import AdditionOperator, DiagonalOperator, IdentityOperator, MaskOperator, asoperator
+from pyoperators import AdditionOperator, DiagonalOperator, IdentityOperator, MaskOperator, ReshapeOperator, asoperator
 from .acquisitionmodels import DdTdd, DiscreteDifference
 from .datatypes import Map, Tod
 from .linalg import Function, norm2, norm2_ellipsoid
@@ -301,13 +301,14 @@ def _solver(A, b, tod, model, invntt, priors=[], hyper=0, x0=None, tol=1.e-5,
     if isinstance(M, DiagonalOperator):
         tmf.remove_nonfinite(M.data.T)
 
-    if unpacking is not None:
-        A = unpacking.T * A * unpacking
-        b = unpacking.T(b)
-        if x0 is not None:
-            x0 = unpacking.T(x0)
-        if M is not None:
-            M = unpacking.T * M * unpacking
+    if unpacking is None:
+        unpacking = ReshapeOperator(b.size, b.shape)
+    A = unpacking.T * A * unpacking
+    b = unpacking.T(b)
+    if x0 is not None:
+        x0 = unpacking.T(x0)
+    if M is not None:
+        M = unpacking.T * M * unpacking
 
     b = b.ravel()
     if not np.all(np.isfinite(b)):
@@ -332,10 +333,8 @@ def _solver(A, b, tod, model, invntt, priors=[], hyper=0, x0=None, tol=1.e-5,
     norms = [norm2_ellipsoid(invntt)] + npriors * [norm2]
     comms = [var.comm_tod] + npriors * [comm_map]
     def criter(x):
-        if unpacking is not None:
-            x = unpacking * x
-        rs = [model * x - tod.view(np.ndarray).ravel() ] + \
-             [ p * x for p in priors]
+        x = unpacking(x)
+        rs = [model(x) - tod.view(np.ndarray) ] + [p(x) for p in priors]
         Js = [h * n(r,comm=c) for h, n, r, c in zip(hc, norms, rs, comms)]
         return Js
 
