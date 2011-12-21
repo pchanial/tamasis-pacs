@@ -156,7 +156,7 @@ class Instrument(object):
             output = input[index]
         if type(input) != np.ndarray:
             output = output.view(type(input))
-            for k,v in input.__dict__.items():
+            for k, v in input.__dict__.items():
                 try:
                     output.__dict__[k] = self.pack(v, masked=masked)
                 except (ValueError, TypeError):
@@ -216,7 +216,7 @@ class Instrument(object):
         output[index] = input
         if type(input) != np.ndarray:
             output = output.view(type(input))
-            for k,v in input.__dict__.items():
+            for k, v in input.__dict__.items():
                 try:
                     output.__dict__[k] = self.unpack(v, masked=masked)
                 except (ValueError, TypeError):

@@ -115,7 +115,7 @@ class DistributedArray(np.ndarray):
             output = DistributedArray.__new__(DistributedArray, output,
                                               self.shape, comm)
         if hasattr(self, '__dict__'):
-            for k,v in self.__dict__.items():
+            for k, v in self.__dict__.items():
                 setattr(output, k, v)
         output.comm = comm
 
@@ -443,7 +443,7 @@ class FitsArray(DistributedArray, Quantity):
 
             command = 'ds9 -title ' + id
 
-            for k,v in keywords.items():
+            for k, v in keywords.items():
                 k = str(k)
                 if type(v) is not tuple:
                     v = (v,)
