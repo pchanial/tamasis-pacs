@@ -21,7 +21,11 @@ obs = PacsObservation(frames_files,
                       policy_invalid='mask')
 
 # Read the Time Ordered Data: the signal and mask
-tod = obs.get_tod(flatfielding=False,
+# Set flatfielding to False if the observation has already been flat-fielded.
+# Set subtraction_mean to False to keep the offsets. The mask keyword can be
+# a list of the names of the masks to be combined. By default, the activated
+# masks are selected.
+tod = obs.get_tod(flatfielding=True,
                   subtraction_mean=True,
 		  masks='saturation')
 
