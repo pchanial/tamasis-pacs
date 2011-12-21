@@ -631,16 +631,16 @@ class Projection(Operator):
             self.nsamples_tot, self.ndetectors, npixels).T
 
     def set_attrin(self, attr):
-        attr['header'] = self.header
+        attr['header'] = self.header.copy()
         unit = attr['_unit'] if '_unit' in attr else {}
-        attr['_derived_units'] = self.duin
+        attr['_derived_units'] = self.duin.copy()
         if unit:
             attr['_unit'] = _divide_unit(unit, self.unit)
 
     def set_attrout(self, attr):
         attr['header'] = None
         unit = attr['_unit'] if '_unit' in attr else {}
-        attr['_derived_units'] = self.duout
+        attr['_derived_units'] = self.duout.copy()
         if unit:
             attr['_unit'] = _multiply_unit(unit, self.unit)
 
