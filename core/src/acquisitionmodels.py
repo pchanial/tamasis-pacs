@@ -118,7 +118,7 @@ def block_diagonal(*partition_args, **keywords):
                 not isscalar(a) else a for j,a in enumerate(args)) \
                 for i in range(n))
             keyss = tuple(dict((k, v[i]) if k in partition_args and \
-                not isscalar(v) else (k,v) for k,v in keywords.iteritems()) \
+                not isscalar(v) else (k,v) for k,v in keywords.items()) \
                 for i in range(n))
             
             # the input shapein/out describe the BlockDiagonalOperator
