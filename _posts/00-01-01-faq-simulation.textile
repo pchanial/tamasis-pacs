@@ -6,7 +6,7 @@ published: true
 category: faq
 ---
 
-The first step is to get a sky map, which will be used for the simulation. You may "create a synthetic map":/tamasis-map/2000/faq-how-to-add-a-point-source-to-a-map/ or load it if the sky map is in FITS format:
+The first step is to get a sky map, which will be used for the simulation. You may "create a synthetic map":{{ site.baseurl }}/2000/faq-how-to-add-a-point-source-to-a-map/ or load it if the sky map is in FITS format:
 
 {% highlight python %}
 sky = Map('myfile.fits')

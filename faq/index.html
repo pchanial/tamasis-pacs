@@ -9,7 +9,7 @@ excerpt: Frequently Asked Questions
   <div class="content">
     <ul>
       {% for post in site.categories.faq %}
-      <li><a href="/tamasis-map/{{ post.url }}/">{{ post.title }}</a></li>
+      <li><a href="{{ site.baseurl }}/{{ post.url }}/">{{ post.title }}</a></li>
       {% endfor %}
     </ul>
   </div>

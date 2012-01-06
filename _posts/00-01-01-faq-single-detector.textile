@@ -5,7 +5,7 @@ published: true
 category: faq
 ---
 
-A @PacsObservation@ gathers information about the instrument settings, which are stored in the @instrument@ attribute.  With the exception of the detector channel, the parameters in the @instrument@ attribute can be modified after instantiation. More information can be found on "what contains a PacsObservation":/tamasis-map/2000/faq-what-is-a-pacsobservation/.
+A @PacsObservation@ gathers information about the instrument settings, which are stored in the @instrument@ attribute. With the exception of the detector channel, the parameters in the @instrument@ attribute can be modified after instantiation. More information can be found on "what contains a PacsObservation":{{ site.baseurl }}/2000/faq-what-is-a-pacsobservation/.
 
 The field @detector.removed@ controls the list of detectors to be included in the timelines and the field @detector.masked@, the list of detectors to be masked in the timelines. The former is used to distribute the work among processors in an MPI job and the latter to flag the bad detectors. Both control which detectors will contribute to the map.
 

@@ -2,4 +2,7 @@ permalink: /:year/:title
 auto: true
 server: true
 pygments: true
-baseurl: /tamasis-map/
+baseurl: /tamasis-map
+package: Tamasis/PACS
+meta_keywords: Pierre Chanial, Tamasis, Map-making, Herschel, PACS, Astrophysics
+menu: <a href=http://pchanial.github.com/pyoperators">PyOperators</a>
