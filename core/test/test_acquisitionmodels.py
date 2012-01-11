@@ -2,7 +2,7 @@ import numpy as np
 import scipy
 import tamasis
 
-from pyoperators import Operator, AdditionOperator, CompositionOperator, DiagonalOperator, BlockDiagonalOperator, ScalarOperator, asoperator, I
+from pyoperators import Operator, AdditionOperator, CompositionOperator, DiagonalOperator, BlockDiagonalOperator, asoperator, I
 from pyoperators.utils import isscalar, assert_is
 from numpy.testing import assert_array_equal, assert_almost_equal, assert_raises
 from tamasis.acquisitionmodels import BlackBodyOperator, Convolution, CompressionAverage, DdTdd, DiscreteDifference, DownSampling, FftOperator, FftHalfComplex, Masking, Packing, Padding, ResponseTruncatedExponential, RollOperator, ShiftOperator, Unpacking, block_diagonal

@@ -725,7 +725,7 @@ class DdTdd(Operator):
         self.axis = axis
         self.scalar = scalar
         self.comm = comm or var.comm_map        
-        self.add_rule('{ScalarOperator}.',lambda s: DdTdd(self.axis,
+        self.add_rule('{HomothetyOperator}.',lambda s: DdTdd(self.axis,
             s.data * self.scalar))
 
     def direct(self, input, output):

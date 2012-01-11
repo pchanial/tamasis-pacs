@@ -13,8 +13,8 @@ import scipy
 import time
 
 from mpi4py import MPI
-from pyoperators import (Operator, ScalarOperator, IdentityOperator,
-                         RoundOperator, ClipOperator)
+from pyoperators import (Operator, HomothetyOperator, IdentityOperator,
+                         RoundOperator, ClipOperator, I)
 from pyoperators.core import CompositeOperator
 from pyoperators.utils import strenum, strplural, openmp_num_threads
 
@@ -1253,10 +1253,10 @@ def PacsConversionAdu(obs, gain='nominal', offset='direct'):
     z = obs.instrument.adu_converter_max[offset]
 
     return np.product([
-        ClipOperator(a, z, description='ADU converter saturation'),
-        RoundOperator(description='ADU converter rounding'),
-        OffsetOperator(o, description='ADU converter offset'),
-        ScalarOperator(1/g, description='ADU converter gain')])
+        ClipOperator(a, z), # ADU converter saturation
+        RoundOperator(),    # ADU converter rounding
+        I + o,              # ADU converter offset
+        1 / g])             # ADU converter gain
 
 
 #-------------------------------------------------------------------------------
@@ -1264,9 +1264,10 @@ def PacsConversionAdu(obs, gain='nominal', offset='direct'):
 
 def PacsConversionVolts(obs):
     """Jy-to-Volts conversion."""
-    return ScalarOperator(obs.instrument.responsivity / \
-                          obs.instrument.active_fraction,
-                          description='Jy-to-Volts conversion')
+    op = HomothetyOperator(obs.instrument.responsivity / \
+                           obs.instrument.active_fraction)
+    op.__name__ = 'Jy-to-Volts conversion'
+    return op
 
 
 #-------------------------------------------------------------------------------
