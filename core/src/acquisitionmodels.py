@@ -240,7 +240,7 @@ class Compression(Operator):
 
     def __new__(cls, factor, shapein=None, **keywords):
         if factor == 1:
-            op = IdentityOperator(shapein=shapein, **keywords)
+            op = IdentityOperator(shapein=shapein, dtype=float, **keywords)
             op.factor = 1
             return op
         return super(Compression, cls).__new__(cls, factor, shapein, **keywords)
