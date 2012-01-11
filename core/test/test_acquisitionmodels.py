@@ -402,16 +402,6 @@ def test_dtype():
     FTYPE = tamasis.var.FLOAT_DTYPE
     a = FftOperator((3,4))
     assert a.dtype is CTYPE
-    a = ScalarOperator(complex(0,1))
-    assert a.dtype is CTYPE
-    a = ScalarOperator(complex(1,0))
-    assert a.dtype is CTYPE
-    a = ScalarOperator(3) + ScalarOperator(1)
-    assert a.dtype is FTYPE
-    a = DiagonalOperator(np.array([2.,3,4]))
-    assert a.dtype is FTYPE
-    a = DiagonalOperator(np.array([2,complex(3,1),4]))
-    assert a.dtype is CTYPE
     a = Masking(np.array([1, complex(2,2)]))
     assert a.dtype is FTYPE
     a = Masking([True, False])
