@@ -30,29 +30,29 @@ h1. Software dependencies
 
 h2. Python modules
 
-* numpy >= 1.6.0
-* scipy >= 0.9
+* "numpy":http://numpy.scipy.org >= 1.6.0
+* "scipy":http://www.scipy.org >= 0.9
 * "pyoperators":http://pchanial.github.com/pyoperators >= 2.0
-* matplotlib >= 0.99
+* "matplotlib":http://matplotlib.sourceforge.net >= 0.99
 * "pyfftw":https://launchpad.net/pyfftw/ >= 0.2.1
-* numexpr >= 2.0
-* pyfits >= 3.0
-* kapteyn >= 2.0.2
+* "numexpr":http://code.google.com/p/numexpr >= 2.0
+* "pyfits":http://www.stsci.edu/resources/software_hardware/pyfits >= 3.0
+* "kapteyn":http://www.astro.rug.nl/software/kapteyn >= 2.0.2
 
 <h3>Optional:</h3>
-* ds9
-* mpi4py
+* "ds9":http://hea-www.harvard.edu/saord/ds9/pyds9
+* "mpi4py":http://mpi4py.scipy.org
 
 h2. Other
 
-* gfortran >= 4.5 or ifort >= 11.1
-* cfitsio >= 3.23
-* FFTW >= 3.2.2 (compiled with options @--enable-threads@ and @--enable-shared@)
+* "gfortran":http://gcc.gnu.org >= 4.5 or ifort >= 11.1
+* "cfitsio":http://heasarc.gsfc.nasa.gov/fitsio >= 3.23
+* "FFTW":http://www.fftw.org >= 3.2.2 (compiled with options @--enable-threads@ and @--enable-shared@)
 
 <h3>Optional:</h3>
 
-* wcslib >= 4.4.4
-* openmpi or mpich
+* "wcslib":http://www.atnf.csiro.au/people/mcalabre/WCS >= 4.4.4
+* "openmpi":http://www.open-mpi.org or "mpich":http://www.mcs.anl.gov/research/projects/mpich2
 
 
 h1. Upgrading from Tamasis/PACS 3.2
