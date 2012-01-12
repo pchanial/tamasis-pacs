@@ -348,7 +348,8 @@ def test_fortran_fun(bld):
     for subdir in subdirs:
         files = bld.srcnode.ant_glob(subdir+'/test/test_*.f')
         for file in files:
-            if str(file) in ('test_wcslib1.f', 'test_wcslib2.f'): continue
+            if 'WCSLIB' not in libraries and 'wcslib' in str(file):
+                continue
             bld(features = 'fc fcprogram',
                 source   = file,
                 target   = os.path.splitext(str(file))[0],
