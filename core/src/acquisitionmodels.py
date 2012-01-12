@@ -1093,8 +1093,9 @@ class FftHalfComplex(Operator):
                              " is '{1}'".format(shapein[-1], self.size))
         return shapein
 
-@real
 @linear
+@square
+@real
 @inplace
 class Convolution(Operator):
     def __init__(self, shape, kernel, flags=['measure'], nthreads=None,
