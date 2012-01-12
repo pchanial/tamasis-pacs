@@ -1,8 +1,8 @@
 import numpy as np
 import tamasis
-from tamasis import *
+from tamasis import FitsArray, Map, Tod, MPI
+from tamasis.utils import assert_all_eq
 
-class TestFailure(Exception): pass
 tamasis.var.verbose = True
 
 rank = MPI.COMM_WORLD.Get_rank()
@@ -26,5 +26,4 @@ for shape in shapes:
                     continue
                 local = obj.tolocal()
                 globa = local.toglobal()
-                if any_neq(obj, globa):
-                    raise TestFailure()
+                assert_all_eq(obj, globa)

@@ -18,9 +18,9 @@ except:
     _imported_ds9 = False
 
 from functools import reduce
-from mpi4py import MPI
 from pyoperators.utils import tointtuple
 
+from . import MPI
 from .wcsutils import create_fitsheader
 from .mpiutils import read_fits, write_fits, split_shape, split_work
 from .quantity import Quantity

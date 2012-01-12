@@ -12,12 +12,12 @@ import re
 import scipy
 import time
 
-from mpi4py import MPI
 from pyoperators import (Operator, HomothetyOperator, IdentityOperator,
                          RoundOperator, ClipOperator, I)
 from pyoperators.core import CompositeOperator
 from pyoperators.utils import strenum, strplural, openmp_num_threads
 
+from . import MPI
 from . import var
 from tamasis.core import (Quantity, Tod, MaskPolicy, Instrument, Pointing, tmf,
                           CompressionAverage, Projection, Masking,

@@ -7,7 +7,6 @@ import re
 import tamasisfortran as tmf
 
 from . import var
-from mpi4py import MPI
 from numpyutils import get_attributes
 
 __all__ = ['Quantity', 'UnitError', 'units']

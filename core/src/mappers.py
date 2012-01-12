@@ -9,7 +9,7 @@ import os
 import tamasisfortran as tmf
 import time
 
-from mpi4py import MPI
+from . import MPI
 from . import var
 from pyoperators import AdditionOperator, DiagonalOperator, IdentityOperator, MaskOperator, ReshapeOperator, asoperator
 from .acquisitionmodels import DdTdd, DiscreteDifference

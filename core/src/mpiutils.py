@@ -3,13 +3,13 @@
 #
 from __future__ import division
 
-import math
 import numpy as np
 import os
 import pyfits
 import sys
 import tamasisfortran as tmf
-from mpi4py import MPI
+
+from . import MPI
 from .wcsutils import create_fitsheader
 
 __all__ = []

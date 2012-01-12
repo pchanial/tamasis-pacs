@@ -4,7 +4,7 @@
 import numpy as np
 import os
 import tamasisfortran as tmf
-from mpi4py import MPI
+from . import MPI
 
 comm_tod = MPI.COMM_WORLD
 comm_map = MPI.COMM_SELF
@@ -27,7 +27,6 @@ COMPLEX_DTYPE = {
 VERSION = tmf.info_version().strip()
 
 def get_default_dtype(data):
-    import numpy
     if np.iscomplexobj(data):
         return COMPLEX_DTYPE
     else:

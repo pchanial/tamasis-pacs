@@ -1,9 +1,9 @@
 import os
 import tamasis
 
-from mpi4py import MPI
 from scipy.sparse.linalg import cgs
 from tamasis import *
+from tamasis import MPI
 
 class TestFailure(Exception): pass
 

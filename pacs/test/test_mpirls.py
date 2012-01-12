@@ -1,8 +1,7 @@
-import numpy as np
 import os
 import tamasis
 from tamasis import *
-from mpi4py import MPI
+from tamasis import MPI
 
 
 import scipy

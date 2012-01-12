@@ -2,6 +2,7 @@
 # All rights reserved
 #
 import tamasisfortran as tmf
+from . import MPI
 import var
 from .var import VERSION as __version__
 from .numpyutils import *

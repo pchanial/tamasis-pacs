@@ -1,7 +1,6 @@
 import numpy as np
 import tamasis
-from mpi4py import MPI
-from tamasis import any_neq, linalg as la
+from tamasis import any_neq, linalg as la, MPI
 
 rank = MPI.COMM_WORLD.Get_rank()
 size = MPI.COMM_WORLD.Get_size()

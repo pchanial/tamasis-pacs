@@ -4,15 +4,13 @@
 
 from __future__ import division
 
-import kapteyn
 import numpy as np
 from matplotlib import pyplot
-from mpi4py import MPI
 from pyoperators.utils import isscalar, strenum
-from .datatypes import Map
+from . import MPI
 from .instruments import Instrument
 from .pointings import POINTING_DTYPE, Pointing
-from .wcsutils import angle_lonlat, barycenter_lonlat, create_fitsheader
+from .wcsutils import create_fitsheader
 
 __all__ = ['Observation', 'MaskPolicy']
 

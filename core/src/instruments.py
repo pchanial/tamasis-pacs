@@ -4,8 +4,8 @@ import numpy as np
 import tamasisfortran as tmf
 from kapteyn import wcs
 from matplotlib import pyplot
-from mpi4py import MPI
 from pyoperators.utils import strenum, strshape
+from . import MPI
 from .datatypes import Map
 from .wcsutils import barycenter_lonlat, combine_fitsheader, create_fitsheader
 

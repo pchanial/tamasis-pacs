@@ -22,16 +22,16 @@ out = 'build'
 subdirs = ['core', 'madcap', 'pacs']
 
 # Required libraries
-libraries = ['CFITSIO', 'FFTW3', 'MPI', 'OPENMP', 'WCSLIB']
+libraries = ['CFITSIO', 'FFTW3', 'OPENMP', 'WCSLIB']
 
 # Required Python packages
 required_modules = ['numpy',
                     'scipy',
+                    'pyoperators',
                     'matplotlib',
                     'fftw3',
                     'pyfits',
                     'kapteyn',
-                    'mpi4py',
                     'numexpr']
 
 
@@ -45,6 +45,10 @@ def options(opt):
     opt.load('compiler_c')
     opt.load('compiler_fc')
     opt.load('python')
+    opt.add_option('--enable-mpi',
+                   action='store_true',
+                   default=False,
+                   help='MPI-enabled installation')
     opt.add_option('--precision-real',
                    action='store',
                    default='8',
@@ -62,6 +66,12 @@ def options(opt):
 #
 
 def configure(conf):
+
+    global required_modules, libraries
+
+    if conf.options.enable_mpi:
+        required_modules += ['mpi4py']
+        libraries += ['MPI']
 
     conf.load('compiler_c')
     conf.load('compiler_fc')
@@ -182,11 +192,21 @@ end program test
             msg              = "Checking for 'lapack'",
             use              = ['LAPACK'])
 
-    conf.check_cc(fragment    = 'program test\nuse mpi\nend program test',
-                  features    = 'fc fcprogram',
-                  msg         = 'Checking for MPI fortran module',
-                  define_name = 'HAVE_MPI_MODULE',
-                  mandatory   = False)
+    if conf.options.enable_mpi:
+        conf.check_cc(fragment    = 'program test\nuse mpi\nend',
+                      compile_filename = 'test.f',
+                      features    = 'fc fcprogram',
+                      msg         = 'Checking for MPI fortran module',
+                      define_name = 'HAVE_MPI_MODULE',
+                      mandatory   = False)
+        if 'HAVE_MPI_MODULE' not in conf.env:
+            conf.check_cc(fragment= "program test\ninclude 'mpif.h'\nend",
+                          compile_filename = 'test.f',
+                          features    = 'fc fcprogram',
+                          msg         = 'Checking for MPI fortran header',
+                          define_name = 'HAVE_MPI_HEADER')
+        conf.define('HAVE_MPI', 1)
+
 
     conf.check_cfg(package='wcslib',  args=['--libs', '--cflags'])
     conf.check_cfg(modversion='wcslib')
@@ -241,10 +261,16 @@ def build(bld):
     # Python extension tamasisfortran.so
     target = 'tamasisfortran.so'
     source = [bld.srcnode.find_node('%s/src/tamasisfortran_%s.f90' % (s,s)) for s in subdirs]
-    source += bld.srcnode.ant_glob('core/src/tamasisfortran_core_*.f90')
+    additional_interfaces = ['pointing']
+    if 'MPI' in libraries:
+        additional_interfaces += 'mpi'
+    for a in additional_interfaces:
+        source += bld.srcnode.ant_glob('core/src/tamasisfortran_core_{0}.f90' \
+                                       .format(a))
 
     #XXX this should be a Task...
-    cmd = 'OMPI_FC=' + '${FC} ${F2PY} --fcompiler=${F2PYFCOMPILER} --f90exec=mpif90'
+    f90exec = ' --f90exec=mpif90' if 'MPI' in libraries else ''
+    cmd = 'OMPI_FC=' + '${FC} ${F2PY} --fcompiler=${F2PYFCOMPILER}' + f90exec
     cmd += ' --f90flags="${FCFLAGS}'
     cmd += ' ${FCFLAGS_OPENMP}"' if 'OPENMP' in libraries else '"'
     cmd += ' --quiet' if bld.options.verbose == 0 else ''

@@ -1,7 +1,7 @@
 import os
 import tamasis
 from tamasis import *
-from mpi4py import MPI
+from tamasis import MPI
 
 
 #solver = scipy.sparse.linalg.bicgstab

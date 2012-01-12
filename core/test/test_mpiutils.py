@@ -1,7 +1,5 @@
 import numpy as np
-import tamasis
-from mpi4py import MPI
-from tamasis import any_neq, DistributionGlobal, utils as u, mpiutils as mu
+from tamasis import any_neq, DistributionGlobal, utils as u, MPI
 
 rank = MPI.COMM_WORLD.Get_rank()
 size = MPI.COMM_WORLD.Get_size()

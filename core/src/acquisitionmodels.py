@@ -7,8 +7,6 @@ import operator
 
 import tamasisfortran as tmf
 
-from mpi4py import MPI
-
 from pyoperators import (Operator, IdentityOperator, DiagonalOperator,
                          BlockColumnOperator, BlockDiagonalOperator,
                          NumexprOperator)
@@ -16,8 +14,8 @@ from pyoperators.decorators import (idempotent, linear, orthogonal, real,
                                     square, symmetric, unitary, inplace)
 from pyoperators.utils import isscalar, tointtuple, openmp_num_threads
 
+from . import MPI
 from . import var
-
 from .datatypes import Map, Tod
 from .observations import Observation
 from .quantity import Quantity, _divide_unit, _multiply_unit

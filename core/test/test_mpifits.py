@@ -3,8 +3,7 @@ from __future__ import division
 import os
 import numpy as np
 from glob import glob
-from mpi4py import MPI
-from tamasis import Map
+from tamasis import Map, MPI
 from tamasis.numpyutils import assert_all_eq
 from uuid import uuid1
 
