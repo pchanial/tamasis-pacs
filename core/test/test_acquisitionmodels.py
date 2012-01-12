@@ -2,7 +2,7 @@ import numpy as np
 import scipy
 import tamasis
 
-from pyoperators import Operator, AdditionOperator, CompositionOperator, DiagonalOperator, BlockDiagonalOperator, asoperator, I
+from pyoperators import Operator, AdditionOperator, CompositionOperator, DiagonalOperator, BlockDiagonalOperator, asoperator, decorators, I
 from pyoperators.utils import isscalar, assert_is
 from numpy.testing import assert_array_equal, assert_almost_equal, assert_raises
 from tamasis.acquisitionmodels import BlackBodyOperator, Convolution, CompressionAverage, DdTdd, DiscreteDifference, DownSampling, FftOperator, FftHalfComplex, Masking, Packing, Padding, ResponseTruncatedExponential, RollOperator, ShiftOperator, Unpacking, block_diagonal
@@ -11,6 +11,7 @@ from tamasis.numpyutils import all_eq
 def test_partitioning():
 
     @block_diagonal('value', 'mykey')
+    @decorators.square
     class MyOp(Operator):
         """ Bla1. """
         def __init__(self, arg1, value, arg3, mykey=None, **keywords):
