@@ -8,12 +8,12 @@ h3. {{ page.title }}
 
 <div class="content">
 
-The current stable version of the Tamasis/PACS package is 3.2.
+The current stable version of the Tamasis/PACS package is 4.0.
 The project is hosted at "github":https://github.com/pchanial/tamasis-map/ and there are two ways to obtain it.
   
 * Either by retrieving an archive
-    - as a "tar file":https://github.com/pchanial/tamasis-map/tarball/v3.2/
-    - or a "zip file":https://github.com/pchanial/tamasis-map/zipball/v3.2/.
+    - as a "tar file":https://github.com/pchanial/tamasis-map/tarball/v4.0/
+    - or a "zip file":https://github.com/pchanial/tamasis-map/zipball/v4.0/.
 <br/>
 * Alternatively, by cloning the project, using the version control system "Git":http://git-scm.com/:
 
@@ -21,7 +21,7 @@ bc. $ git clone git://github.com/pchanial/tamasis-map.git
 
 The second method is more convenient to make updates (if you've just cloned the repository, you will obviously not get anything new)
 
-bc. $ cd tamasis-map.git
+bc. $ cd tamasis-map
 $ git pull
 Already up-to-date.
 
