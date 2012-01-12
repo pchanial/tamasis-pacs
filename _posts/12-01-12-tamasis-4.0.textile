@@ -9,7 +9,7 @@ What's new ?
 * first release depending on the "PyOperator":http://pchanial.github.com/pyoperators package, which is the result of the merging of Tamasis' new acquisition models and of the work by N. Barbey ("linear_operators":http://nbarbey.github.com/linear_operators).
 * the operator class is much more flexible, faster and the memory is better managed. In particular, operators can be combined in blocks. They can also be reduced, following algebraic rules.
 * as a consequence, are available many more algorithms (FminBFGS, FminCG, FminCOBYLA, FminLBFGSB, FminNCG, FminPowell, FminSLSQP, FminTNC, Lanczos, Double Lookup Inference) and priors through an @Operator@ interface to the wavelet package "pywt":http://www.pybytes.com/pywavelets.
-* the @Instrument@ and @Observation@ classes are now populated with useful methods, so that Tamasis can now be used for other instruments than PACS
+* the @Instrument@ and @Observation@ classes are now populated with useful methods, so that Tamasis can now be used for other instruments than PACS.
 * API change: in the Projection operator for the PACS instrument, use "@downsampling=True@", instead of "@oversampling=False@".
-* dependency to MPI and WCSLIB has been made optional
-* test suite converted to nose
+* dependencies to MPI and WCSLIB have been made optional.
+* test suite converted to nose.
