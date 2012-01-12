@@ -13,7 +13,7 @@ except:
     for i, c in enumerate(constants):
         _g[c] = i
 
-    class FakeComm(object):
+    class Comm(object):
         def __init__(self, rank, size):
             self.rank = rank
             self.size = size
@@ -25,11 +25,11 @@ except:
             return [sendobj]
         def allreduce(self, sendobj=None, recvobj=None, op=SUM):
             return sendobj
-        def AllGatherv(self, i, o, op=None):
+        def Allgatherv(self, i, o, op=None):
             if i == IN_PLACE:
                 return
             o[0][...] = i[0]
-        def AllReduce(self, i, o, op=None):
+        def Allreduce(self, i, o, op=None):
             if i == IN_PLACE:
                 return
             o[0][...] = i[0]
@@ -44,8 +44,8 @@ except:
     def Get_processor_name():
         return ''
 
-    COMM_NULL = FakeComm(0, 0)
-    COMM_SELF = FakeComm(0, 1)
+    COMM_NULL = Comm(0, 0)
+    COMM_SELF = Comm(0, 1)
     COMM_WORLD = COMM_SELF
 
 # mpiutils
