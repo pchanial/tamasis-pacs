@@ -2,7 +2,6 @@
 layout: post
 title: How to create a PACS simulation?
 excerpt: Creation of PACS Simulation
-published: true
 category: faq
 ---
 

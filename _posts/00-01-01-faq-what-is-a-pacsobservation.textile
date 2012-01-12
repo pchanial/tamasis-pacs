@@ -1,7 +1,6 @@
 ---
 layout: post
 title: What is a PacsObservation?
-published: true
 category: faq
 ---
 

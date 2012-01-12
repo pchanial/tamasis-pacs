@@ -2,7 +2,6 @@
 layout: post
 title: Tamasis 3.2
 excerpt: Release of Tamasis 3.2
-published: true
 category: blog
 ---
 

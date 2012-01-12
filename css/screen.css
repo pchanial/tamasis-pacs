@@ -21,35 +21,43 @@ body {
   text-align: justify;
 }
 
-h1, h2, h3, h4, h5, h6 {
+h1, h2, h3 {
   font-family: "Rosario", "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-weight: bold;
   line-height: 150%;
   text-align: left;
 }
 
-h2, h3, h4 {
-  margin: 20px 0px;
-}
-
-h1 a, h2 a, h3 a, h4 a, h5 a, h6 a {
-  color: #333;
-}
-
-h2 {
-  font-size: 3.375em;
+h1, h2 {
+  margin: 1.25em 0 0.5em 0;
 }
 
 h3 {
+  margin: 0.625em 0 0.25em;
+}
+
+h1:first-child, h2:first-child {
+  margin: 0 0 0.5em 0;
+}
+
+h3:first-child {
+  margin: 0 0 0.25em;
+}
+
+h1 a, h2 a, h3 a {
+  color: #333;
+}
+
+h1 {
   font-size: 2.25em;
 }
 
-h4 {
+h2 {
   font-size: 1.5em;
 }
 
-p {
-  margin: 20px 0px;
+h3 {
+  font-size: 1em;
 }
 
 a, strong {
@@ -67,11 +75,6 @@ a:hover {
 
 a img {
   vertical-align: middle;
-}
-
-pre {
-  white-space: pre-wrap;
-  word-wrap: break-word;
 }
 
 em {
@@ -97,6 +100,52 @@ code, pre {
   line-height: 100%;
 }
 
+ul, ol {
+  margin: 0 0 0 3em;
+}
+
+ul > li {
+  list-style-type: disc;
+}
+
+ol > li {
+  list-style-type: decimal;
+}
+
+table {
+  margin: 0 -1em;
+  border-collapse:separate;
+  border-spacing: 1em 0.25em;
+}
+
+img {
+  -moz-border-radius: 5px;
+  -moz-box-shadow: 0 1px 0 #fff;
+  -webkit-border-radius: 5px;
+  -webkit-box-shadow: 0 1px 0 #fff;
+  border: 5px #333 solid;
+  width: 440px;
+}
+
+p {
+  padding: 0;
+  margin: 0;
+}
+
+pre {
+  -moz-border-radius: 5px;
+  -moz-box-shadow: 0 -1px 0 #333;
+  -webkit-border-radius: 5px;
+  -webkit-box-shadow: 0 -1px 0 #333;
+  background-color: #333;
+  color: #fff;
+  text-shadow: 0 1px 0 #000;
+  font-size: 1em;
+  padding: 1em;
+  margin: 1em 2em;
+  overflow: auto;
+}
+
 div#outer {
   margin: 3em 12%;
 }
@@ -111,25 +160,6 @@ div.container {
   z-index: 1;
   margin: 0px 0px 30px;
   padding: 1.5em;
-}
-
-div#header {
-  font-size: 1em;
-}
-
-div#header ul {
-  margin: 0px;
-  float: right;
-}
-
-div#header li {
-  padding: 10px 0px 10px 10px;
-  float: left;
-}
-
-div#header li form input {
-  width: 5em;
-  font-size: 1em; /* required by firefox 5.0 */
 }
 
 div#menu {
@@ -189,30 +219,33 @@ div#menu hr {
   background-color: #fff;
 }
 
-div.content img {
-  -moz-border-radius: 5px;
-  -moz-box-shadow: 0 1px 0 #fff;
-  -webkit-border-radius: 5px;
-  -webkit-box-shadow: 0 1px 0 #fff;
-  border: 5px #333 solid;
-  width: 440px;
-}
-
-div.content p {
-  padding: 0;
-}
-
-div.content pre {
-  -moz-border-radius: 5px;
-  -moz-box-shadow: 0 -1px 0 #333;
-  -webkit-border-radius: 5px;
-  -webkit-box-shadow: 0 -1px 0 #333;
-  background-color: #333;
-  color: #fff;
-  text-shadow: 0 1px 0 #000;
+div#header {
   font-size: 1em;
-  padding: 1em;
-  margin: 2em;
+}
+
+div#header ul {
+  margin: 0px;
+  float: right;
+}
+
+div#header li {
+  padding: 10px 0px 10px 10px;
+  float: left;
+  list-style-type: none;
+}
+
+div#header img {
+  -moz-border-radius: 0;
+  -moz-box-shadow: 0;
+  -webkit-border-radius: 0;
+  -webkit-box-shadow: 0;
+  border: 0;
+  width: auto;
+}
+
+div#header li form input {
+  width: 5em;
+  font-size: 1em; /* required by firefox 5.0 */
 }
 
 div.definition {
@@ -222,31 +255,22 @@ div.definition {
   -moz-box-shadow: 0 0 1px #333;
   -webkit-border-radius: 5px;
   -webkit-box-shadow: 0 0 1px #333;
+  display: inline-block;
   background-color:#fffbbb;
   color: #000;
-  float: left;
+  width: auto;
   text-shadow:0;
   font-size: 1em;
-  padding: 0em 1em;
-  margin: 2em;
+  padding: 0.25em 1em;
+  margin: 1em 2em;
 }
 
-div.content ul, div.content ol {
-  margin: 0 0 0 3em;
+div.definition p {
+  padding: 0.25em 0;
 }
-
-div.content ul > li {
-  list-style-type: disc;
-}
-
-div.content ol > li {
-  list-style-type: decimal;
-}
-
-div.content table {
-  margin: 0 -1em;
-  border-collapse:separate;
-  border-spacing: 1em 0.5em;
+  
+div.definition + hr {
+  margin:0;
 }
 
 #footnote {
@@ -275,7 +299,7 @@ div.content table {
   box-shadow: 1px 1px 0 #888;
   color: #000;
   text-shadow: 0 1px 0 #888, 1px 0 0 #888;
-  padding: 10px;
+  padding: 1em;
   font-size: 50%;
   line-height: 100%;
   margin: 0;

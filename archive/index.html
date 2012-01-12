@@ -5,14 +5,12 @@ excerpt: The complete archive for Tamasis/PACS.
 ---
 
 {% for post in site.posts %}
-<div class="content">
-  <h4>
-    {% if post.category == "blog" %}
-    <p class="date">{{ post.date | date_to_string }}</p>&nbsp;
-    {% endif %}
-    <a href="{{ site.baseurl }}/{{ post.url }}/">{{ post.title }}</a>
-  </h4>
+<h2>
+  {% if post.category == "blog" %}
+  <p class="date">{{ post.date | date_to_string }}</p>&nbsp;
+  {% endif %}
+  <a href="{{ site.baseurl }}/{{ post.url }}/">{{ post.title }}</a>
+</h2>
   {{ post.excerpt }}
-</div>
 {% endfor %}
 
