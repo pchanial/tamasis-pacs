@@ -6,8 +6,6 @@ excerpt: Download Tamasis package
 
 h1. {{ page.title }}
 
-<div class="content">
-
 The current stable version of the Tamasis/PACS package is 4.0.
 The project is hosted at "github":https://github.com/pchanial/tamasis-map/ and there are two ways to obtain it.
   
@@ -28,6 +26,59 @@ Already up-to-date.
 This method is also required if you are to test tamasis' development branch.
 
 
-Once the package has been retrieved, you may proceed to the "installation":{{ site.baseurl }}/installation.
+h1. Software dependencies
 
-</div>
+h2. Python modules
+
+* numpy >= 1.6.0
+* scipy >= 0.9
+* "pyoperators":http://pchanial.github.com/pyoperators >= 2.0
+* matplotlib >= 0.99
+* "pyfftw":https://launchpad.net/pyfftw/ >= 0.2.1
+* numexpr >= 2.0
+* pyfits >= 3.0
+* kapteyn >= 2.0.2
+
+<h3>Optional:</h3>
+* ds9
+* mpi4py
+
+h2. Other
+
+* gfortran >= 4.5 or ifort >= 11.1
+* cfitsio >= 3.23
+* FFTW >= 3.2.2 (compiled with options @--enable-threads@ and @--enable-shared@)
+
+<h3>Optional:</h3>
+
+* wcslib >= 4.4.4
+* openmpi or mpich
+
+
+h1. Upgrading from Tamasis/PACS 3.2
+
+Note for users upgrading from version 3.2: the Python packages numexpr and PyOperators must be installed and the package pyfits must be upgraded.
+
+h1. Installation
+
+Once all the dependencies are installed, type
+
+bc. $ ./waf configure --prefix=/path/to/local build install test
+
+Then, to make sure that the stack size of an OpenMP thread is large enough to handle a map, you should add to your @.bashrc@/@.bash_profile@ file the following lines:
+
+{% highlight bash %}
+export OMP_STACKSIZE=2g
+ulimit -s unlimited
+{% endhighlight %}
+
+
+h1. Troubleshooting
+
+* if you have installed libraries in a non-standard location, make sure that the environment variable @LD_LIBRARY_PATH@ (Linux) or @DYLD_LIBRARY_PATH@ (MacOSX) contains the path of these libraries.
+
+* if Python 3 is your default python interpreter (in Archlinux, for instance) 
+and assuming that the Python 2 interpreter is 'python2', you can run the fol-
+lowing command in bash:
+
+bc. PYTHON=python2 python2 waf configure --prefix=~/local build install test
