@@ -77,8 +77,6 @@ h1. Troubleshooting
 
 * if you have installed libraries in a non-standard location, make sure that the environment variable @LD_LIBRARY_PATH@ (Linux) or @DYLD_LIBRARY_PATH@ (MacOSX) contains the path of these libraries.
 
-* if Python 3 is your default python interpreter (in Archlinux, for instance) 
-and assuming that the Python 2 interpreter is 'python2', you can run the fol-
-lowing command in bash:
+* if Python 3 is your default python interpreter (in Archlinux, for instance) and assuming that the Python 2 interpreter is 'python2', you can run the following command in bash:
 
 bc. PYTHON=python2 python2 waf configure --prefix=~/local build install test
