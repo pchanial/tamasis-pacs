@@ -9,7 +9,7 @@ h4. Python modules
 * numpy >= 1.6.0
 * scipy
 * matplotlib >= 0.99
-* "pyfftw":https://launchpad.net/pyfftw/ >= 0.2.1
+* "pyfftw":https://launchpad.net/pyfftw/ >= 0.2.1 (compiled with options @--enable-threads@ and @--enable-shared@)
 * pyfits >= 3.0
 * kapteyn >= 2.0.2
 
