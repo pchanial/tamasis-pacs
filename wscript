@@ -22,7 +22,7 @@ out = 'build'
 subdirs = ['core', 'madcap', 'pacs']
 
 # Required libraries
-libraries = ['CFITSIO', 'FFTW3', 'OPENMP', 'WCSLIB']
+libraries = ['CFITSIO', 'FFTW3', 'OPENMP']
 
 # Required Python packages
 required_modules = ['numpy',
@@ -49,6 +49,10 @@ def options(opt):
                    action='store_true',
                    default=False,
                    help='MPI-enabled installation')
+    opt.add_option('--enable-wcslib',
+                   action='store_true',
+                   default=False,
+                   help='enables linking WCSLIB')
     opt.add_option('--precision-real',
                    action='store',
                    default='8',
@@ -72,6 +76,9 @@ def configure(conf):
     if conf.options.enable_mpi:
         required_modules += ['mpi4py']
         libraries += ['MPI']
+
+    if conf.options.enable_wcslib:
+        libraries += ['WCSLIB']
 
     conf.load('compiler_c')
     conf.load('compiler_fc')
@@ -208,24 +215,24 @@ end program test
         conf.define('HAVE_MPI', 1)
 
 
-    conf.check_cfg(package='wcslib',  args=['--libs', '--cflags'])
-    conf.check_cfg(modversion='wcslib')
-    check_wcslib_external(conf.env)
+    if 'WCSLIB' in libraries:
+        conf.check_cfg(package='wcslib',  args=['--libs', '--cflags'])
+        conf.check_cfg(modversion='wcslib')
+        check_wcslib_external(conf.env)
+        # Since WCSLIB doesn't provide F90 include files, we generate them
+        # from the F77 ones
+        f77dir = conf.root.find_node(conf.env['INCLUDES_WCSLIB'][0])
+        f90dir = conf.bldnode.make_node('include').mkdir()
+        f77files = f77dir.ant_glob('*inc')
+        for f77file in f77dir.ant_glob('*inc'):
+            f90file = conf.bldnode.make_node('include/'+f77file.name)
+            f77_to_f90(f77file, f90file)
 
     conf.env.SHAREDIR = os.path.abspath(conf.env.PYTHONDIR + '/../../../share')
     conf.define(conf.env.FC_NAME, 1)
     conf.define('TAMASIS_DIR', os.path.join(conf.env.SHAREDIR, 'tamasis'))
     conf.define('TAMASIS_VERSION', VERSION)
     conf.define('PRECISION_REAL', int(conf.options.precision_real))
-
-    # Since WCSLIB doesn't provide F90 include files, we generate them
-    # from the F77 ones
-    f77dir = conf.root.find_node(conf.env['INCLUDES_WCSLIB'][0])
-    f90dir = conf.bldnode.make_node('include').mkdir()
-    f77files = f77dir.ant_glob('*inc')
-    for f77file in f77dir.ant_glob('*inc'):
-        f90file = conf.bldnode.make_node('include/'+f77file.name)
-        f77_to_f90(f77file, f90file)
 
     # Write the file .f2py_f2cmap which maps the real or complex type parameter
     # 'p' to a C type
@@ -251,6 +258,8 @@ def build(bld):
     # Build static libraries libtamasis*.a
     for subdir in subdirs:
         files = bld.srcnode.ant_glob(subdir+'/src/module_*.f')
+        if subdir == 'core' and 'WCSLIB' not in libraries:
+            files = [f for f in files if 'wcslib' not in f.abspath()]
         bld(features = 'fc fcstlib',
             source   = files,
             target   = 'tamasis' + subdir,

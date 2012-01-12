@@ -9,7 +9,9 @@ module module_wcs
     use module_math,      only : DEG2RAD, RAD2DEG, distance, neq_real
     use module_string,    only : strinteger, strlowcase, strupcase
     use module_tamasis,   only : p
+#ifdef HAVE_WCSLIB
     use module_wcslib
+#endif
     implicit none
     private
 
@@ -31,10 +33,12 @@ module module_wcs
     public :: init_rotation
     public :: xy2xy_rotation
     public :: refpix_area
+#ifdef HAVE_WCSLIB
     public :: init_wcslib
     public :: ad2xy_wcslib
     public :: free_wcslib
     public :: header2wcslib
+#endif
 
 
 contains
@@ -412,6 +416,7 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
+#ifdef HAVE_WCSLIB
     subroutine init_wcslib(header, status)
 
         character(len=*), intent(in) :: header
@@ -546,6 +551,7 @@ contains
         status = wcsfree(wcs)
 
     end subroutine free_wcslib
+#endif
 
 
  end module module_wcs
