@@ -6,13 +6,15 @@ category: installation-dependencies
 
 h4. Python modules
 
-* numpy >= 1.4.1
-* kapteyn >= 2.0.2
-* matplotlib >= 0.99
-* mpi4py
-* "pyfftw":https://launchpad.net/pyfftw/ >= 0.2.1
-* pyfits >= 2.3
+* numpy >= 1.6.0
 * scipy
+* matplotlib >= 0.99
+* "pyfftw":https://launchpad.net/pyfftw/ >= 0.2.1
+* pyfits >= 3.0
+* kapteyn >= 2.0.2
+
+Optional:
+* mpi4py
 
 
 h4. Other libraries
@@ -20,5 +22,8 @@ h4. Other libraries
 * gfortran >= 4.5 or ifort >= 11.1
 * cfitsio >= 3.23
 * FFTW >= 3.2.2
+
+Optional:
+
 * wcslib >= 4.4.4
 * openmpi or mpich
