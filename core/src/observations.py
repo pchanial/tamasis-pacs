@@ -143,10 +143,9 @@ class Observation(object):
             cross = _create_scan(center, length, step, sampling_period, speed,
                                  acceleration, nlegs, angle + 90, dtype)
             cross.time += scan.time[-1] + sampling_period
-            scan, scan.header = Pointing(np.hstack([scan.time, cross.time]),
-                                         np.hstack([scan.ra, cross.ra]),
-                                         np.hstack([scan.dec, cross.dec]),
-                                         0.,
+            scan, scan.header = Pointing((np.hstack([scan.ra, cross.ra]),
+                                          np.hstack([scan.dec, cross.dec]), 0.),
+                                         np.hstack([scan.time, cross.time]),
                                          info=np.hstack([scan.info,cross.info]),
                                          dtype=dtype), scan.header
 
@@ -315,7 +314,7 @@ def _create_scan(center, length, step, sampling_period, speed, acceleration,
     ra, dec = _change_coord(ra0, dec0, angle - 90, longitude / 3600,
                             latitude / 3600)
 
-    scan = Pointing(time, ra, dec, 0., infos, dtype=dtype)
+    scan = Pointing((ra, dec, 0.), time, infos, dtype=dtype)
     header = create_fitsheader(nsamples)
     header.update('ra', ra0)
     header.update('dec', dec0)
