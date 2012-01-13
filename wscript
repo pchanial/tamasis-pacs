@@ -25,14 +25,14 @@ subdirs = ['core', 'madcap', 'pacs']
 libraries = ['CFITSIO', 'FFTW3', 'OPENMP']
 
 # Required Python packages
-required_modules = ['numpy',
-                    'scipy',
-                    'pyoperators',
+required_modules = ['numpy>=1.6',
+                    'scipy>=0.9',
+                    'pyoperators>=0.2',
                     'matplotlib',
                     'fftw3',
-                    'pyfits',
+                    'pyfits>=3.0',
                     'kapteyn',
-                    'numexpr']
+                    'numexpr>=2.0']
 
 
 
