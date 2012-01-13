@@ -335,7 +335,10 @@ class test(BuildContext):
     fun = 'test_fun'
 
 def test_fun(ctx):
-    Options.commands = ['test-fortran', 'test-python', 'test-mpi'] + Options.commands
+    tests = ['test-fortran', 'test-python']
+    if 'MPI' in libraries:
+        tests += ['test-mpi']
+    Options.commands = tests + Options.commands
 
 class test_fortran(BuildContext):
     """run Fortran test suite"""
