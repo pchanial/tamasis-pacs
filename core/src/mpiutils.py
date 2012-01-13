@@ -31,8 +31,14 @@ def split_shape(shape, comm=None):
     comm = comm or MPI.COMM_WORLD
     if not isinstance(shape, (list, np.ndarray, tuple)):
         shape = (shape,)
-    n = int(np.ceil(shape[0] / comm.Get_size()))
+    if len(shape) == 0:
+        if comm.size > 1:
+            raise ValueError('It is ambiguous to split a scalar across processe'
+                             's.')
+        return ()
+    n = int(np.ceil(shape[0] / comm.size))
     return (n,) + tuple(shape[1:])
+
 
 #-------------------------------------------------------------------------------
 
