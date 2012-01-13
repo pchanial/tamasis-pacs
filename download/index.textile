@@ -30,9 +30,9 @@ h1. Software dependencies
 
 h2. Python modules
 
-* "numpy":http://numpy.scipy.org >= 1.6.0
+* "numpy":http://numpy.scipy.org >= 1.6
 * "scipy":http://www.scipy.org >= 0.9
-* "pyoperators":http://pchanial.github.com/pyoperators >= 2.0
+* "pyoperators":http://pchanial.github.com/pyoperators >= 0.2
 * "matplotlib":http://matplotlib.sourceforge.net >= 0.99
 * "pyfftw":https://launchpad.net/pyfftw/ >= 0.2.1
 * "numexpr":http://code.google.com/p/numexpr >= 2.0
