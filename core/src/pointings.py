@@ -11,8 +11,8 @@ from .quantity import Quantity
 from .wcsutils import angle_lonlat, barycenter_lonlat, create_fitsheader
 
 __all__ = ['Pointing']
-POINTING_DTYPE = [('time', var.FLOAT_DTYPE), ('ra', var.FLOAT_DTYPE),
-                  ('dec', var.FLOAT_DTYPE), ('pa', var.FLOAT_DTYPE),
+POINTING_DTYPE = [('ra', var.FLOAT_DTYPE), ('dec', var.FLOAT_DTYPE),
+                  ('pa', var.FLOAT_DTYPE), ('time', var.FLOAT_DTYPE),
                   ('info', np.int64), ('masked', np.bool8),
                   ('removed', np.bool8)]
 
@@ -20,8 +20,45 @@ class Pointing(FitsArray):
     INSCAN     = 1
     TURNAROUND = 2
     OTHER      = 3
-    def __new__(cls, time, ra, dec, pa, info=None, masked=None, removed=None,
-                nsamples=None, dtype=None):
+    def __new__(cls, coords, time=None, info=None, masked=None, removed=None,
+                dtype=None):
+
+        if isinstance(coords, np.ndarray):
+            s = coords.shape[-1]
+            if s not in (2, 3):
+                raise ValueError('Invalid number of dimensions.')
+            ra = coords[...,0]
+            dec = coords[...,1]
+            if s == 3:
+                pa = coords[...,2]
+            else:
+                pa = 0
+        elif isinstance(coords, (list, tuple)):
+            s = len(coords)
+            if s not in (2, 3):
+                raise ValueError('Invalid number of dimensions.')
+            ra = coords[0]
+            dec = coords[1]
+            if s == 3:
+                pa = coords[2]
+            else:
+                pa = 0
+        elif isinstance(coords, dict):
+            if 'ra' not in coords or 'dec' not in coords:
+                raise ValueError("The input pointing does have keywords 'ra' an"
+                                 "d 'dec'.")
+            ra = coords['ra']
+            dec = coords['dec']
+            pa = coords.get('pa', 0)
+        else:
+            raise TypeError('The input pointing type is invalid.')
+ 
+        ra = np.asarray(ra)
+        shape = ra.shape
+        size = 1 if ra.ndim == 0 else shape[-1]
+
+        if time is None:
+            time = np.arange(size, dtype=float)
 
         if info is None:
             info = Pointing.INSCAN
@@ -35,47 +72,31 @@ class Pointing(FitsArray):
         if dtype is None:
             dtype = POINTING_DTYPE
 
-        time    = np.asarray(time)
-        ra      = np.asarray(ra)
         dec     = np.asarray(dec)
         pa      = np.asarray(pa)
+        time    = np.asarray(time)
         info    = np.asarray(info)
         masked  = np.asarray(masked)
         removed = np.asarray(removed)
 
-        if nsamples is None:
-            nsamples = (time.size,)
-        else:
-            if isscalar(nsamples):
-                nsamples = (nsamples,)
-            else:
-                nsamples = tuple(nsamples)
-        nsamples_tot = np.sum(nsamples)
-
-        if np.any([x.size not in (1, nsamples_tot) \
-                   for x in [ra, dec, pa, info, masked, removed]]):
+        if np.any([x.shape not in ((), shape) \
+                   for x in [dec, pa, info, masked, removed]]):
             raise ValueError('The pointing inputs do not have the same size.')
 
-        result = FitsArray.zeros(nsamples_tot, dtype=dtype)
-        result.time    = time
+        result = FitsArray.zeros(shape, dtype=dtype)
         result.ra      = ra
         result.dec     = dec
         result.pa      = pa
+        result.time    = time
         result.info    = info
         result.masked  = masked
         result.removed = removed
-        result.header = create_fitsheader(result.size)
-        result._unit = {}
+        result.header  = create_fitsheader(shape)
+        result._unit   = {}
         result._derived_units = {}
         result = result.view(cls)
-        result.nsamples = nsamples
 
         return result.view(cls)
-
-    def __array_finalize__(self, array):
-        FitsArray.__array_finalize__(self, array)
-        nsamples = getattr(array, 'nsamples', None)
-        self.nsamples = (self.size,) if nsamples is None else nsamples
 
     def __getattr__(self, name):
         if self.dtype.names is None or name not in self.dtype.names:

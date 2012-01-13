@@ -101,7 +101,7 @@ def test_detector_policy():
 
 def test_pack():
     for channel, nrows, ncolumns in ('red',16,32), ('blue',32,64):
-        obs = PacsSimulation(Pointing(0., 0., 0., 0.), channel)
+        obs = PacsSimulation(Pointing((0., 0., 0.), 0.), channel)
         for dt in (np.uint8, np.uint16, np.uint32, np.uint64):
             a = np.arange(nrows*ncolumns*3, dtype=dt) \
                   .reshape((nrows,ncolumns,-1))

@@ -191,9 +191,9 @@ class PacsBase(Observation):
     ACCELERATION = Quantity(4., '"/s^2')
     DEFAULT_RESOLUTION = {'blue':3.2, 'green':3.2, 'red':6.4}
     PSF_FWHM = {'blue':5.2, 'green':7.7, 'red':12.}
-    POINTING_DTYPE = [('time', var.FLOAT_DTYPE), ('ra', var.FLOAT_DTYPE),
-                      ('dec', var.FLOAT_DTYPE), ('pa', var.FLOAT_DTYPE),
-                      ('chop', var.FLOAT_DTYPE), ('info', np.int64),
+    POINTING_DTYPE = [('ra', var.FLOAT_DTYPE), ('dec', var.FLOAT_DTYPE),
+                      ('pa', var.FLOAT_DTYPE), ('chop', var.FLOAT_DTYPE),
+                      ('time', var.FLOAT_DTYPE), ('info', np.int64),
                       ('masked', np.bool8), ('removed', np.bool8)]
     DETECTOR_DTYPE = [
         ('masked', np.bool8), ('removed', np.bool8),
@@ -865,11 +865,10 @@ class PacsObservation(PacsBase):
         self.slice.mask_activated = mask_activated[:,0:nmasks_max]
         
         # store pointing information
-        self.pointing = Pointing(frame_time, frame_ra, frame_dec, frame_pa,
-            frame_info, frame_masked, frame_removed,
-            nsamples=self.slice.nsamples_all, dtype=self.POINTING_DTYPE)
+        self.pointing = Pointing((frame_ra, frame_dec, frame_pa), frame_time,
+            frame_info, frame_masked, frame_removed, dtype=self.POINTING_DTYPE)
         self.pointing.chop = frame_chop
-        self.slice.scan_speed = _scan_speed(self.pointing)
+        self.slice.scan_speed = [_scan_speed(self.pointing[s.start:s.stop]) for s in self.slice]
 
         # store frame policy
         self.policy = policy
@@ -1029,27 +1028,25 @@ class PacsSimulation(PacsBase):
                 "'. Expected values are " + strenum(choices) + '.')
 
         # get compression factor from input pointing
-        deltas = [np.median(p.time[1:]-p.time[0:-1]) for p in pointings]
-        deltas = [d for d in deltas if np.isfinite(d)]
+        deltas = [p.time[1:] - p.time[0:-1] for p in pointings if p.size > 1]
         if len(deltas) == 0:
-            delta0 = self.SAMPLING_PERIOD
+            delta = self.SAMPLING_PERIOD
         else:
-            delta0 = np.median(np.hstack([p.time[1:]-p.time[0:-1] for p in \
-                               pointings]))
+            deltas = [np.median(d) for d in deltas]
+            delta = np.median(np.hstack(deltas))
+            if not np.allclose(deltas, delta, rtol=0.01):
+                raise ValueError('The input pointings do not have the same samp'
+                                 'ling period: '+str(deltas)+'.')
 
-        if not np.allclose(deltas, delta0, rtol=0.01):
-            raise ValueError('The input pointings do not have the same samplin'\
-                             'g period: '+str(deltas)+'.')
-
-        compression_factor = int(np.round(delta0 / self.SAMPLING_PERIOD))
+        compression_factor = int(np.round(delta / self.SAMPLING_PERIOD))
         if compression_factor <= 0:
             raise ValueError('Invalid time in pointing argument. Use PacsSimu' \
                              'lation.SAMPLING_PERIOD.')
-        if np.abs(delta0 / compression_factor - self.SAMPLING_PERIOD) > 0.01 * \
+        if np.abs(delta / compression_factor - self.SAMPLING_PERIOD) > 0.01 * \
            self.SAMPLING_PERIOD:
-            print('Warning: the pointing time has unexpected sampling rate. ' \
-                  'Assuming a compression factor of ' + str(compression_factor)\
-                  + '.')
+            print('Warning: the pointing time has an unexpected sampling rate. '
+                  'Assuming a compression factor of {0}.'.format(
+                  compression_factor))
 
         # observing mode
         if mode is None:
@@ -1084,15 +1081,14 @@ class PacsSimulation(PacsBase):
             mode == 'transparent', self.comm_tod)
 
         nslices = len(pointings)
-        nsamples = tuple([len(p) for p in pointings])
+        nsamples = tuple([p.size for p in pointings])
 
         # concatenate pointings
-        pointing = Pointing(0, 0, 0, 0, nsamples=nsamples,
-                            dtype=self.POINTING_DTYPE)
+        pointing = Pointing.empty(sum(nsamples), dtype=self.POINTING_DTYPE)
         d = 0
         for p, n in zip(pointings, nsamples):
             names = (set(p.dtype.names) | set(p.__dict__.keys())) & \
-                    set(pointing.dtype.names)
+                     set(pointing.dtype.names)
             for name in names:
                 pointing[name][d:d+n] = p[name]
             d += n
@@ -1637,20 +1633,12 @@ def _write_status(obs, filename, fitskw=None):
 
 
 def _scan_speed(pointing):
-    nslices = len(pointing.nsamples)
-    speed = np.ndarray(nslices, float)
+    if pointing.size == 1:
+        return np.nan
     velocity = pointing.velocity
-    removed = pointing.removed
-    info = pointing.info
-    dest = 0
-    for islice in range(nslices):
-        n = pointing.nsamples[islice]
-        inscan = (info[dest:dest+n] == pointing.INSCAN) * ~removed[dest:dest+n]
-        if not np.any(inscan):
-            inscan[:] = True
-        speed[islice] = np.round(np.median(velocity[dest:dest+n][inscan]),1)
-        dest += n
-    return speed
+    inscan = (pointing.info == pointing.INSCAN) & ~pointing.removed
+    return np.round(np.median(velocity[inscan]),1)
+
 
 #-------------------------------------------------------------------------------
 # processing steps
