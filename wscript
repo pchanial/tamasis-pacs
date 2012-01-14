@@ -6,7 +6,7 @@ import string
 import subprocess
 import sys
 
-from waflib import Options
+from waflib import Options, Tools
 from waflib.Build import BuildContext
 from waflib.Configure import conf
 from waflib.Context import Context
@@ -79,6 +79,9 @@ def configure(conf):
 
     if conf.options.enable_wcslib:
         libraries += ['WCSLIB']
+
+    for platform in 'linux', 'darwin', 'default':
+        Tools.compiler_fc.fc_compiler[platform] = ['ifort', 'gfortran']
 
     conf.load('compiler_c')
     conf.load('compiler_fc')
