@@ -9,7 +9,7 @@ import tamasisfortran as tmf
 
 from pyoperators import (Operator, IdentityOperator, DiagonalOperator,
                          BlockColumnOperator, BlockDiagonalOperator,
-                         NumexprOperator)
+                         CompositionOperator, NumexprOperator)
 from pyoperators.decorators import (idempotent, linear, orthogonal, real,
                                     square, symmetric, unitary, inplace)
 from pyoperators.utils import isscalar, tointtuple, openmp_num_threads
@@ -168,7 +168,8 @@ class BlackBodyOperator(Operator):
     Instanceless class whose __new__ method specialises in
     BlackBodyFixedTemperatureOperator and BlackBodyFreeTemperatureOperator.
     """
-    def __new__(cls, wavelength, wavelength0, temperature=None, beta=0.):
+    def __new__(cls, wavelength=None, wavelength0=None, temperature=None,
+                beta=0.):
         if temperature is not None:
             return BlackBodyFixedTemperatureOperator(temperature, wavelength,
                                                      wavelength0, beta)
@@ -181,12 +182,13 @@ class BlackBodyFixedTemperatureOperator(NumexprOperator):
     Diagonal operator whose normalised values follow the Planck equation,
     optionnally modified by a power-law emissivity of given slope.
     """
-    def __new__(cls, temperature, wavelength, wavelength0=None, beta=0.):
+    def __new__(cls, temperature=None, wavelength=None, wavelength0=None,
+                beta=0.):
         if not isscalar(wavelength):
             return BlockColumnOperator([BlackBodyFixedTemperatureOperator(
                 temperature, w, wavelength0, beta) for w in wavelength],
                 new_axisout=0)
-        return super(BlackBodyFixedTemperatureOperator, cls).__new__(cls)
+        return NumexprOperator.__new__(cls)
 
     def __init__(self, temperature, wavelength, wavelength0=None, beta=0.):
         """
@@ -236,34 +238,28 @@ class Compression(Operator):
     Compression is operated on the fastest axis.
     """
 
-    def __new__(cls, factor, shapein=None, **keywords):
+    def __new__(cls, factor=None, shapein=None, **keywords):
         if factor == 1:
             op = IdentityOperator(shapein=shapein, dtype=float, **keywords)
             op.factor = 1
             return op
-        return super(Compression, cls).__new__(cls, factor, shapein, **keywords)
+        return Operator.__new__(cls)
 
     def __init__(self, factor, shapein=None, shapeout=None, **keywords):
         self.factor = int(factor)
         Operator.__init__(self, shapein=shapein, shapeout=shapeout, **keywords)
 
     def reshapein(self, shapein):
-        if shapein is None:
-            return None
-        if shapein[-1] % self.factor != 0:
-            raise ValueError("The input timeline size '{0}') is incompatible wi"
-                "th the compression factor '{1}'".format(shapein[-1],
-                self.factor))
-        shapeout = list(shapein)
-        shapeout[-1] = shapein[-1] // self.factor
-        return shapeout
+        return shapein[:-1] + (shapein[-1] // self.factor,)
 
     def reshapeout(self, shapeout):
-        if shapeout is None:
-            return None
-        shapeout = list(shapeout)
-        shapeout[-1] = shapeout[-1] * self.factor
-        return  shapeout
+        return shapeout[:-1] + (shapeout[-1] * self.factor,)
+
+    def validatein(self, shapein):
+        if shapein[-1] % self.factor != 0:
+            raise ValueError("The input timeline size '{0}' is incompatible wit"
+                "h the compression factor '{1}'.".format(shapein[-1],
+                self.factor))
 
     def __str__(self):
         return super(Compression, self).__str__() + ' (x{})'.format(self.factor)
@@ -313,7 +309,10 @@ class DownSampling(Compression):
 @symmetric
 class InvNtt(Operator):
 
-    def __new__(cls, obs, method='uncorrelated', filename=None, **keywords):
+    def __new__(cls, obs=None, method='uncorrelated', filename=None,
+                **keywords):
+        if obs is None:
+            return Operator.__new__(cls)
         nsamples = obs.get_nsamples()
         method = method.lower()
         if method not in ('uncorrelated', 'uncorrelated python'):
@@ -391,7 +390,9 @@ class InvNttUncorrelated(Operator):
 @symmetric
 class InvNttUncorrelatedPython(Operator):
 
-    def __new__(cls, fft_filter, ncorrelations, nsamples):
+    def __new__(cls, fft_filter=None, ncorrelations=None, nsamples=None):
+        if fft_filter is None:
+            return Operator.__new__(cls)
         filter_length = fft_filter.shape[-1]
         invntt = DiagonalOperator(fft_filter)
         fft = FftHalfComplex(filter_length)
@@ -432,18 +433,10 @@ class Padding(Operator):
         output[...] = input[...,self.left:right]
 
     def reshapein(self, shapein):
-        if shapein is None:
-            return None
-        shapeout = list(shapein)
-        shapeout[-1] += self.left + self.right
-        return shapeout
+        return shapein[:-1] + (shapein[-1] + self.left + self.right,)
        
     def reshapeout(self, shapeout):
-        if shapeout is None:
-            return None
-        shapein = list(shapeout)
-        shapein[-1] -= self.left + self.right
-        return shapein
+        return shapeout[:-1] + (shapeout[-1] - self.left - self.right,)
 
 
 @real
@@ -466,11 +459,11 @@ class Projection(Operator):
           intercepted by a detector
     """
 
-    def __new__(cls, input, method=None, header=None, resolution=None,
+    def __new__(cls, input=None, method=None, header=None, resolution=None,
                 npixels_per_sample=0, units=None, derived_units=None,
                 downsampling=False, comm_map=None, comm_tod=None, packed=False):
         if not isinstance(input, Observation) or len(input.slice) == 1:
-            instance = super(Projection, cls).__new__(cls)
+            instance = Operator.__new__(cls)
             return instance
         obs = input
         if header is None:
@@ -698,7 +691,7 @@ class DiscreteDifference(Operator):
         Operator.__init__(self, dtype=var.FLOAT_DTYPE, **keywords)
         self.axis = axis
         self.comm = comm or var.comm_map
-        self.add_rule('.T.', self._rule_ddtdd)
+        self.set_rule('.T.', self._rule_ddtdd, CompositionOperator)
 
     def direct(self, input, output):
         diff(input, output, self.axis, comm=self.comm)
@@ -706,7 +699,8 @@ class DiscreteDifference(Operator):
     def transpose(self, input, output):
         diffT(input, output, self.axis, comm=self.comm)
 
-    def _rule_ddtdd(self, dT):
+    @staticmethod
+    def _rule_ddtdd(dT, self):
         return DdTdd(self.axis, comm=self.comm)
 
 
@@ -723,8 +717,8 @@ class DdTdd(Operator):
         self.axis = axis
         self.scalar = scalar
         self.comm = comm or var.comm_map        
-        self.add_rule('{HomothetyOperator}.',lambda s: DdTdd(self.axis,
-            s.data * self.scalar))
+        self.set_rule('{HomothetyOperator}.', lambda o,s: DdTdd(self.axis,
+            o.data * s.scalar), CompositionOperator)
 
     def direct(self, input, output):
         diffTdiff(input, output, self.axis, self.scalar, comm=self.comm)
@@ -1083,13 +1077,10 @@ class FftHalfComplex(Operator):
                 output_, oshape[1], ostride, self.bplan._get_parameter())
         output /= self.size
 
-    def reshapein(self, shapein):
-        if shapein is None:
-            return None
+    def validatein(self, shapein):
         if shapein[-1] != self.size:
             raise ValueError("Invalid input dimension '{0}'. Expected dimension"
                              " is '{1}'".format(shapein[-1], self.size))
-        return shapein
 
 @linear
 @square

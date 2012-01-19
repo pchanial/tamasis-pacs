@@ -1209,24 +1209,17 @@ class PacsMultiplexing(Operator):
         tmf.pacs_multiplexing_transpose(input.T, output.T,
                                         self.fine_sampling_factor, self.ij)
 
-    def validate_shapein(self, shapein):
-        if shapein is None:
-            return None
-        if shapein[1] % self.fine_sampling_factor != 0:
-            raise ValueError('The input timeline size (' + \
-                str(shapein[1]) + ') is not an integer times the fine sampling'\
-                ' factor ('+str(self.fine_sampling_factor)+').')
-        shapeout = list(shapein)
-        shapeout[1] = shapeout[1] // self.fine_sampling_factor
-        return tuple(shapeout)
+    def reshapein(self, shapein):
+        return shapein[:-1] + (shapein[-1] // self.fine_sampling_factor,)
 
-    def validate_shapeout(self, shapeout):
-        if shapeout is None:
-            return None
-        super(PacsMultiplexing, self).validate_shapeout(shapeout)
-        shapein = list(shapeout)
-        shapein[1] = shapein[1] * self.fine_sampling_factor
-        return tuple(shapein)
+    def reshapeout(self, shapeout):
+        return shapeout[:-1] + (shapeout[-1] * self.fine_sampling_factor,)
+
+    def validatein(self, shapein):
+        if shapein[-1] % self.fine_sampling_factor != 0:
+            raise ValueError("The input timeline size '{0}' is incompatible wit"
+                "h the fine sampling factor '{1}'.".format(shapein[-1],
+                self.fine_sampling_factor))
 
 
 #-------------------------------------------------------------------------------
@@ -1330,9 +1323,6 @@ def pacs_preprocess(obs, tod,
     model = masking * model
 
     return todc, model, mapper_naive(todc, model), map_mask
-
-
-#-------------------------------------------------------------------------------
 
 
 #-------------------------------------------------------------------------------
