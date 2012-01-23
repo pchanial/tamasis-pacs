@@ -270,9 +270,6 @@ class CompressionAverage(Compression):
     Compress the input signal by averaging blocks of specified size.
     """
 
-    def __str__(self):
-        return super(CompressionAverage, self).__str__() + ' (x{})'.format(self.factor)
-
     def direct(self, input, output):
         input_, ishape, istride = _ravel_strided(input)
         output_, oshape, ostride = _ravel_strided(output)
