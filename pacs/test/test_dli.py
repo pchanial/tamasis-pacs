@@ -22,7 +22,7 @@ model = masking_tod * projection
 naive = mapper_naive(tod, model)
 naive[np.isnan(naive)] = 0
 
-prior = BlockColumnOperator([DiscreteDifference(axis, shapein=(103,97)) for axis in (0,1)])
+prior = BlockColumnOperator([DiscreteDifference(axis, shapein=(103,97)) for axis in (0,1)], new_axisout=0)
 
 dli = DoubleLoopAlgorithm(model, tod, prior)
 map_dli = dli()
