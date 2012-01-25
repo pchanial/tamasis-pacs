@@ -566,8 +566,8 @@ subroutine pacs_uv2yz(uv, ncoords, distortion_yz, chop, yz)
     use module_tamasis,        only : p
     implicit none
 
-    real(p), intent(in)    :: uv(2,ncoords)
     integer*8, intent(in)  :: ncoords
+    real(p), intent(in)    :: uv(2,ncoords)
     real(p), intent(in)    :: distortion_yz(2,3,3,3)
     real(p), intent(in)    :: chop
     real(p), intent(inout) :: yz(2,ncoords)
@@ -631,9 +631,9 @@ contains
     subroutine uv2xy_minmax(coords, ncoords, ra, dec, pa, chop, npointings, distortion_yz, header, xmin, ymin, xmax, ymax, status)
         ! Return the minimum and maximum sky pixel coordinate values for a set of coordinates in the (u,v) plane.
 
+        integer*8, intent(in)                      :: ncoords, npointings     ! #coordinates, #detectors
         real(p), intent(in)                        :: coords(2,ncoords)       ! instrument frame coordinates
         real(p), intent(in), dimension(npointings) :: ra, dec, pa, chop       ! input pointings in celestial coordinates
-        integer*8, intent(in)                      :: ncoords, npointings     ! #coordinates, #detectors
         real(p), intent(in)                        :: distortion_yz(2,3,3,3)  ! distortion coefficients
         character(len=2880), intent(in)            :: header                  ! input FITS header
         real(p), intent(out)                       :: xmin, ymin, xmax, ymax  ! min and max values of the map coordinates
@@ -683,11 +683,11 @@ contains
     subroutine uv2pmatrix_nearest_neighbour(coords, ncoords, area, ra, dec, pa, chop, masked, npointings, distortion_yz, header,   &
                                             pmatrix, out, status)
         !f2py integer*8, depend(npointings,ncoords) :: pmatrix(npointings*ncoords)
+        integer*8, intent(in)                        :: ncoords, npointings    ! #coordinates, #pointings
         real(p), intent(in)                          :: coords(2,ncoords)      ! instrument frame coordinates
         real(p), intent(in)                          :: area(ncoords)          ! detector area / reference_area
         real(p), intent(in), dimension(npointings)   :: ra, dec, pa, chop      ! input pointings in celestial coordinates
         logical*1, intent(in), dimension(npointings) :: masked                 ! pointing flags: true if masked, removed
-        integer*8, intent(in)                        :: ncoords, npointings    ! #coordinates, #pointings
         real(p), intent(in)                          :: distortion_yz(2,3,3,3) ! distortion coefficients
         character(len=*), intent(in)                 :: header
         type(PointingElement), intent(inout)         :: pmatrix(1,npointings,ncoords)
@@ -739,10 +739,10 @@ contains
     subroutine uv2pmatrix_sharp_edges(coords, ncoords, ra, dec, pa, chop, masked, npointings, distortion_yz, header, pmatrix,      &
                                       npixels_per_sample, new_npixels_per_sample, out, status)
         !f2py integer*8, depend(npixels_per_sample,npointings,ncoords) :: pmatrix(npixels_per_sample*npointings*ncoords/4)
+        integer*8, intent(in)                        :: ncoords, npointings    ! #coordinates, #pointings
         real(p), intent(in)                          :: coords(2,ncoords)      ! instrument frame coordinates
         real(p), intent(in), dimension(npointings)   :: ra, dec, pa, chop      ! input pointings in celestial coordinates
         logical*1, intent(in), dimension(npointings) :: masked                 ! pointing flags: true if masked, removed
-        integer*8, intent(in)                        :: ncoords, npointings    ! #coordinates, #pointings
         real(p), intent(in)                          :: distortion_yz(2,3,3,3) ! distortion coefficients
         character(len=*), intent(in)                 :: header                 ! sky map FITS header
         type(PointingElement), intent(inout)         :: pmatrix(npixels_per_sample,npointings,ncoords/4) ! the pointing matrix

@@ -30,9 +30,9 @@ contains
         ! The routine is not accurate at the poles.
         ! Input units are in arc seconds, output units in degrees.
 
+        integer, intent(in)    :: ncoords           ! number of coordinates
         real(p), intent(in)    :: input(2,ncoords)  ! input coordinates in instrument frame
         real(p), intent(inout) :: output(2,ncoords) ! output in celestial coordinates
-        integer, intent(in)    :: ncoords           ! number of coordinates
         real(p), intent(in)    :: ra, dec, pa       ! pointing direction is (0,0) in the local frame
 
         real(p) :: cospa, sinpa, c1, c2
@@ -57,9 +57,9 @@ contains
     subroutine instrument2xy_minmax(coords, ncoords, ra, dec, pa, npointings, header, xmin, ymin, xmax, ymax, status)
         ! Return the minimum and maximum sky pixel coordinate values of coordinates in the instrument frame.
 
+        integer*8, intent(in)                      :: ncoords, npointings     ! #coordinates, #pointings
         real(p), intent(in)                        :: coords(2,ncoords)       ! instrument frame coordinates
         real(p), intent(in), dimension(npointings) :: ra, dec, pa             ! input pointings in celestial coordinates
-        integer*8, intent(in)                      :: ncoords, npointings     ! #coordinates, #pointings
         character(len=2880), intent(in)            :: header                  ! input FITS header
         real(p), intent(out)                       :: xmin, ymin, xmax, ymax  ! min and max values of the map coordinates
         integer, intent(out)                       :: status                  ! status flag
