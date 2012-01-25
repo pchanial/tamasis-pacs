@@ -345,7 +345,7 @@ subroutine pacs_map_header(band, compression_factor, delay, fine_sampling_factor
     logical, intent(in)                            :: oversampling
     real(p), intent(in), dimension(npointings)     :: time, ra, dec, pa, chop
     logical*1, intent(in), dimension(npointings)   :: masked, removed
-    integer, intent(in)                            :: npointings
+    integer*8, intent(in)                          :: npointings
     logical*1, intent(in)                          :: detector_masked(nrows,ncolumns)
     logical*1, intent(in)                          :: detector_removed(nrows,ncolumns)
     integer, intent(in)                            :: nrows
@@ -567,7 +567,7 @@ subroutine pacs_uv2yz(uv, ncoords, distortion_yz, chop, yz)
     implicit none
 
     real(p), intent(in)    :: uv(2,ncoords)
-    integer, intent(in)    :: ncoords
+    integer*8, intent(in)  :: ncoords
     real(p), intent(in)    :: distortion_yz(2,3,3,3)
     real(p), intent(in)    :: chop
     real(p), intent(inout) :: yz(2,ncoords)
@@ -590,7 +590,7 @@ subroutine pacs_uv2ad(uv, ncoords, ra, dec, pa, chop, nsamples, distortion_yz, a
     use module_tamasis,        only : p
     implicit none
 
-    integer, intent(in)    :: ncoords, nsamples
+    integer*8, intent(in)  :: ncoords, nsamples
     real(p), intent(in)    :: uv(2,ncoords), ra(nsamples), dec(nsamples), pa(nsamples), chop(nsamples)
     real(p), intent(in)    :: distortion_yz(2,3,3,3)
     real(p), intent(inout) :: ad(2,ncoords,nsamples)
@@ -633,7 +633,7 @@ contains
 
         real(p), intent(in)                        :: coords(2,ncoords)       ! instrument frame coordinates
         real(p), intent(in), dimension(npointings) :: ra, dec, pa, chop       ! input pointings in celestial coordinates
-        integer, intent(in)                        :: ncoords, npointings     ! #coordinates, #detectors
+        integer*8, intent(in)                      :: ncoords, npointings     ! #coordinates, #detectors
         real(p), intent(in)                        :: distortion_yz(2,3,3,3)  ! distortion coefficients
         character(len=2880), intent(in)            :: header                  ! input FITS header
         real(p), intent(out)                       :: xmin, ymin, xmax, ymax  ! min and max values of the map coordinates
@@ -687,7 +687,7 @@ contains
         real(p), intent(in)                          :: area(ncoords)          ! detector area / reference_area
         real(p), intent(in), dimension(npointings)   :: ra, dec, pa, chop      ! input pointings in celestial coordinates
         logical*1, intent(in), dimension(npointings) :: masked                 ! pointing flags: true if masked, removed
-        integer, intent(in)                          :: ncoords, npointings    ! #coordinates, #pointings
+        integer*8, intent(in)                        :: ncoords, npointings    ! #coordinates, #pointings
         real(p), intent(in)                          :: distortion_yz(2,3,3,3) ! distortion coefficients
         character(len=*), intent(in)                 :: header
         type(PointingElement), intent(inout)         :: pmatrix(1,npointings,ncoords)
@@ -742,7 +742,7 @@ contains
         real(p), intent(in)                          :: coords(2,ncoords)      ! instrument frame coordinates
         real(p), intent(in), dimension(npointings)   :: ra, dec, pa, chop      ! input pointings in celestial coordinates
         logical*1, intent(in), dimension(npointings) :: masked                 ! pointing flags: true if masked, removed
-        integer, intent(in)                          :: ncoords, npointings    ! #coordinates, #pointings
+        integer*8, intent(in)                        :: ncoords, npointings    ! #coordinates, #pointings
         real(p), intent(in)                          :: distortion_yz(2,3,3,3) ! distortion coefficients
         character(len=*), intent(in)                 :: header                 ! sky map FITS header
         type(PointingElement), intent(inout)         :: pmatrix(npixels_per_sample,npointings,ncoords/4) ! the pointing matrix

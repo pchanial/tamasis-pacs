@@ -59,7 +59,7 @@ contains
 
         real(p), intent(in)                        :: coords(2,ncoords)       ! instrument frame coordinates
         real(p), intent(in), dimension(npointings) :: ra, dec, pa             ! input pointings in celestial coordinates
-        integer, intent(in)                        :: ncoords, npointings     ! #coordinates, #pointings
+        integer*8, intent(in)                      :: ncoords, npointings     ! #coordinates, #pointings
         character(len=2880), intent(in)            :: header                  ! input FITS header
         real(p), intent(out)                       :: xmin, ymin, xmax, ymax  ! min and max values of the map coordinates
         integer, intent(out)                       :: status                  ! status flag
