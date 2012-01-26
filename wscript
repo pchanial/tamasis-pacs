@@ -203,17 +203,19 @@ end program test
             use              = ['LAPACK'])
 
     if conf.options.enable_mpi:
+        conf.env.OMPI_FC = conf.env.FC
+        conf.find_program('mpif90', var='FC')
         conf.check_cc(fragment    = 'program test\nuse mpi\nend',
                       compile_filename = 'test.f',
                       features    = 'fc fcprogram',
-                      msg         = 'Checking for MPI fortran module',
+                      msg         = 'Checking for the MPI fortran module',
                       define_name = 'HAVE_MPI_MODULE',
                       mandatory   = False)
-        if 'HAVE_MPI_MODULE' not in conf.env:
+        if conf.env['HAVE_MPI_MODULE'] == 0:
             conf.check_cc(fragment= "program test\ninclude 'mpif.h'\nend",
                           compile_filename = 'test.f',
                           features    = 'fc fcprogram',
-                          msg         = 'Checking for MPI fortran header',
+                          msg         = 'Checking for the MPI fortran header',
                           define_name = 'HAVE_MPI_HEADER')
         conf.define('HAVE_MPI', 1)
 
@@ -281,8 +283,10 @@ def build(bld):
                                        .format(a))
 
     #XXX this should be a Task...
-    f90exec = ' --f90exec=mpif90' if 'MPI' in libraries else ''
-    cmd = 'OMPI_FC=' + '${FC} ${F2PY} --fcompiler=${F2PYFCOMPILER}' + f90exec
+    cmd = ''
+    if 'MPI' in libraries:
+        cmd += 'OMPI_FC=${OMPI_FC} '
+    cmd = '${F2PY} --fcompiler=${F2PYFCOMPILER} --f90exec=${FC}'
     cmd += ' --f90flags="${FCFLAGS}'
     cmd += ' ${FCFLAGS_OPENMP}"' if 'OPENMP' in libraries else '"'
     cmd += ' --quiet' if bld.options.verbose == 0 else ''
