@@ -73,6 +73,18 @@ def barycenter_lonlat(lon, lat):
 def combine_fitsheader(headers, cdelt=None, pa=None):
     """
     Returns a FITS header which encompasses all input headers.
+
+    Parameters
+    ----------
+    headers : list of pyfits.Header
+        The headers of the maps that must be contained in the map of the
+        returned header.
+    cdelt : float or 2 element array
+        Physical increment at the reference pixel. Default is the lowest
+        header cdelt.
+    pa : float
+        Position angle of the Y=AXIS2 axis (=-CROTA2). Default is the mean 
+        header pa.
     """
 
     if not isinstance(headers, (list, tuple)):
@@ -81,9 +93,11 @@ def combine_fitsheader(headers, cdelt=None, pa=None):
     if len(headers) == 1 and cdelt is None and pa is None:
         return headers[0]
 
+    # compute the world coordinates of the reference pixel of the combined map
     crval = barycenter_lonlat([h['CRVAL1'] for h in headers],
                               [h['CRVAL2'] for h in headers])
 
+    # compute the combined map cdelt & pa
     if cdelt is None or pa is None:
         cdeltpa = [get_cdelt_pa(h) for h in headers]
 
@@ -93,9 +107,12 @@ def combine_fitsheader(headers, cdelt=None, pa=None):
     if pa is None:
         pa = tmf.mean_degrees(np.array([pa for cdelt, pa in cdeltpa]))
 
+    # first, create the combined header with a single pixel centred on the
+    # reference coordinates, with correct orientation and cdelt
     header0 = create_fitsheader((1,1), cdelt=cdelt, pa=pa, crpix=(1,1),
                                 crval=crval)
 
+    # then, 'enlarge' it to make it fit the edges of each header
     proj0 = wcs.Projection(header0)
     xy0 = []
     for h in headers:
@@ -104,8 +121,8 @@ def combine_fitsheader(headers, cdelt=None, pa=None):
         ny = h['NAXIS2']
         x  = h['CRPIX1']
         y  = h['CRPIX2']
-        edges = proj.toworld(([0.5,x,nx+0.5,0.5,x,nx+0.5,0.5,x,nx+0.5],
-                              [0.5,0.5,0.5,y,y,y,ny+0.5,ny+0.5,ny+0.5]))
+        edges = proj.toworld(([0.5, x, nx+0.5, 0.5, x, nx+0.5, 0.5, x, nx+0.5],
+                              [0.5, 0.5, 0.5, y, y, y, ny+0.5, ny+0.5, ny+0.5]))
         xy0.append(proj0.topixel(edges))
 
     xmin0 = np.round(min([min(c[0]) for c in xy0]))
