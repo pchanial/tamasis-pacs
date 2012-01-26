@@ -2,35 +2,48 @@ from __future__ import division
 
 import os
 import numpy as np
+import tamasis
 from glob import glob
+from numpy.testing import assert_equal
 from tamasis import Map, MPI
 from tamasis.numpyutils import assert_all_eq
 from uuid import uuid1
 
-rank = MPI.COMM_WORLD.Get_rank()
-size = MPI.COMM_WORLD.Get_size()
+rank = MPI.COMM_WORLD.rank
+size = MPI.COMM_WORLD.size
 path_data = os.path.dirname(__file__) + '/data/'
 id = MPI.COMM_WORLD.bcast(str(uuid1()))
 
-def test():
-    filename = path_data + 'frames_blue_map_naive.fits'
-    ref = Map(filename, comm=MPI.COMM_SELF)
-    local = Map(filename, comm=MPI.COMM_WORLD)
-    local2 = ref.tolocal()
+filename = path_data + 'frames_blue_map_naive.fits'
+ref = Map(filename, comm=MPI.COMM_SELF)
+lmap = Map(filename, comm=MPI.COMM_WORLD)
 
-    assert local.shape[0] == int(np.ceil(ref.shape[0] / size))
-    assert_all_eq(local, local2)
+def test_read():
+    shape_global = ref.shape
+    shape_local = tamasis.mpiutils.distribute_shape(shape_global)
+    assert_equal(shape_local, lmap.shape)
 
-    ref2 = local.toglobal()
+    lmaps = MPI.COMM_WORLD.allgather(lmap)
+    gmap = np.concatenate(lmaps, axis=0).magnitude
+
+    assert_all_eq(ref, gmap)
+
+def test_write():
+    filename2 = 'test-' + id + '.fits'
+    lmap.save(filename2)
+    ref2 = Map(filename2, comm=MPI.COMM_SELF)
+    lmap2 = Map(filename2, comm=MPI.COMM_WORLD)
+    lmap2.save('test'+str(rank)+'fits', comm=MPI.COMM_SELF)
+    assert_all_eq(lmap, lmap2)
     assert_all_eq(ref, ref2)
 
-    filename2 = 'test-' + id + '.fits'
-    local.save(filename2)
-    ref3 = Map(filename2, comm=MPI.COMM_SELF)
-    local3 = Map(filename2, comm=MPI.COMM_WORLD)
+#    local2 = ref.tolocal()
 
-    assert_all_eq(local, local3)
-    assert_all_eq(ref, ref3)
+#    assert local.shape[0] == int(np.ceil(ref.shape[0] / size))
+#    assert_all_eq(local, local2)
+#
+#    ref2 = local.toglobal()
+#    assert_all_eq(ref, ref2)
 
 def teardown():
     if rank > 0:

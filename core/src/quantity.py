@@ -256,7 +256,7 @@ class Quantity(np.ndarray):
             
         if context is None or len(self._unit) == 0:
             return array
-       
+
         ufunc = context[0]
         if ufunc in (np.add, np.subtract, np.maximum, np.minimum, np.greater,
                      np.greater_equal, np.less, np.less_equal, np.equal,

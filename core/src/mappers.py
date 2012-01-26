@@ -273,8 +273,6 @@ def mapper_nl(tod, model, unpacking=None, priors=[], hypers=[], norms=[],
                  coverage=coverage,
                  unit=unit,
                  derived_units=derived_units,
-                 comm=coverage.comm,
-                 shape_global=coverage.shape_global,
                  copy=False)
 
     return output
@@ -424,8 +422,6 @@ def _solver(A, b, tod, model, invntt, priors=[], hyper=0, x0=None, tol=1.e-5,
                  coverage=coverage,
                  unit=unit,
                  derived_units=derived_units,
-                 comm=coverage.comm,
-                 shape_global=coverage.shape_global,
                  copy=False)
 
     return output

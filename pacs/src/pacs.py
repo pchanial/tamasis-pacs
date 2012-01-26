@@ -22,7 +22,7 @@ from . import var
 from tamasis.core import (Quantity, Tod, MaskPolicy, Instrument, Pointing, tmf,
                           CompressionAverage, Projection, Masking,
                           create_fitsheader)
-from tamasis.mpiutils import split_observation
+from tamasis.mpiutils import distribute_observation
 from tamasis.observations import Observation
 
 __all__ = [ 'PacsObservation',
@@ -1484,7 +1484,7 @@ def _get_workload(band, slices, detector_masked, policy, transparent, comm):
             detector_removed[16:,:]     = True
 
     # distribute the workload over the processors
-    return split_observation(detector_removed, slices, comm=comm)
+    return distribute_observation(detector_removed, slices, comm=comm)
 
 
 #-------------------------------------------------------------------------------

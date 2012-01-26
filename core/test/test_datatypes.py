@@ -147,8 +147,8 @@ def test_map():
         def __init__(self, data):
             self.info = 'info'
     m = MAP(np.ones(3))
-    assert get_attributes(m) == ['_derived_units', '_header', '_unit','comm', 'coverage', 'error',
-                                 'info', 'origin', 'shape_global']
+    assert get_attributes(m) == ['_derived_units', '_header', '_unit',
+                                 'coverage', 'error', 'info', 'origin']
 
 def test_pickling():
     objs = (q,f,m,t)

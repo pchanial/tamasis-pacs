@@ -20,7 +20,7 @@ from .datatypes import Map, Tod
 from .observations import Observation
 from .quantity import Quantity, _divide_unit, _multiply_unit
 from .utils import diff, diffT, diffTdiff, shift
-from .mpiutils import split_shape, split_work
+from .mpiutils import distribute_shape, distribute_slice
 from .wcsutils import str2fitsheader
 
 try:
@@ -753,11 +753,11 @@ class DistributionGlobal(Operator):
                                     **keywords)
             return
 
-        shapeout = split_shape(shape, comm)
+        shapeout = distribute_shape(shape, comm)
         self.counts = []
         self.offsets = [0]
         for rank in range(comm.Get_size()):
-            s = split_work(shape[0], rank=rank, comm=comm)
+            s = distribute_slice(shape[0], rank=rank, comm=comm)
             n = (s.stop - s.start) * np.product(shape[1:])
             self.counts.append(n)
             self.offsets.append(self.offsets[-1] + n)
@@ -769,13 +769,13 @@ class DistributionGlobal(Operator):
                                 **keywords)
 
     def direct(self, input, output):
-        s = split_work(self.shapein[0], comm=self.comm)
+        s = distribute_slice(self.shapein[0], comm=self.comm)
         n = s.stop - s.start
         output[0:n] = input[s.start:s.stop]
         output[n:] = 0
 
     def transpose(self, input, output):
-        s = split_work(self.shapein[0], comm=self.comm)
+        s = distribute_slice(self.shapein[0], comm=self.comm)
         n = s.stop - s.start
         self.comm.Allgatherv([input[0:n], MPI.DOUBLE], [output, (self.counts,
                              self.offsets), MPI.DOUBLE])
@@ -793,7 +793,7 @@ class DistributionLocal(Operator):
         if comm is None:
             comm = var.comm_map
         shapeout = (int(np.sum(~mask)),)
-        shapein = split_shape(mask.shape, comm)
+        shapein = distribute_shape(mask.shape, comm)
         attrin = { 'comm':comm, 'shape_global':mask.shape }
         attrout = { 'comm':MPI.COMM_SELF, 'shape_global':shapeout}
         Operator.__init__(self, classin=Map, shapein=shapein,

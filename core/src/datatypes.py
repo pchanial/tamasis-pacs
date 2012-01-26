@@ -18,147 +18,35 @@ except:
     _imported_ds9 = False
 
 from functools import reduce
-from pyoperators.utils import tointtuple
 
 from . import MPI
 from .wcsutils import create_fitsheader
-from .mpiutils import read_fits, write_fits, split_shape, split_work
+from .mpiutils import read_fits, write_fits
 from .quantity import Quantity
 
 __all__ = [ 'FitsArray', 'Map', 'Tod' ]
 
 
-class DistributedArray(np.ndarray):
-    """ndarray subclass, to handle MPI-distributed arrays.
-    """
-
-    shape_global = None
-    comm = None
-
-    def __new__(cls, data, shape_global=None, comm=MPI.COMM_SELF):
-        if shape_global is None and comm.Get_size() > 1:
-            raise ValueError('The global shape of the local array is not speci'\
-                             'fied.')
-        if not isinstance(data, DistributedArray):
-            data = data.view(cls)
-        data.shape_global = shape_global or data.shape
-        data.comm = comm
-        return data
-
-    def __array_finalize__(self, array):
-        self.shape_global = getattr(array, 'shape_global', self.shape)
-        self.comm = getattr(array, 'comm', MPI.COMM_SELF)
-
-    def __reduce__(self):
-        state = list(np.ndarray.__reduce__(self))
-        subclass_state = self.__dict__.copy()
-        subclass_state['comm'] = self.comm.py2f()
-        state[2] = (state[2],subclass_state)
-        return tuple(state)
-    
-    def __setstate__(self,state):
-        ndarray_state, subclass_state = state
-        np.ndarray.__setstate__(self,ndarray_state)        
-        for k, v in subclass_state.items():
-            if k == 'comm':
-                v = MPI.Comm.f2py(v)
-            setattr(self, k, v)
-
-    def toglobal(self, attr=()):
-        """Gather the local images into a global image."""
-        if self.comm is None:
-            raise RuntimeError('This array is not a local image.')
-        counts = []
-        offsets = [0]
-        for rank in range(self.comm.Get_size()):
-            s = split_work(self.shape_global[0], rank=rank, comm=self.comm)
-            n = (s.stop - s.start) * np.product(self.shape_global[1:])
-            counts.append(n)
-            offsets.append(offsets[-1] + n)
-        offsets.pop()
-        s = split_work(self.shape_global[0], comm=self.comm)
-        n = s.stop - s.start
-        output = self.empty(self.shape_global, dtype=self.dtype,
-                            comm=MPI.COMM_SELF)
-        output.__array_finalize__(self)
-        t = MPI.BYTE.Create_contiguous(self.dtype.itemsize)
-        t.Commit()
-        self.comm.Allgatherv([self[0:n], t], [output, (counts, offsets), t])
-
-        for a in attr:
-            i = getattr(self, a, None)
-            if i is None:
-                continue
-            o = np.empty(self.shape_global, dtype=i.dtype)
-            t = MPI.BYTE.Create_contiguous(i.dtype.itemsize)
-            t.Commit()
-            self.comm.Allgatherv([i[0:n], t], [o, (counts, offsets), t])
-            setattr(output, a, o)
-            
-        output.comm = MPI.COMM_SELF
-
-        return output
-
-    def tolocal(self, comm=MPI.COMM_WORLD):
-        """Scatter a global image into local ones."""
-        if hasattr(self, 'shape_global') and self.shape != self.shape_global or\
-           hasattr(self, 'comm') and self.comm.Get_size() > 1:
-            raise ValueError('This array is not a global image.')
-
-        order = 'f' if np.isfortran(self) else 'c'
-        if hasattr(self, 'empty'):
-            output = self.empty(self.shape, dtype=self.dtype, order=order,
-                                comm=comm)
-        else:
-            shape = split_shape(self.shape, comm)
-            output = np.empty(shape, dtype=self.dtype, order=order)
-            output = DistributedArray.__new__(DistributedArray, output,
-                                              self.shape, comm)
-        if hasattr(self, '__dict__'):
-            for k, v in self.__dict__.items():
-                setattr(output, k, v)
-        output.comm = comm
-
-        s = split_work(self.shape[0], comm=comm)
-        n = s.stop - s.start
-        output[0:n] = self[s.start:s.stop]
-        if n < output.shape[0]:
-            output[n:] = 0
-        return output
-
-
-class FitsArray(DistributedArray, Quantity):
+class FitsArray(Quantity):
 
     _header = None
 
     def __new__(cls, data, header=None, unit=None, derived_units=None,
                 dtype=None, copy=True, order='C', subok=False, ndmin=0,
-                shape_global=None, comm=None):
-
-        comm = comm or getattr(data, 'comm', MPI.COMM_SELF)
-        shape_global = shape_global or getattr(data, 'shape_global', None)
+                comm=None):
 
         if isinstance(data, (str, unicode)):
-            ihdu = 0
-            fits = pyfits.open(data)
-            while True:
-                try:
-                    hdu = fits[ihdu]
-                except IndexError:
-                    raise IOError('The FITS file has no data.')
-                if hdu.header['NAXIS'] == 0:
-                    ihdu += 1
-                    continue
-                if hdu.data is not None:
-                    break
-            if comm.Get_size() > 1:
-                files = comm.allgather(data)
-                # before splitting the array into local image, check that the
-                # file name is the same for all MPI process
-                if any([f != files[0] for f in files]):
-                    raise ValueError('The file name is not the same for all MP'\
-                                     'I processses.')
-            data, header, shape_global = read_fits(hdu, comm)
+
+            if comm is None:
+                comm = MPI.COMM_WORLD
+
+            try:
+                derived_units = pyfits.open(data)['derived_units'].data
+                derived_units = pickle.loads(str(derived_units.data))
+            except KeyError:
+                pass
+
+            data, header = read_fits(data, None, comm)
 
             copy = False
             if unit is None:
@@ -168,17 +56,14 @@ class FitsArray(DistributedArray, Quantity):
                     unit = header['QTTY____'] # HCSS crap
                     if unit == '1':
                         unit = ''
-            try:
-                derived_units = fits['derived_units'].data
-                derived_units = pickle.loads(str(derived_units.data))
-                comm.Barrier()
-            except KeyError:
-                pass
+
+        elif comm is not None:
+            raise ValueError('The MPI communicator can only be set for input FI'
+                             'TS files.')
 
         # get a new FitsArray instance (or a subclass if subok is True)
         result = Quantity.__new__(cls, data, unit, derived_units, dtype, copy,
                                   order, True, ndmin)
-        result = DistributedArray.__new__(cls, result, shape_global, comm)
         if not subok and result.__class__ is not cls:
             result = result.view(cls)
 
@@ -198,16 +83,7 @@ class FitsArray(DistributedArray, Quantity):
 
     def __array_finalize__(self, array):
         Quantity.__array_finalize__(self, array)
-        DistributedArray.__array_finalize__(self, array)
         self._header = getattr(array, '_header', None)
-
-    def __getitem__(self, key):
-        item = super(Quantity, self).__getitem__(key)
-        if not isinstance(item, self.__class__):
-            return item
-        item.shape_global = item.shape
-        item.comm = MPI.COMM_SELF
-        return item
 
     def __getattr__(self, name):
         if self.dtype.names and name in self.dtype.names:
@@ -222,27 +98,21 @@ class FitsArray(DistributedArray, Quantity):
 
     @staticmethod
     def empty(shape, header=None, unit=None, derived_units=None, dtype=None,
-              order=None, comm=MPI.COMM_SELF):
-        shape = tointtuple(shape)
-        shape_local = split_shape(shape, comm)
-        return FitsArray(np.empty(shape_local, dtype, order), header, unit,
-            derived_units, dtype, copy=False, shape_global=shape, comm=comm)
+              order=None):
+        return FitsArray(np.empty(shape, dtype, order), header, unit,
+            derived_units, dtype, copy=False)
 
     @staticmethod
     def ones(shape, header=None, unit=None, derived_units=None, dtype=None,
-             order=None, comm=MPI.COMM_SELF):
-        shape = tointtuple(shape)
-        shape_local = split_shape(shape, comm)
-        return FitsArray(np.ones(shape_local, dtype, order), header, unit,
-            derived_units, dtype, copy=False, shape_global=shape, comm=comm)
+             order=None):
+        return FitsArray(np.ones(shape, dtype, order), header, unit,
+            derived_units, dtype, copy=False)
 
     @staticmethod
     def zeros(shape, header=None, unit=None, derived_units=None, dtype=None,
-              order=None, comm=MPI.COMM_SELF):
-        shape = tointtuple(shape)
-        shape_local = split_shape(shape, comm)
-        return FitsArray(np.zeros(shape_local, dtype, order), header, unit,
-            derived_units, dtype, copy=False, shape_global=shape, comm=comm)
+              order=None):
+        return FitsArray(np.zeros(shape, dtype, order), header, unit,
+            derived_units, dtype, copy=False)
 
     def has_wcs(self):
         """
@@ -262,9 +132,7 @@ class FitsArray(DistributedArray, Quantity):
     @property
     def header(self):
         if self._header is None and not np.iscomplexobj(self):
-            self._header = create_fitsheader(self.shape_global[::-1],
-                                             fromdata=self)
-            
+            self._header = create_fitsheader(self.shape[::-1], fromdata=self)
         return self._header
 
     @header.setter
@@ -277,38 +145,28 @@ class FitsArray(DistributedArray, Quantity):
     def tofile(self, fid, sep='', format='%s'):
         super(FitsArray,self).tofile(fid, sep, format)
 
-    def save(self, filename, fitskw=None):
-        """Save a FitsArray instance to a fits file given a filename
-       
-        If the same file already exist it overwrites it.
+    def save(self, filename, header=None, comm=None):
+        """
+        Write a FitsArray instance as a FITS file.
         """
 
-        if self.header is not None:
-            header = self.header.copy()
-        else:
-            header = create_fitsheader(fromdata=self)
-       
+        header = (header or self.header).copy()
+        if comm is None:
+            comm = MPI.COMM_WORLD
+
         if len(self._unit) != 0:
             header.update('BUNIT', self.unit)
 
-        if fitskw is not None:
-            for k, v in fitskw.items():
-                if len(k) > 8:
-                    k = 'HIERARCH ' + k
-                if isinstance(v, tuple):
-                    if len(v) != 2:
-                        raise ValueError('A tuple input for fitskw must have t'\
-                                         'wo elements (value, comment).')
-                    v, c = v
-                else:
-                    c = None
-                v = v if isinstance(v, (str, int, long, float, complex, bool,
-                    np.floating, np.integer, np.complexfloating)) else repr(v)
-                header.update(k, v, c)
-
-        write_fits(filename, self, header, self.shape_global, False, self.comm)
-        if not isinstance(self, Map) and not isinstance(self, Tod):
-            _save_derived_units(filename, self.derived_units, self.comm)
+        write_fits(filename, self, header, False, None, comm)
+        if not self.derived_units:
+            return
+        if comm is None or comm.rank == 0:
+            buf = StringIO.StringIO()
+            pickle.dump(self.derived_units, buf, pickle.HIGHEST_PROTOCOL)
+            data = np.frombuffer(buf.getvalue(), np.uint8)
+            write_fits(filename, data, None, True, 'derived_units',
+                       MPI.COMM_SELF)
+        comm.Barrier()
 
     def imsave(self, filename, colorbar=True, **kw):
         is_interactive = matplotlib.is_interactive()
@@ -504,30 +362,33 @@ class Map(FitsArray):
 
     def __new__(cls, data,  header=None, unit=None, derived_units=None,
                 coverage=None, error=None, origin=None, dtype=None, copy=True,
-                order='C', subok=False, ndmin=0, shape_global=None, comm=None):
+                order='C', subok=False, ndmin=0, comm=None):
 
         # get a new Map instance (or a subclass if subok is True)
         result = FitsArray.__new__(cls, data, header, unit, derived_units,
-            dtype, copy, order, True, ndmin, shape_global, comm)
+            dtype, copy, order, True, ndmin, comm)
         if not subok and result.__class__ is not cls:
             result = result.view(cls)
 
         if isinstance(data, (str, unicode)):
+
+            if comm is None:
+                comm = MPI.COMM_WORLD
+
             if 'DISPORIG' in result.header:
                 if origin is None:
                     origin = result.header['DISPORIG']
                 del result.header['DISPORIG']
-            fits = pyfits.open(data)
-            try:
-                if coverage is None:
-                    coverage, j1, j2 = read_fits(fits['Coverage'], comm)
-            except:
-                pass
-            try:
-                if error is None:
-                    error, j1, j2 = read_fits(fits['Error'], comm)
-            except:
-                pass
+            if coverage is None:
+                try:
+                    coverage, junk = read_fits(data, 'Coverage', comm)
+                except KeyError:
+                    pass
+            if error is None:
+                try:
+                    error, junk = read_fits(data, 'Error', comm)
+                except KeyError:
+                    pass
 
         if origin is not None:
             origin = origin.strip().lower()
@@ -567,33 +428,21 @@ class Map(FitsArray):
 
     @staticmethod
     def empty(shape, coverage=None, error=None, origin='lower', header=None,
-              unit=None, derived_units=None, dtype=None, order=None,
-              comm=MPI.COMM_SELF):
-        shape = tointtuple(shape)
-        shape_local = split_shape(shape, comm)
-        return Map(np.empty(shape_local, dtype, order), header, unit,
-                   derived_units, coverage, error, origin, dtype, copy=False,
-                   shape_global=shape, comm=comm)
+              unit=None, derived_units=None, dtype=None, order=None):
+        return Map(np.empty(shape, dtype, order), header, unit, derived_units,
+                   coverage, error, origin, dtype, copy=False)
 
     @staticmethod
     def ones(shape, coverage=None, error=None, origin='lower', header=None,
-             unit=None, derived_units=None, dtype=None, order=None,
-             comm=MPI.COMM_SELF):
-        shape = tointtuple(shape)
-        shape_local = split_shape(shape, comm)
-        return Map(np.ones(shape_local, dtype, order), header, unit,
-                   derived_units, coverage, error, origin, dtype, copy=False,
-                   shape_global=shape, comm=comm)
+             unit=None, derived_units=None, dtype=None, order=None):
+        return Map(np.ones(shape, dtype, order), header, unit, derived_units,
+                   coverage, error, origin, dtype, copy=False)
 
     @staticmethod
     def zeros(shape, coverage=None, error=None, origin='lower', header=None,
-              unit=None, derived_units=None, dtype=None, order=None,
-              comm=MPI.COMM_SELF):
-        shape = tointtuple(shape)
-        shape_local = split_shape(shape, comm)
-        return Map(np.zeros(shape_local, dtype, order), header, unit,
-                   derived_units, coverage, error, origin, dtype, copy=False,
-                   shape_global=shape, comm=comm)
+              unit=None, derived_units=None, dtype=None, order=None):
+        return Map(np.zeros(shape, dtype, order), header, unit, derived_units,
+                   coverage, error, origin, dtype, copy=False)
 
     def imshow(self, mask=None, title=None, new_figure=True, origin=None, **kw):
         """A simple graphical display function for the Map class"""
@@ -639,30 +488,18 @@ class Map(FitsArray):
         pyplot.show()
         return annim
 
-    def save(self, filename, fitskw=None):
-        fitskw = fitskw or {}
-        if 'DISPORIG' not in [k.upper() for k in fitskw.keys()]:
-            fitskw['DISPORIG'] = (self.origin, 'Map display convention')
-        FitsArray.save(self, filename, fitskw=fitskw)
-        if self.coverage is not None:
-            write_fits(filename, self.coverage, None, self.shape_global, True,
-                       self.comm, extname='Coverage')
-        if self.error is not None:
-            write_fits(filename, self.error, None, self.shape_global, True,
-                       self.comm, extname='Error')
-        _save_derived_units(filename, self.derived_units, self.comm)
+    def save(self, filename, header=None, comm=None):
 
-    def toglobal(self):
-        return DistributedArray.toglobal(self, attr=('coverage', 'error'))
+        header = (header or self.header).copy()
+        if comm is None:
+            comm = MPI.COMM_WORLD
 
-    def tolocal(self, comm=MPI.COMM_WORLD):
-        output = DistributedArray.tolocal(self, comm)
-        tolocal = DistributedArray.__dict__['tolocal']
+        header.update('DISPORIG', self.origin, 'Map display convention')
+        FitsArray.save(self, filename, header, comm=comm)
         if self.coverage is not None:
-            output.coverage = tolocal(self.coverage, comm)
+            write_fits(filename, self.coverage, None, True, 'Coverage', comm)
         if self.error is not None:
-            output.error = tolocal(self.error, comm)
-        return output
+            write_fits(filename, self.error, None, True, 'Error', comm)
 
 
 #-------------------------------------------------------------------------------
@@ -674,11 +511,11 @@ class Tod(FitsArray):
 
     def __new__(cls, data, mask=None, header=None, unit=None,
                 derived_units=None, dtype=None, copy=True, order='C',
-                subok=False, ndmin=0, shape_global=None, comm=None):
+                subok=False, ndmin=0, comm=None):
 
         # get a new Tod instance (or a subclass if subok is True)
         result = FitsArray.__new__(cls, data, header, unit, derived_units,
-            dtype, copy, order, True, ndmin, shape_global, comm)
+            dtype, copy, order, True, ndmin, comm)
         if not subok and result.__class__ is not cls:
             result = result.view(cls)
         
@@ -687,8 +524,12 @@ class Tod(FitsArray):
             mask = None
 
         if mask is None and isinstance(data, (str, unicode)):
+
+            if comm is None:
+                comm = MPI.COMM_WORLD
+
             try:
-                mask, j, k = read_fits(pyfits.open(data)['Mask'], comm)
+                mask, junk = read_fits(data, 'mask', comm)
                 mask = mask.view(np.bool8)
                 copy = False
             except:
@@ -759,36 +600,21 @@ class Tod(FitsArray):
 
     @staticmethod
     def empty(shape, mask=None, header=None, unit=None, derived_units=None,
-              dtype=None, order=None, comm=MPI.COMM_SELF):
-        shape = tointtuple(shape)
-        if len(shape) <= 1 and comm.Get_size() > 1:
-            raise ValueError('Scalar or vector Tod can not be distributed.')
-        shape_local = split_shape(shape, comm)
-        return Tod(np.empty(shape_local, dtype, order), mask, header, unit,
-                   derived_units, dtype, copy=False, shape_global=shape,
-                   comm=comm)
+              dtype=None, order=None):
+        return Tod(np.empty(shape, dtype, order), mask, header, unit,
+                   derived_units, dtype, copy=False)
 
     @staticmethod
     def ones(shape, mask=None, header=None, unit=None, derived_units=None,
-             dtype=None, order=None, comm=MPI.COMM_SELF):
-        shape = tointtuple(shape)
-        if len(shape) <= 1 and comm.Get_size() > 1:
-            raise ValueError('Scalar or vector Tod can not be distributed.')
-        shape_local = split_shape(shape, comm)
-        return Tod(np.ones(shape_local, dtype, order), mask, header, unit,
-                   derived_units, dtype, copy=False, shape_global=shape,
-                   comm=comm)
+             dtype=None, order=None):
+        return Tod(np.ones(shape, dtype, order), mask, header, unit,
+                   derived_units, dtype, copy=False)
 
     @staticmethod
     def zeros(shape, mask=None, header=None, unit=None, derived_units=None,
-              dtype=None, order=None, comm=MPI.COMM_SELF):
-        shape = tointtuple(shape)
-        if len(shape) <= 1 and comm.Get_size() > 1:
-            raise ValueError('Scalar or vector Tod can not be distributed.')
-        shape_local = split_shape(shape, comm)
-        return Tod(np.zeros(shape_local, dtype, order), mask, header, unit,
-                   derived_units, dtype, copy=False, shape_global=shape,
-                   comm=comm)
+              dtype=None, order=None):
+        return Tod(np.zeros(shape, dtype, order), mask, header, unit,
+                   derived_units, dtype, copy=False)
 
     def imshow(self, title=None, aspect='auto', **kw):
         """
@@ -819,36 +645,12 @@ class Tod(FitsArray):
             output += 's'
         return output + ']'
 
-    def save(self, filename, fitskw=None):
-        FitsArray.save(self, filename, fitskw=fitskw)
+    def save(self, filename, header=None, comm=None):
+
+        if comm is None:
+            comm = MPI.COMM_WORLD
+
+        FitsArray.save(self, filename, header, comm=comm)
         if self.mask is not None:
-            write_fits(filename, self.mask.view('uint8'), None,
-                       self.shape_global, True, self.comm, extname='Mask')
-        _save_derived_units(filename, self.derived_units, self.comm)
-
-    def toglobal(self):
-        return DistributedArray.toglobal(self, attr=('mask',))
-
-    def tolocal(self, comm=MPI.COMM_WORLD):
-        output = DistributedArray.tolocal(self, comm)
-        if self.mask is not None:
-            tolocal = DistributedArray.__dict__['tolocal']
-            output.mask = tolocal(self.mask, comm)
-        return output
-
-
-#-------------------------------------------------------------------------------
-
-
-def _save_derived_units(filename, du, comm):
-    if not du:
-        return
-    if comm is None:
-        return
-    if comm.Get_rank() == 0:
-        buffer = StringIO.StringIO()
-        pickle.dump(du, buffer, pickle.HIGHEST_PROTOCOL)
-        data = np.frombuffer(buffer.getvalue(), np.uint8)
-        header = create_fitsheader(fromdata=data, extname='derived_units')
-        pyfits.append(filename, data, header)
-    comm.Barrier()
+            mask = self.mask.view('uint8')
+            write_fits(filename, mask, None, True, 'Mask', comm)

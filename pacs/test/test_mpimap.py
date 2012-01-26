@@ -44,7 +44,7 @@ mlocalunpacked = packing.T(mlocalpacked)
 
 pb = False
 for irank in range(size):
-    s = tamasis.mpiutils.split_work(proj.mask.shape[0], rank=irank)
+    s = tamasis.mpiutils.distribute_slice(proj.mask.shape[0], rank=irank)
     if np.any((mlocalunpacked[s] != 0) & (mlocalunpacked[s] != irank+1)):
         pb = True
         print 'Problem in rank ' + str(rank) + ' with local ' + str(irank)

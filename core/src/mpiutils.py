@@ -9,41 +9,61 @@ import pyfits
 import sys
 import tamasisfortran as tmf
 
+from pyoperators.utils import strshape
 from . import MPI
 from .wcsutils import create_fitsheader
 
 __all__ = []
 
 
-def split_work(nglobal, rank=None, comm=None):
-    comm = comm or MPI.COMM_WORLD
-    size  = comm.Get_size()
+def distribute_shape(shape, rank=None, size=None, comm=None):
+    """
+    Return the shape of a local array given the shape of a global array,
+    according to the rank of the MPI job, The load is distributed along
+    the first dimension.
+    """
+    if rank is None or size is None:
+        comm = comm or MPI.COMM_WORLD
+    if size is None:
+        size = comm.size
     if rank is None:
-        rank = comm.Get_rank()
-    nlocal = int(np.ceil(nglobal / size))
-    return slice(min(rank * nlocal, nglobal), min((rank + 1) * nlocal, nglobal))
+        rank = comm.rank
+    if not isinstance(shape, tuple):
+        raise TypeError('The input is not a shape tuple.')
+    if len(shape) == 0:
+        if size > 1:
+            raise ValueError('It is ambiguous to split a scalar across processe'
+                             's.')
+        return ()
+    nglobal = shape[0]
+    nlocal = nglobal // size + ((nglobal % size) > rank)
+    return (nlocal,) + tuple(shape[1:])
+
+
+#-------------------------------------------------------------------------------
+
+
+def distribute_slice(nglobal, rank=None, size=None, comm=None):
+    """
+    Given a number of ordered global work items, return the slice that brackets
+    the items distributed to a local MPI job.
+    """
+    if rank is None or size is None:
+        comm = comm or MPI.COMM_WORLD
+    if size is None:
+        size = comm.size
+    if rank is None:
+        rank = comm.rank
+    nlocal = nglobal // size + ((nglobal % size) > rank)
+    start = nglobal // size * rank + min(rank, nglobal % size)
+    stop = start + nlocal
+    return slice(start, stop)
     
 
 #-------------------------------------------------------------------------------
 
 
-def split_shape(shape, comm=None):
-    comm = comm or MPI.COMM_WORLD
-    if not isinstance(shape, (list, np.ndarray, tuple)):
-        shape = (shape,)
-    if len(shape) == 0:
-        if comm.size > 1:
-            raise ValueError('It is ambiguous to split a scalar across processe'
-                             's.')
-        return ()
-    n = int(np.ceil(shape[0] / comm.size))
-    return (n,) + tuple(shape[1:])
-
-
-#-------------------------------------------------------------------------------
-
-
-def split_observation(detectors, observations, rank=None, comm=None):
+def distribute_observation(detectors, observations, rank=None, comm=None):
 
     if comm is None:
         comm = MPI.COMM_WORLD
@@ -104,59 +124,126 @@ def split_observation(detectors, observations, rank=None, comm=None):
 
     return detectors_, observations_
 
-def read_fits(hdu, comm=None, sequential=False):
-    """Read a FITS file into local images of the same shape"""
 
-    if comm is None:
-        comm = MPI.COMM_SELF
+#-------------------------------------------------------------------------------
+
+
+def read_fits(filename, extname, comm):
+    """
+    Read and distribute a FITS file into local arrays.
+
+    Parameters
+    ----------
+    filename : str
+        The FITS file name.
+    extname : str
+        The FITS extension name. Use None to read the first HDU with data.
+    comm : mpi4py.Comm
+        The MPI communicator of the local arrays.
+    """
+
+    # check if the file name is the same for all MPI jobs
+    files = comm.allgather(filename+str(extname))
+    all_equal = all([f == files[0] for f in files])
+    if comm.size > 1 and not all_equal:
+        raise ValueError('The file name is not the same for all MPI jobs.')
+
+    # get primary hdu or extension
+    fits = pyfits.open(filename)
+    if extname is not None:
+        hdu = fits[extname]
+    else:
+        ihdu = 0
+        while True:
+            try:
+                hdu = fits[ihdu]
+            except IndexError:
+                raise IOError('The FITS file has no data.')
+            if hdu.header['NAXIS'] == 0:
+                ihdu += 1
+                continue
+            if hdu.data is not None:
+                break
+
     header = hdu.header
-    naxis = tuple(header['NAXIS'+str(i)] for i in range(1, header['NAXIS']+1))
-    s = split_work(naxis[-1], comm=comm)
-    n = s.stop - s.start
-    nmax = int(np.ceil(naxis[-1] / comm.Get_size()))
-    fitsdtype = {8:'uint8', 16:'>i2', 32:'>i4', 64:'>i8', -32:'>f4', -64:'>f8'}
+    n = header['NAXIS' + str(header['NAXIS'])]
+    s = distribute_slice(n, comm=comm)
+    output = pyfits.Section(hdu)[s]
 
-    for iproc in range(comm.Get_size()):
-        if iproc == comm.Get_rank():
-            if n < nmax:
-                shape = (nmax,) + naxis[-2::-1]
-                output = np.zeros(shape,dtype=fitsdtype[header['BITPIX']])
-                output[0:n,...] = pyfits.Section(hdu)[s]
-            else:
-                output = pyfits.Section(hdu)[s]
-        if sequential:
-            comm.Barrier()
-    comm.Barrier()
     if not output.dtype.isnative:
         output = output.byteswap().newbyteorder('=')
 
-    return output, header, naxis[::-1]
+    # update the header
+    header['NAXIS' + str(header['NAXIS'])] = s.stop - s.start
+    try:
+        if header['CTYPE1'] == 'RA---TAN' and header['CTYPE2'] == 'DEC--TAN':
+            header['CRPIX2'] -= s.start
+    except KeyError:
+        pass
+    comm.Barrier()
 
-def write_fits(filename, data, header, shape_global, extension, comm,
-               extname=None):
-    """Write local images into a FITS file"""
+    return output, header
 
-    if comm is None:
-        comm = MPI.COMM_SELF
 
+#-------------------------------------------------------------------------------
+
+
+def write_fits(filename, data, header, extension, extname, comm):
+    """
+    Write and combine local arrays into a FITS file.
+
+    Parameters
+    ----------
+    filename : str
+        The FITS file name.
+    data : ndarray
+        The array to be written.
+    header : pyfits.Header
+        The data FITS header. None can be set, in which case a minimal FITS
+        header will be inferred from the data.
+    extension : boolean
+        If True, the data will be written as an extension to an already
+        existing FITS file.
+    extname : str
+        The FITS extension name. Use None to write the primary HDU.
+    comm : mpi4py.Comm
+        The MPI communicator of the local arrays. Use MPI.COMM_SELF if the data
+        are not meant to be combined into a global array. Make sure that the MPI
+        processes are not executing this routine with the same file name.
+    """
+
+    # check if the file name is the same for all MPI jobs
+    files = comm.allgather(filename+str(extname))
+    all_equal = all(f == files[0] for f in files)
+    if comm.size > 1 and not all_equal:
+        raise ValueError('The file name is not the same for all MPI jobs.')
+    ndims = comm.allgather(data.ndim)
+    if any(n != ndims[0] for n in ndims):
+        raise ValueError("The arrays have an incompatible number of dimensions:"
+                         " '{0}'.".format(', '.join(str(n) for n in ndims)))
+    ndim = ndims[0]
+    shapes = comm.allgather(data.shape)
+    if any(s[1:] != shapes[0][1:] for s in shapes):
+        raise ValueError("The arrays have incompatible shapes: '{0}'.".format(
+                         strshape(shapes)))
+
+    # get header
+    if header is None:
+        header = create_fitsheader(fromdata=data, extname=extname)
+    else:
+        header = header.copy()
+    if extname is not None:
+        header.update('extname', extname)
+
+    # we remove the file first to avoid an annoying pyfits informative message
     if not extension:
         try:
             os.remove(filename)
         except:
             pass
 
-    if header is None:
-        header = create_fitsheader(shape_global[::-1], data.dtype,
-                                   extname=extname)
-
-    rank = comm.Get_rank()
-    size = comm.Get_size()
-    files = comm.allgather(filename)
-    allsame = all([f == files[0] for f in files])
-    alldiff = len(files) == len(np.unique(files))
-    if not alldiff and not allsame:
-        raise ValueError('Some target filenames are equal, but not all.')
-    if alldiff or size == 1:
+    # case without MPI communication
+    if comm.size == 1:
         if not extension:
             hdu = pyfits.PrimaryHDU(data, header)
             hdu.writeto(filename, clobber=True)
@@ -164,27 +251,37 @@ def write_fits(filename, data, header, shape_global, extension, comm,
             pyfits.append(filename, data, header)
         return
 
-    if rank == 0:
+    # get global/local parameters
+    shape_global = (sum(s[0] for s in shapes),) + shapes[0][1:]
+    nglobal = shape_global[0]
+    s = distribute_slice(nglobal)
+    nlocal = s.stop - s.start
+
+    if not extension:
+        try:
+            os.remove(filename)
+        except:
+            pass
+
+    if comm.rank == 0:
+        header['NAXIS' + str(ndim)] = nglobal
         shdu = pyfits.StreamingHDU(filename, header)
         data_loc = shdu._datLoc
         shdu.close()
     else:
         data_loc = None
+
     data_loc = comm.bcast(data_loc)
 
     # get a communicator excluding the processes which have no work to do
     # (Create_subarray does not allow 0-sized subarrays)
-    nglobal = shape_global[0]
     chunk = np.product(shape_global[1:])
-    s = split_work(nglobal)
-    nlocal = s.stop - s.start
-    nmax = int(np.ceil(nglobal / size))
-    rank_nowork = int(np.ceil(nglobal / nmax))
+    rank_nowork = min(comm.size, nglobal)
     group = comm.Get_group()
     group.Incl(range(rank_nowork))
     newcomm = comm.Create(group)
     
-    if rank < rank_nowork:
+    if comm.rank < rank_nowork:
         mtype = {1:MPI.BYTE, 4: MPI.FLOAT, 8:MPI.DOUBLE}[data.dtype.itemsize]
         ftype = mtype.Create_subarray([nglobal*chunk], [nlocal*chunk],
                                       [s.start*chunk])
@@ -199,7 +296,7 @@ def write_fits(filename, data, header, shape_global, extension, comm,
         f.Write_all(data[0:nlocal])
         f.Close()
 
-    if rank == 0:
+    if comm.rank == 0:
         shdu._ffo = pyfits.file._File(filename, 'append')
         shdu._ffo.getfile().seek(0,2)
         pyfitstype = {8:'uint8', 16:'int16', 32:'int32', 64:'int64', -32:'float32', -64:'float64'}[header['BITPIX']]
