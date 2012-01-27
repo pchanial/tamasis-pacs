@@ -12,8 +12,8 @@ from .core import *
 from .madcap import *
 from .pacs import *
 
-del datatypes, mappers, numpyutils, observations, processing, quantities, tamasisfortran
-del core, madcap, pacs
-
-__all__ = [ f for f in dir() if f[0] != '_' and f not in ('mpiutils', 'tmf', 'var', 'wcsutils')]
+import types
+__all__ = [ f for f in dir() if f[0] != '_' and not isinstance(eval(f), types.ModuleType)]
+del tamasisfortran, types
+del f # not needed in Python3
 
