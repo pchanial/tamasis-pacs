@@ -21,3 +21,6 @@ from .pointings import *
 from .observations import *
 
 __all__ = [x for x in dir() if not x.startswith('_') or x == '__version__']
+
+del x # not needed in Python3
+
