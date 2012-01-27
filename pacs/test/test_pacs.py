@@ -159,7 +159,7 @@ def test_slice2():
     assert all_eq(m1, m2, 1e-12)
     assert all_eq(proj1(m1), proj2(m1))
     
-def tearDown():
+def teardown():
     files = glob('*' + uuid + '.fits')
     for f in files:
         try:

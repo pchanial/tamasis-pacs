@@ -30,7 +30,7 @@ from functools import reduce
 
 from . import MPI
 from .mpiutils import read_fits, write_fits
-from .quantity import Quantity
+from .quantities import Quantity
 from .wcsutils import create_fitsheader
 
 __all__ = [ 'FitsArray', 'Map', 'Tod' ]
@@ -104,9 +104,9 @@ class FitsArray(Quantity):
                 comm = MPI.COMM_WORLD
 
             try:
-                derived_units = pyfits.open(data)['derived_units'].data
-                derived_units = pickle.loads(str(derived_units.data))
-            except KeyError:
+                buf = pyfits.open(data)['derived_units'].data
+                derived_units = pickle.loads(str(buf.data))
+            except (ImportError, KeyError):
                 pass
 
             data, header = read_fits(data, None, comm)

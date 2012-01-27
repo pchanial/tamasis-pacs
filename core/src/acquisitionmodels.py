@@ -18,7 +18,7 @@ from . import MPI
 from . import var
 from .datatypes import Map, Tod
 from .observations import Observation
-from .quantity import Quantity, _divide_unit, _multiply_unit
+from .quantities import Quantity, _divide_unit, _multiply_unit
 from .utils import diff, diffT, diffTdiff, shift
 from .mpiutils import distribute_shape, distribute_slice
 from .wcsutils import str2fitsheader

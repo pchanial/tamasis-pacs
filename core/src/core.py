@@ -10,7 +10,7 @@ from .linalg import *
 from .mpiutils import *
 from .wcsutils import *
 from .solvers import *
-from .quantity import *
+from .quantities import *
 from .datatypes import *
 from .utils import *
 from .processing import *

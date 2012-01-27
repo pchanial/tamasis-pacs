@@ -7,7 +7,7 @@ from pyoperators.utils import isscalar
 
 from . import var
 from .datatypes import FitsArray, Map
-from .quantity import Quantity
+from .quantities import Quantity
 from .wcsutils import angle_lonlat, barycenter_lonlat, create_fitsheader
 
 __all__ = ['Pointing']
