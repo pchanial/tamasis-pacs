@@ -9,6 +9,9 @@ from . import MPI
 from .datatypes import Map
 from .wcsutils import barycenter_lonlat, combine_fitsheader, create_fitsheader
 
+__all__ = ['Instrument']
+
+
 class Instrument(object):
     """
     Class storing information about the instrument.
