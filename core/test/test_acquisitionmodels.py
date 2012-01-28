@@ -5,7 +5,7 @@ import tamasis
 from pyoperators import Operator, AdditionOperator, CompositionOperator, DiagonalOperator, BlockDiagonalOperator, asoperator, decorators, I
 from pyoperators.utils import isscalar, assert_is
 from numpy.testing import assert_array_equal, assert_almost_equal, assert_raises
-from tamasis.acquisitionmodels import BlackBodyOperator, Convolution, CompressionAverage, DdTdd, DiscreteDifference, DownSampling, FftOperator, FftHalfComplex, Masking, Packing, Padding, ResponseTruncatedExponential, RollOperator, ShiftOperator, Unpacking, block_diagonal
+from tamasis.acquisitionmodels import BlackBodyOperator, ConvolutionOperator, CompressionAverageOperator, DdTddOperator, DiscreteDifferenceOperator, DownSamplingOperator, FftOperator, FftHalfComplexOperator, Masking, PackOperator, PadOperator, ConvolutionTruncatedExponentialOperator, RollOperator, ShiftOperator, UnpackOperator, block_diagonal
 from tamasis.numpyutils import all_eq
 
 def test_partitioning():
@@ -89,7 +89,7 @@ def test_blackbody():
     
 def test_compression_average1():
     data = np.array([1., 2., 2., 3.])
-    compression = CompressionAverage(2)
+    compression = CompressionAverageOperator(2)
     compressed = compression(data)
     assert_array_equal(compressed, [1.5, 2.5])
     assert_array_equal(compression.T(compressed), [0.75, 0.75, 1.25, 1.25])
@@ -99,7 +99,7 @@ def test_compression_average2():
     tod = np.empty((2,15), float)
     tod[0,:] = [1,1,1,1,1,3,3,3,3,3,4,4,4,4,4]
     tod[1,:] = [1,2,1.,0.5,0.5,5,0,0,0,0,1,2,1,2,1.5]
-    compression = CompressionAverage(5, partition=partition)
+    compression = CompressionAverageOperator(5, partition=partition)
     tod2 = compression(tod)
     assert tod2.shape == (2,3)
     assert_array_equal(tod2, [[1.,3.,4.],[1.,1.,1.5]])
@@ -109,31 +109,31 @@ def test_compression_average2():
     assert_almost_equal(tod3[0,:], (0.2,0.2,0.2,0.2,0.2,0.6,0.6,0.6,0.6,0.6,0.8,0.8,0.8,0.8,0.8))
     
     tod = np.array([1,2,2,3,3,3,4,4,4,4])
-    compression = CompressionAverage([1,2,3,4], partition=[1,2,3,4])
+    compression = CompressionAverageOperator([1,2,3,4], partition=[1,2,3,4])
     tod2 = compression(tod)
     assert_almost_equal(tod2, [1,2,3,4])
     tod3 = compression.T(tod2)
     assert_almost_equal(tod3, 10*[1])
 
 def test_compression_average3():
-    a = CompressionAverage(3)
+    a = CompressionAverageOperator(3)
     assert_almost_equal(a.todense(9).T, a.T.todense(3))
 
 def test_downsampling1():
     partition = (1,2,3,4)
     tod = np.array([1,2,1,3,1,1,4,1,1,1])
-    compression=DownSampling([1,2,3,4], partition=partition)
+    compression=DownSamplingOperator([1,2,3,4], partition=partition)
     tod2 = compression(tod)
     assert_array_equal(tod2, [1,2,3,4])
     tod3 = compression.T(tod2)
     assert_array_equal(tod3, [1,2,0,3,0,0,4,0,0,0])
 
 def test_downsampling2():
-    a = CompressionAverage(3)
+    a = CompressionAverageOperator(3)
     assert_almost_equal(a.todense(9).T, a.T.todense(3))
 
 def test_padding1():
-    padding = Padding(left=1,right=20)
+    padding = PadOperator(left=1,right=20)
     a = np.arange(10*15).reshape((10,15))
     b = padding(a)
     assert b.shape == (10,36)
@@ -145,7 +145,7 @@ def test_padding1():
     assert_array_equal(padding.T.todense(shapeout), padding.todense(shapein).T)
 
 def test_padding2():
-    padding = Padding(left=1,right=(4,20), partition=(12,3))
+    padding = PadOperator(left=1,right=(4,20), partition=(12,3))
     a = np.arange(10*15).reshape((10,15))
     b = padding(a)
     assert b.shape == (10,41)
@@ -159,8 +159,8 @@ def test_padding2():
     shapeout = (10,(12+1+4)+(3+1+20))
     assert_array_equal(padding.T.todense(shapeout), padding.todense(shapein).T)
 
-def test_response_truncated_exponential():
-    r = ResponseTruncatedExponential(1., shapein=(1,10))
+def test_convolution_truncated_exponential():
+    r = ConvolutionTruncatedExponentialOperator(1., shapein=(1,10))
     a = np.ones((1,10))
     b = r(a)
     assert np.allclose(a, b)
@@ -172,7 +172,7 @@ def test_response_truncated_exponential():
 
 def test_ffthalfcomplex1():
     n = 100
-    fft = FftHalfComplex(n)
+    fft = FftHalfComplexOperator(n)
     a = np.random.random(n)+1
     b = fft.T(fft(a))
     assert np.allclose(a, b)
@@ -182,14 +182,14 @@ def test_ffthalfcomplex1():
 
 def test_ffthalfcomplex2():
     nsamples = 1000
-    fft = FftHalfComplex(nsamples)
+    fft = FftHalfComplexOperator(nsamples)
     a = np.random.random((10,nsamples))+1
     b = fft.T(fft(a))
     assert np.allclose(a, b)
 
 def test_ffthalfcomplex3():
     partition = (100,300,5,1000-100-300-5)
-    ffts = [FftHalfComplex(p) for p in partition]
+    ffts = [FftHalfComplexOperator(p) for p in partition]
     fft = BlockDiagonalOperator(ffts, partitionin=partition, axisin=-1)
     a = np.random.random((10,np.sum(partition)))+1
     b = fft(a)
@@ -200,7 +200,7 @@ def test_ffthalfcomplex3():
 
 def test_addition():
     def func(nops):
-        ops = [ DiscreteDifference(axis=axis,shapein=(2,3,4,5)) \
+        ops = [ DiscreteDifferenceOperator(axis=axis,shapein=(2,3,4,5)) \
                 for axis in range(nops) ]
         model = AdditionOperator(ops)
         v = np.arange(2*3*4*5.).reshape(2,3,4,5)
@@ -214,7 +214,7 @@ def test_addition():
 
 def test_additionT():
     def func(nops):
-        ops = [ DiscreteDifference(axis=axis,shapein=(2,3,4,5)) \
+        ops = [ DiscreteDifferenceOperator(axis=axis,shapein=(2,3,4,5)) \
                 for axis in range(nops) ]
         model = AdditionOperator(ops)
         assert model.T.T is model
@@ -229,7 +229,7 @@ def test_additionT():
 
 def test_composition():
     def func(nops):
-        ops = [ DiscreteDifference(axis=axis,shapein=(2,3,4,5)) \
+        ops = [ DiscreteDifferenceOperator(axis=axis,shapein=(2,3,4,5)) \
                 for axis in range(nops) ]
         model = CompositionOperator(ops)
         v = np.arange(2*3*4*5.).reshape(2,3,4,5)
@@ -244,7 +244,7 @@ def test_composition():
 
 def test_compositionT():
     def func(nops):
-        ops = [ DiscreteDifference(axis=axis,shapein=(2,3,4,5)) \
+        ops = [ DiscreteDifferenceOperator(axis=axis,shapein=(2,3,4,5)) \
                 for axis in range(nops) ]
         model = CompositionOperator(ops)
         assert model.T.T is model
@@ -300,11 +300,11 @@ def test_masking():
 
 def test_packing():
 
-    p = Packing([False, True, True, False])
+    p = PackOperator([False, True, True, False])
     assert np.allclose(p([1,2,3,4]), [1,4])
     assert np.allclose(p.T([1,4]), [1,0,0,4])
 
-    u = Unpacking([False, True, True, False])
+    u = UnpackOperator([False, True, True, False])
     assert np.allclose(u([1,4]), [1,0,0,4])
     assert np.allclose(u.T([1,2,3,4]), [1,4])
 
@@ -322,13 +322,13 @@ def test_convolution():
     image = np.zeros(imashape)
     image[3,3] = 1.
     ref = scipy.signal.convolve(image, kernel, mode='same')
-    convol=Convolution(image.shape, kernel)
+    convol=ConvolutionOperator(image.shape, kernel)
     con = convol(image)
     assert np.allclose(ref, con, atol=1.e-15)
 
     image = np.array([0,1,0,0,0,0,0])
     kernel = [1,1,0.5]
-    convol = Convolution(image.shape, [1,1,1])
+    convol = ConvolutionOperator(image.shape, [1,1,1])
     con = convol(image)
     ref = scipy.signal.convolve(image, kernel, mode='same')
 
@@ -340,7 +340,7 @@ def test_convolution():
           ishape = (ix,)
           image = np.zeros(ishape)
           image.flat[image.size//2] = 1.
-          convol = Convolution(image.shape, kernel)
+          convol = ConvolutionOperator(image.shape, kernel)
           con = convol(image)
           ref = scipy.signal.convolve(image, kernel, mode='same')
           assert np.allclose(con, ref, atol=1.e-15)
@@ -357,7 +357,7 @@ def test_convolution():
             ishape = (ix,iy)
             image = np.zeros(ishape)
             image[tuple([s//2 for s in image.shape])] = 1.
-            convol = Convolution(image.shape, kernel)
+            convol = ConvolutionOperator(image.shape, kernel)
             con = convol(image)
             ref = scipy.signal.convolve(image, kernel, mode='same')
             assert np.allclose(con, ref, atol=1.e-15)
@@ -376,7 +376,7 @@ def test_convolution():
                 ishape = (ix,iy,iz)
                 image = np.zeros(ishape)
                 image[tuple([s//2 for s in image.shape])] = 1.
-                convol = Convolution(image.shape, kernel)
+                convol = ConvolutionOperator(image.shape, kernel)
                 con = convol(image)
                 ref = scipy.signal.convolve(image, kernel, mode='same')
                 assert np.allclose(con, ref, atol=1.e-15)
@@ -412,9 +412,9 @@ def test_dtype():
 
 def test_diff():
     def func(shape, axis):
-        dX = DiscreteDifference(axis=axis, shapein=shape)
+        dX = DiscreteDifferenceOperator(axis=axis, shapein=shape)
         assert_array_equal(dX.todense().T, dX.T.todense())
-        dtd = DdTdd(axis=axis, shapein=shape).todense()
+        dtd = DdTddOperator(axis=axis, shapein=shape).todense()
         assert_array_equal(np.matrix(dX.T.todense()) * \
                       np.matrix(dX.todense()), dtd)
     for shape in ((3,), (3,4), (3,4,5), (3,4,5,6)):

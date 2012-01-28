@@ -12,7 +12,7 @@ import time
 from . import MPI
 from . import var
 from pyoperators import AdditionOperator, DiagonalOperator, IdentityOperator, MaskOperator, ReshapeOperator, asoperator
-from .acquisitionmodels import DdTdd, DiscreteDifference
+from .acquisitionmodels import DdTddOperator, DiscreteDifferenceOperator
 from .datatypes import Map, Tod
 from .linalg import Function, norm2, norm2_ellipsoid
 from .solvers import cg, nlcg, QuadraticStep
@@ -151,10 +151,10 @@ def mapper_rls(tod, model, invntt=None, unpacking=None, hyper=1.0, x0=None,
     nmaps = A.shape[1] * comm_map.Get_size()
 
     npriors = len(model.shapein)
-    priors = [ DiscreteDifference(axis=axis, shapein=model.shapein,
+    priors = [ DiscreteDifferenceOperator(axis=axis, shapein=model.shapein,
                comm=comm_map) for axis in range(npriors) ]
-    prior = AdditionOperator([DdTdd(axis=axis, scalar=hyper * ntods / nmaps,
-        comm=comm_map) for axis in range(npriors)])
+    prior = AdditionOperator([DdTddOperator(axis=axis, scalar=hyper * ntods / \
+                              nmaps, comm=comm_map) for axis in range(npriors)])
     if hyper != 0 and (comm_map.Get_rank() == 0 or comm_map.Get_size() > 1):
         A += prior
 
@@ -178,7 +178,7 @@ def mapper_nl(tod, model, unpacking=None, priors=[], hypers=[], norms=[],
 
     if len(priors) == 0 and len(hypers) != 0:
         npriors = len(model.shapein)
-        priors = [ DiscreteDifference(axis=axis, shapein=model.shapein,
+        priors = [ DiscreteDifferenceOperator(axis=axis, shapein=model.shapein,
                    comm=var.comm_map) for axis in range(npriors) ]
     else:
         npriors = len(priors)

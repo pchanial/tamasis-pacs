@@ -1,4 +1,4 @@
-#----------------------------------------------
+!#----------------------------------------------
 # Creation of a map using the MADmap algorithm
 #----------------------------------------------
 import numpy as np
@@ -27,10 +27,10 @@ tod = obs.get_tod(flatfielding=True,
 # 'downsampling=True' means that the acquisition model will not
 # sample at the instrument frequency of 40Hz, but at the compressed frequency
 # (10Hz for prime mode, 5Hz for parallel mode)
-projection = Projection(obs,
-                        method='sharp',
-                        downsampling=True,
-                        npixels_per_sample=6)
+projection = ProjectionOperator(obs,
+                                method='sharp',
+                                downsampling=True,
+                                npixels_per_sample=6)
 
 # Remove low frequency drifts. The specified window length is the
 # number of samples used to compute the median (unlike HCSS, where
@@ -52,14 +52,14 @@ tod.save('tod_preprocessed.fits')
 # and H the acquisition model.
 # To take into account bad samples such as glitches, we solve
 # M y == M H x, M is the mask operator which sets bad samples values to 0
-projection = Projection(obs,
-                        method='nearest',
-                        downsampling=True)
-masking = Masking(tod.mask)
+projection = ProjectionOperator(obs,
+                                method='nearest',
+                                downsampling=True)
+masking = MaskOperator(tod.mask)
 model = masking * projection
 
 # Get the filter operator N^-1
-invntt = InvNtt(obs)
+invntt = InvNttOperator(obs)
 
 # The naive map is given by
 map_naive = mapper_naive(tod, model)
@@ -69,7 +69,7 @@ map_naive = mapper_naive(tod, model)
 # it is equivalent to solving the equation H^T N^-1 H x = H^T N^-1 y
 map_madmap = mapper_ls(tod, model,
                        invntt=invntt,
-                       unpacking=Unpacking(projection.mask),
+                       unpacking=UnpackOperator(projection.mask),
                        M=DiagonalOperator(1/map_naive.coverage),
                        tol=1.e-5)
 map_madmap.save('map_madmap.fits')

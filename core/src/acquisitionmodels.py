@@ -9,7 +9,7 @@ import tamasisfortran as tmf
 
 from pyoperators import (Operator, IdentityOperator, DiagonalOperator,
                          BlockColumnOperator, BlockDiagonalOperator,
-                         CompositionOperator, NumexprOperator)
+                         CompositionOperator, MaskOperator, NumexprOperator)
 from pyoperators.decorators import (idempotent, linear, orthogonal, real,
                                     square, symmetric, unitary, inplace)
 from pyoperators.utils import isscalar, tointtuple, openmp_num_threads
@@ -32,25 +32,32 @@ except:
 
 __all__ = [
     'BlackBodyOperator',
-    'CompressionAverage',
-    'Convolution',
-    'DistributionGlobal',
-    'DistributionLocal',
-    'DdTdd',
-    'DiscreteDifference',
-    'DownSampling',
+    'CompressionAverage', # obsolete
+    'CompressionAverageOperator',
+    'ConvolutionOperator',
+    'DistributionGlobalOperator',
+    'DistributionLocalOperator',
+    'DdTdd', # Obsolete
+    'DdTddOperator',
+    'DiscreteDifference', # obsolete
+    'DiscreteDifferenceOperator',
+    'DownSamplingOperator',
     'FftOperator',
-    'FftHalfComplex',
-    'InvNtt',
-    'Masking',
-    'Packing',
-    'Padding',
-    'Projection',
-    'ResponseTruncatedExponential',
+    'FftHalfComplexOperator',
+    'InvNtt', # obsolete
+    'InvNttOperator',
+    'Masking', # obsolete
+    'PackOperator',
+    'PadOperator',
+    'Projection', # obsolete
+    'ProjectionOperator',
+    'ResponseTruncatedExponential', # obsolete
+    'ConvolutionTruncatedExponentialOperator',
     'RollOperator',
     'ShiftOperator',
-    'SqrtInvNtt',
-    'Unpacking',
+    'SqrtInvNttOperator',
+    'Unpacking', # obsolete
+    'UnpackOperator',
 ]
 
 def block_diagonal(*partition_args, **keywords):
@@ -231,7 +238,7 @@ class BlackBodyFixedTemperatureOperator(NumexprOperator):
 @block_diagonal('factor', axis=-1)
 @real
 @linear
-class Compression(Operator):
+class CompressionOperator(Operator):
 
     """
     Abstract class for compressing the input signal.
@@ -262,10 +269,11 @@ class Compression(Operator):
                 self.factor))
 
     def __str__(self):
-        return super(Compression, self).__str__() + ' (x{})'.format(self.factor)
+        return super(CompressionOperator, self).__str__() + ' (x{})'.format(
+               self.factor)
 
 
-class CompressionAverage(Compression):
+class CompressionAverageOperator(CompressionOperator):
     """
     Compress the input signal by averaging blocks of specified size.
     """
@@ -283,7 +291,7 @@ class CompressionAverage(Compression):
             istride, output_, oshape[1], ostride, self.factor)
 
 
-class DownSampling(Compression):
+class DownSamplingOperator(CompressionOperator):
     """
     Downsample the input signal by picking up one sample out of a number
     specified by the compression factor
@@ -304,7 +312,7 @@ class DownSampling(Compression):
 
 @real
 @symmetric
-class InvNtt(Operator):
+class InvNttOperator(Operator):
 
     def __new__(cls, obs=None, method='uncorrelated', filename=None,
                 **keywords):
@@ -339,9 +347,9 @@ class InvNtt(Operator):
             np.divide(f, norm, f)
             
         if method == 'uncorrelated':
-            cls = InvNttUncorrelated
+            cls = InvNttUncorrelatedOperator
         else:
-            cls = InvNttUncorrelatedPython
+            cls = InvNttUncorrelatedPythonOperator
         #XXX should generate BlockDiagonalOperator with no duplicates...
         return BlockDiagonalOperator([cls(f, ncorrelations, n) \
                    for f, n in zip(fft_filters, nsamples)], axisin=-1)
@@ -349,9 +357,9 @@ class InvNtt(Operator):
 
 @real
 @symmetric
-class SqrtInvNtt(InvNtt):
+class SqrtInvNttOperator(InvNttOperator):
     def __init__(self, *args, **kw):
-        invntt = InvNtt(*args, **kw)
+        invntt = InvNttOperator(*args, **kw)
         self._tocomposite(op.Composition, invntt.blocks)
         data = self.blocks[2].data
         np.sqrt(data, data)
@@ -360,7 +368,7 @@ class SqrtInvNtt(InvNtt):
 @real
 @symmetric
 @inplace
-class InvNttUncorrelated(Operator):
+class InvNttUncorrelatedOperator(Operator):
 
     def __init__(self, fft_filter, ncorrelations, nsamples,
                  fftw_flags=['measure', 'unaligned']):
@@ -385,23 +393,23 @@ class InvNttUncorrelated(Operator):
 
 @real
 @symmetric
-class InvNttUncorrelatedPython(Operator):
+class InvNttUncorrelatedPythonOperator(Operator):
 
     def __new__(cls, fft_filter=None, ncorrelations=None, nsamples=None):
         if fft_filter is None:
             return Operator.__new__(cls)
         filter_length = fft_filter.shape[-1]
         invntt = DiagonalOperator(fft_filter)
-        fft = FftHalfComplex(filter_length)
-        padding = Padding(left=ncorrelations, right=filter_length - nsamples - \
-                              ncorrelations)
+        fft = FftHalfComplexOperator(filter_length)
+        padding = PadOperator(left=ncorrelations, right=filter_length - \
+                              nsamples - ncorrelations)
         return padding.T * fft.T * invntt * fft * padding
 
 
 @block_diagonal('left', 'right', axis=-1)
 @real
 @linear
-class Padding(Operator):
+class PadOperator(Operator):
     """Pads before and after along the fast dimension of an ndarray."""
 
     def __init__(self, left=0, right=0., **keywords):
@@ -438,7 +446,7 @@ class Padding(Operator):
 
 @real
 @linear
-class Projection(Operator):
+class ProjectionOperator(Operator):
     """
     This class handles operations by the pointing matrix
 
@@ -474,8 +482,9 @@ class Projection(Operator):
             pmatrix, method, units, derived_units = obs.get_pointing_matrix(
                 header, npixels_per_sample, method=method, downsampling= \
                 downsampling, islice=islice)
-            p = Projection(pmatrix, method=method, header=header, units=units,
-                           derived_units=derived_units, comm_tod=obs.comm_tod)
+            p = ProjectionOperator(pmatrix, method=method, header=header,
+                    units=units, derived_units=derived_units,
+                    comm_tod=obs.comm_tod)
             operands.append(p)
             partitionout.append(pmatrix.shape[1])
         result = BlockColumnOperator(operands, partitionout=partitionout,
@@ -566,11 +575,11 @@ class Projection(Operator):
 
         if self.ispacked:
             if ismapdistributed:
-                self *= DistributionLocal(mask)
+                self *= DistributionLocalOperator(mask)
             else:
-                self *= Packing(mask)
+                self *= PackOperator(mask)
         elif istoddistributed:
-            self *= DistributionGlobal(self.shapein, share=True,
+            self *= DistributionGlobalOperator(self.shapein, share=True,
                                        comm=self.comm_tod)
         s = self.operands[0]
         self.header = s.header
@@ -637,10 +646,8 @@ class Projection(Operator):
 @linear
 @square
 @inplace
-class ResponseTruncatedExponential(Operator):
+class ConvolutionTruncatedExponentialOperator(Operator):
     """
-    ResponseTruncatedExponential(tau)
-
     Apply a truncated exponential response to the signal
 
     Parameters
@@ -677,7 +684,7 @@ class ResponseTruncatedExponential(Operator):
 @linear
 @square
 @inplace
-class DiscreteDifference(Operator):
+class DiscreteDifferenceOperator(Operator):
     """
     Discrete difference operator.
 
@@ -698,13 +705,13 @@ class DiscreteDifference(Operator):
 
     @staticmethod
     def _rule_ddtdd(dT, self):
-        return DdTdd(self.axis, comm=self.comm)
+        return DdTddOperator(self.axis, comm=self.comm)
 
 
 @real
 @symmetric
 @inplace
-class DdTdd(Operator):
+class DdTddOperator(Operator):
     """Calculate operator dX.T dX along a given axis."""
 
     def __init__(self, axis=-1, scalar=1., comm=None, **keywords):
@@ -714,8 +721,8 @@ class DdTdd(Operator):
         self.axis = axis
         self.scalar = scalar
         self.comm = comm or var.comm_map        
-        self.set_rule('{HomothetyOperator}.', lambda o,s: DdTdd(self.axis,
-            o.data * s.scalar), CompositionOperator)
+        self.set_rule('{HomothetyOperator}.', lambda o,s: DdTddOperator(
+                      self.axis, o.data * s.scalar), CompositionOperator)
 
     def direct(self, input, output):
         diffTdiff(input, output, self.axis, self.scalar, comm=self.comm)
@@ -723,7 +730,7 @@ class DdTdd(Operator):
 
 @real
 @linear
-class DistributionGlobal(Operator):
+class DistributionGlobalOperator(Operator):
     """
     Distribute a global map to different MPI processes.
     By default, they are locally distributed, in the sense that an MPI process
@@ -783,7 +790,7 @@ class DistributionGlobal(Operator):
 
 @real
 @linear
-class DistributionLocal(Operator):
+class DistributionLocalOperator(Operator):
     """
     Scatter a distributed map to different MPI processes under the control of a
     local non-distributed mask.
@@ -863,7 +870,7 @@ class Masking(Operator):
 @real
 @linear
 @inplace
-class Packing(Operator):
+class PackOperator(Operator):
     """
     Convert an nd array in a 1d map, under the control of a mask.
     The elements for which the mask is True are equal to the field argument.
@@ -887,7 +894,7 @@ class Packing(Operator):
 @real
 @linear
 @inplace
-class Unpacking(Operator):
+class UnpackOperator(Operator):
     """
     Convert 1d map into an nd array, under the control of a mask.
     The elements for which the mask is True are equal to the field argument.
@@ -906,41 +913,6 @@ class Unpacking(Operator):
     def transpose(self, input, output):
         tmf.packing(input.ravel(), self.mask.view(np.int8).ravel(),
                     output.ravel())
-
-
-class Slicing(Operator):
-    "Pads before and after a Tod."
-
-    def __init__(self, shapein, slices, **keywords):
-        if isinstance(slices, slice):
-            slices = (slice,)
-
-        if len(slices) != len(self.shapein):
-            raise ValueError('The dimensions of the slices is incompatible wi'\
-                             'th the input shape.')
-
-        if shapein is not None:
-            shapeout = self.validate_shapein(shapein)
-        else:
-            shapeout = None
-        Operator.__init__(self, shapein=shapein, shapeout=shapeout,
-                                **keywords)
-
-        self.slices = slices
-        self.mask = np.ones(shapeout, dtype=np.bool8)
-        self.mask[self.slices] = False
-
-    def direct(self, input, output):
-        if input.data is output.data or output.base == id(input):
-            return
-        output[:] = input[self.slices]
-
-    def transpose(self, input, output):
-        if input.data is output.data:
-            return
-        if input.base != id(output):
-            output[self.slices] = input
-        tmf.masking_inplace(output.ravel(), self.mask.view(np.int8).ravel())
 
 
 @real
@@ -1028,7 +1000,7 @@ class FftOperator(Operator):
 @real
 @orthogonal
 @inplace
-class FftHalfComplex(Operator):
+class FftHalfComplexOperator(Operator):
     """
     Performs real-to-half-complex fft
     """
@@ -1083,7 +1055,7 @@ class FftHalfComplex(Operator):
 @square
 @real
 @inplace
-class Convolution(Operator):
+class ConvolutionOperator(Operator):
     def __init__(self, shape, kernel, flags=['measure'], nthreads=None,
                  dtype=None, **keywords):
 
@@ -1167,4 +1139,42 @@ def _ravel_strided(array):
     stop = start + (n2 - 1) * s2 + n1
     flat = base.ravel()[start:stop]
     return flat, array_.shape, s2
-    
+
+def obsolete(cls):
+    @functools.wraps(cls.__base__.__init__)
+    def init(self, *args, **keywords):
+        print("The class '{0}' has been renamed. Use class '{1}' instead." \
+              .format(cls.__name__, cls.__base__.__name__))
+        cls.__init_original__(self, *args, **keywords)
+    cls.__init_original__ = cls.__base__.__init__
+    cls.__init__ = init
+    return cls
+
+        
+@obsolete
+class CompressionAverage(CompressionAverageOperator):
+    pass
+@obsolete
+class DiscreteDifference(DiscreteDifferenceOperator):
+    pass
+@obsolete
+class DdTdd(DdTddOperator):
+    pass
+@obsolete
+class InvNtt(InvNttOperator):
+    pass
+@obsolete
+class Masking(MaskOperator):
+    pass
+@obsolete
+class Packing(PackOperator):
+    pass
+@obsolete
+class Projection(ProjectionOperator):
+    pass
+@obsolete
+class ResponseTruncatedExponential(ConvolutionTruncatedExponentialOperator):
+    pass
+@obsolete
+class Unpacking(UnpackOperator):
+    pass

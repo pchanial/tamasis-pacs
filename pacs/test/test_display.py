@@ -1,12 +1,10 @@
 #!/usr/bin/env python
-import numpy as np
 import os
-import tamasis
-
-from   matplotlib.pyplot import clim, figure, plot, show, ioff
-from   tamasis import *
-
-tamasis.var.verbose = False
+from   matplotlib.pyplot import plot
+from   tamasis import (PacsObservation, CompressionAverageOperator,
+                       IdentityOperator, MaskOperator, ProjectionOperator,
+                       deglitch_l2mad, filter_median, filter_polynomial,
+                       mapper_naive, plot_tod)
 
 datadir  = os.getenv('PACS_DATA', '')+'/transpScan/'
 datafile = [datadir+'1342184598_blue_PreparedFrames.fits',
@@ -17,13 +15,13 @@ if not all(map(os.path.exists, datafile)):
     exit(0)
 
 pacs = PacsObservation([datafile[0]+'[6065:20000]', datafile[1]+'[6066:20001]'],
-                       fine_sampling_factor=1, calblock_extension_time=0.)
+                        fine_sampling_factor=1, calblock_extension_time=0.)
 
 telescope    = IdentityOperator()
-projection   = Projection(pacs, resolution=3.2, npixels_per_sample=5)
-multiplexing = CompressionAverage(1)
+projection   = ProjectionOperator(pacs, resolution=3.2, npixels_per_sample=5)
+multiplexing = CompressionAverageOperator(1)
 crosstalk    = IdentityOperator()
-compression  = CompressionAverage(4)
+compression  = CompressionAverageOperator(4)
 
 model = compression * crosstalk * multiplexing * projection * telescope
 

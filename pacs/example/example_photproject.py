@@ -22,9 +22,9 @@ obs = PacsObservation(frames_files,
 # 'downsampling=True' means that the acquisition model will not
 # sample at the instrument frequency of 40Hz, but at the compressed frequency
 # (10Hz for prime mode, 5Hz for parallel mode)
-projection = Projection(obs, 
-                        downsampling=True,
-                        npixels_per_sample=6)
+projection = ProjectionOperator(obs, 
+                                downsampling=True,
+                                npixels_per_sample=6)
 
 # Read the Time Ordered Data: the signal and mask
 tod = obs.get_tod(flatfielding=True,
@@ -51,7 +51,7 @@ tod.mask = deglitch_l2mad(tod_glitch, projection, nsigma=5.)
 # and H the acquisition model.
 # To take into account bad samples such as glitches, we solve
 # M y == M H x, M is the mask operator which sets bad samples values to 0
-masking = Masking(tod.mask)
+masking = MaskOperator(tod.mask)
 model = masking * projection
 
 # Get the photproject map, which is equal to:

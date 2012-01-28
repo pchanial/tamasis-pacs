@@ -3,7 +3,7 @@ import os
 import pyoperators
 import tamasis
 
-from tamasis import PacsObservation, BlockColumnOperator, DiscreteDifference, MaskOperator, Projection, DoubleLoopAlgorithm, mapper_naive
+from tamasis import PacsObservation, BlockColumnOperator, DiscreteDifference, MaskOperator, ProjectionOperator, DoubleLoopAlgorithm, mapper_naive
 
 pyoperators.memory.verbose=False
 tamasis.var.verbose = True
@@ -12,8 +12,8 @@ obs = PacsObservation(filename=data_dir+'frames_blue.fits')
 obs.pointing.chop[:] = 0
 tod = obs.get_tod(flatfielding=False)
 
-projection  = Projection(obs, resolution=3.2, downsampling=True,
-                         npixels_per_sample=6)
+projection  = ProjectionOperator(obs, resolution=3.2, downsampling=True,
+                                 npixels_per_sample=6)
 masking_tod = MaskOperator(tod.mask)
 model = masking_tod * projection
 

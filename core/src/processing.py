@@ -8,7 +8,7 @@ import numpy as np
 import scipy
 import tamasisfortran as tmf
 from .datatypes import Tod
-from acquisitionmodels import Projection
+from acquisitionmodels import ProjectionOperator
 
 __all__ = [ 'deglitch_l2std',
             'deglitch_l2mad',
@@ -18,11 +18,11 @@ __all__ = [ 'deglitch_l2std',
             'remove_nonfinite' ]
 
 def _deglitch(tod, projection, nsigma, func):
-    if isinstance(projection, Projection):
+    if isinstance(projection, ProjectionOperator):
         pmatrix = projection._pmatrix
         npixels_per_sample = projection.npixels_per_sample
     elif hasattr(projection, 'operands') and \
-         all([isinstance(p, Projection) for p in projection.operands]):
+         all([isinstance(p, ProjectionOperator) for p in projection.operands]):
         ops = projection.operands
         npixels_per_sample = max([p.npixels_per_sample for p in ops])
         ndetectors = ops[0].ndetectors

@@ -2,7 +2,10 @@ import numpy as np
 import pyoperators
 import os
 import tamasis
-from tamasis import *
+from tamasis import (PacsObservation, CompressionAverageOperator,
+                     DiagonalOperator, IdentityOperator, MaskOperator,
+                     ProjectionOperator, UnpackOperator, mapper_ls,
+                     mapper_naive)
 
 pyoperators.memory.verbose = False
 tamasis.var.verbose = False
@@ -14,19 +17,18 @@ obs = PacsObservation(data_dir + 'frames_blue.fits', fine_sampling_factor=1)
 tod = obs.get_tod(flatfielding=False)
 
 telescope   = IdentityOperator()
-projection  = Projection(obs, downsampling=True, npixels_per_sample=6)
-compression = CompressionAverage(obs.slice.compression_factor)
-masking_tod = Masking(tod.mask)
-masking_map = Masking(projection.get_mask())
+projection  = ProjectionOperator(obs, downsampling=True, npixels_per_sample=6)
+compression = CompressionAverageOperator(obs.slice.compression_factor)
+masking_tod = MaskOperator(tod.mask)
+masking_map = MaskOperator(projection.get_mask())
 
 model = masking_tod * projection * telescope * masking_map
-print(model)
 
 # naive map
 map_naive = mapper_naive(tod, model)
 
 # iterative map, restricting oneself to observed map pixels
-unpacking = Unpacking(projection.get_mask())
+unpacking = UnpackOperator(projection.get_mask())
 old_settings = np.seterr(divide='ignore')
 M = DiagonalOperator(unpacking.T(1./map_naive.coverage))
 np.seterr(**old_settings)

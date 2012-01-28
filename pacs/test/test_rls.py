@@ -15,9 +15,9 @@ obs = PacsObservation(filename=data_dir+'frames_blue.fits',
 obs.pointing.chop[:] = 0
 tod = obs.get_tod(flatfielding=False)
 
-projection  = Projection(obs, resolution=3.2, downsampling=True,
-                         npixels_per_sample=6)
-masking_tod = Masking(tod.mask)
+projection  = ProjectionOperator(obs, resolution=3.2, downsampling=True,
+                                 npixels_per_sample=6)
+masking_tod = MaskOperator(tod.mask)
 model = masking_tod * projection
 
 # iterative map, taking all map pixels

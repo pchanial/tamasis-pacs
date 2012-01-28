@@ -1,4 +1,4 @@
-#-------------------------------------------------------------
+!!#-------------------------------------------------------------
 # Creation of a map using the regularised least square method
 #-------------------------------------------------------------
 import os
@@ -25,10 +25,10 @@ tod = obs.get_tod(flatfielding=True,
 # 'downsampling=True' means that the acquisition model will not
 # sample at the instrument frequency of 40Hz, but at the compressed frequency
 # (10Hz for prime mode, 5Hz for parallel mode)
-projection = Projection(obs,
-                        method='sharp',
-                        downsampling=True,
-                        npixels_per_sample=6)
+projection = ProjectionOperator(obs,
+                                method='sharp',
+                                downsampling=True,
+                                npixels_per_sample=6)
 
 # Remove low frequency drifts. The specified window length is the
 # number of samples used to compute the median (unlike HCSS, where
@@ -50,8 +50,8 @@ tod.save('tod_preprocessed.fits')
 # and H the acquisition model.
 # To take into account bad samples such as glitches, we solve
 # M y == M H x, M is the mask operator which sets bad samples values to 0
-compression = CompressionAverage(obs.slice.compression_factor)
-masking = Masking(tod.mask)
+compression = CompressionAverageOperator(obs.slice.compression_factor)
+masking = MaskOperator(tod.mask)
 model = masking * compression * projection
 
 # The regularised least square map is obtained by minimising the criterion
@@ -59,7 +59,7 @@ model = masking * compression * projection
 # it is equivalent to solving the equation (H^T H + hyper D^T D ) x = H^T y
 hyper = 0.1
 map_rls = mapper_rls(tod, model,
-                     unpacking=Unpacking(projection.mask),
+                     unpacking=UnpackOperator(projection.mask),
                      tol=1.e-6,
                      hyper=hyper)
 map_rls.save('map_rls.fits')

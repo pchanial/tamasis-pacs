@@ -132,17 +132,17 @@ def pipeline_dli(filename, output_file, keywords, verbose=False):
     # median filtering
     tod = tm.filter_median(tod, **keywords["filter_median"])
     # define projector
-    projection = tm.Projection(obs, **keywords["Projection"])
+    projection = tm.ProjectionOperator(obs, **keywords["Projection"])
     # build instrument model
-    response = tm.ResponseTruncatedExponential(obs.pack(
+    response = tm.ResponseTruncatedExponentialOperator(obs.pack(
             obs.instrument.detector.time_constant) / obs.SAMPLING_PERIOD)
-    compression = tm.CompressionAverage(obs.slice.compression_factor)
-    masking = tm.Masking(tod.mask)
+    compression = tm.CompressionAverageOperator(obs.slice.compression_factor)
+    masking = tm.MaskOperator(tod.mask)
     model = masking * compression * response * projection
     # set tod masked values to zero
     tod = masking(tod)
     # N^-1 operator
-    invntt = tm.InvNtt(obs)
+    invntt = tm.InvNttOperator(obs)
 
     # for the dli algorithm
     M = map_mask(tod, model, **keywords["map_mask"])
@@ -152,7 +152,8 @@ def pipeline_dli(filename, output_file, keywords, verbose=False):
     N = lo.aslinearoperator(invntt)
     # vectorize data so it is accepted by LinearOperators
     y = tod.ravel()
-    Ds = [tm.DiscreteDifference(axis=i, shapein=projection.shapein) for i in (0, 1)]
+    Ds = [tm.DiscreteDifferenceOperator(axis=i, shapein=projection.shapein) \
+          for i in (0, 1)]
     Ds = [lo.aslinearoperator(D) for D in Ds]
     Ds = [D * M.T for D in Ds]
     D = lo.concatenate(Ds)

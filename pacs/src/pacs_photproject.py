@@ -143,9 +143,10 @@ def pipeline_photproject(filenames, output_file, keywords):
     # median filtering
     tod = tm.filter_median(tod, **keywords["filter_median"])
     # define projector
-    projection = tm.Projection(obs, downsampling=True, **keywords["Projection"])
+    projection = tm.ProjectionOperator(obs, downsampling=True,
+                                       **keywords["Projection"])
     # build instrument model
-    masking = tm.Masking(tod.mask)
+    masking = tm.MaskOperator(tod.mask)
     model = masking * projection
     # set tod masked values to zero
     tod = masking(tod)

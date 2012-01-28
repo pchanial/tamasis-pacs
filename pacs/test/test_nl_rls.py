@@ -2,7 +2,8 @@ import os
 import tamasis
 import pyoperators
 
-from tamasis import *
+from tamasis import (PacsObservation, DiagonalOperator, MaskOperator,
+                     ProjectionOperator, mapper_nl)
 from tamasis.linalg import norm2, norm2_ellipsoid
 
 class TestFailure(Exception): pass
@@ -16,9 +17,9 @@ obs = PacsObservation(filename=data_dir+'frames_blue.fits',
 obs.pointing.chop[:] = 0
 tod = obs.get_tod(flatfielding=False)
 
-projection   = Projection(obs, resolution=3.2, downsampling=True,
-                          npixels_per_sample=6)
-masking_tod  = Masking(tod.mask)
+projection   = ProjectionOperator(obs, resolution=3.2, downsampling=True,
+                                  npixels_per_sample=6)
+masking_tod  = MaskOperator(tod.mask)
 
 model = masking_tod * projection
 

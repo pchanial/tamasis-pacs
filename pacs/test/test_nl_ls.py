@@ -1,6 +1,7 @@
 import os
 import tamasis
-from tamasis import *
+from tamasis import (PacsObservation, DiagonalOperator, MaskOperator,
+                     ProjectionOperator, mapper_naive, mapper_nl)
 
 class TestFailure(Exception): pass
 
@@ -8,9 +9,9 @@ data_dir = os.path.dirname(__file__) + '/data/'
 obs = PacsObservation(data_dir+'frames_blue.fits', fine_sampling_factor=1)
 tod = obs.get_tod(flatfielding=False)
 
-projection   = Projection(obs, downsampling=True, npixels_per_sample=6)
-masking_tod  = Masking(tod.mask)
-masking_map  = Masking(projection.get_mask())
+projection   = ProjectionOperator(obs, downsampling=True, npixels_per_sample=6)
+masking_tod  = MaskOperator(tod.mask)
+masking_map  = MaskOperator(projection.get_mask())
 
 model = masking_tod * projection * masking_map
 

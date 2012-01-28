@@ -2,7 +2,6 @@
 # Creation of a map using the regularised least square method
 #-------------------------------------------------------------
 import os
-import numpy as np
 from tamasis import *
 
 # Specify the Frames observations as FITS files
@@ -33,10 +32,10 @@ tod = obs.get_tod(flatfielding=True,
 # 'downsampling=True' means that the acquisition model will not
 # sample at the instrument frequency of 40Hz, but at the compressed frequency
 # (10Hz for prime mode, 5Hz for parallel mode)
-projection = Projection(obs,
-                        method='sharp',
-                        downsampling=True,
-                        npixels_per_sample=5)
+projection = ProjectionOperator(obs,
+                                method='sharp',
+                                downsampling=True,
+                                npixels_per_sample=5)
 
 # Map-level deglitching using the MAD (median absolute deviation to
 # the mean). We highpass filter the Tod using a short filtering 
@@ -79,14 +78,14 @@ obs.save('obs_preprocessed.fits', tod)
 # and H the acquisition model.
 # To take into account bad samples such as glitches, we solve
 # M y == M H x, M is the mask operator which sets bad samples values to 0
-projection = Projection(obs,
-                        method='sharp',
-                        resolution=3.2,
-                        npixels_per_sample=5)
-response = ResponseTruncatedExponential(obs.pack(
+projection = ProjectionOperator(obs,
+                                method='sharp',
+                                resolution=3.2,
+                                npixels_per_sample=5)
+response = ConvolutionTruncatedExponentialOperator(obs.pack(
     obs.instrument.detector.time_constant) / obs.SAMPLING_PERIOD)
-compression = CompressionAverage(obs.slice.compression_factor)
-masking = Masking(tod.mask)
+compression = CompressionAverageOperator(obs.slice.compression_factor)
+masking = MaskOperator(tod.mask)
 model = masking * compression * response * projection
 
 # The naive map is given by
@@ -100,8 +99,8 @@ ds9(map_naive)
 # it is equivalent to solving the equation (H^T H + hyper D^T D ) x = H^T y
 hyper = 0.1
 map_tamasis = mapper_rls(tod, model,
-                         invntt=InvNtt(obs),
-                         unpacking=Unpacking(projection.mask),
+                         invntt=InvNttOperator(obs),
+                         unpacking=UnpackOperator(projection.mask),
                          tol=1.e-5,
                          hyper=hyper)
 

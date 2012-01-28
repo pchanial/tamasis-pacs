@@ -159,17 +159,17 @@ def pipeline_wrls(filenames, output_file, keywords, verbose=False):
     # median filtering
     tod = tm.filter_median(tod, **keywords["filter_median"])
     # define projector
-    projection = tm.Projection(obs, **keywords["Projection"])
+    projection = tm.ProjectionOperator(obs, **keywords["Projection"])
     # build instrument model
-    response = tm.ResponseTruncatedExponential(obs.pack(
+    response = tm.ResponseTruncatedExponentialOperator(obs.pack(
             obs.instrument.detector.time_constant) / obs.SAMPLING_PERIOD)
-    compression = tm.CompressionAverage(obs.slice.compression_factor)
-    masking = tm.Masking(tod.mask)
+    compression = tm.CompressionAverageOperator(obs.slice.compression_factor)
+    masking = tm.MaskOperator(tod.mask)
     model = masking * compression * response * projection
     # set tod masked values to zero
     tod = masking(tod)
     # N^-1 operator
-    invntt = tm.InvNtt(obs)
+    invntt = tm.InvNttOperator(obs)
     # perform map-making inversion
     map_rls = tm.mapper_rls(tod, model, invntt=invntt, solver=cgs,
                             **keywords["mapper_rls"])

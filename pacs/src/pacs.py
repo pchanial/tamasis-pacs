@@ -20,8 +20,8 @@ from pyoperators.utils import strenum, strplural, openmp_num_threads
 from . import MPI
 from . import var
 from tamasis.core import (Quantity, Tod, MaskPolicy, Instrument, Pointing, tmf,
-                          CompressionAverage, Projection, Masking,
-                          create_fitsheader)
+                          CompressionAverageOperator, ProjectionOperator,
+                          MaskOperator, create_fitsheader)
 from tamasis.mpiutils import distribute_observation
 from tamasis.observations import Observation
 
@@ -439,8 +439,8 @@ class PacsBase(Observation):
         nsamples = self.get_nsamples()
         nsamples_tot = np.sum(nsamples*self.slice.compression_factor / 4)
         if nsamples_tot > data.shape[-1]:
-            raise ValueError('There is not enough noise data for this observa' \
-                             'tion.')
+            raise ValueError('There is not enough noise data for this observati'
+                             'on.')
 
         irandom = np.random.random_integers(0,iend-istart-nsamples_tot)
         result = Tod(data[:,:,irandom:irandom+nsamples_tot],
@@ -451,7 +451,8 @@ class PacsBase(Observation):
         if flatfielding:
             result.T[:] /= self.pack(self.instrument.detector.flat_detector)
 
-        compression = CompressionAverage(self.slice.compression_factor / 4)
+        compression = CompressionAverageOperator(
+            self.slice.compression_factor / 4)
         result = compression(result)
         return result
 
@@ -463,8 +464,8 @@ class PacsBase(Observation):
         if length == 0:
             return self.pack(stddevs[...,-1])
         if length < lengths[0]:
-            raise ValueError('The value of the median filtering length should '\
-                             'be greater than ' + str(lengths[0]) + '.')
+            raise ValueError('The value of the median filtering length should b'
+                             'e greater than ' + str(lengths[0]) + '.')
         i = 1
         while i < len(lengths) - 2 and length >= lengths[i]:
             i += 1
@@ -483,7 +484,7 @@ class PacsBase(Observation):
         nsamples = np.sum(~self.pointing.removed)
         if nsamples != tod.shape[-1]:
             raise ValueError("The input Tod has a number of samples'" + \
-                str(tod.shape[-1]) + "' incompatible with that of this observ" \
+                str(tod.shape[-1]) + "' incompatible with that of this observat"
                 "ation '" + str(nsamples) + "'.")
 
         _write_status(self, filename, fitskw=fitskw)
@@ -511,8 +512,8 @@ class PacsBase(Observation):
         """
         Return a sky scan for the PACS instrument.
 
-        The output is a Pointing instance that can be handed to PacsSimulation to
-        create a simulation.
+        The output is a Pointing instance that can be handed to PacsSimulation
+        to create a simulation.
 
         Parameters
         ----------
@@ -566,8 +567,8 @@ class PacsBase(Observation):
                 active = slice[islice].mask_activated[0:slice[islice].nmasks]
                 a = [m for m, act in zip(masks, active) if act]
                 d = [m for m, act in zip(masks, active) if not act]
-            return ((('no ' if len(m) == 0 else '') + strplural(s + 'activate' \
-                'd mask', len(m), False, ': ' + ', '.join(m))).capitalize() \
+            return ((('no ' if len(m) == 0 else '') + strplural(s + 'activated '
+                'mask', len(m), False, ': ' + ', '.join(m))).capitalize() \
                 for s,m in (('',a), ('de',d)))
 
         nthreads = openmp_num_threads()
@@ -618,8 +619,8 @@ class PacsBase(Observation):
                 result += sp + a + '\n'
                 result += sp + d + '\n'
             else:
-                result += sp + 'The masks of the observations are heterogeneo' \
-                          'us\n'
+                result += sp + 'The masks of the observations are heterogeneous'
+                result += '\n'
 
         # print slice-specific information
         isample = 0
@@ -778,12 +779,13 @@ class PacsObservation(PacsBase):
         # store observation information
         if calblock_extension_time is None:
             calblock_extension_time = 40. if band == 'red' else 20.
-        obsid, mode, compression_factor, unit, ra, dec, instrument_angle, scan_angle, \
-            scan_length, scan_step, scan_nlegs, frame_time, frame_ra, \
-            frame_dec, frame_pa, frame_chop, frame_info, frame_masked, \
-            frame_removed, nmasks, mask_name_flat, mask_activated, status = \
-            tmf.pacs_info_observation(filename_, nfilenames, np.array(policy,
-            np.int32),np.sum(nsamples_all), calblock_extension_time)
+        obsid, mode, compression_factor, unit, ra, dec, instrument_angle, \
+            scan_angle, scan_length, scan_step, scan_nlegs, frame_time, \
+            frame_ra, frame_dec, frame_pa, frame_chop, frame_info, \
+            frame_masked, frame_removed, nmasks, mask_name_flat, \
+            mask_activated, status = tmf.pacs_info_observation(filename_,
+            nfilenames, np.array(policy, np.int32),np.sum(nsamples_all),
+            calblock_extension_time)
         if status != 0: raise RuntimeError()
 
         flen_value = len(unit) // nfilenames
@@ -868,7 +870,8 @@ class PacsObservation(PacsBase):
         self.pointing = Pointing((frame_ra, frame_dec, frame_pa), frame_time,
             frame_info, frame_masked, frame_removed, dtype=self.POINTING_DTYPE)
         self.pointing.chop = frame_chop
-        self.slice.scan_speed = [_scan_speed(self.pointing[s.start:s.stop]) for s in self.slice]
+        self.slice.scan_speed = [_scan_speed(self.pointing[s.start:s.stop]) \
+                                 for s in self.slice]
 
         # store frame policy
         self.policy = policy
@@ -982,8 +985,8 @@ class PacsObservation(PacsBase):
         # check number of records
         if np.any([len(s) for s in status] != self.slice.nsamples_all):
             raise ValueError("The status has a number of records '" + \
-                str([len(s) for s in status]) + "' incompatible with that of " \
-                "the pointings '" + str(self.slice.nsamples_all) + "'.")
+                str([len(s) for s in status]) + "' incompatible with that of th"
+                "e pointings '" + str(self.slice.nsamples_all) + "'.")
 
         # merge status if necessary
         if any([status[i].dtype != status[0].dtype \
@@ -1040,8 +1043,8 @@ class PacsSimulation(PacsBase):
 
         compression_factor = int(np.round(delta / self.SAMPLING_PERIOD))
         if compression_factor <= 0:
-            raise ValueError('Invalid time in pointing argument. Use PacsSimu' \
-                             'lation.SAMPLING_PERIOD.')
+            raise ValueError('Invalid time in pointing argument. Use PacsSimula'
+                             'tion.SAMPLING_PERIOD.')
         if np.abs(delta / compression_factor - self.SAMPLING_PERIOD) > 0.01 * \
            self.SAMPLING_PERIOD:
             print('Warning: the pointing time has an unexpected sampling rate. '
@@ -1067,8 +1070,8 @@ class PacsSimulation(PacsBase):
                     else 8) or \
                mode == 'transparent' and compression_factor != 1:
                 raise ValueError("The observing mode '" + mode + "' in the " + \
-                    band + " band is incompatible with the compression factor" \
-                    " '" + str(compression_factor) + "'.")
+                    band + " band is incompatible with the compression factor '"
+                    "" + str(compression_factor) + "'.")
 
         # set up the instrument
         PacsBase.__init__(self, band, active_fraction, delay,
@@ -1163,11 +1166,11 @@ class PacsSimulation(PacsBase):
 
         p = self.pointing
         if p.size != np.sum(self.slice.nsamples_all):
-            raise ValueError('The pointing and slice attribute are incompatib' \
-                             'le. This should not happen.')
+            raise ValueError('The pointing and slice attribute are incompatible'
+                             '. This should not happen.')
 
-        status = np.recarray(p.size, dtype=[('BBID', np.int64),
-            ('FINETIME', np.int64), ('BAND', 'S2'), ('CHOPFPUANGLE', np.float64),
+        status = np.recarray(p.size, dtype=[('BBID', np.int64), ('FINETIME',
+            np.int64), ('BAND', 'S2'),('CHOPFPUANGLE', np.float64),
             ('RaArray', np.float64), ('DecArray', np.float64),
             ('PaArray', np.float64)])
         band = self.instrument.band
@@ -1230,11 +1233,11 @@ def PacsConversionAdu(obs, gain='nominal', offset='direct'):
     Returns the operator which converts PACS timelines from Volts to ADU.
     """
     if gain not in obs.instrument.adu_converter_gain:
-        raise ValueError("Invalid gain. Expected values are 'low', 'high' or '"\
-                         "'nominal'.")
+        raise ValueError("Invalid gain. Expected values are 'low', 'high' or 'n"
+                         "ominal'.")
     if offset not in obs.instrument.adu_converter_offset:
-        raise ValueError("Invalid offset. Expected values are 'direct' or 'ddc"\
-                         "s'.")
+        raise ValueError("Invalid offset. Expected values are 'direct' or 'ddcs"
+                         "'.")
 
     g = obs.instrument.adu_converter_gain[gain]
     o = obs.instrument.adu_converter_offset[offset]
@@ -1275,7 +1278,7 @@ def pacs_preprocess(obs, tod,
     deglitch, filter and potentially compress if the observation is in
     transparent mode
     """
-    projection = Projection(obs,
+    projection = ProjectionOperator(obs,
                             method='sharp',
                             header=header,
                             downsampling=True,
@@ -1285,14 +1288,14 @@ def pacs_preprocess(obs, tod,
                               projection,
                               nsigma=deglitching_nsigma)
     tod = filter_median(tod, hf_length)
-    masking = Masking(tod.mask)
+    masking = MaskOperator(tod.mask)
     tod = masking(tod)
     
     # get the proper projector if necessary
     if projection is None or projection_method != 'sharp' or \
        not downsampling and np.any(obs.slice.compression_factor * \
        obs.instrument.fine_sampling_factor > 1):
-        projection = Projection(obs,
+        projection = ProjectionOperator(obs,
                                 method=projection_method,
                                 downsampling=downsampling,
                                 header=header,
@@ -1302,7 +1305,8 @@ def pacs_preprocess(obs, tod,
     if all(obs.slice[0].compression_factor != 1) or \
        transparent_mode_compression_factor == 1:
         if not downsampling:
-            compression = CompressionAverage(obs.slice.compression_factor)
+            compression = CompressionAverageOperator(
+                obs.slice.compression_factor)
             model = compression * projection
         else:
             model = projection
@@ -1311,12 +1315,13 @@ def pacs_preprocess(obs, tod,
         return tod, model, mapper_naive(tod, model), map_mask
 
     # compress the transparent observation
-    compression = CompressionAverage(transparent_mode_compression_factor)
+    compression = CompressionAverageOperator(
+        transparent_mode_compression_factor)
     todc = compression(tod)
     mask = compression(tod.mask)
     mask[mask != 0] = 1
     todc.mask = np.array(mask, dtype='uint8')
-    maskingc = Masking(todc.mask)
+    maskingc = MaskOperator(todc.mask)
 
     model = compression * projection
     map_mask = model.T(tod.mask)
@@ -1411,8 +1416,8 @@ def pacs_compute_delay(obs, tod, model, invntt=None, tol_delay=1.e-3,
 
         def substitute_projection(model):
             for i, c in enumerate(model.operands):
-                if isinstance(c, Projection):
-                    model.operands[i] = Projection(obs, method=c.method,
+                if isinstance(c, ProjectionOperator):
+                    model.operands[i] = ProjectionOperator(obs, method=c.method,
                        header=c.header, npixels_per_sample=c.npixels_per_sample)
                     return True
                 elif isinstance(c, CompositeOperator):
@@ -1420,9 +1425,9 @@ def pacs_compute_delay(obs, tod, model, invntt=None, tol_delay=1.e-3,
                         return True
             return False
 
-        if isinstance(model, Projection):
-            return Projection(obs, method=model.method, header=model.header,
-                              npixels_per_sample=model.npixels_per_sample)
+        if isinstance(model, ProjectionOperator):
+            return ProjectionOperator(obs, method=model.method, header= \
+                model.header, npixels_per_sample=model.npixels_per_sample)
         if isinstance(model, CompositeOperator):
             if substitute_projection(model):
                 return model
@@ -1527,13 +1532,13 @@ def _write_status(obs, filename, fitskw=None):
     s = obs.slice[0]
 
     if any(obs.slice.compression_factor != obs.slice[0].compression_factor):
-        raise ValueError('Unable to save into a single file. The observations '\
-                         'do not have the same compression factor.')
+        raise ValueError('Unable to save into a single file. The observations d'
+                         'o not have the same compression factor.')
     compression_factor = s.compression_factor
 
     if any(obs.slice.mode != obs.slice[0].mode):
-        raise ValueError('Unable to save into a single file. The observations '\
-                         'do not have the same observing mode.')
+        raise ValueError('Unable to save into a single file. The observations d'
+                         'o not have the same observing mode.')
     mode = s.mode
     channel = 'Red' if obs.instrument.band == 'red' else 'Blue'
     band_type = {'blue':'BS', 'green':'BS', 'red':'RS'}[obs.instrument.band]
@@ -1550,8 +1555,8 @@ def _write_status(obs, filename, fitskw=None):
         comp_mode = ''
 
     if obs.pointing.size != np.sum(obs.slice.nsamples_all):
-        raise ValueError('The pointing and slice attribute are incompatible. ' \
-                         'This should not happen.')
+        raise ValueError('The pointing and slice attribute are incompatible. Th'
+                         'is should not happen.')
 
     status = obs.status[~obs.pointing.removed]
 
@@ -1602,8 +1607,8 @@ def _write_status(obs, filename, fitskw=None):
                 k = 'HIERARCH ' + k
             if isinstance(v, tuple):
                 if len(v) != 2:
-                    raise ValueError('A tuple input for fitskw must have two e'\
-                                     'lements (value, comment).')
+                    raise ValueError('A tuple input for fitskw must have two el'
+                                     'ements (value, comment).')
                 v, c = v
             else:
                 c = None
@@ -1635,8 +1640,8 @@ def _scan_speed(pointing):
 
 def step_scanline_masking(obs, n_repetition=0, n_scanline=None):
     """
-    Mask everything up to the n_scanline scan line of the n_repetition repetition.
-    If n_scanline is None, mask the whole repetition.
+    Mask everything up to the n_scanline scan line of the n_repetition
+    repetition. If n_scanline is None, mask the whole repetition.
 
     Arguments
     ----------
@@ -1707,10 +1712,10 @@ def step_deglitching(obs, tod, length=100, nsigma=25., method="mad"):
         raise ValueError("Unrecognized deglitching method.")
 
     # special deglitching projector
-    proj_glitch = tm.Projection(obs,
-                                method='sharp',
-                                downsampling=True,
-                                npixels_per_sample=6)
+    proj_glitch = tm.ProjectionOperator(obs,
+                                        method='sharp',
+                                        downsampling=True,
+                                        npixels_per_sample=6)
     # filter tod with narrow window
     tod_glitch = tm.filter_median(tod, length=length)
     # actual degltiching according to selected method (mad or std)

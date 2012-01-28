@@ -2,8 +2,9 @@ import numpy as np
 import os
 import tamasis
 
-from tamasis import (CompressionAverage, PacsObservation, PacsSimulation,
-                     Projection, create_fitsheader, gaussian)
+from tamasis import (PacsObservation, PacsSimulation,
+                     CompressionAverageOperator, ProjectionOperator,
+                     create_fitsheader, gaussian)
 from tamasis.numpyutils import all_eq
 from uuid import uuid1
 
@@ -23,8 +24,8 @@ def test1():
     simul = PacsSimulation(scan, 'red', policy_bad_detector='keep')
 
     # build the acquisition model
-    model = CompressionAverage(simul.slice.compression_factor) * \
-            Projection(simul, header=header, npixels_per_sample=49)
+    model = CompressionAverageOperator(simul.slice.compression_factor) * \
+            ProjectionOperator(simul, header=header, npixels_per_sample=49)
 
     # get the noiseless tod
     tod = model(mymap)
