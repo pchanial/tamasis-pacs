@@ -204,7 +204,8 @@ end program test
 
     if conf.options.enable_mpi:
         conf.env.OMPI_FC = conf.env.FC
-        conf.find_program('mpif90', var='FC')
+        conf.find_program('mpif90', var='MPIFC')
+        conf.env.FC = conf.env.MPIFC
         conf.check_cc(fragment    = 'program test\nuse mpi\nend',
                       compile_filename = 'test.f',
                       features    = 'fc fcprogram',
