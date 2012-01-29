@@ -246,13 +246,16 @@ def diff(input, output, axis=0, comm=None):
         raise ValueError("Invalid axis '" + str(axis) + "'. Expected value is" \
                          ' less than ' + str(ndim-1) + '.')
 
+    inplace = input.__array_interface__['data'][0] == \
+              output.__array_interface__['data'][0]
+
     if axis != 0 or comm.Get_size() == 1:
-        tmf.diff(input.ravel(), output.ravel(), ndim-axis,
-                 np.asarray(input.T.shape))
+        tmf.operators.diff(input.ravel(), output.ravel(), ndim-axis,
+                           np.asarray(input.T.shape), inplace)
         return
 
-    status = tmf.diff_mpi(input.ravel(), output.ravel(), ndim-axis,
-                          np.asarray(input.T.shape), comm.py2f())
+    status = tmf.operators.diff_mpi(input.ravel(), output.ravel(), ndim-axis,
+        np.asarray(input.T.shape), comm.py2f(), inplace)
     if status != 0: raise RuntimeError()
 
 
@@ -287,13 +290,16 @@ def diffT(input, output, axis=0, comm=None):
         raise ValueError("Invalid axis '" + str(axis) + "'. Expected value is" \
                          ' less than ' + str(ndim-1) + '.')
 
+    inplace = input.__array_interface__['data'][0] == \
+              output.__array_interface__['data'][0]
+
     if axis != 0 or comm.Get_size() == 1:
-        tmf.difft(input.ravel(), output.ravel(), ndim-axis,
-                  np.asarray(input.T.shape))
+        tmf.operators.difft(input.ravel(), output.ravel(), ndim-axis,
+                            np.asarray(input.T.shape), inplace)
         return
 
-    status = tmf.difft_mpi(input.ravel(), output.ravel(), ndim-axis,
-                           np.asarray(input.T.shape), comm.py2f())
+    status = tmf.operators.difft_mpi(input.ravel(), output.ravel(), ndim-axis,
+        np.asarray(input.T.shape), comm.py2f(), inplace)
     if status != 0: raise RuntimeError()
     
 #-------------------------------------------------------------------------------
@@ -328,14 +334,16 @@ def diffTdiff(input, output, axis=0, scalar=1., comm=None):
         raise ValueError("Invalid axis '" + str(axis) + "'. Expected value is" \
                          ' less than ' + str(ndim) + '.')
 
-    if axis != 0 or comm.Get_size() == 1:
-        tmf.difftdiff(input.ravel(), output.ravel(), ndim-axis,
-                      np.asarray(input.T.shape), scalar)
+    inplace = input.__array_interface__['data'][0] == \
+              output.__array_interface__['data'][0]
 
+    if axis != 0 or comm.Get_size() == 1:
+        tmf.operators.difftdiff(input.ravel(), output.ravel(), ndim-axis,
+                                np.asarray(input.T.shape), scalar, inplace)
         return
 
-    status = tmf.difftdiff_mpi(input.ravel(), output.ravel(), ndim-axis,
-                               np.asarray(input.T.shape), scalar, comm.py2f())
+    status = tmf.operators.difftdiff_mpi(input.ravel(), output.ravel(),
+        ndim-axis, np.asarray(input.T.shape), scalar, comm.py2f(), inplace)
     if status != 0: raise RuntimeError()
 
 
