@@ -811,16 +811,16 @@ class DistributionLocalOperator(Operator):
         self.operator = operator
 
     def direct(self, input, output):
-        status = tmf.mpi_allscatterlocal(input.T, self.mask.view(np.int8).T,
-            output.T, self.comm.py2f())
+        status = tmf.operators_mpi.allscatterlocal(input.T, self.mask.view(
+            np.int8).T, output.T, self.comm.py2f())
         if status == 0: return
         if status < 0:
             raise RuntimeError('Incompatible sizes.')
         raise MPI.Exception(status)
 
     def transpose(self, input, output):
-        status = tmf.mpi_allreducelocal(input.T, self.mask.view(np.int8).T,
-            output.T, self.operator.py2f(), self.comm.py2f())
+        status = tmf.operators_mpi.allreducelocal(input.T, self.mask.view(
+            np.int8).T, output.T, self.operator.py2f(), self.comm.py2f())
         if status == 0: return
         if status < 0:
             raise RuntimeError('Incompatible mask.')

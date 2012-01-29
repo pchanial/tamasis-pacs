@@ -29,15 +29,15 @@ contains
 
         if (dim == 1) then
             if (inplace) then
-                call diff_fast_inplace(input(1), ndiff, nslow)
+                call xxx_diff_fast_inplace(input(1), ndiff, nslow)
             else
-                call diff_fast_outplace(input(1), output(1), ndiff, nslow)
+                call xxx_diff_fast_outplace(input(1), output(1), ndiff, nslow)
             end if
         else
             if (inplace) then
-                call diff_medium_inplace(input(1), nfast, ndiff, nslow)
+                call xxx_diff_medium_inplace(input(1), nfast, ndiff, nslow)
             else
-                call diff_medium_outplace(input(1), output(1), nfast, ndiff, nslow)
+                call xxx_diff_medium_outplace(input(1), output(1), nfast, ndiff, nslow)
             end if
         end if
 
@@ -65,15 +65,15 @@ contains
 
         if (dim == 1) then
             if (inplace) then
-                call diffT_fast_inplace(input(1), ndiff, nslow)
+                call xxx_diffT_fast_inplace(input(1), ndiff, nslow)
             else
-                call diffT_fast_outplace(input(1), output(1), ndiff, nslow)
+                call xxx_diffT_fast_outplace(input(1), output(1), ndiff, nslow)
             end if
         else
             if (inplace) then
-                call diffT_medium_inplace(input(1), nfast, ndiff, nslow)
+                call xxx_diffT_medium_inplace(input(1), nfast, ndiff, nslow)
             else
-                call diffT_medium_outplace(input(1), output(1), nfast, ndiff, nslow)
+                call xxx_diffT_medium_outplace(input(1), output(1), nfast, ndiff, nslow)
             end if
         end if
 
@@ -102,15 +102,15 @@ contains
 
         if (dim == 1) then
             if (inplace) then
-                call diffTdiff_fast_inplace(input(1), ndiff, nslow, scalar)
+                call xxx_diffTdiff_fast_inplace(input(1), ndiff, nslow, scalar)
             else
-                call diffTdiff_fast_outplace(input(1), output(1), ndiff, nslow, scalar)
+                call xxx_diffTdiff_fast_outplace(input(1), output(1), ndiff, nslow, scalar)
             end if
         else
             if (inplace) then
-                call diffTdiff_medium_inplace(input(1), nfast, ndiff, nslow, scalar)
+                call xxx_diffTdiff_medium_inplace(input(1), nfast, ndiff, nslow, scalar)
             else
-                call diffTdiff_medium_outplace(input(1), output(1), nfast, ndiff, nslow, scalar)
+                call xxx_diffTdiff_medium_outplace(input(1), output(1), nfast, ndiff, nslow, scalar)
             end if
         end if
 
@@ -120,7 +120,7 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine diff_fast_inplace(input, m, n)
+    subroutine xxx_diff_fast_inplace(input, m, n)
 
         real(p), intent(inout) :: input(m,n)
         integer, intent(in)    :: m, n
@@ -141,13 +141,13 @@ contains
         end do
         !$omp end parallel do
 
-    end subroutine diff_fast_inplace
+    end subroutine xxx_diff_fast_inplace
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine diff_fast_outplace(input, output, m, n)
+    subroutine xxx_diff_fast_outplace(input, output, m, n)
 
         real(p), intent(in)    :: input(m,n)
         real(p), intent(inout) :: output(m,n)
@@ -169,13 +169,13 @@ contains
         end do
         !$omp end parallel do
 
-    end subroutine diff_fast_outplace
+    end subroutine xxx_diff_fast_outplace
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine diff_medium_inplace(input, m, n, o)
+    subroutine xxx_diff_medium_inplace(input, m, n, o)
 
         integer, intent(in)    :: m, n, o
         real(p), intent(inout) :: input(m,n,o)
@@ -202,13 +202,13 @@ contains
         end do
         !$omp end parallel do
 
-    end subroutine diff_medium_inplace
+    end subroutine xxx_diff_medium_inplace
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine diff_medium_outplace(input, output, m, n, o)
+    subroutine xxx_diff_medium_outplace(input, output, m, n, o)
 
         integer, intent(in)    :: m, n, o
         real(p), intent(in)    :: input(m,n,o)
@@ -236,13 +236,13 @@ contains
         end do
         !$omp end parallel do
 
-    end subroutine diff_medium_outplace
+    end subroutine xxx_diff_medium_outplace
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine diff_slow_inplace(input, m, n, boundary, islastrank)
+    subroutine xxx_diff_slow_inplace(input, m, n, boundary, islastrank)
 
         real(p), intent(inout)        :: input(m,n)
         integer, intent(in)           :: m, n
@@ -273,13 +273,13 @@ contains
         end do
         !$omp end parallel do
 
-    end subroutine diff_slow_inplace
+    end subroutine xxx_diff_slow_inplace
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine diff_slow_outplace(input, output, m, n, boundary, islastrank)
+    subroutine xxx_diff_slow_outplace(input, output, m, n, boundary, islastrank)
 
         real(p), intent(in)           :: input(m,n)
         real(p), intent(inout)        :: output(m,n)
@@ -311,13 +311,13 @@ contains
         end do
         !$omp end parallel do
 
-    end subroutine diff_slow_outplace
+    end subroutine xxx_diff_slow_outplace
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine diffT_fast_inplace(input, m, n)
+    subroutine xxx_diffT_fast_inplace(input, m, n)
 
         real(p), intent(inout) :: input(m,n)
         integer, intent(in)    :: m, n
@@ -339,13 +339,13 @@ contains
         end do
         !$omp end parallel do
 
-    end subroutine diffT_fast_inplace
+    end subroutine xxx_diffT_fast_inplace
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine diffT_fast_outplace(input, output, m, n)
+    subroutine xxx_diffT_fast_outplace(input, output, m, n)
 
         real(p), intent(in)    :: input(m,n)
         real(p), intent(inout) :: output(m,n)
@@ -368,13 +368,13 @@ contains
         end do
         !$omp end parallel do
 
-    end subroutine diffT_fast_outplace
+    end subroutine xxx_diffT_fast_outplace
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine diffT_medium_inplace(input, m, n, o)
+    subroutine xxx_diffT_medium_inplace(input, m, n, o)
 
         integer, intent(in)    :: m, n, o
         real(p), intent(inout) :: input(m,n,o)
@@ -401,13 +401,13 @@ contains
         end do
         !$omp end parallel do
 
-    end subroutine diffT_medium_inplace
+    end subroutine xxx_diffT_medium_inplace
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine diffT_medium_outplace(input, output, m, n, o)
+    subroutine xxx_diffT_medium_outplace(input, output, m, n, o)
 
         integer, intent(in)    :: m, n, o
         real(p), intent(in)    :: input(m,n,o)
@@ -435,13 +435,13 @@ contains
         end do
         !$omp end parallel do
 
-    end subroutine diffT_medium_outplace
+    end subroutine xxx_diffT_medium_outplace
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine diffT_slow_inplace(input, m, n, boundary, isfirstrank, islastrank)
+    subroutine xxx_diffT_slow_inplace(input, m, n, boundary, isfirstrank, islastrank)
 
         real(p), intent(inout)        :: input(m,n)
         integer, intent(in)           :: m, n
@@ -493,13 +493,13 @@ contains
         end do
         !$omp end parallel do
 
-    end subroutine diffT_slow_inplace
+    end subroutine xxx_diffT_slow_inplace
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine diffT_slow_outplace(input, output, m, n, boundary, isfirstrank, islastrank)
+    subroutine xxx_diffT_slow_outplace(input, output, m, n, boundary, isfirstrank, islastrank)
 
         integer, intent(in)           :: m, n
         real(p), intent(in)           :: input(m,n)
@@ -554,13 +554,13 @@ contains
         end do
         !$omp end parallel do
 
-    end subroutine diffT_slow_outplace
+    end subroutine xxx_diffT_slow_outplace
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine diffTdiff_fast_inplace(input, m, n, scalar)
+    subroutine xxx_diffTdiff_fast_inplace(input, m, n, scalar)
 
         real(p), intent(inout)        :: input(m,n)
         integer, intent(in)           :: m, n
@@ -593,13 +593,13 @@ contains
         end do
         !$omp end parallel do
 
-    end subroutine diffTdiff_fast_inplace
+    end subroutine xxx_diffTdiff_fast_inplace
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine diffTdiff_fast_outplace(input, output, m, n, scalar)
+    subroutine xxx_diffTdiff_fast_outplace(input, output, m, n, scalar)
 
         real(p), intent(in)           :: input(m,n)
         real(p), intent(inout)        :: output(m,n)
@@ -633,13 +633,13 @@ contains
         end do
         !$omp end parallel do
 
-    end subroutine diffTdiff_fast_outplace
+    end subroutine xxx_diffTdiff_fast_outplace
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine diffTdiff_medium_inplace(input, m, n, o, scalar)
+    subroutine xxx_diffTdiff_medium_inplace(input, m, n, o, scalar)
 
         integer, intent(in)           :: m, n, o
         real(p), intent(inout)        :: input(m,n,o)
@@ -679,13 +679,13 @@ contains
         end do
         !$omp end parallel do
 
-    end subroutine diffTdiff_medium_inplace
+    end subroutine xxx_diffTdiff_medium_inplace
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine diffTdiff_medium_outplace(input, output, m, n, o, scalar)
+    subroutine xxx_diffTdiff_medium_outplace(input, output, m, n, o, scalar)
 
         integer, intent(in)           :: m, n, o
         real(p), intent(in)           :: input(m,n,o)
@@ -726,13 +726,13 @@ contains
         end do
         !$omp end parallel do
 
-    end subroutine diffTdiff_medium_outplace
+    end subroutine xxx_diffTdiff_medium_outplace
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine diffTdiff_slow_inplace(input, m, n, scalar, boundary1, boundary2, isfirstrank, islastrank)
+    subroutine xxx_diffTdiff_slow_inplace(input, m, n, scalar, boundary1, boundary2, isfirstrank, islastrank)
 
         real(p), intent(inout)        :: input(m,n)
         integer, intent(in)           :: m, n
@@ -799,13 +799,13 @@ contains
         end do
         !$omp end parallel do
 
-    end subroutine diffTdiff_slow_inplace
+    end subroutine xxx_diffTdiff_slow_inplace
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine diffTdiff_slow_outplace(input, output, m, n, scalar, boundary1, boundary2, isfirstrank, islastrank)
+    subroutine xxx_diffTdiff_slow_outplace(input, output, m, n, scalar, boundary1, boundary2, isfirstrank, islastrank)
 
         integer, intent(in)           :: m, n
         real(p), intent(in)           :: input(m,n)
@@ -873,7 +873,7 @@ contains
         end do
         !$omp end parallel do
 
-    end subroutine diffTdiff_slow_outplace
+    end subroutine xxx_diffTdiff_slow_outplace
 
 
 end module operators

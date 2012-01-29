@@ -254,8 +254,8 @@ def diff(input, output, axis=0, comm=None):
                            np.asarray(input.T.shape), inplace)
         return
 
-    status = tmf.operators.diff_mpi(input.ravel(), output.ravel(), ndim-axis,
-        np.asarray(input.T.shape), comm.py2f(), inplace)
+    status = tmf.operators_mpi.diff(input.ravel(), output.ravel(), ndim-axis,
+        np.asarray(input.T.shape), inplace, comm.py2f())
     if status != 0: raise RuntimeError()
 
 
@@ -298,8 +298,8 @@ def diffT(input, output, axis=0, comm=None):
                             np.asarray(input.T.shape), inplace)
         return
 
-    status = tmf.operators.difft_mpi(input.ravel(), output.ravel(), ndim-axis,
-        np.asarray(input.T.shape), comm.py2f(), inplace)
+    status = tmf.operators_mpi.difft(input.ravel(), output.ravel(), ndim-axis,
+        np.asarray(input.T.shape), inplace, comm.py2f())
     if status != 0: raise RuntimeError()
     
 #-------------------------------------------------------------------------------
@@ -342,8 +342,8 @@ def diffTdiff(input, output, axis=0, scalar=1., comm=None):
                                 np.asarray(input.T.shape), scalar, inplace)
         return
 
-    status = tmf.operators.difftdiff_mpi(input.ravel(), output.ravel(),
-        ndim-axis, np.asarray(input.T.shape), scalar, comm.py2f(), inplace)
+    status = tmf.operators_mpi.difftdiff(input.ravel(), output.ravel(),
+        ndim-axis, np.asarray(input.T.shape), scalar, inplace, comm.py2f())
     if status != 0: raise RuntimeError()
 
 
