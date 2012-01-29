@@ -356,10 +356,18 @@ def test_scipy_linear_operator():
 def test_diff():
     def func(shape, axis):
         dX = DiscreteDifferenceOperator(axis=axis, shapein=shape)
-        assert_equal(dX.todense().T, dX.T.todense())
-        dtd = DdTddOperator(axis=axis, shapein=shape).todense()
-        assert_equal(np.matrix(dX.T.todense()) * \
-                     np.matrix(dX.todense()), dtd)
+        dTd = DdTddOperator(axis=axis, shapein=shape)
+        dX_dense = dX.todense()
+        assert_equal(dX_dense, dX.todense(inplace=True))
+
+        dXT_dense = dX.T.todense()
+        assert_equal(dXT_dense, dX.T.todense(inplace=True))
+        assert_equal(dX_dense.T, dXT_dense)
+
+        dtd_dense = dTd.todense()
+        assert_equal(dtd_dense, dTd.todense(inplace=True))
+        assert_equal(np.matrix(dXT_dense) * np.matrix(dX_dense), dtd_dense)
+
     for shape in ((3,), (3,4), (3,4,5), (3,4,5,6)):
         for axis in range(len(shape)):
             yield func, shape, axis
