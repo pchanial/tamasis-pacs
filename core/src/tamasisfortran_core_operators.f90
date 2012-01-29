@@ -177,8 +177,8 @@ contains
 
     subroutine diff_medium_inplace(input, m, n, o)
 
-        real(p), intent(inout) :: input(m,n,o)
         integer, intent(in)    :: m, n, o
+        real(p), intent(inout) :: input(m,n,o)
 
         integer, parameter     :: block = 4096
         integer                :: i, j, k, a, z
@@ -210,9 +210,9 @@ contains
 
     subroutine diff_medium_outplace(input, output, m, n, o)
 
+        integer, intent(in)    :: m, n, o
         real(p), intent(in)    :: input(m,n,o)
         real(p), intent(inout) :: output(m,n,o)
-        integer, intent(in)    :: m, n, o
 
         integer, parameter     :: block = 4096
         integer                :: i, j, k, a, z
@@ -376,8 +376,8 @@ contains
 
     subroutine diffT_medium_inplace(input, m, n, o)
 
-        real(p), intent(inout) :: input(m,n,o)
         integer, intent(in)    :: m, n, o
+        real(p), intent(inout) :: input(m,n,o)
 
         integer, parameter     :: block = 4096
         integer                :: i, j, k, a, z
@@ -409,9 +409,9 @@ contains
 
     subroutine diffT_medium_outplace(input, output, m, n, o)
 
+        integer, intent(in)    :: m, n, o
         real(p), intent(in)    :: input(m,n,o)
         real(p), intent(inout) :: output(m,n,o)
-        integer, intent(in)    :: m, n, o
 
         integer, parameter     :: block = 4096
         integer                :: i, j, k, a, z
@@ -641,8 +641,8 @@ contains
 
     subroutine diffTdiff_medium_inplace(input, m, n, o, scalar)
 
-        real(p), intent(inout)        :: input(m,n,o)
         integer, intent(in)           :: m, n, o
+        real(p), intent(inout)        :: input(m,n,o)
         real(p), intent(in), optional :: scalar
 
         integer, parameter :: block = 4096
@@ -687,9 +687,9 @@ contains
 
     subroutine diffTdiff_medium_outplace(input, output, m, n, o, scalar)
 
+        integer, intent(in)           :: m, n, o
         real(p), intent(in)           :: input(m,n,o)
         real(p), intent(inout)        :: output(m,n,o)
-        integer, intent(in)           :: m, n, o
         real(p), intent(in), optional :: scalar
 
         integer, parameter :: block = 4096
