@@ -13,7 +13,7 @@ import scipy
 import time
 
 from pyoperators import (Operator, HomothetyOperator, IdentityOperator,
-                         RoundOperator, ClipOperator, I)
+                         MaskOperator, RoundOperator, ClipOperator, I)
 from pyoperators.core import CompositeOperator
 from pyoperators.utils import strenum, strplural, openmp_num_threads
 
@@ -21,7 +21,7 @@ from . import MPI
 from . import var
 from tamasis.core import (Quantity, Tod, MaskPolicy, Instrument, Pointing, tmf,
                           CompressionAverageOperator, ProjectionOperator,
-                          MaskOperator, create_fitsheader)
+                          create_fitsheader)
 from tamasis.mpiutils import distribute_observation
 from tamasis.observations import Observation
 

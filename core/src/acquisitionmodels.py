@@ -10,8 +10,8 @@ import tamasisfortran as tmf
 from pyoperators import (Operator, IdentityOperator, DiagonalOperator,
                          BlockColumnOperator, BlockDiagonalOperator,
                          CompositionOperator, MaskOperator, NumexprOperator)
-from pyoperators.decorators import (idempotent, linear, orthogonal, real,
-                                    square, symmetric, unitary, inplace)
+from pyoperators.decorators import (linear, orthogonal, real, square, symmetric,
+                                    unitary, inplace)
 from pyoperators.utils import isscalar, tointtuple, openmp_num_threads
 
 from . import MPI
@@ -825,46 +825,6 @@ class DistributionLocalOperator(Operator):
         if status < 0:
             raise RuntimeError('Incompatible mask.')
         raise MPI.Exception(status)
-
-
-@real
-@symmetric
-@idempotent
-@inplace
-class Masking(Operator):
-    """
-    Mask operator.
-
-    Sets to zero values whose mask is True (non-null). The input of a Masking
-    instance can be of rank greater than the speficied mask, in which case the
-    latter is broadcast along the fast dimensions.
-    """
-
-    def __init__(self, mask, **keywords):
-        if mask is None:
-            print('Warning: input mask is None.')
-            mask = False
-        mask = np.array(mask, order='c', dtype=np.bool8)
-        self.isscalar = mask.ndim == 0
-        self.mask = np.array(mask, ndmin=1, copy=False)
-        Operator.__init__(self, dtype=var.FLOAT_DTYPE, **keywords)
-
-    def direct(self, input, output):
-        if self.same_data(input, output):
-            tmf.masking_inplace(input.ravel(), self.mask.view(np.int8).ravel())
-        else:
-            tmf.masking_outplace(input.ravel(), self.mask.view(np.int8).ravel(),
-                                 output.ravel())
-
-    def validate_shapein(self, shapein):
-        if shapein is None:
-            return self.shapein
-        if self.isscalar:
-            return shapein
-        if shapein[0:self.mask.ndim] != self.mask.shape:
-            raise ValueError('The input has a shape ' + str(shapein) + ' incomp'
-                'atible with that of the mask ' + str(self.mask.shape) + '.')
-        return shapein
 
 
 @real

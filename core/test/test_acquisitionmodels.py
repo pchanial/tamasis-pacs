@@ -5,7 +5,7 @@ import tamasis
 from pyoperators import Operator, AdditionOperator, CompositionOperator, DiagonalOperator, BlockDiagonalOperator, asoperator, decorators, I
 from pyoperators.utils import isscalar, assert_is
 from numpy.testing import assert_array_equal, assert_almost_equal, assert_raises
-from tamasis.acquisitionmodels import BlackBodyOperator, ConvolutionOperator, CompressionAverageOperator, DdTddOperator, DiscreteDifferenceOperator, DownSamplingOperator, FftOperator, FftHalfComplexOperator, Masking, PackOperator, PadOperator, ConvolutionTruncatedExponentialOperator, RollOperator, ShiftOperator, UnpackOperator, block_diagonal
+from tamasis.acquisitionmodels import BlackBodyOperator, ConvolutionOperator, CompressionAverageOperator, DdTddOperator, DiscreteDifferenceOperator, DownSamplingOperator, FftOperator, FftHalfComplexOperator, PackOperator, PadOperator, ConvolutionTruncatedExponentialOperator, RollOperator, ShiftOperator, UnpackOperator, block_diagonal
 from tamasis.numpyutils import all_eq
 
 def test_partitioning():
@@ -258,45 +258,6 @@ def test_compositionT():
     for nops in range(1, 5):
         yield func, nops
 
-def test_masking():
-    mask = Masking(None)
-    assert mask.shapein is None
-    assert mask.shapeout is None
-    assert mask.mask.ndim == 1
-    assert not mask.mask[0]
-    assert mask(3) == 3
-
-    b = np.array([3., 4., 1., 0., 3., 2.])
-    c = np.array([3., 4., 0., 0., 3., 0.])
-    mask = Masking(np.array([0, 0., 1., 1., 0., 1], dtype='int8'))
-    assert np.all(mask(b) == c)
-    mask = DiagonalOperator(np.array([1, 1., 0., 0., 1., 0]))
-    assert np.all(mask(b) == c)
-    mask = Masking(np.array([False, False, True, True, False, True]))
-    assert np.all(mask(b) == c)
-
-    b = np.array([[3., 4.], [1., 0.], [3., 2.]])
-    c = np.array([[3., 4.], [0., 0.], [3., 0.]])
-    mask = Masking(np.array([[0, 0.], [1., 1.], [0., 1.]], dtype='int8'))
-    assert np.all(mask(b) == c)
-    mask = DiagonalOperator(np.array([[1, 1.], [0., 0.], [1., 0.]]))
-    assert np.all(mask(b) == c)
-    mask = Masking(np.array([[False, False], [True, True], [False, True]]))
-    assert np.all(mask(b) == c)
-
-    b = np.array([[[3, 4.], [1., 0.]], [[3., 2], [-1, 9]]])
-    c = np.array([[[3, 4.], [0., 0.]], [[3., 0], [0, 0]]])
-    mask = Masking(np.array([[[0, 0.], [1., 1.]], [[0., 1], [1, 1]]], int))
-    assert np.all(mask(b) == c)
-    mask = DiagonalOperator(np.array([[[1, 1], [0., 0]], [[1, 0], [0, 0]]]))
-    assert np.all(mask(b) == c)
-    mask = Masking(np.array([[[False, False], [True, True]],
-                             [[False, True], [True, True]]]))
-    assert np.all(mask(b) == c)
-
-    c = mask(b, b)
-    assert id(b) == id(c)
-
 
 def test_packing():
 
@@ -392,23 +353,6 @@ def test_scipy_linear_operator():
     assert np.all(model.T(vec) == diagonal)
     assert np.all(model.matvec(vec)  == diagonal)
     assert np.all(model.rmatvec(vec) == diagonal)
-
-def test_transpose():
-    syms = [ I, DiagonalOperator([1,2,3]), Masking([0,1,1,1]) ]
-    for m in syms:
-        yield assert_is, m, m.T
-
-def test_dtype():
-    CTYPE = tamasis.var.COMPLEX_DTYPE
-    FTYPE = tamasis.var.FLOAT_DTYPE
-    a = FftOperator((3,4))
-    assert a.dtype is CTYPE
-    a = Masking(np.array([1, complex(2,2)]))
-    assert a.dtype is FTYPE
-    a = Masking([True, False])
-    assert a.dtype is FTYPE
-    a = Masking(np.array([0,1,0], dtype='int8'))
-    assert a.dtype is FTYPE
 
 def test_diff():
     def func(shape, axis):
