@@ -1,11 +1,10 @@
 import numpy as np
 import scipy
-import tamasis
 
-from pyoperators import Operator, AdditionOperator, CompositionOperator, DiagonalOperator, BlockDiagonalOperator, asoperator, decorators, I
-from pyoperators.utils import isscalar, assert_is
+from pyoperators import Operator, AdditionOperator, CompositionOperator, BlockDiagonalOperator, asoperator, decorators
+from pyoperators.utils import isscalar
 from numpy.testing import assert_array_equal, assert_almost_equal, assert_raises
-from tamasis.acquisitionmodels import BlackBodyOperator, ConvolutionOperator, CompressionAverageOperator, DdTddOperator, DiscreteDifferenceOperator, DownSamplingOperator, FftOperator, FftHalfComplexOperator, PackOperator, PadOperator, ConvolutionTruncatedExponentialOperator, RollOperator, ShiftOperator, UnpackOperator, block_diagonal
+from tamasis.acquisitionmodels import BlackBodyOperator, ConvolutionOperator, CompressionAverageOperator, DdTddOperator, DiscreteDifferenceOperator, DownSamplingOperator, FftHalfComplexOperator, PackOperator, PadOperator, ConvolutionTruncatedExponentialOperator, RollOperator, ShiftOperator, UnpackOperator, block_diagonal
 from tamasis.numpyutils import all_eq
 
 def test_partitioning():
