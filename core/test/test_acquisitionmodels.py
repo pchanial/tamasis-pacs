@@ -3,7 +3,7 @@ import scipy
 
 from pyoperators import Operator, AdditionOperator, CompositionOperator, BlockDiagonalOperator, asoperator, decorators
 from pyoperators.utils import isscalar
-from numpy.testing import assert_array_equal, assert_almost_equal, assert_raises
+from numpy.testing import assert_equal, assert_almost_equal, assert_raises
 from tamasis.acquisitionmodels import BlackBodyOperator, ConvolutionOperator, CompressionAverageOperator, DdTddOperator, DiscreteDifferenceOperator, DownSamplingOperator, FftHalfComplexOperator, PackOperator, PadOperator, ConvolutionTruncatedExponentialOperator, RollOperator, ShiftOperator, UnpackOperator, block_diagonal
 from tamasis.numpyutils import all_eq
 
@@ -40,7 +40,7 @@ def test_partitioning():
             assert op.mykey is k
             if not isinstance(v, tuple):
                 output = op(input)
-                assert_array_equal(output, v)
+                assert_equal(output, v)
         else:
             assert op.__class__ is BlockDiagonalOperator
             v = len(n) * [v] if isscalar(v) else v[0:len(n)]
@@ -49,7 +49,7 @@ def test_partitioning():
                 func(op.operands[i], None, v[i], k[i])
             expected = np.hstack(n_*[v_] for n_, v_ in zip(n,v))
             output = op(input)
-            assert_array_equal(output, expected)
+            assert_equal(output, expected)
 
     for n in (None, 2, (2,), (4,2), (5,4,2)):
         for v in (2., (2.,), (2., 3)):
@@ -90,8 +90,8 @@ def test_compression_average1():
     data = np.array([1., 2., 2., 3.])
     compression = CompressionAverageOperator(2)
     compressed = compression(data)
-    assert_array_equal(compressed, [1.5, 2.5])
-    assert_array_equal(compression.T(compressed), [0.75, 0.75, 1.25, 1.25])
+    assert_equal(compressed, [1.5, 2.5])
+    assert_equal(compression.T(compressed), [0.75, 0.75, 1.25, 1.25])
 
 def test_compression_average2():
     partition = (10,5)
@@ -101,7 +101,7 @@ def test_compression_average2():
     compression = CompressionAverageOperator(5, partition=partition)
     tod2 = compression(tod)
     assert tod2.shape == (2,3)
-    assert_array_equal(tod2, [[1.,3.,4.],[1.,1.,1.5]])
+    assert_equal(tod2, [[1.,3.,4.],[1.,1.,1.5]])
 
     tod3 = compression.T(tod2)
     assert tod3.shape == (2,15)
@@ -123,9 +123,9 @@ def test_downsampling1():
     tod = np.array([1,2,1,3,1,1,4,1,1,1])
     compression=DownSamplingOperator([1,2,3,4], partition=partition)
     tod2 = compression(tod)
-    assert_array_equal(tod2, [1,2,3,4])
+    assert_equal(tod2, [1,2,3,4])
     tod3 = compression.T(tod2)
-    assert_array_equal(tod3, [1,2,0,3,0,0,4,0,0,0])
+    assert_equal(tod3, [1,2,0,3,0,0,4,0,0,0])
 
 def test_downsampling2():
     a = CompressionAverageOperator(3)
@@ -136,27 +136,27 @@ def test_padding1():
     a = np.arange(10*15).reshape((10,15))
     b = padding(a)
     assert b.shape == (10,36)
-    assert_array_equal(b[:,0:1], 0)
-    assert_array_equal(b[:,1:16], a)
-    assert_array_equal(b[:,16:], 0)
+    assert_equal(b[:,0:1], 0)
+    assert_equal(b[:,1:16], a)
+    assert_equal(b[:,16:], 0)
     shapein = (10,15)
     shapeout = (10,15+1+20)
-    assert_array_equal(padding.T.todense(shapeout), padding.todense(shapein).T)
+    assert_equal(padding.T.todense(shapeout), padding.todense(shapein).T)
 
 def test_padding2():
     padding = PadOperator(left=1,right=(4,20), partition=(12,3))
     a = np.arange(10*15).reshape((10,15))
     b = padding(a)
     assert b.shape == (10,41)
-    assert_array_equal(b[:,0:1], 0)
-    assert_array_equal(b[:,1:13], a[:,0:12])
-    assert_array_equal(b[:,13:17], 0)
-    assert_array_equal(b[:,17:18], 0)
-    assert_array_equal(b[:,18:21], a[:,12:])
-    assert_array_equal(b[:,21:], 0)
+    assert_equal(b[:,0:1], 0)
+    assert_equal(b[:,1:13], a[:,0:12])
+    assert_equal(b[:,13:17], 0)
+    assert_equal(b[:,17:18], 0)
+    assert_equal(b[:,18:21], a[:,12:])
+    assert_equal(b[:,21:], 0)
     shapein = (10,15)
     shapeout = (10,(12+1+4)+(3+1+20))
-    assert_array_equal(padding.T.todense(shapeout), padding.todense(shapein).T)
+    assert_equal(padding.T.todense(shapeout), padding.todense(shapein).T)
 
 def test_convolution_truncated_exponential():
     r = ConvolutionTruncatedExponentialOperator(1., shapein=(1,10))
@@ -356,10 +356,10 @@ def test_scipy_linear_operator():
 def test_diff():
     def func(shape, axis):
         dX = DiscreteDifferenceOperator(axis=axis, shapein=shape)
-        assert_array_equal(dX.todense().T, dX.T.todense())
+        assert_equal(dX.todense().T, dX.T.todense())
         dtd = DdTddOperator(axis=axis, shapein=shape).todense()
-        assert_array_equal(np.matrix(dX.T.todense()) * \
-                      np.matrix(dX.todense()), dtd)
+        assert_equal(np.matrix(dX.T.todense()) * \
+                     np.matrix(dX.todense()), dtd)
     for shape in ((3,), (3,4), (3,4,5), (3,4,5,6)):
         for axis in range(len(shape)):
             yield func, shape, axis
@@ -367,19 +367,19 @@ def test_diff():
 def test_shift1():
     for axis in range(4):
         shift = ShiftOperator(1, axis=axis, shapein=(3,4,5,6))
-        yield assert_array_equal, shift.todense().T, shift.T.todense()
+        yield assert_equal, shift.todense().T, shift.T.todense()
 
 def test_shift2():
     for axis in range(1,4):
         shift = ShiftOperator(((1,2,3),), axis=axis, shapein=(3,4,5,6))
-        yield assert_array_equal, shift.todense().T, shift.T.todense()
+        yield assert_equal, shift.todense().T, shift.T.todense()
 
 def test_shift3():
     for offset in ( (3,), (3,4), (3,4,5) ):
         for axis in range(len(offset),4):
             s = np.random.random_integers(-2,2,offset)
             shift = ShiftOperator([s], axis=axis, shapein=(3,4,5,6))
-            yield assert_array_equal, shift.todense().T, shift.T.todense()
+            yield assert_equal, shift.todense().T, shift.T.todense()
 
 def test_roll():
     shape = np.arange(2,6)
@@ -391,4 +391,4 @@ def test_roll():
             for a in axis:
                 expected = np.roll(expected, n, a)
             result = RollOperator(axis=axis, n=n)(v)
-            yield assert_array_equal, result, expected
+            yield assert_equal, result, expected
