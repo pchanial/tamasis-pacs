@@ -156,7 +156,7 @@ def test_slice2():
 
     m1 = proj1.T(tod1)
     m2 = proj2.T(tod2)
-    assert all_eq(m1, m2, 1e-12)
+    assert all_eq(m1, m2, 1e-11)
     assert all_eq(proj1(m1), proj2(m1))
     
 def teardown():
