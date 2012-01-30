@@ -9,7 +9,7 @@ import pyfits
 import sys
 import tamasisfortran as tmf
 
-from pyoperators.mpi_operators import distribute_shape, distribute_slice
+from pyoperators.operators_mpi import distribute_shape, distribute_slice
 from pyoperators.utils import strshape
 from . import MPI
 from .wcsutils import create_fitsheader
