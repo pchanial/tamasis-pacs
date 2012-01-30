@@ -1,0 +1,21 @@
+---
+layout: post
+title: Tamasis 4.1
+excerpt: Release of Tamasis 4.1
+category: blog
+---
+
+What's new ?
+* Update to PyOperators v0.3
+* Update to waf 1.6.10
+* Bring back MPI read/write capabilities for FitsArray/Map/Tod instances
+* Bring back MPI-distributed discrete difference operator
+* Pointing class: make constructor more generic and easy to use
+* API changes: module _quantity_ has been renamed to _quantities_. Although the old names will be kept for some time, operators now consistently end with @'Operator'@:
+  - @CompressionAverage@ &rarr; @CompressionAverageOperator@
+  - @DiscreteDifference@ &rarr; @DiscreteDifferenceOperator@
+  - @InvNtt@ &rarr; @InvNttOperator@
+  - @Masking@ &rarr; @MaskOperator@
+  - @Projection@ &rarr; @ProjectionOperator@
+  - @ResponseTruncatedExponential@ &rarr; @ConvolutionTruncatedExponentialOperator@
+  - @Unpacking@ &rarr; @UnpackOperator@
