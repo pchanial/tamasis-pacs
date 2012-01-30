@@ -465,7 +465,8 @@ class ProjectionOperator(Operator):
 
     def __new__(cls, input=None, method=None, header=None, resolution=None,
                 npixels_per_sample=0, units=None, derived_units=None,
-                downsampling=False, comm_map=None, comm_tod=None, packed=False):
+                downsampling=False, comm_map=None, comm_tod=None, packed=False,
+                shapein=None, shapeout=None, **keywords):
         if not isinstance(input, Observation) or len(input.slice) == 1:
             instance = Operator.__new__(cls)
             return instance
@@ -483,16 +484,18 @@ class ProjectionOperator(Operator):
                 downsampling, islice=islice)
             p = ProjectionOperator(pmatrix, method=method, header=header,
                     units=units, derived_units=derived_units,
-                    comm_tod=obs.comm_tod)
+                    comm_tod=obs.comm_tod, **keywords)
             operands.append(p)
             partitionout.append(pmatrix.shape[1])
         result = BlockColumnOperator(operands, partitionout=partitionout,
                                      axisout=-1)
         def get_mask(output=None):
             if output is None:
-                shapein = tuple([header['NAXIS'+str(i+1)] for i in \
-                                 range(header['NAXIS'])])[::-1]
-                output = Map.ones(shapein, dtype=np.bool8, header=header)
+                shapein_ = shapein
+                if shapein_ is None:
+                    shapein_ = tuple([header['NAXIS'+str(i+1)] for i in \
+                                     range(header['NAXIS'])])[::-1]
+                output = Map.ones(shapein_, dtype=np.bool8, header=header)
             for p in operands:
                 p.get_mask(output)
             return output
@@ -504,9 +507,10 @@ class ProjectionOperator(Operator):
     def __init__(self, input, method=None, header=None, resolution=None,
                  npixels_per_sample=0, units=None, derived_units=None,
                  downsampling=False, comm_map=None, comm_tod=None,
-                 packed=False):
+                 packed=False, shapein=None, shapeout=None, **keywords):
 
-        self.comm_map = comm_map or var.comm_map
+        comm_map = comm_map or var.comm_map
+        comm_tod = comm_tod or var.comm_tod
 
         if isinstance(input, Observation):
             if header is None:
@@ -541,6 +545,7 @@ class ProjectionOperator(Operator):
 
         self.pmatrix = pmatrix
         self._pmatrix = _pmatrix
+        self.comm_map = comm_map
         self.comm_tod = comm_tod
         self.header = header
         self.ndetectors = ndetectors
@@ -550,9 +555,27 @@ class ProjectionOperator(Operator):
                                  Quantity(1, units[1])._unit)
         self.duout, self.duin = derived_units
 
-        shapein = tuple([self.header['NAXIS'+str(i+1)] for i in \
-                         range(self.header['NAXIS'])])[::-1]
-        shapeout = (ndetectors, nsamples)
+        shapein_expected = None if self.header is None else tuple([self.header[
+            'NAXIS'+str(i+1)] for i in range(self.header['NAXIS'])])[::-1]
+        if shapein is None and shapein_expected is None:
+            raise ValueError("The pointing matrix itself does not contain infor"
+                "mation about the input shape. Use the 'header' or 'shapein' ke"
+                "ywords to specify it.")
+        if shapein is None:
+            shapein = shapein_expected
+        elif shapein_expected is not None and shapein != shapein_expected:
+            raise ValueError("The specified input shape '{0}' is incompatible w"
+                "ith that of the header '{1}'.".format(shapein,
+                shapein_expected))
+
+        shapeout_expected = (ndetectors, nsamples)
+        if shapeout is None:
+            shapeout = shapeout_expected
+        elif shapeout != shapeout_expected:
+            raise ValueError("The specified output shape '{0}' is incompatible "
+                "with that of the pointing matrix '{1}'.".format(shapeout,
+                shapeout_expected))
+
         mask = Map.empty(shapein, dtype=np.bool8, header=self.header)
         tmf.pointing_matrix_mask(self._pmatrix, mask.view(np.int8).T,
             self.npixels_per_sample, self.nsamples, self.ndetectors)
@@ -568,7 +591,8 @@ class ProjectionOperator(Operator):
         self.method = method
         Operator.__init__(self, shapein=shapein, shapeout=shapeout,
                           attrin=self.set_attrin, attrout=self.set_attrout,
-                          classin=Map, classout=Tod, dtype=var.FLOAT_DTYPE)
+                          classin=Map, classout=Tod, dtype=var.FLOAT_DTYPE,
+                          **keywords)
         if not self.ispacked and not istoddistributed:
             return
 
