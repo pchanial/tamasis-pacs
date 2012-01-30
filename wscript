@@ -1,6 +1,8 @@
 #! /usr/bin/env python
 
 import glob
+import multiprocessing
+import numpy as np
 import os
 import string
 import subprocess
@@ -62,6 +64,9 @@ def options(opt):
                    action='store_true',
                    default=False,
                    help='use compiler flags for debugging (export symbols, add checks...)')
+    opt.add_option('--np',
+                   action='store',
+                   help='number of MPI copies')
 
 
 
@@ -278,7 +283,7 @@ def build(bld):
     source = [bld.srcnode.find_node('%s/src/tamasisfortran_%s.f90' % (s,s)) for s in subdirs]
     additional_interfaces = ['operators', 'pointing']
     if 'MPI' in libraries:
-        additional_interfaces += 'mpi'
+        additional_interfaces += [ 'mpi' ]
     for a in additional_interfaces:
         source += bld.srcnode.ant_glob('core/src/tamasisfortran_core_{0}.f90' \
                                        .format(a))
@@ -421,16 +426,16 @@ class test_mpi(BuildContext):
     fun = 'test_mpi_fun'
 
 def test_mpi_fun(bld):
-    import tamasis as tm
+    if bld.options.np is None:
+        ns = 2**np.arange(int(np.floor(np.log2(multiprocessing.cpu_count())))+1)
+    else:
+        ns = [ int(bld.options.np) ]
     for subdir in subdirs:
         files = bld.path.ant_glob(subdir+'/test/test_mpi*.py')
-        ncores = [ 1, 2 ]
-        if tm.tmf.info_nthreads() > 2:
-            ncores += [ 4 ]
         for file in files:
-            for n in ncores:
+            for n in ns:
                 bld(rule='export OMP_NUM_THREADS=1; mpirun -n ' + str(n) + \
-                    ' ${PYTHON} ' + file.abspath() + (' > /dev/null' \
+                    ' ${NOSETESTS} ' + file.abspath() + (' > /dev/null' \
                 if bld.options.verbose == 0 else '') + '; unset OMP' \
                     '_NUM_THREADS', always=True)
                 bld.add_group()

@@ -4,6 +4,9 @@ from tamasis import PacsObservation, DistributionGlobalOperator, MaskOperator, P
 from tamasis import MPI
 from tamasis.numpyutils import assert_all_eq
 
+from nose.plugins.skip import SkipTest
+raise SkipTest
+
 #solver = scipy.sparse.linalg.bicgstab
 solver = tamasis.solvers.cg
 tol = 1.e-3

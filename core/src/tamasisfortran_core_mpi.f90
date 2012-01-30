@@ -30,7 +30,7 @@ contains
     subroutine diff(input, output, asize, dim, ashape, arank, inplace, comm, status)
 
         integer*8, intent(in)  :: asize
-        real(p), intent(in)    :: input(asize)
+        real(p), intent(inout) :: input(asize)
         real(p), intent(inout) :: output(asize)
         integer, intent(in)    :: dim
         integer, intent(in)    :: arank
@@ -71,7 +71,7 @@ contains
     subroutine diffT(input, output, asize, dim, ashape, inplace, arank, comm, status)
 
         integer*8, intent(in)  :: asize
-        real(p), intent(in)    :: input(asize)
+        real(p), intent(inout) :: input(asize)
         real(p), intent(inout) :: output(asize)
         integer, intent(in)    :: dim
         integer, intent(in)    :: arank
@@ -112,7 +112,7 @@ contains
     subroutine diffTdiff(input, output, asize, dim, ashape, arank, scalar, inplace, comm, status)
 
         integer*8, intent(in)  :: asize
-        real(p), intent(in)    :: input(asize)
+        real(p), intent(inout) :: input(asize)
         real(p), intent(inout) :: output(asize)
         integer, intent(in)    :: dim
         integer, intent(in)    :: arank

@@ -1,7 +1,10 @@
 import numpy as np
 import tamasis
 from tamasis import FitsArray, Map, Tod, MPI
-from tamasis.utils import assert_all_eq
+from tamasis.numpyutils import assert_all_eq
+
+from nose.plugins.skip import SkipTest
+raise SkipTest
 
 tamasis.var.verbose = True
 

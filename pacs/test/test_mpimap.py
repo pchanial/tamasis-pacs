@@ -4,6 +4,9 @@ import tamasis
 from tamasis import PacsObservation, Map, DistributionGlobalOperator, DistributionLocalOperator, MaskOperator, PackOperator, ProjectionOperator, mapper_naive, MPI
 from tamasis.numpyutils import assert_all_eq
 
+from nose.plugins.skip import SkipTest
+raise SkipTest
+
 data_dir = os.path.dirname(__file__) + '/data/'
 rank = MPI.COMM_WORLD.Get_rank()
 size = MPI.COMM_WORLD.Get_size()

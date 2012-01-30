@@ -9,7 +9,8 @@ import tamasisfortran as tmf
 
 from pyoperators import (Operator, IdentityOperator, DiagonalOperator,
                          BlockColumnOperator, BlockDiagonalOperator,
-                         CompositionOperator, MaskOperator, NumexprOperator)
+                         CompositionOperator, DistributionIdentityOperator,
+                         MaskOperator, NumexprOperator)
 from pyoperators.decorators import (linear, orthogonal, real, square, symmetric,
                                     unitary, inplace)
 from pyoperators.utils import isscalar, tointtuple, openmp_num_threads
@@ -20,7 +21,6 @@ from .datatypes import Map, Tod
 from .observations import Observation
 from .quantities import Quantity, _divide_unit, _multiply_unit
 from .utils import diff, diffT, diffTdiff, shift
-from .mpiutils import distribute_shape, distribute_slice
 from .wcsutils import str2fitsheader
 
 try:
@@ -35,7 +35,6 @@ __all__ = [
     'CompressionAverage', # obsolete
     'CompressionAverageOperator',
     'ConvolutionOperator',
-    'DistributionGlobalOperator',
     'DistributionLocalOperator',
     'DdTdd', # Obsolete
     'DdTddOperator',
@@ -579,8 +578,7 @@ class ProjectionOperator(Operator):
             else:
                 self *= PackOperator(mask)
         elif istoddistributed:
-            self *= DistributionGlobalOperator(self.shapein, share=True,
-                                       comm=self.comm_tod)
+            self *= DistributionIdentityOperator(commout=self.comm_tod)
         s = self.operands[0]
         self.header = s.header
         self.method = s.method
@@ -726,66 +724,6 @@ class DdTddOperator(Operator):
 
     def direct(self, input, output):
         diffTdiff(input, output, self.axis, self.scalar, comm=self.comm)
-
-
-@real
-@linear
-class DistributionGlobalOperator(Operator):
-    """
-    Distribute a global map to different MPI processes.
-    By default, they are locally distributed, in the sense that an MPI process
-    will only handle a subset of the global map.
-    """
-
-    def __init__(self, shape, share=False, comm=None, **keywords):
-
-        if comm is None:
-            comm = var.comm_map
-        self.comm = comm
-
-        # if share is true, the maps are not distributed
-        if share:
-            def direct(input, output):
-                if input.data is output.data:
-                    pass
-                output[:] = input
-            def transpose(input, output):
-                if input.data is not output.data:
-                    output[:] = input
-                if self.comm.Get_size() > 1:
-                    self.comm.Allreduce(MPI.IN_PLACE, [output, MPI.DOUBLE],
-                                        op=MPI.SUM)
-            Operator.__init__(self, shapein=shape, classin=Map,
-                                    direct=direct, transpose=transpose,
-                                    **keywords)
-            return
-
-        shapeout = distribute_shape(shape, comm)
-        self.counts = []
-        self.offsets = [0]
-        for rank in range(comm.Get_size()):
-            s = distribute_slice(shape[0], rank=rank, comm=comm)
-            n = (s.stop - s.start) * np.product(shape[1:])
-            self.counts.append(n)
-            self.offsets.append(self.offsets[-1] + n)
-        self.offsets.pop()
-        attrin = { 'comm':MPI.COMM_SELF, 'shape_global':shape }
-        attrout = { 'comm':self.comm, 'shape_global':shape }
-        Operator.__init__(self, shapein=shape, shapeout=shapeout,
-                                attrin=attrin, attrout=attrout, classin=Map,
-                                **keywords)
-
-    def direct(self, input, output):
-        s = distribute_slice(self.shapein[0], comm=self.comm)
-        n = s.stop - s.start
-        output[0:n] = input[s.start:s.stop]
-        output[n:] = 0
-
-    def transpose(self, input, output):
-        s = distribute_slice(self.shapein[0], comm=self.comm)
-        n = s.stop - s.start
-        self.comm.Allgatherv([input[0:n], MPI.DOUBLE], [output, (self.counts,
-                             self.offsets), MPI.DOUBLE])
 
 
 @real
