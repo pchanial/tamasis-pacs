@@ -373,6 +373,9 @@ ities of different units may have changed operands to common unit '" + \
         if key is Ellipsis:
             return item
 
+        if isinstance(key, np.ndarray):
+            return item
+
         if not isinstance(key, tuple):
             key = (key,)
 
