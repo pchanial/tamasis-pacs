@@ -500,48 +500,31 @@ ities of different units may have changed operands to common unit '" + \
         if len(self._unit) == 0:
             return self
 
-        factor = Quantity(1., '')
+        ffast = Quantity(1., '')
+        fslow = Quantity(1., '')
         for key, val in self._unit.items():
 
             # check if the unit is a local derived unit
-            newfactor = _check_du(self, key, val, self.derived_units)
+            newfactor, broadcast = _check_du(self, key, val, self.derived_units)
 
             # check if the unit is a global derived unit
             if newfactor is None:
-                newfactor = _check_du(self, key, val, units)
+                newfactor, broadcast = _check_du(self, key, val, units)
                 
             # if the unit is not derived, we add it to the dictionary
             if newfactor is None:            
-                _multiply_unit_inplace(factor._unit, key, val)
+                _multiply_unit_inplace(fslow._unit, key, val)
                 continue
 
             # factor may be broadcast
-            factor = factor * newfactor
+            if broadcast == 'leftward':
+                fslow = fslow * newfactor
+            else:
+                ffast = (ffast.T * newfactor.T).T
 
-        if np.rank(self) == 0 or np.rank(factor) == 0:
-            result = self * factor.magnitude
-            result._unit = factor._unit
-            return result
-
-        # make sure that the unit factor can be broadcast
-        if any([d1 not in (1,d2)
-                for (d1,d2) in zip(self.shape[0:factor.ndim], factor.shape)]):
-            raise ValueError("The derived unit '" + key + "' has a shape '" + \
-                str(newfactor.shape) + "' which is incompatible with the dime" \
-                "nsion(s) along the first axes '" + str(self.shape) + "'.")
-
-        # Python's broadcast operates by adding slow dimensions. Since we
-        # need to use a unique conversion factor along the fast dimensions
-        # (ex: second axis in an array tod[detector,time]), we need to perform
-        # our own broadcast by adding fast dimensions
-        if np.any(self.shape[0:factor.ndim] != factor.shape):
-            broadcast = np.hstack([factor.shape,
-                                  np.ones(self.ndim-factor.ndim,int)])
-            result = self * np.ones(broadcast)
-        else:
-            result = self.copy()
-        result.T[:] *= factor.magnitude.T
-        result._unit = factor._unit
+        result = self * fslow.magnitude
+        result = (result.T * ffast.magnitude.T).T
+        result._unit = _multiply_unit(fslow._unit, ffast._unit)
 
         return result
 
@@ -608,39 +591,49 @@ ities of different units may have changed operands to common unit '" + \
         return _wrap_func(np.var, self, _power_unit(self._unit, 2), *args, **kw)
     var.__doc__ = np.ndarray.var.__doc__
 
-
-def _get_du(input, key, d):
-    if hasattr(d[key], '__call__'):
-        du = d[key](input)
-    else:
-        du = d[key]
+def _check_du(input, key, val, derived_units):
+    if len(derived_units) == 0:
+        return None, None
+    if (key,val) in derived_units:
+        du, broadcast = _get_du(input, (key,val), derived_units)
+        return (None, None) if du is None else (du.SI, broadcast)
+    if (key,-val) in derived_units:
+        du, broadcast = _get_du(input, (key,-val), derived_units)
+        return (None, None) if du is None else ((1 / du).SI, broadcast)
+    du, broadcast = _get_du(input, key, derived_units)
     if du is None:
-        return None
+        return None, None
+    if val == 1.:
+        return du.SI, broadcast
+    if val == -1.:
+        return (1 / du).SI, broadcast
+    return (du ** val).SI, broadcast
+
+def _get_du(input, key, derived_units):
+    try:
+        du, broadcast = _check_in_du(key, derived_units)
+    except ValueError:
+        return None, None
+    if callable(du):
+        du = du(input)
+    if du is None:
+        return None, None
     if hasattr(input, '_header'):
         du = du.view(type(input))
         du._header = input._header
     du._derived_units = input._derived_units
-    return du
+    return du, broadcast
 
-def _check_du(input, key, val, derived_units):
-    if len(derived_units) == 0:
-        return None
-    if (key,val) in derived_units:
-        du = _get_du(input, (key,val), derived_units).SI
-        return None if du is None else du.SI
-    if (key,-val) in derived_units:
-        du = _get_du(input, (key,-val), derived_units)
-        return None if du is None else (1 / du).SI
-    if key not in derived_units:
-        return None
-    du = _get_du(input, key, derived_units)
-    if du is None:
-        return None
-    if val == 1.:
-        return du.SI
-    if val == -1.:
-        return (1 / du).SI
-    return (du ** val).SI        
+def _check_in_du(key, derived_units):
+    for du, value in derived_units.items():
+        try:
+            pos = du.index('[')
+            if key == du[:pos]:
+                return value, du[pos+1:-1]
+        except ValueError:
+            if key == du:
+                return value, 'leftward'
+    raise ValueError()
 
 
 #-------------------------------------------------------------------------------

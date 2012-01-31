@@ -1,3 +1,5 @@
+from __future__ import division
+
 import numpy as np
 import tamasis
 from nose.tools import assert_equal, assert_raises
@@ -163,9 +165,12 @@ def test_dtype():
     assert_is(Quantity(np.array(np.complex128(1.))).dtype, COMPLEX_DTYPE)
 
 def test_derived_units1():
-    du = {'detector':Quantity([1, 1/10.], 'm^2')}
+    du = {'detector[rightward]':Quantity([1, 1/10.], 'm^2'),
+          'time[leftward]':Quantity([1,1/2,1/3,1/4], 's')}
     a = Quantity([[1,2,3,4],[10,20,30,40]], 'detector', derived_units=du)
     assert_almost_equal(a.SI, [[1,2,3,4],[1,2,3,4]])
+    a = Quantity([[1,2,3,4],[10,20,30,40]], 'time', derived_units=du)
+    assert_almost_equal(a.SI, [[1,1,1,1],[10,10,10,10]])
     a = Quantity(1, 'detector C', du)
     assert a.SI.shape == (2,)
     a = Quantity(np.ones((1,10)), 'detector', derived_units=du)

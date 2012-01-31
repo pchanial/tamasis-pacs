@@ -283,8 +283,8 @@ class PacsBase(Observation):
             {
                 'detector_reference': Quantity(1 / \
                     self.instrument.active_fraction, 'detector'),
-                'detector' : Quantity(self.pack(self.instrument.detector.area),
-                                      'arcsec^2'),
+                'detector[rightward]' : Quantity(self.pack(
+                    self.instrument.detector.area), 'arcsec^2'),
                 'V' : volt,
             },{
                 'V' : volt
