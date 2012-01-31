@@ -152,6 +152,15 @@ def _strunit(unit):
 
     return result[1:]
 
+def _grab_doc(doc, func):
+    # ex: zeros.__doc__ = _grab_doc(np.zeros.__doc__, 'zeros')
+    doc = doc.replace(func + '(shape, ', func + '(shape, unit=None, ')
+    doc = doc.replace('\n    dtype : ', '\n    unit : string\n        Unit of' \
+      ' the new array, e.g. ``W``. Default is None for scalar.\n    dtype : ''')
+    doc = doc.replace('np.'+func, 'unit.'+func)
+    doc = doc.replace('\n    out : ndarray', '\n    out : Quantity')
+    return doc
+
 
 class Quantity(np.ndarray):
     """
@@ -352,14 +361,74 @@ ities of different units may have changed operands to common unit '" + \
         return array
 
     def __getitem__(self, key):
+        """
+        x.__getitem__(y) <==> x[y]
+
+        Return the item described by the key.
+
+        """
         item = np.ndarray.__getitem__(self, key)
-        if isinstance(item, Quantity):
+        if not isinstance(item, Quantity):
+            item = Quantity(item, self._unit, self._derived_units, copy=False)
+        if key is Ellipsis:
             return item
-        return Quantity(item, self._unit, self._derived_units, copy=False)
+
+        if not isinstance(key, tuple):
+            key = (key,)
+
+        # Replace Ellipsis with ':'
+        try:
+            pos = key.index(Ellipsis)
+            key = key[:pos] + (self.ndim-len(key))*(slice(None),) + key[pos+1:]
+        except ValueError:
+            pass
+
+        key += (self.ndim-len(key))*(slice(None),)
+
+        # update the broadcastable derived units
+        du = None
+        for d, v in item._derived_units.items():
+            try:
+                pos = d.index('[')
+            except:
+                continue
+
+            # the derived unit is broadcastable, let's update it
+            broadcast = d[pos+1:-1]
+            if broadcast == 'leftward':
+                v = v[key[-v.ndim:]]
+            else:
+                v = v[key[:v.ndim]]
+
+            if du is None:
+                du = item._derived_units.copy()
+
+            # if the derived unit has become a scalar, remove the brackets
+            if v.ndim == 0:
+                del du[d]
+                du[d[:pos]] = v
+            else:
+                du[d] = v
+            
+        if du is not None:
+            item._derived_units = du
+        return item
+
+    def __getslice__(self, i, j):
+        """
+        x.__getslice__(i, j) <==> x[i:j]
+
+        Return the slice described by (i, j).  The use of negative
+        indices is not supported.
+
+        """
+        return self.__getitem__(slice(i, j))
 
     @property
     def magnitude(self):
         """
+        x.magnitude <==> x.view(np.ndarray)
+
         Return the magnitude of the quantity
         """
         return self.view(np.ndarray)
@@ -408,11 +477,18 @@ ities of different units may have changed operands to common unit '" + \
         if derived_units is not None:
             if not isinstance(derived_units, dict):
                 raise TypeError('Input derived units are not a dict.')
-            for key in derived_units.keys():
+            for key in derived_units:
                 if not isinstance(derived_units[key], Quantity) and \
                         not hasattr(derived_units[key], '__call__'):
                     raise UnitError("The user derived unit '" + key + \
                                     "' is not a Quantity.")
+                try:
+                    pos = key.index('[')
+                except ValueError:
+                    continue
+                if key[pos:] not in ('[leftward]', '[rightward]'):
+                    raise UnitError("Invalid broadcast : '{0}'. Valid values ar"
+                        "e '[leftward]' or '[rightward]'.".format(key[pos:]))
         self._derived_units = derived_units
 
     def tounit(self, unit):
@@ -558,6 +634,21 @@ ities of different units may have changed operands to common unit '" + \
         if len(self._unit) == 0:
             return result
         return result + ' ' + _strunit(self._unit)
+
+    @staticmethod
+    def empty(shape, unit=None, derived_units=None, dtype=None, order=None):
+        return Quantity(np.empty(shape, dtype, order), unit, derived_units,
+                        copy=False)
+
+    @staticmethod
+    def ones(shape, unit=None, derived_units=None, dtype=None, order=None):
+        return Quantity(np.ones(shape, dtype, order), unit, derived_units,
+                        copy=False)
+
+    @staticmethod
+    def zeros(shape, unit=None, derived_units=None, dtype=None, order=None):
+        return Quantity(np.zeros(shape, dtype, order), unit, derived_units,
+                        copy=False)
 
     def min(self, *args, **kw):
         return _wrap_func(np.min, self, self._unit, *args, **kw)
@@ -769,26 +860,6 @@ def _wrap_func(func, array, unit, *args, **kw):
     result = func(array.magnitude, *args, **kw)
     result = Quantity(result, unit, array.derived_units, copy=False)
     return result
-
-def _grab_doc(doc, func):
-    doc = doc.replace(func + '(shape, ', func + '(shape, unit=None, ')
-    doc = doc.replace('\n    dtype : ', '\n    unit : string\n        Unit of' \
-      ' the new array, e.g. ``W``. Default is None for scalar.\n    dtype : ''')
-    doc = doc.replace('np.'+func, 'unit.'+func)
-    doc = doc.replace('\n    out : ndarray', '\n    out : Quantity')
-    return doc
-
-def empty(shape, unit=None, dtype=None, order=None):
-    return Quantity(np.empty(shape, dtype, order), unit, copy=False)
-empty.__doc__ = _grab_doc(np.empty.__doc__, 'empty')
-
-def ones(shape, unit=None, dtype=None, order=None):
-    return Quantity(np.ones(shape, dtype, order), unit, copy=False)
-ones.__doc__ = _grab_doc(np.ones.__doc__, 'ones')
-
-def zeros(shape, unit=None, dtype=None, order=None):
-    return Quantity(np.zeros(shape, dtype, order), unit, copy=False)
-zeros.__doc__ = _grab_doc(np.zeros.__doc__, 'zeros')
 
 
 

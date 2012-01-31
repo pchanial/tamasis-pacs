@@ -4,7 +4,7 @@ import numpy as np
 import tamasis
 from nose.tools import assert_equal, assert_raises
 from numpy.testing import assert_almost_equal, assert_array_equal
-from pyoperators.utils import assert_is, assert_is_instance
+from pyoperators.utils import assert_eq, assert_is, assert_is_instance
 from tamasis.quantities import Quantity, UnitError
 from tamasis.numpyutils import all_eq
 from tamasis.var import FLOAT_DTYPE, COMPLEX_DTYPE
@@ -196,6 +196,58 @@ def test_derived_units3():
     b = a.SI
     assert b.magnitude == 64
     assert b.unit == 'stop'
+
+def test_derived_units4():
+    l = np.arange(3*4*5).reshape((3,4,5))
+    a_leftward = Quantity.ones((2,3,4,5), 'r', {'r[leftward]':Quantity(l)})
+    r = np.arange(2*3*4).reshape((2,3,4))
+    a_rightward = Quantity.ones((2,3,4,5), 'r', {'r[rightward]':Quantity(r)})
+    _ = slice(None)
+    def func_leftward(a, key):
+        b = a[key]
+        
+        print key, b.derived_units
+        if key is Ellipsis:
+            assert_eq(b.derived_units['r[leftward]'],
+                      a.derived_units['r[leftward]'])
+        if key in ((1,2,3,4),(_,1,2,3)):
+            assert 'r' in b.derived_units
+            if key == (1,2,3,4):
+                assert b.derived_units['r'] == Quantity(59)
+            else:
+                assert b.derived_units['r'] == Quantity(33)
+        else:
+            assert 'r' not in b.derived_units
+            if not isinstance(key, tuple):
+                key = (key,)
+            key += (4-len(key)) * (slice(None),)
+            assert_eq(b.derived_units['r[leftward]'],
+                      a.derived_units['r[leftward]'][key[-3:]])
+    def func_rightward(a, key):
+        b = a[key]        
+        if key is Ellipsis:
+            assert_eq(b.derived_units['r[rightward]'],
+                      a.derived_units['r[rightward]'])
+        if key in ((1,2,3), (1,2,3,4),(1,2,3,_)):
+            assert 'r' in b.derived_units
+            assert b.derived_units['r'] == Quantity(23)
+        else:
+            assert 'r' not in b.derived_units
+            if not isinstance(key, tuple):
+                key = (key,)
+            assert_eq(b.derived_units['r[rightward]'],
+                      a.derived_units['r[rightward]'][key[:3]])
+    for key in (1, (1,), (1,2), (1,2,3), (1,2,3,4),
+                _, (_,), (_,1), (_,1,2), (_,1,2,3),
+                (1,_), (1,_,2), (1,_,2,3),
+                (1,2,_), (1,2,_,3),
+                (1,2,3,_), 
+                (_,_), (_,_,1), (_,1,_), (1,_,_),
+                (_,_,1,2), (_,1,_,2), (_,1,2,_), (1,_,_,2), (1,_,2,_),(1,2,_,_),
+                (_,_,_), (_,_,_,1), (_,_,1,_), (_,1,_,_), (1,_,_,_),
+                (_,_,_,_), Ellipsis):
+        yield func_leftward, a_leftward, key
+        yield func_rightward, a_rightward, key
 
 def test_pixels():
     assert_quantity(Quantity(1,'pixel/sr/pixel_reference').SI, 1, 'sr^-1')
