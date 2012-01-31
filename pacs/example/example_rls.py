@@ -59,7 +59,7 @@ model = masking * compression * projection
 # it is equivalent to solving the equation (H^T H + hyper D^T D ) x = H^T y
 hyper = 0.1
 map_rls = mapper_rls(tod, model,
-                     unpacking=UnpackOperator(projection.mask),
+                     unpacking=UnpackOperator(projection.get_mask()),
                      tol=1.e-6,
                      hyper=hyper)
 map_rls.save('map_rls.fits')

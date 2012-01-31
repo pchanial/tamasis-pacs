@@ -69,7 +69,7 @@ map_naive = mapper_naive(tod, model)
 # it is equivalent to solving the equation H^T N^-1 H x = H^T N^-1 y
 map_madmap = mapper_ls(tod, model,
                        invntt=invntt,
-                       unpacking=UnpackOperator(projection.mask),
+                       unpacking=UnpackOperator(projection.get_mask()),
                        M=DiagonalOperator(1/map_naive.coverage),
                        tol=1.e-5)
 map_madmap.save('map_madmap.fits')
