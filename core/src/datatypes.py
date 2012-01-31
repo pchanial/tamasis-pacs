@@ -608,11 +608,17 @@ class Map(FitsArray):
                           origin=origin, colorbar=colorbar, **keywords)
             return image
 
+        data = np.ma.MaskedArray(np.asarray(self), mask=mask)
+        if np.iscomplexobj(data):
+            data = abs(data)
+        mean   = np.mean(data)
+        stddev = np.std(data)
+        minval = float(max(mean - 2*stddev, np.min(data)))
+        maxval = float(min(mean + 5*stddev, np.max(data)))
+        data[data > maxval] = maxval
+        data[data < minval] = minval
         if mask is not None:
-            data = np.array(self, copy=True)
             data[mask] = np.nan
-        else:
-            data = np.asarray(self)
 
         #XXX FIX ME
         colorbar = False
