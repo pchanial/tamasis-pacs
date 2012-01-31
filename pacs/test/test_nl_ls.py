@@ -25,7 +25,8 @@ class Callback():
     def __call__(self, x):
         self.niterations += 1
 
-invntt = DiagonalOperator(1/obs.get_detector_stddev(100)**2, broadcast='fast')
+invntt = DiagonalOperator(1/obs.get_detector_stddev(100)**2,
+                          broadcast='rightward')
 norm = tamasis.linalg.norm2_ellipsoid(invntt)
 precond = 1./map_naive.coverage
 precond[precond > 1] = 0

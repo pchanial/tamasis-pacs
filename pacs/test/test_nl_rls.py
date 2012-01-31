@@ -30,7 +30,8 @@ class Callback():
     def __call__(self, x):
         self.niterations += 1
 
-invntt = DiagonalOperator(1/obs.get_detector_stddev(100)**2, broadcast='fast')
+invntt = DiagonalOperator(1/obs.get_detector_stddev(100)**2,
+                          broadcast='rightward')
 
 def test():
     map_nl = mapper_nl(tod, model, hypers=2*[1.],
