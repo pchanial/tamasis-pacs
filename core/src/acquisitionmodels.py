@@ -268,7 +268,7 @@ class CompressionOperator(Operator):
                 self.factor))
 
     def __str__(self):
-        return super(CompressionOperator, self).__str__() + ' (x{})'.format(
+        return super(CompressionOperator, self).__str__() + ' (x{0})'.format(
                self.factor)
 
 
