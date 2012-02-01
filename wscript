@@ -8,7 +8,7 @@ import string
 import subprocess
 import sys
 
-from waflib import Options, Tools
+from waflib import Logs, Options, Tools
 from waflib.Build import BuildContext
 from waflib.Configure import conf
 from waflib.Context import Context
@@ -426,6 +426,11 @@ class test_mpi(BuildContext):
     fun = 'test_mpi_fun'
 
 def test_mpi_fun(bld):
+
+    if not bld.env.HAVE_MPI:
+        Logs.pprint('RED', 'The package is not configured to use MPI. Use --enable-mpi option.')
+        return
+
     if bld.options.np is None:
         ns = 2**np.arange(int(np.floor(np.log2(multiprocessing.cpu_count())))+1)
     else:
