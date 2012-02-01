@@ -25,13 +25,9 @@ def test():
     tod = obs.get_tod()
 
     # packed projection
-    print 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
-    print 'XXX FIX ME                                              XXX'
-    print 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
-    print
-
-    #proj2 = Projection(obs, npixels_per_sample=6, packed=True, downsampling=True)
-    #if any_neq(proj.T(tod), proj2.T(tod), 1.e-12): raise TestFailure()
+    proj2 = Projection(obs, npixels_per_sample=6, packed=True,
+                       downsampling=True)
+    assert all_eq(proj.T(tod), proj2.T(tod), 1.e-12)
 
     filename = 'obs-' + uuid + '.fits'
     obs.save(filename, tod)

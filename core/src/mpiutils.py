@@ -10,7 +10,7 @@ import sys
 import tamasisfortran as tmf
 
 from pyoperators.operators_mpi import distribute_shape, distribute_slice
-from pyoperators.utils import strshape
+from pyoperators.utils import openmp_num_threads, strshape
 from . import MPI
 from .wcsutils import create_fitsheader
 
@@ -27,7 +27,7 @@ def distribute_observation(detectors, observations, rank=None, comm=None):
 
     if rank is None:
         rank = comm.Get_rank()
-    nthreads = tmf.info_nthreads()
+    nthreads = openmp_num_threads()
     ndetectors = np.sum(~detectors)
     nobservations = len(observations)
 

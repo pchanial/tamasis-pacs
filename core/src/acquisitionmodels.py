@@ -4,6 +4,7 @@ import functools
 import inspect
 import numpy as np
 import operator
+import pyoperators
 
 import tamasisfortran as tmf
 
@@ -238,7 +239,6 @@ class BlackBodyFixedTemperatureOperator(NumexprOperator):
 @real
 @linear
 class CompressionOperator(Operator):
-
     """
     Abstract class for compressing the input signal.
     Compression is operated on the fastest axis.
@@ -465,52 +465,61 @@ class ProjectionOperator(Operator):
 
     def __new__(cls, input=None, method=None, header=None, resolution=None,
                 npixels_per_sample=0, units=None, derived_units=None,
-                downsampling=False, comm_map=None, comm_tod=None, packed=False,
-                shapein=None, shapeout=None, **keywords):
+                downsampling=False, packed=False, shapein=None, shapeout=None,
+                commin=None, commout=None, **keywords):
+
+        # if the input is a pointing matrix, bail
         if not isinstance(input, Observation) or len(input.slice) == 1:
             instance = Operator.__new__(cls)
             return instance
+
+        # the input is an Observation
         obs = input
         if header is None:
             header = obs.get_map_header(resolution=resolution,
                                         downsampling=downsampling)
         elif isinstance(header, str):
             header = str2fitsheader(header)
+
+        shapein = shapein if shapein is not None else tuple([header['NAXIS' + \
+            str(i+1)] for i in range(header['NAXIS'])])[::-1]
+
+        # get the block column operator
         operands = []
-        partitionout = []
         for islice in range(len(obs.slice)):
             pmatrix, method, units, derived_units = obs.get_pointing_matrix(
                 header, npixels_per_sample, method=method, downsampling= \
                 downsampling, islice=islice)
             p = ProjectionOperator(pmatrix, method=method, header=header,
-                    units=units, derived_units=derived_units,
-                    comm_tod=obs.comm_tod, **keywords)
+                    units=units, derived_units=derived_units, packed=False,
+                    shapein=shapein, **keywords)
             operands.append(p)
-            partitionout.append(pmatrix.shape[1])
-        result = BlockColumnOperator(operands, partitionout=partitionout,
-                                     axisout=-1)
+        result = BlockColumnOperator(operands, axisout=-1)
+
+        # get the global mask
         def get_mask(output=None):
             if output is None:
-                shapein_ = shapein
-                if shapein_ is None:
-                    shapein_ = tuple([header['NAXIS'+str(i+1)] for i in \
-                                     range(header['NAXIS'])])[::-1]
-                output = Map.ones(shapein_, dtype=np.bool8, header=header)
+                #FIXME shapein_global = collect_shape(shapein)
+                shapein_global = shapein
+                output = Map.ones(shapein_global, dtype=np.bool8, header=header)
             for p in operands:
                 p.get_mask(output)
             return output
-            
         result.header = header
         result.get_mask = get_mask
+
+        # handle distributed input and output
+        cls.distribute(result, commin, commout, packed)
+
         return result
 
     def __init__(self, input, method=None, header=None, resolution=None,
                  npixels_per_sample=0, units=None, derived_units=None,
-                 downsampling=False, comm_map=None, comm_tod=None,
+                 downsampling=False, commin=None, commout=None,
                  packed=False, shapein=None, shapeout=None, **keywords):
 
-        comm_map = comm_map or var.comm_map
-        comm_tod = comm_tod or var.comm_tod
+        commin = commin or MPI.COMM_WORLD
+        commout = commout or MPI.COMM_WORLD
 
         if isinstance(input, Observation):
             if header is None:
@@ -519,7 +528,7 @@ class ProjectionOperator(Operator):
             elif isinstance(header, str):
                 header = str2fitsheader(header)
 
-            comm_tod = input.comm_tod
+            commout = input.comm_tod
             pmatrix, method, units, derived_units = input.get_pointing_matrix(
                     header,
                     npixels_per_sample,
@@ -541,22 +550,15 @@ class ProjectionOperator(Operator):
             units = ('', '')
         if derived_units is None:
             derived_units = ({}, {})
+
+        unit = _divide_unit(Quantity(1, units[0])._unit,
+                            Quantity(1, units[1])._unit)
+
         ndetectors, nsamples, npixels_per_sample = pmatrix.shape
 
-        self.pmatrix = pmatrix
-        self._pmatrix = _pmatrix
-        self.comm_map = comm_map
-        self.comm_tod = comm_tod
-        self.header = header
-        self.ndetectors = ndetectors
-        self.nsamples = nsamples
-        self.npixels_per_sample = npixels_per_sample
-        self.unit = _divide_unit(Quantity(1, units[0])._unit,
-                                 Quantity(1, units[1])._unit)
-        self.duout, self.duin = derived_units
-
-        shapein_expected = None if self.header is None else tuple([self.header[
-            'NAXIS'+str(i+1)] for i in range(self.header['NAXIS'])])[::-1]
+        # validate shapein
+        shapein_expected = None if header is None else tuple([header['NAXIS' + \
+            str(i+1)] for i in range(header['NAXIS'])])[::-1]
         if shapein is None and shapein_expected is None:
             raise ValueError("The pointing matrix itself does not contain infor"
                 "mation about the input shape. Use the 'header' or 'shapein' ke"
@@ -568,6 +570,7 @@ class ProjectionOperator(Operator):
                 "ith that of the header '{1}'.".format(shapein,
                 shapein_expected))
 
+        # validate shapeout
         shapeout_expected = (ndetectors, nsamples)
         if shapeout is None:
             shapeout = shapeout_expected
@@ -576,33 +579,75 @@ class ProjectionOperator(Operator):
                 "with that of the pointing matrix '{1}'.".format(shapeout,
                 shapeout_expected))
 
-        mask = Map.empty(shapein, dtype=np.bool8, header=self.header)
-        tmf.pointing_matrix_mask(self._pmatrix, mask.view(np.int8).T,
-            self.npixels_per_sample, self.nsamples, self.ndetectors)
+        # attribute setting functions
+        def set_attrin(attr):
+            if header is not None:
+                attr['header'] = self.header.copy()
+            unitout = attr['_unit'] if '_unit' in attr else {}
+            if unitout:
+                attr['_unit'] = _divide_unit(unitout, unit)
+            if derived_units[1] is not None:
+                attr['_derived_units'] = derived_units[1]
 
-        ismapdistributed = self.comm_map.Get_size() > 1
-        istoddistributed = self.comm_tod.Get_size() > 1
-        self.ispacked = packed or ismapdistributed
-        if self.ispacked:
-            tmf.pointing_matrix_pack(self._pmatrix, mask.view(np.int8).T,
-                self.npixels_per_sample, self.nsamples, self.ndetectors)
-            shapein = (int(np.sum(~mask)))
+        def set_attrout(attr):
+            attr['header'] = None
+            unitin = attr['_unit'] if '_unit' in attr else {}
+            if unitin:
+                attr['_unit'] = _multiply_unit(unitin, unit)
+            if derived_units[0] is not None:
+                attr['_derived_units'] = derived_units[0]
 
-        self.method = method
+        # initialise operator
         Operator.__init__(self, shapein=shapein, shapeout=shapeout,
-                          attrin=self.set_attrin, attrout=self.set_attrout,
+                          attrin=set_attrin, attrout=set_attrout,
                           classin=Map, classout=Tod, dtype=var.FLOAT_DTYPE,
                           **keywords)
-        if not self.ispacked and not istoddistributed:
+        self.method = method
+        self.pmatrix = pmatrix
+        self._pmatrix = _pmatrix
+        self.commin = commin
+        self.commout = commout
+        self.header = header
+        self.ndetectors = ndetectors
+        self.nsamples = nsamples
+        self.npixels_per_sample = npixels_per_sample
+        self.unit = unit
+        self.duout, self.duin = derived_units
+
+        # handle distributed input and output
+        self.distribute(self, commin, commout, packed)
+
+    @staticmethod
+    def distribute(self, commin, commout, packed, **keywords):
+
+        ismapdistributed = commin is not None and commin.size > 1
+        istoddistributed = commout is not None and commout.size > 1
+
+        if not ismapdistributed and not istoddistributed and not packed:
             return
 
-        if self.ispacked:
+        if packed or ismapdistributed:
+            mask = self.get_mask()
+            shapein = int(np.sum(~mask))
+            ops = (self,) if isinstance(self, ProjectionOperator) else \
+                  self.operands
+            for op in ops:
+                tmf.pointing_matrix_pack(self._pmatrix, mask.view(np.int8).T,
+                    self.npixels_per_sample, self.nsamples, self.ndetectors)
+                Operator.__init__(op, shapein=shapein, shapeout=self.shapeout,
+                                  attrin=op.attrin, attrout=op.attrout,
+                                  classin=op.classin, classout=op.classout,
+                                  dtype=self.dtype, **keywords)
+                op.packed = True
+
             if ismapdistributed:
                 self *= DistributionLocalOperator(mask)
             else:
                 self *= PackOperator(mask)
-        elif istoddistributed:
-            self *= DistributionIdentityOperator(commout=self.comm_tod)
+
+        if istoddistributed and not ismapdistributed:
+            self *= DistributionIdentityOperator(commout=self.commout)
+
         s = self.operands[0]
         self.header = s.header
         self.method = s.method
@@ -611,7 +656,8 @@ class ProjectionOperator(Operator):
 
     def direct(self, input, output):
         if not output.flags.contiguous:
-            print 'Optimize me: Projection output is not contiguous.'
+            if pyoperators.memory.verbose:
+                print 'Optimize me: Projection output is not contiguous.'
             output_ = np.empty_like(output)
         else:
             output_ = output
@@ -622,7 +668,8 @@ class ProjectionOperator(Operator):
 
     def transpose(self, input, output, operation=None):
         if not input.flags.contiguous:
-            print 'Optimize me: Projection.T input is not contiguous.'
+            if pyoperators.memory.verbose:
+                print 'Optimize me: Projection.T input is not contiguous.'
             input_ = np.ascontiguousarray(input)
         else:
             input_ = input
@@ -634,11 +681,11 @@ class ProjectionOperator(Operator):
                                       self.npixels_per_sample)
 
     def get_mask(self, output=None):
-        shapein = tuple([self.header['NAXIS'+str(i+1)] for i in \
-                         range(self.header['NAXIS'])])[::-1]
+        shapein_global = self.shapein
+        #XXX FIXME: shapein_global = collect_shape(self.shapein)
         if output is None:
-            output = Map.ones(shapein, dtype=np.bool8, header=self.header)
-        elif output.dtype != bool or output.shape != shapein:
+            output = Map.ones(shapein_global, dtype=np.bool8, header=self.header)
+        elif output.dtype != bool or output.shape != shapein_global:
             raise ValueError('The argument to store the mask is incompatible.')
         tmf.pointing_matrix_mask(self._pmatrix, output.view(np.int8).T, 
             self.npixels_per_sample, self.nsamples, self.ndetectors)
@@ -648,20 +695,6 @@ class ProjectionOperator(Operator):
         npixels = np.product(self.shapein)
         return tmf.pointing_matrix_ptp(self._pmatrix, self.npixels_per_sample,
             self.nsamples_tot, self.ndetectors, npixels).T
-
-    def set_attrin(self, attr):
-        attr['header'] = self.header.copy()
-        unit = attr['_unit'] if '_unit' in attr else {}
-        attr['_derived_units'] = self.duin.copy()
-        if unit:
-            attr['_unit'] = _divide_unit(unit, self.unit)
-
-    def set_attrout(self, attr):
-        attr['header'] = None
-        unit = attr['_unit'] if '_unit' in attr else {}
-        attr['_derived_units'] = self.duout.copy()
-        if unit:
-            attr['_unit'] = _multiply_unit(unit, self.unit)
 
 
 @real
