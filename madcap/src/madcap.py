@@ -11,6 +11,7 @@ import re
 
 from . import var
 from . import tmf
+from tamasis.acquisitionmodels import PointingMatrix
 from tamasis.datatypes import Tod
 from tamasis.instruments import Instrument
 from tamasis.observations import Observation
@@ -65,9 +66,15 @@ class MadMap1Observation(Observation):
         self.info.mapmask = mapmask
 
         # Store slice information
-        self.slice = np.recarray(nslices, dtype=[('nsamples_all', int),
-                                                 ('invnttfile', 'S256')])
+        self.slice = np.recarray(nslices, dtype=[
+                ('start', int),
+                ('stop', int),
+                ('nsamples_all', int),
+                ('invnttfile', 'S256')])
         self.slice.nsamples_all = nsamples
+        self.slice.start[0] = 0
+        self.slice.start[1:] = np.cumsum(nsamples)[:-1]
+        self.slice.stop = np.cumsum(nsamples)
         self.slice.nfinesamples = nsamples
         self.slice.invnttfile = [invnttfile+'.'+str(i) for i in range(nslices)]
 
@@ -91,10 +98,17 @@ class MadMap1Observation(Observation):
         return header
 
     def get_pointing_matrix(self, header, npixels_per_sample, method=None,
-                            downsampling=False, islice=None):
+                            section=None, **keywords):
         """
         Method to get the pointing matrix.
         """
+
+        # if no slice is provided, return a pointing matrix for each of them
+        if section is None:
+            return super(MadMap1Observation, self).get_pointing_matrix(header,
+                         npixels_per_sample, method)
+
+        # let's get the pointing matrix associated to the section
         if npixels_per_sample not in (0, self.info.npixels_per_sample):
             raise ValueError('The npixels_per_sample value is incompatible wi' \
                              'th the MADMAP1 file.')
@@ -104,29 +118,31 @@ class MadMap1Observation(Observation):
         if method != 'default':
             raise ValueError("Invalid pointing matrix method '" + method + "'.")
 
+        pointing = self.pointing[section.start:section.stop]
         ndetectors = self.get_ndetectors()
-        if islice is None:
-            nsamples = int(np.sum(self.get_nsamples()))
-            islice = -1
-        else:
-            nsamples = self.get_nsamples()[islice]
+        nsamples = int(np.sum(~pointing.removed))
         tod = np.empty((ndetectors, nsamples))
+        try:
+            islice = list(self.slice.start).index(section.start)
+            if self.slice[islice].stop != section.stop:
+                raise ValueError()
+        except ValueError:
+            raise RuntimeError('Only observation slice can be specified through'
+                               ' the section keyword.')
 
         shape = (ndetectors, nsamples, self.info.npixels_per_sample)
-        dtype = [('weight', 'f4'), ('pixel', 'i4')]
-        if npixels_per_sample != 0:
-            print('Info: Allocating ' + str(np.product(shape) / 2**17) + ' MiB '
-                  'for the pointing matrix.')
+        info = {'header' : header,
+                'method' : method}
         try:
-            pmatrix = np.empty(shape, dtype).view(np.recarray)
+            pmatrix = PointingMatrix.empty(shape, info=info, verbose=True)
         except MemoryError:
             gc.collect()
-            pmatrix = np.empty(shape, dtype).view(np.recarray)
+            pmatrix = PointingMatrix.empty(shape, info=info)
         status = tmf.madmap1_read_tod(self.info.todfile, self.info.invnttfile,
             self.info.convert, self.info.npixels_per_sample, islice + 1, tod.T,
             pmatrix.ravel().view(np.int64))
         if status != 0: raise RuntimeError()
-        return pmatrix, method, None, None
+        return pmatrix
 
     def get_tod(self, unit=None):
         """

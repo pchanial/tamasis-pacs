@@ -54,12 +54,51 @@ class Observation(object):
                                               resolution=resolution)
 
     def get_pointing_matrix(self, header, npixels_per_sample=0, method=None,
-                            downsampling=False):
+                            section=None, **keywords):
         """
-        Return the pointing matrix.
+        Return the pointing matrix for the observation.
+
+        If the observation has several slices, as many pointing matrices
+        are returned in a list.
+
+        Parameters
+        ----------
+            header : pyfits.Header
+                The map FITS header
+            npixels_per_sample : int
+                Maximum number of sky pixels intercepted by a detector.
+                By setting 0 (the default), the actual value will be determined
+                automatically.
+            method : string
+                'sharp' : the intersection of the sky pixels and the detectors
+                          is computed assuming that the transmission outside
+                          the detector is zero and one otherwise (sharp edge
+                          geometry)
+                'nearest' : the value of the sky pixel closest to the detector
+                            center is taken as the sample value, assuming
+                            surface brightness conservation.
+            section : PacsObservation.slice
+                If specified, return the pointing matrix for a specific slice.
+
         """
-        return self.instrument.get_pointing_matrix(self.pointing, header,
-            npixels_per_sample, method)
+        # if section is None, return as many pointing matrices as slices
+        if section is None:
+            if self.slice is not None:
+                pmatrix = [self.get_pointing_matrix(header, npixels_per_sample,
+                           method, section=s, **keywords) for s in self.slice]
+                if len(pmatrix) == 1:
+                    pmatrix = pmatrix[0]
+                return pmatrix
+            pointing = self.pointing
+        else:
+            # otherwise, restrict the pointing to the input section
+            if not isinstance(section, slice):
+                section = slice(section.start, section.stop)
+            pointing = self.pointing[section]
+        result = self.instrument.get_pointing_matrix(pointing, header,
+                     npixels_per_sample, method, **keywords)
+        result.info.update(keywords)
+        return result
 
     def get_nsamples(self):
         """
@@ -68,16 +107,6 @@ class Observation(object):
         """
         return tuple([int(np.sum(~self.pointing[s.start:s.stop].removed)) \
                       for s in self.slice])
-
-    def get_nfinesamples(self):
-        """
-        Return the number of valid samplings for each slice, by taking
-        into account compression factor and fine sampling.
-        They are those whose self.pointing is not removed.
-        """
-        return tuple(np.asarray(self.get_nsamples()) * \
-                     self.slice.compression_factor * \
-                     self.instrument.fine_sampling_factor)
 
     def get_tod(self, unit=None, flatfielding=True, subtraction_mean=True):
         """

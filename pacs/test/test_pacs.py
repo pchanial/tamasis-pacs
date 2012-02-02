@@ -4,7 +4,7 @@ import os
 import tamasis
 
 from glob import glob
-from tamasis import PacsObservation, PacsSimulation, Pointing, Projection, Map, Tod, IdentityOperator, MaskOperator, mapper_naive
+from tamasis import PacsObservation, PacsSimulation, Pointing, ProjectionOperator, Map, Tod, IdentityOperator, MaskOperator, mapper_naive
 from tamasis.numpyutils import all_eq, minmax
 from uuid import uuid1
 
@@ -18,15 +18,15 @@ def test():
     obs.pointing.chop[:] = 0
 
     # get mask
-    proj = Projection(obs, npixels_per_sample=6, downsampling=True)
+    proj = ProjectionOperator(obs, npixels_per_sample=6, downsampling=True)
     o = Tod.ones(proj.shapeout)
     nocoverage = mapper_naive(o, proj).coverage == 0
     assert all_eq(nocoverage, proj.get_mask())
     tod = obs.get_tod()
 
     # packed projection
-    proj2 = Projection(obs, npixels_per_sample=6, packed=True,
-                       downsampling=True)
+    proj2 = ProjectionOperator(obs, npixels_per_sample=6, packed=True,
+                               downsampling=True)
     assert all_eq(proj.T(tod), proj2.T(tod), 1.e-12)
 
     filename = 'obs-' + uuid + '.fits'
@@ -37,8 +37,8 @@ def test():
     assert all_eq(tod, tod2)
 
     telescope  = IdentityOperator()
-    projection = Projection(obs, resolution=3.2, downsampling=True,
-                            npixels_per_sample=6)
+    projection = ProjectionOperator(obs, resolution=3.2, downsampling=True,
+                                    npixels_per_sample=6)
     crosstalk  = IdentityOperator()
     masking    = MaskOperator(tod.mask)
 
@@ -56,7 +56,7 @@ def test():
     header2 = header.copy()
     header2['NAXIS1'] += 500
     header2['CRPIX1'] += 250
-    projection2 = Projection(obs, header=header2, downsampling=True)
+    projection2 = ProjectionOperator(obs, header=header2, downsampling=True)
     map_naive2 = mapper_naive(tod, MaskOperator(tod.mask) * projection2)
     map_naive2.inunit('Jy/arcsec^2')
     map_naive3 = map_naive2[:,250:header['NAXIS1']+250]
@@ -75,8 +75,8 @@ def test_detector_policy():
     map_naive_ref = Map(data_dir + '../../../core/test/data/frames_blue_map_naive.fits')
     obs = PacsObservation(data_dir + 'frames_blue.fits', reject_bad_line=False)
     obs.pointing.chop[:] = 0
-    projection = Projection(obs, header=map_naive_ref.header,
-                            downsampling=True, npixels_per_sample=6)
+    projection = ProjectionOperator(obs, header=map_naive_ref.header,
+                                    downsampling=True, npixels_per_sample=6)
     tod = obs.get_tod(flatfielding=False)
     masking = MaskOperator(tod.mask)
     model = masking * projection
@@ -87,8 +87,8 @@ def test_detector_policy():
                               policy_bad_detector='remove',
                               reject_bad_line=False)
     obs_rem.pointing.chop[:] = 0
-    projection_rem = Projection(obs_rem, header=map_naive.header,
-                                downsampling=True, npixels_per_sample=7)
+    projection_rem = ProjectionOperator(obs_rem, header=map_naive.header,
+                                        downsampling=True, npixels_per_sample=7)
     tod_rem = obs_rem.get_tod(flatfielding=False)
     masking_rem = MaskOperator(tod_rem.mask)
     model_rem = masking_rem * projection_rem
@@ -108,10 +108,10 @@ def test_pack():
 
 def test_npixels_per_sample_is_zero():
     obs = PacsObservation(data_dir + 'frames_blue.fits')
-    proj = Projection(obs, npixels_per_sample=2)
+    proj = ProjectionOperator(obs, npixels_per_sample=2)
     header = proj.header.copy()
     header['crval1'] += 1
-    proj2 = Projection(obs, header=header)
+    proj2 = ProjectionOperator(obs, header=header)
     assert proj2.npixels_per_sample == 0
     t = proj2(np.ones((header['NAXIS2'],header['NAXIS1'])))
     assert all_eq(minmax(t), [0,0])
@@ -144,11 +144,11 @@ def test_slice2():
 
     header = obs1.get_map_header()
 
-    proj1 = Projection(obs1, header=header, downsampling=True)
-    proj2 = Projection(obs2, header=header, downsampling=True)
+    proj1 = ProjectionOperator(obs1, header=header, downsampling=True)
+    proj2 = ProjectionOperator(obs2, header=header, downsampling=True)
     assert all_eq(proj1.get_mask(), proj2.get_mask())
-    assert all_eq(proj1.pmatrix,
-                  np.concatenate([p.pmatrix for p in proj2.operands], axis=1))
+    assert all_eq(proj1.matrix, np.concatenate([p.matrix for p in \
+                  proj2.operands], axis=1))
 
     m1 = proj1.T(tod1)
     m2 = proj2.T(tod2)

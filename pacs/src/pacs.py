@@ -14,14 +14,13 @@ import time
 
 from pyoperators import (Operator, HomothetyOperator, IdentityOperator,
                          MaskOperator, RoundOperator, ClipOperator, I)
-from pyoperators.core import CompositeOperator
 from pyoperators.utils import strenum, strplural, openmp_num_threads
 
 from . import MPI
 from . import var
 from tamasis.core import (Quantity, Tod, MaskPolicy, Instrument, Pointing, tmf,
                           CompressionAverageOperator, ProjectionOperator,
-                          create_fitsheader)
+                          PointingMatrix, create_fitsheader)
 from tamasis.mpiutils import distribute_observation
 from tamasis.observations import Observation
 
@@ -185,6 +184,111 @@ class PacsInstrument(Instrument):
 
         return new_npixels_per_sample, out
 
+    def get_pointing_matrix(self, pointing, header, npixels_per_sample, method,
+                            downsampling=None, compression_factor=None,
+                            delay=None, derived_units=None, **keywords):
+        """
+        Return the PACS-specific pointing matrix for a given set of pointings.
+
+        Parameters
+        ----------
+            pointing : Pointing
+                The pointing containing the astrometry of the array center.
+            header : pyfits.Header
+                The map FITS header
+            npixels_per_sample : int
+                Maximum number of sky pixels intercepted by a detector.
+                By setting 0 (the default), the actual value will be determined
+                automatically.
+            method : string
+                'sharp' : the intersection of the sky pixels and the detectors
+                          is computed assuming that the transmission outside
+                          the detector is zero and one otherwise (sharp edge
+                          geometry)
+                'nearest' : the value of the sky pixel closest to the detector
+                            center is taken as the sample value, assuming
+                            surface brightness conservation.
+            downsampling : boolean
+                If True, return a pointing matrix downsampled by the compression
+                factor. Otherwise return a pointing matrix sampled at 40Hz,
+                unless the instrument has been setup with a higher sampling rate
+                via the 'fine_sampling_factor' keyword.
+            compression_factor : int
+                The on-board compression factor.
+            delay : float
+                Instrument clock lag wrt the spacecraft clock, in ms.
+
+        """
+        if method is None:
+            method = 'sharp'
+        method = method.lower()
+        choices = ('nearest', 'sharp')
+        if method not in choices:
+            raise ValueError("Invalid method '" + method + \
+                "'. Expected values are " + strenum(choices) + '.')
+
+        nvalids = int(np.sum(~pointing.removed))
+        if not downsampling:
+            nvalids *= self.fine_sampling_factor * compression_factor
+
+        ndetectors = self.get_ndetectors()
+        shape = (ndetectors, nvalids, npixels_per_sample)
+        info = {'header':header,
+                'method':method,
+                'units':('/detector', '/pixel'),
+                'derived_units':derived_units,
+                'downsampling':downsampling}
+
+        try:
+            pmatrix = PointingMatrix.empty(shape, info=info, verbose=True)
+        except MemoryError:
+            gc.collect()
+            pmatrix = PointingMatrix.empty(shape, info=info, verbose=False)
+
+        if pmatrix.size == 0:
+            # f2py doesn't accept zero-sized opaque arguments
+            pmatrix_ = np.empty(1, np.int64)
+        else:
+            pmatrix_ = pmatrix.ravel().view(np.int64)
+
+        new_npixels_per_sample, status = tmf.pacs_pointing_matrix(
+            self.band,
+            nvalids,
+            compression_factor,
+            delay,
+            self.fine_sampling_factor,
+            not downsampling,
+            np.asfortranarray(pointing.time),
+            np.asfortranarray(pointing.ra),
+            np.asfortranarray(pointing.dec),
+            np.asfortranarray(pointing.pa),
+            np.asfortranarray(pointing.chop),
+            np.asfortranarray(pointing.masked, np.int8),
+            np.asfortranarray(pointing.removed,np.int8),
+            method,
+            np.asfortranarray(self.detector.removed, np.int8),
+            self.get_ndetectors(),
+            self.detector.center.swapaxes(0,1).copy().T,
+            self.detector.corner.swapaxes(0,1).copy().T,
+            np.asfortranarray(self.detector.area),
+            self.distortion_yz.base.base.base,
+            npixels_per_sample,
+            str(header).replace('\n',''),
+            pmatrix_)
+        if status != 0: raise RuntimeError()
+
+        # if the actual number of pixels per sample is greater than
+        # the specified one, redo the computation of the pointing matrix
+        if new_npixels_per_sample <= npixels_per_sample:
+            return pmatrix
+
+        del pmatrix_, pmatrix
+        return self.get_pointing_matrix(pointing, header,
+            new_npixels_per_sample, method, compression_factor= \
+            compression_factor, delay=delay, derived_units=derived_units,
+            downsampling=downsampling)
+
+
 class PacsBase(Observation):
     """ Abstract class for PacsObservation and PacsSimulation. """
 
@@ -317,105 +421,48 @@ class PacsBase(Observation):
                                           downsampling=downsampling)
     get_map_header.__doc__ = Observation.get_map_header.__doc__
     
-    def get_pointing_matrix_old(self, header, npixels_per_sample=0, method=None,
-                                downsampling=False, islice=None):
-        """ Return the pointing matrix. """
-        if method is None:
-            method = 'sharp'
-        method = method.lower()
-        choices = ('nearest', 'sharp')
-        if method not in choices:
-            raise ValueError("Invalid method '" + method + \
-                "'. Expected values are " + strenum(choices) + '.')
-
-        nvalids = self.get_nfinesamples() if not downsampling else \
-            self.get_nsamples()
-        if islice is None:
-            if len(self.slice) != 1:
-                raise ValueError('The slicing is not specified.')
-            islice = -1
-        nvalids = nvalids[islice]
-
-        ndetectors = self.get_ndetectors()
-        if npixels_per_sample != 0:
-            sizeofpmatrix = npixels_per_sample * nvalids * ndetectors
-            print('Info: Allocating '+str(sizeofpmatrix / 2**17)+' MiB for the '
-                  'pointing matrix.')
-        else:
-            
-            sizeofpmatrix = 1
-        shape = (ndetectors, nvalids, npixels_per_sample)
-        dtype = [('weight', 'f4'), ('pixel', 'i4')]
-        if npixels_per_sample != 0:
-            print('Info: Allocating ' + str(np.product(shape) / 2**17) + ' MiB '
-                  'for the pointing matrix.')
-        try:
-            pmatrix = np.empty(shape, dtype).view(np.recarray)
-        except MemoryError:
-            gc.collect()
-            pmatrix = np.empty(shape, dtype).view(np.recarray)
-        if pmatrix.size == 0:
-            # f2py doesn't accept zero-sized opaque arguments
-            pmatrix_ = np.empty(1, np.int64)
-        else:
-            pmatrix_ = pmatrix.ravel().view(np.int64)
-
-        detector = self.instrument.detector
-        s = self.slice[islice]
-        sl = slice(s.start, s.stop)
-        new_npixels_per_sample, status = tmf.pacs_pointing_matrix(
-            self.instrument.band,
-            nvalids,
-            s.compression_factor,
-            s.delay,
-            self.instrument.fine_sampling_factor,
-            not downsampling,
-            np.asfortranarray(self.pointing.time[sl]),
-            np.asfortranarray(self.pointing.ra[sl]),
-            np.asfortranarray(self.pointing.dec[sl]),
-            np.asfortranarray(self.pointing.pa[sl]),
-            np.asfortranarray(self.pointing.chop[sl]),
-            np.asfortranarray(self.pointing.masked[sl], np.int8),
-            np.asfortranarray(self.pointing.removed[sl],np.int8),
-            method,
-            np.asfortranarray(self.instrument.detector.removed, np.int8),
-            self.get_ndetectors(),
-            detector.center.swapaxes(0,1).copy().T,
-            detector.corner.swapaxes(0,1).copy().T,
-            np.asfortranarray(self.instrument.detector.area),
-            self.instrument.distortion_yz.base.base.base,
-            npixels_per_sample,
-            str(header).replace('\n',''),
-            pmatrix_)
-        if status != 0: raise RuntimeError()
-
-        # if the actual number of pixels per sample is greater than
-        # the specified one, redo the computation of the pointing matrix
-        if new_npixels_per_sample <= npixels_per_sample:
-            return pmatrix, method, ('/detector','/pixel'), \
-                   self.get_derived_units()
-
-        del pmatrix_, pmatrix
-        return self.get_pointing_matrix(header, new_npixels_per_sample,
-                                        method, downsampling, islice)
-    get_pointing_matrix_old.__doc__ = Observation.get_pointing_matrix.__doc__
-
     def get_pointing_matrix(self, header, npixels_per_sample=0, method=None,
-                            downsampling=False, islice=None):
-        if not downsampling or np.any(self.slice.delay != 0) or \
-           method and method != 'sharp':
-            return self.get_pointing_matrix_old(header,
-                npixels_per_sample=npixels_per_sample, method=method,
-                downsampling=downsampling, islice=islice)
-        pointing = self.pointing
-        if islice is not None:
-            s = self.slice[islice]
-            pointing = pointing[s.start:s.stop]
+                            section=None, downsampling=False, **keywords):
+        """
+        Return the PACS-specific pointing matrix for the observation.
 
-        pmatrix, method, units, dus = self.instrument.get_pointing_matrix(
-            pointing, header, npixels_per_sample, method)
+        If the observation has several slices, as many pointing matrices
+        are returned in a list.
 
-        return pmatrix, method, units, self.get_derived_units()
+        Parameters
+        ----------
+            header : pyfits.Header
+                The map FITS header
+            npixels_per_sample : int
+                Maximum number of sky pixels intercepted by a detector.
+                By setting 0 (the default), the actual value will be determined
+                automatically.
+            method : string
+                'sharp' : the intersection of the sky pixels and the detectors
+                          is computed assuming that the transmission outside
+                          the detector is zero and one otherwise (sharp edge
+                          geometry)
+                'nearest' : the value of the sky pixel closest to the detector
+                            center is taken as the sample value, assuming
+                            surface brightness conservation.
+            section : PacsObservation.slice
+                If specified, return the pointing matrix for a specific slice.
+            downsampling : boolean
+                If True, return a pointing matrix downsampled by the compression
+                factor. Otherwise return a pointing matrix sampled at 40Hz,
+                unless the instrument has been setup with a higher sampling rate
+                via the 'fine_sampling_factor' keyword.
+
+        """
+        if section is None:
+            return super(PacsBase, self).get_pointing_matrix(header,
+                         npixels_per_sample, method, downsampling=downsampling,
+                         derived_units=self.get_derived_units())
+
+        return super(PacsBase, self).get_pointing_matrix(header,
+            npixels_per_sample, method, section, compression_factor= \
+            section.compression_factor, delay=section.delay, downsampling= \
+            downsampling, derived_units=self.get_derived_units())
 
     def get_random(self, flatfielding=True, subtraction_mean=True):
         """
@@ -475,6 +522,16 @@ class PacsBase(Observation):
                        stddevs[...,-1])
         s[np.isnan(s)] = np.inf
         return self.pack(s)
+
+    def get_nfinesamples(self):
+        """
+        Return the number of valid samplings for each slice, by taking
+        into account compression factor and fine sampling.
+        They are those whose self.pointing is not removed.
+        """
+        return tuple(np.asarray(self.get_nsamples()) * \
+                     self.slice.compression_factor * \
+                     self.instrument.fine_sampling_factor)
 
     def save(self, filename, tod, fitskw={}):
         
@@ -1420,7 +1477,7 @@ def pacs_compute_delay(obs, tod, model, invntt=None, tol_delay=1.e-3,
                     model.operands[i] = ProjectionOperator(obs, method=c.method,
                        header=c.header, npixels_per_sample=c.npixels_per_sample)
                     return True
-                elif isinstance(c, CompositeOperator):
+                elif hasattr(c, 'operands'):
                     if substitute_projection(c):
                         return True
             return False
@@ -1428,7 +1485,7 @@ def pacs_compute_delay(obs, tod, model, invntt=None, tol_delay=1.e-3,
         if isinstance(model, ProjectionOperator):
             return ProjectionOperator(obs, method=model.method, header= \
                 model.header, npixels_per_sample=model.npixels_per_sample)
-        if isinstance(model, CompositeOperator):
+        if hasattr(model, 'operands'):
             if substitute_projection(model):
                 return model
 

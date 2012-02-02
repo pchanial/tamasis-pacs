@@ -92,11 +92,12 @@ if options.median_filtering is not None:
 # Set up the acquisition model. downsampling is set to True because
 # photproject does not attempt to sample better than what is transmitted
 if options.deglitching != 'none' or options.do_outputmap:
-    projection = Projection(obs,
-                            header=options.header,
-                            resolution=options.resolution,
-                            downsampling=True,
-                            npixels_per_sample=options.npixels_per_sample)
+    projection = ProjectionOperator(
+        obs,
+        header=options.header,
+        resolution=options.resolution,
+        downsampling=True,
+        npixels_per_sample=options.npixels_per_sample)
 
 # Deglitch
 if options.deglitching != 'none':

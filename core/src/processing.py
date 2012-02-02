@@ -19,20 +19,19 @@ __all__ = [ 'deglitch_l2std',
 
 def _deglitch(tod, projection, nsigma, func):
     if isinstance(projection, ProjectionOperator):
-        pmatrix = projection._pmatrix
-        npixels_per_sample = projection.npixels_per_sample
+        matrix = projection.matrix
+        npixels_per_sample = matrix.shape[-1]
     elif hasattr(projection, 'operands') and \
          all([isinstance(p, ProjectionOperator) for p in projection.operands]):
         ops = projection.operands
-        npixels_per_sample = max([p.npixels_per_sample for p in ops])
-        ndetectors = ops[0].ndetectors
-        nsamples = sum([p.nsamples for p in ops])
-        pmatrix = np.zeros((ndetectors, nsamples, npixels_per_sample),
-                           ops[0].pmatrix.dtype)
-        pmatrix['pixel'] = -1
+        npixels_per_sample = max(p.matrix.shape[-1] for p in ops)
+        if tod.shape[-1] != sum(p.matrix.shape[-2] for p in ops):
+            raise ValueError('The tod has an incompatible shape.')
+        matrix = np.zeros(tod.shape+(npixels_per_sample,), ops[0].matrix.dtype)
+        matrix['index'] = -1
         dest = 0
         for p in ops:
-            pmatrix[:,dest:dest+p.nsamples,:p.npixels_per_sample] = p.pmatrix
+            matrix[...,dest:dest+p.nsamples,:p.npixels_per_sample] = p.matrix
             dest += p.nsamples
     else:
         raise TypeError('The operator is not a projection.')
@@ -43,7 +42,7 @@ def _deglitch(tod, projection, nsigma, func):
         mask = np.zeros(tod.shape, np.bool8)
     else:
         mask = tod.mask.copy()
-    func(pmatrix.view(int).ravel(), nx, ny, tod.T, mask.view(np.int8).T,
+    func(matrix.view(int).ravel(), nx, ny, tod.T, mask.view(np.int8).T,
          nsigma, npixels_per_sample)
     return mask
     

@@ -19,7 +19,6 @@ from pyoperators.utils import isscalar, tointtuple, openmp_num_threads
 from . import MPI
 from . import var
 from .datatypes import Map, Tod
-from .observations import Observation
 from .quantities import Quantity, _divide_unit, _multiply_unit
 from .utils import diff, diffT, diffTdiff, shift
 from .wcsutils import str2fitsheader
@@ -58,6 +57,7 @@ __all__ = [
     'SqrtInvNttOperator',
     'Unpacking', # obsolete
     'UnpackOperator',
+    'PointingMatrix',
 ]
 
 def block_diagonal(*partition_args, **keywords):
@@ -443,24 +443,81 @@ class PadOperator(Operator):
         return shapeout[:-1] + (shapeout[-1] - self.left - self.right,)
 
 
+class PointingMatrix(np.ndarray):
+    DTYPE = np.dtype([('value', np.float32), ('index', np.int32)])
+    def __new__(cls, array, info=None, copy=True, ndmin=0):
+        result = np.array(array, copy=copy, ndmin=ndmin).view(cls)
+        result.info = info
+        return result
+
+    def __array_finalize__(self, obj):
+        self.info = getattr(obj, 'info', None)
+
+    def __getattr__(self, name):
+        if name in self.dtype.names:
+            return self[name]
+        return super(PointingMatrix, self).__getattribute__(name)
+
+    @classmethod
+    def empty(cls, shape, info=None, verbose=True):
+        if verbose:
+            print('Info: Allocating ' + str(np.product(shape) / 2**17) + ' MiB '
+                  'for the pointing matrix.')
+        return PointingMatrix(np.empty(shape, dtype=cls.DTYPE), info=info,
+                              copy=False)
+
+    @classmethod
+    def zeros(cls, shape, info=None, verbose=True):
+        if verbose:
+            print('Info: Allocating ' + str(np.product(shape) / 2**17) + ' MiB '
+                  'for the pointing matrix.')
+        result = PointingMatrix(np.zeros(shape, dtype=cls.DTYPE), info=info,
+                                copy=False)
+        result.index = -1
+        return result
+
 @real
 @linear
 class ProjectionOperator(Operator):
     """
     This class handles operations by the pointing matrix
 
-    The input observation has the following required attributes/methods:
-        - nfinesamples
-        - nsamples
-        - ndetectors
-        - get_pointing_matrix()
-        - unit
-    The instance has the following specific attributes:
-        - header: the FITS header of the map
-        - pmatrix: the pointing matrix as a flexible dtype
-        - _pmatrix: opaque view of the pointing matrix
-        - npixels_per_sample: maximum number of sky map pixels that can be
-          intercepted by a detector
+    It is assumed that each pointing matrix row has at most 'npixels_per_sample'
+    non-null elements, or in other words, an output element can only intersect
+    a fixed number of input elements.
+
+    Given an input vector x and an output vector y, y = P(x) translates into:
+        y[i] = sum(P.matrix[i,:].value * x[P.matrix[i,:].index])
+
+    If the input is not MPI-distributed unlike the output, the projection
+    operator is automatically multiplied by the operator DistributionIdentity-
+    Operator, to enable MPI reductions.
+
+    If the input is MPI-distributed, this operator is automatically packed (see
+    below) and multiplied by the operator DistributionLocalOperator, which
+    takes the local input as argument.
+
+    Arguments
+    ---------
+    input : pointing matrix or Observation
+        It is recommended to use a pointing matrix or a list of pointing
+        matrices instead of an observation:
+            proj = ProjectionOperator(obs.get_pointing_matrix(...))
+    packed : boolean
+        If true, the input indices are renumbered to discard the input elements
+        which are not projected onto the output. This feature is used to handle
+        MPI-distributed input arrays.
+    commin: mpi4py.Comm
+        The input MPI communicator.
+    commout: mpi4py.Comm
+        The output MPI communicator.
+
+    Attributes
+    ----------
+    header : pyfits.Header
+        The map FITS header
+    matrix : composite dtype ('value', 'f4'), ('index', 'i4')
+        The pointing matrix. 
     """
 
     def __new__(cls, input=None, method=None, header=None, resolution=None,
@@ -468,32 +525,55 @@ class ProjectionOperator(Operator):
                 downsampling=False, packed=False, shapein=None, shapeout=None,
                 commin=None, commout=None, **keywords):
 
-        # if the input is a pointing matrix, bail
-        if not isinstance(input, Observation) or len(input.slice) == 1:
+        # check if there is only one pointing matrix
+        isobservation = hasattr(input, 'get_pointing_matrix')
+        if isobservation or input is None:
+            if hasattr(input, 'slice'):
+                nmatrices = len(input.slice)
+            else:
+                nmatrices = 1
+        else:
+            if isinstance(input, PointingMatrix):
+                input = (input,)
+            if any(not isinstance(i, PointingMatrix) for i in input):
+                raise TypeError('The input is not a PointingMatrix, (nor a sequ'
+                                'ence of).')
+            nmatrices = len(input)
+
+        if nmatrices == 1:
             instance = Operator.__new__(cls)
             return instance
 
-        # the input is an Observation
-        obs = input
-        if header is None:
-            header = obs.get_map_header(resolution=resolution,
-                                        downsampling=downsampling)
-        elif isinstance(header, str):
+        # the input has multiple pointing matrices
+        if isobservation:
+            if header is None:
+                if not hasattr(input, 'get_map_header'):
+                    raise AttributeError("No map header has been specified and "
+                        "the observation has no 'get_map_header' method.")
+                header = input.get_map_header(resolution=resolution,
+                                              downsampling=downsampling)
+        else:
+            headers = [i.info['header'] for i in input]
+            shapein_headers = [tuple([h['NAXIS' + str(i+1)] for i in \
+                               range(h['NAXIS'])])[::-1] for h in headers]
+            if any(s != shapein_headers[0] for s in shapein_headers):
+                raise ValueError('The pointing matrices do not have the same in'
+                    "put shape: {0}.".format(', '.join(str(shapein_headers))))
+            if header is not None:
+                header = headers[0]
+
+        if isinstance(header, str):
             header = str2fitsheader(header)
 
         shapein = shapein if shapein is not None else tuple([header['NAXIS' + \
             str(i+1)] for i in range(header['NAXIS'])])[::-1]
 
         # get the block column operator
-        operands = []
-        for islice in range(len(obs.slice)):
-            pmatrix, method, units, derived_units = obs.get_pointing_matrix(
-                header, npixels_per_sample, method=method, downsampling= \
-                downsampling, islice=islice)
-            p = ProjectionOperator(pmatrix, method=method, header=header,
-                    units=units, derived_units=derived_units, packed=False,
-                    shapein=shapein, **keywords)
-            operands.append(p)
+        if isobservation:
+            input = input.get_pointing_matrix(header, npixels_per_sample,
+                        method=method, downsampling=downsampling)
+        operands = [ProjectionOperator(p, packed=False, shapein=shapein,
+                                       **keywords) for p in input]
         result = BlockColumnOperator(operands, axisout=-1)
 
         # get the global mask
@@ -502,7 +582,7 @@ class ProjectionOperator(Operator):
                 #FIXME shapein_global = collect_shape(shapein)
                 shapein_global = shapein
                 output = Map.ones(shapein_global, dtype=np.bool8, header=header)
-            for p in operands:
+            for p in result.operands:
                 p.get_mask(output)
             return output
         result.header = header
@@ -521,30 +601,33 @@ class ProjectionOperator(Operator):
         commin = commin or MPI.COMM_WORLD
         commout = commout or MPI.COMM_WORLD
 
-        if isinstance(input, Observation):
+        if hasattr(input, 'get_pointing_matrix'):
             if header is None:
+                if not hasattr(input, 'get_map_header'):
+                    raise AttributeError("No map header is specified and the ob"
+                        "servation has no 'get_map_header' method.")
                 header = input.get_map_header(resolution=resolution,
                                               downsampling=downsampling)
             elif isinstance(header, str):
                 header = str2fitsheader(header)
 
             commout = input.comm_tod
-            pmatrix, method, units, derived_units = input.get_pointing_matrix(
-                    header,
-                    npixels_per_sample,
-                    method=method,
-                    downsampling=downsampling)
+            matrix = input.get_pointing_matrix(header, npixels_per_sample,
+                method=method, downsampling=downsampling)
         else:
+            if not isinstance(input, PointingMatrix):
+                input = input[0]
             if input.ndim != 3:
                 raise ValueError('The input pointing matrix has not 3 dimension'
                                  's.')
-            pmatrix = input
+            matrix = input
 
-        if pmatrix.size == 0:
-            # f2py doesn't accept zero-sized opaque arguments
-            _pmatrix = np.empty(1, np.int64)
-        else:
-            _pmatrix = pmatrix.ravel().view(np.int64)
+        if header is None:
+            header = matrix.info.get('header', None)
+        if units is None:
+            units = matrix.info.get('units', None)
+        if derived_units is None:
+            derived_units = matrix.info.get('derived_units', None)
 
         if units is None:
             units = ('', '')
@@ -554,7 +637,7 @@ class ProjectionOperator(Operator):
         unit = _divide_unit(Quantity(1, units[0])._unit,
                             Quantity(1, units[1])._unit)
 
-        ndetectors, nsamples, npixels_per_sample = pmatrix.shape
+        ndetectors, nsamples, npixels_per_sample = matrix.shape
 
         # validate shapein
         shapein_expected = None if header is None else tuple([header['NAXIS' + \
@@ -597,14 +680,19 @@ class ProjectionOperator(Operator):
             if derived_units[0] is not None:
                 attr['_derived_units'] = derived_units[0]
 
+        # f2py doesn't accept zero-sized opaque arguments
+        if matrix.size == 0:
+            _matrix = np.empty(1, np.int64)
+        else:
+            _matrix = matrix.ravel().view(np.int64)
+
         # initialise operator
         Operator.__init__(self, shapein=shapein, shapeout=shapeout,
                           attrin=set_attrin, attrout=set_attrout,
                           classin=Map, classout=Tod, dtype=var.FLOAT_DTYPE,
                           **keywords)
-        self.method = method
-        self.pmatrix = pmatrix
-        self._pmatrix = _pmatrix
+        self.matrix = matrix
+        self._matrix = _matrix
         self.commin = commin
         self.commout = commout
         self.header = header
@@ -632,7 +720,7 @@ class ProjectionOperator(Operator):
             ops = (self,) if isinstance(self, ProjectionOperator) else \
                   self.operands
             for op in ops:
-                tmf.pointing_matrix_pack(self._pmatrix, mask.view(np.int8).T,
+                tmf.pointing_matrix_pack(self._matrix, mask.view(np.int8).T,
                     self.npixels_per_sample, self.nsamples, self.ndetectors)
                 Operator.__init__(op, shapein=shapein, shapeout=self.shapeout,
                                   attrin=op.attrin, attrout=op.attrout,
@@ -650,7 +738,6 @@ class ProjectionOperator(Operator):
 
         s = self.operands[0]
         self.header = s.header
-        self.method = s.method
         self.ndetectors = s.ndetectors
         self.npixels_per_sample = s.npixels_per_sample
 
@@ -661,7 +748,7 @@ class ProjectionOperator(Operator):
             output_ = np.empty_like(output)
         else:
             output_ = output
-        tmf.pointing_matrix_direct(self._pmatrix, input.T, output_.T,
+        tmf.pointing_matrix_direct(self._matrix, input.T, output_.T,
                                    self.npixels_per_sample)
         if not output.flags.contiguous:
             output[...] = output_
@@ -677,7 +764,7 @@ class ProjectionOperator(Operator):
             output[...] = 0
         elif operation is not operator.__iadd__:
             raise ValueError('Invalid operation.')
-        tmf.pointing_matrix_transpose(self._pmatrix, input_.T, output.T,
+        tmf.pointing_matrix_transpose(self._matrix, input_.T, output.T,
                                       self.npixels_per_sample)
 
     def get_mask(self, output=None):
@@ -687,13 +774,13 @@ class ProjectionOperator(Operator):
             output = Map.ones(shapein_global, dtype=np.bool8, header=self.header)
         elif output.dtype != bool or output.shape != shapein_global:
             raise ValueError('The argument to store the mask is incompatible.')
-        tmf.pointing_matrix_mask(self._pmatrix, output.view(np.int8).T, 
+        tmf.pointing_matrix_mask(self._matrix, output.view(np.int8).T, 
             self.npixels_per_sample, self.nsamples, self.ndetectors)
         return output
 
     def get_ptp(self):
         npixels = np.product(self.shapein)
-        return tmf.pointing_matrix_ptp(self._pmatrix, self.npixels_per_sample,
+        return tmf.pointing_matrix_ptp(self._matrix, self.npixels_per_sample,
             self.nsamples_tot, self.ndetectors, npixels).T
 
 

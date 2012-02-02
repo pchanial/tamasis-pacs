@@ -6,6 +6,7 @@ from kapteyn import wcs
 from matplotlib import pyplot
 from pyoperators.utils import strenum, strshape
 from . import MPI
+from .acquisitionmodels import PointingMatrix
 from .datatypes import Map
 from .wcsutils import barycenter_lonlat, combine_fitsheader, create_fitsheader
 
@@ -281,8 +282,31 @@ class Instrument(object):
         return combine_fitsheader(headers)
 
     def get_pointing_matrix(self, pointing, header, npixels_per_sample=0,
-                            method=None):
-        if method is None:
+                            method=None, **keywords):
+        """
+        Return the pointing matrix for a given set of pointings.
+
+        Parameters
+        ----------
+            pointing : Pointing
+                The pointing containing the astrometry of the array center.
+            header : pyfits.Header
+                The map FITS header
+            npixels_per_sample : int
+                Maximum number of sky pixels intercepted by a detector.
+                By setting 0 (the default), the actual value will be determined
+                automatically.
+            method : string
+                'sharp' : the intersection of the sky pixels and the detectors
+                          is computed assuming that the transmission outside
+                          the detector is zero and one otherwise (sharp edge
+                          geometry)
+                'nearest' : the value of the sky pixel closest to the detector
+                            center is taken as the sample value, assuming
+                            surface brightness conservation.
+
+        """
+       if method is None:
             if 'corner' in self.detector.dtype.names:
                 method = 'sharp'
             else:
@@ -306,15 +330,15 @@ class Instrument(object):
         # Allocate memory for the pointing matrix
         ndetectors = coords.shape[0]
         shape = (ndetectors, nvalids, npixels_per_sample)
-        dtype = [('weight', 'f4'), ('pixel', 'i4')]
-        if npixels_per_sample != 0:
-            print('Info: Allocating ' + str(np.product(shape) / 2**17) + ' MiB '
-                  'for the pointing matrix.')
+        info = {'header':header,
+                'method':method,
+                'units':('/detector', '/pixel'),
+                'derived_units':(None, None)}
         try:
-            pmatrix = np.empty(shape, dtype).view(np.recarray)
+            pmatrix = PointingMatrix.empty(shape, info=info, verbose=True)
         except MemoryError:
             gc.collect()
-            pmatrix = np.empty(shape, dtype).view(np.recarray)
+            pmatrix = PointingMatrix.empty(shape, info=info, verbose=True)
 
         # compute the pointing matrix
         if method == 'sharp':
@@ -337,7 +361,7 @@ class Instrument(object):
                   new_npixels_per_sample))
 
         if new_npixels_per_sample <= npixels_per_sample:
-            return pmatrix, method, ('/detector', '/pixel'), None
+            return pmatrix
 
         # if the actual number of pixels per sample is greater than
         # the specified one, redo the computation of the pointing matrix
