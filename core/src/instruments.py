@@ -306,7 +306,7 @@ class Instrument(object):
                             surface brightness conservation.
 
         """
-       if method is None:
+        if method is None:
             if 'corner' in self.detector.dtype.names:
                 method = 'sharp'
             else:
