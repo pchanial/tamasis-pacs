@@ -77,7 +77,7 @@ def deglitch_l2mad(tod, projection, nsigma=25.):
 #-------------------------------------------------------------------------------
 
 
-def filter_median(tod, length=10, mask=None, nsamples=None):
+def filter_median(tod, length=10, mask=None, partition=None):
     """
     Median filtering, O(1) in window length
     """
@@ -90,12 +90,12 @@ def filter_median(tod, length=10, mask=None, nsamples=None):
     else:
         mask = np.zeros(tod.shape, np.int8)
 
-    if nsamples is None:
-        nsamples = tod.shape[-1]
-    nsamples_tot = tod.shape[-1]
-    status = tmf.filter_median(filtered.reshape((-1,nsamples_tot)).T,
-        mask.reshape((-1,nsamples_tot)).T, length,
-        np.array(nsamples, np.int32, ndmin=1))
+    n = tod.shape[-1]
+    if partition is None:
+        partition = (n,)
+    status = tmf.filter_median(filtered.reshape((-1,n)).T,
+        mask.reshape((-1,n)).T, length,
+        np.array(partition, np.int32, ndmin=1))
     if status != 0:
         raise RuntimeError()
     return filtered
@@ -104,23 +104,60 @@ def filter_median(tod, length=10, mask=None, nsamples=None):
 #-------------------------------------------------------------------------------
 
 
-def filter_polynomial(tod, degree, nsamples=None):
+def filter_polynomial(tod, degree, mask=None, partition=None):
     """
-    Filter by subtracting a fitted polynomial of arbitrary degree.
-    """
-    if nsamples is None:
-        nsamples = (tod.shape[-1],)
-    filtered = tod.copy()
-    dest = 0
-    for islice, n in enumerate(nsamples):
-        x = np.arange(n)
-        slope = scipy.polyfit(x, tod[:,dest:dest+n].T, deg=degree)
+    Filter by subtracting a fitted polynomial of arbitrary degree along
+    the last dimension.
 
-        for idetector in range(tod.shape[0]):
-            filtered[idetector,dest:dest+n] -= \
-                scipy.polyval(slope[:,idetector], x)
-       
-        dest = dest + n
+    Parameters
+    ----------
+    tod : array_like
+        The input array from which a polynomial fit will be removed.
+        If it contains a mask attribute of the same shape, the masked values
+        are not used to compute the polynomial fit. A True value in the mask
+        means that the argument value is masked.
+    degree : int
+        The polynomial degree.
+    mask : array_like, boolean
+        Mask array compatible with argument tod. If supplied, it overrides
+        the first argument mask.
+    partition : sequence of int
+        Partition along the last dimension, to perform filtering along
+        independent chunks.
+
+    Example
+    -------
+    >>> y = np.array([np.arange(100.)*3, np.arange(100.)*2])
+    >>> y += np.random.normal(size=y.shape)
+    >>> y_filtered = filter_polynomial(y, 1)
+    >>> std(y_filtered, axis=1)
+    array([ 1.03496984,  1.0357345 ])
+
+    """
+    tod = np.asanyarray(tod)
+    filtered = tod.copy()
+    filtered_ = filtered.reshape((-1,tod.shape[-1]))
+    if mask is None:
+        mask = getattr(tod, 'mask', None)
+    if mask is not None:
+        mask = np.asarray(mask)
+        mask = mask.reshape((-1,tod.shape[-1]))
+    if partition is None:
+        partition = (tod.shape[-1],)
+
+    dest = 0
+    for n in partition:
+        arange = np.arange(n, dtype=tod.dtype)
+        for i in xrange(filtered_.shape[0]):
+            if mask is None:
+                x = arange
+                y = filtered_[i,dest:dest+n]
+            else:
+                x = arange[~mask[i,dest:dest+n]]
+                y = filtered_[i,dest:dest+n][~mask[i,dest:dest+n]]
+            slope = scipy.polyfit(x, y, deg=degree)
+            filtered_[i,dest:dest+n] -= scipy.polyval(slope, arange)
+        dest += n
 
     return filtered
 
@@ -128,32 +165,64 @@ def filter_polynomial(tod, degree, nsamples=None):
 #-------------------------------------------------------------------------------
 
 
-def interpolate_linear(tod, nsamples=None):
+def interpolate_linear(tod, mask=None, partition=None, out=None):
     """
-    In-place interpolation of masked values of a Tod
-    """
-    if tod.mask is None:
-        return
-    if nsamples is None:
-        nsamples = (tod.shape[-1],)
-    dest = 0
-    for islice, n in enumerate(nsamples):
-        x = np.arange(n)
-        for idetector in range(tod.shape[0]):
-            tod_ = tod[idetector,dest:dest+n]
-            invalid = tod.mask[idetector,dest:dest+n]
-            tod_[invalid] = np.interp(x[invalid], x[~invalid], tod_[~invalid])
-        dest = dest + n
-    
-    return
+    Perform a linear interpolation along the last dimension under the control
+    of a mask.
 
+    Parameters
+    ----------
+    tod : array_like
+        The input array whose masked values are to be interpolated.
+        If the tod does not  contain a mask attribute, no interpolation is
+        performed. A True value in the mask means that the argument value is
+        masked.
+    mask : array_like, boolean, optional
+        Mask array compatible with argument tod. If supplied, it overrides
+        the first argument mask.
+    partition : sequence of int, optional
+        Partition along the last dimension, to perform interpolation on
+        independent chunks and avoid side-effects.
+    out : array_like, optional
+        Array in which the result is stored.
+    
+    """
+    if mask is None:
+        mask = getattr(tod, 'mask', None)
+    if mask is None:
+        return
+    tod = np.asanyarray(tod)
+    if out is None:
+        out = tod.copy()
+    else:
+        out[...] = tod
+    mask = np.asarray(mask)
+    out_ = np.asarray(out)
+    if partition is None:
+        partition = (tod.shape[-1],)
+    elif np.sum(partition) != tod.shape[-1]:
+        raise ValueError('The partition is not compatible with the input.')
+
+    mask = mask.reshape((-1,tod.shape[-1]))
+    out_ = out_.reshape((-1,tod.shape[-1]))
+    dest = 0
+    for n in partition:
+        x = np.arange(n)
+        for i in range(out_.shape[0]):
+            y = out_[i,dest:dest+n]
+            invalid = mask[i,dest:dest+n]
+            y[invalid] = np.interp(x[invalid], x[~invalid], y[~invalid])
+        dest = dest + n
+
+    return out
 
 #-------------------------------------------------------------------------------
 
 
 def remove_nonfinite(tod):
     """
-    Replace NaN values in a Tod with zeros and update the mask.
+    Replace NaN values with zeros in a Tod inplace and update the mask
+    accordingly.
     """
     if tod.mask is None:
         tod.mask = np.zeros(tod.shape, np.bool8)
