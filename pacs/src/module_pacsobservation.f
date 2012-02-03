@@ -787,7 +787,7 @@ contains
                     end if
                 end if
                 njumps = njumps + 1
-                this%p(isample)%invalid = .true.
+                this%p(isample-1:isample)%invalid = .true.
                 this%p(isample)%time = this%p(isample-1)%time + this%sampling_interval
                 this%p(isample)%ra   = this%p(isample-1)%ra  
                 this%p(isample)%dec  = this%p(isample-1)%dec 
