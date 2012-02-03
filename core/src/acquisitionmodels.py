@@ -559,7 +559,7 @@ class ProjectionOperator(Operator):
             if any(s != shapein_headers[0] for s in shapein_headers):
                 raise ValueError('The pointing matrices do not have the same in'
                     "put shape: {0}.".format(', '.join(str(shapein_headers))))
-            if header is not None:
+            if header is None:
                 header = headers[0]
 
         if isinstance(header, str):
