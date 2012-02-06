@@ -4,7 +4,7 @@ import os
 import tamasis
 
 from glob import glob
-from tamasis import PacsObservation, PacsSimulation, Pointing, ProjectionOperator, Map, Tod, IdentityOperator, MaskOperator, mapper_naive
+from tamasis import PacsObservation, PacsSimulation, Pointing, CompressionAverageOperator, ProjectionOperator, Map, Tod, IdentityOperator, MaskOperator, mapper_naive
 from tamasis.numpyutils import all_eq, minmax
 from uuid import uuid1
 
@@ -144,16 +144,20 @@ def test_slice2():
 
     header = obs1.get_map_header()
 
-    proj1 = ProjectionOperator(obs1, header=header, downsampling=True)
-    proj2 = ProjectionOperator(obs2, header=header, downsampling=True)
+    proj1 = ProjectionOperator(obs1, header=header)
+    proj2 = ProjectionOperator(obs2, header=header)
     assert all_eq(proj1.get_mask(), proj2.get_mask())
     assert all_eq(proj1.matrix, np.concatenate([p.matrix for p in \
                   proj2.operands], axis=1))
 
-    m1 = proj1.T(tod1)
-    m2 = proj2.T(tod2)
+    model1 = CompressionAverageOperator(obs1.slice.compression_factor) * proj1
+    model2 = CompressionAverageOperator(obs2.slice.compression_factor) * proj2
+    
+    m1 = model1.T(tod1)
+    m2 = model2.T(tod2)
     assert all_eq(m1, m2, 1e-11)
-    assert all_eq(proj1(m1), proj2(m1))
+    assert all_eq(model1(m1), model2(m1))
+
     
 def teardown():
     files = glob('*' + uuid + '.fits')
