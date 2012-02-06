@@ -153,8 +153,11 @@ def filter_polynomial(tod, degree, mask=None, partition=None):
                 x = arange
                 y = filtered_[i,dest:dest+n]
             else:
-                x = arange[~mask[i,dest:dest+n]]
-                y = filtered_[i,dest:dest+n][~mask[i,dest:dest+n]]
+                m = ~mask[i,dest:dest+n]
+                x = arange[m]
+                if x.size == 0:
+                    continue
+                y = filtered_[i,dest:dest+n][m]
             slope = scipy.polyfit(x, y, deg=degree)
             filtered_[i,dest:dest+n] -= scipy.polyval(slope, arange)
         dest += n
