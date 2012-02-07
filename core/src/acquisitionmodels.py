@@ -491,16 +491,20 @@ class PointingMatrix(np.ndarray):
     @classmethod
     def empty(cls, shape, info=None, verbose=True):
         if verbose:
-            print('Info: Allocating ' + str(np.product(shape) / 2**17) + ' MiB '
-                  'for the pointing matrix.')
+            n = np.product(shape)
+            if n > 0:
+                print('Info: Allocating ' + str(np.product(shape) / 2**17) + \
+                  ' MiB for the pointing matrix.')
         return PointingMatrix(np.empty(shape, dtype=cls.DTYPE), info=info,
                               copy=False)
 
     @classmethod
     def zeros(cls, shape, info=None, verbose=True):
         if verbose:
-            print('Info: Allocating ' + str(np.product(shape) / 2**17) + ' MiB '
-                  'for the pointing matrix.')
+            n = np.product(shape)
+            if n > 0:
+                print('Info: Allocating ' + str(np.product(shape) / 2**17) + \
+                  ' MiB for the pointing matrix.')
         result = PointingMatrix(np.zeros(shape, dtype=cls.DTYPE), info=info,
                                 copy=False)
         result.index = -1
