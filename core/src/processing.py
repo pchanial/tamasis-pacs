@@ -14,8 +14,11 @@ __all__ = [ 'deglitch_l2std',
             'deglitch_l2mad',
             'filter_median',
             'filter_polynomial',
-            'interpolate_linear',
-            'remove_nonfinite' ]
+            'filter_nonfinite',
+            'interpolate_linear' ]
+
+class ndarraywrap(np.ndarray):
+    pass
 
 def _deglitch(tod, projection, nsigma, func):
     if isinstance(projection, ProjectionOperator):
@@ -144,6 +147,8 @@ def filter_polynomial(tod, degree, mask=None, partition=None):
         mask = mask.reshape((-1,tod.shape[-1]))
     if partition is None:
         partition = (tod.shape[-1],)
+    elif np.sum(partition) != tod.shape[-1]:
+        raise ValueError('The partition is not compatible with the input.')
 
     dest = 0
     for n in partition:
@@ -163,6 +168,55 @@ def filter_polynomial(tod, degree, mask=None, partition=None):
         dest += n
 
     return filtered
+
+
+#-------------------------------------------------------------------------------
+
+
+def filter_nonfinite(x, out=None):
+    """
+    Replace non-finite values with zeros in an array inplace and update
+    the input mask accordingly, if present.
+
+    Parameters
+    ----------
+    x : array_like
+        The input array whose non-finite values will be set to zero.
+        If the array contains a mask attribute, the mask entries for which the
+        corresponding array entries are non-finite will be set to True.
+    out : array_like, optional
+        Array in which the result is stored.
+    
+    """
+    x = np.asanyarray(x)
+    
+    if out is None:
+        cls = ndarraywrap if type(x) is np.ndarray else type(x)
+        out = np.empty(x.shape).view(cls)
+        if out.__array_finalize__ is not None:
+            out.__array_finalize__(x)
+        if hasattr(out, 'mask') and out.mask is not None:
+            out.mask = out.mask.copy()
+    else:
+        if not isinstance(out, np.ndarray):
+            raise TypeError('The output argument is not an ndarray.')
+        
+    mask = getattr(out, 'mask', np.zeros(x.shape, bool))
+
+    if x.__array_interface__['data'][0] == out.__array_interface__['data'][0]:
+        if mask is None:
+            tmf.processing.filter_nonfinite_inplace(x.T)
+        else:
+            tmf.processing.filter_nonfinite_mask_inplace(x.T,
+                                                         mask.view(np.int8).T)
+    else:
+        if mask is None:
+            tmf.processing.filter_nonfinite_outplace(x.T, out.T)
+        else:
+            tmf.processing.filter_nonfinite_mask_outplace(x.T, out.T,
+                                                          mask.view(np.int8).T)
+
+    return out
 
 
 #-------------------------------------------------------------------------------
@@ -218,15 +272,3 @@ def interpolate_linear(tod, mask=None, partition=None, out=None):
         dest = dest + n
 
     return out
-
-#-------------------------------------------------------------------------------
-
-
-def remove_nonfinite(tod):
-    """
-    Replace NaN values with zeros in a Tod inplace and update the mask
-    accordingly.
-    """
-    if tod.mask is None:
-        tod.mask = np.zeros(tod.shape, np.bool8)
-    tmf.remove_nonfinite_mask(tod.T, tod.mask.view(np.int8).T)

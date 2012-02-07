@@ -20,7 +20,7 @@ from . import MPI
 from . import var
 from tamasis.core import (Quantity, Tod, MaskPolicy, Instrument, Pointing, tmf,
                           CompressionAverageOperator, ProjectionOperator,
-                          PointingMatrix, create_fitsheader)
+                          PointingMatrix, create_fitsheader, filter_nonfinite)
 from tamasis.mpiutils import distribute_observation
 from tamasis.observations import Observation
 
@@ -1008,7 +1008,7 @@ class PacsObservation(PacsBase):
             first = last + 1
         print('Reading timeline... {0:.2f}'.format(time.time()-time0))
 
-        tmf.remove_nonfinite_mask(tod.ravel(), tod.mask.view(np.int8).ravel())
+        filter_nonfinite(tod, out=tod)
 
         if not raw:
             tod.inunit(unit)

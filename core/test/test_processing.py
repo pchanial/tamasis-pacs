@@ -1,7 +1,8 @@
 import numpy as np
-from numpy.testing import assert_array_equal
-from tamasis.processing import filter_polynomial, interpolate_linear, remove_nonfinite
+
 from tamasis.datatypes import Tod
+from tamasis.processing import filter_polynomial, interpolate_linear, filter_nonfinite
+from tamasis.numpyutils import assert_all_eq
 
 
 def test_filter_polynomial():
@@ -59,15 +60,25 @@ def test_interpolate_linear():
     interpolate_linear(y2, m2, partition=(4,4), out=y2)
     yield func, y2
     
-def test_remove_non_finite1():
-    t = Tod([1,np.nan,5,np.inf,-np.inf,8])
-    remove_nonfinite(t)
-    assert_array_equal(t, [1,0,5,0,0,8])
-    assert_array_equal(t.mask, [False,True,False,True,True,False])
+def test_filter_nonfinite():
+    mask = [False,False,False,True,False,True]
+    data1 = [1,np.nan,5,np.inf,-np.inf,8]
+    data2 = Tod(data1)
+    data3 = Tod(data1, mask=mask)
 
-def test_remove_non_finite2():
-    t = Tod([1,np.nan,5,np.inf,-np.inf,8],
-            mask=[False,False,False,True,False,True])
-    remove_nonfinite(t)
-    assert_array_equal(t, [1,0,5,0,0,8])
-    assert_array_equal(t.mask, [False,True,False,True,True,True])
+    def func(x):
+        y = filter_nonfinite(x)
+        y_expected = np.asanyarray(x).copy()
+        y_expected[~np.isfinite(x)] = 0
+        if hasattr(x, 'mask') and x.mask is not None:
+            y_expected.mask = x.mask.copy()
+            y_expected.mask[~np.isfinite(x)] = True
+        assert_all_eq(y, y_expected)
+            
+        x = np.asanyarray(x)
+        filter_nonfinite(x, out=x)
+        assert_all_eq(x, y_expected)
+
+    for x in (data1, data2, data3):
+        yield func, x
+

@@ -15,6 +15,7 @@ from pyoperators import AdditionOperator, DiagonalOperator, IdentityOperator, Ma
 from .acquisitionmodels import DdTddOperator, DiscreteDifferenceOperator
 from .datatypes import Map, Tod
 from .linalg import Function, norm2, norm2_ellipsoid
+from .processing import filter_nonfinite
 from .solvers import cg, nlcg, QuadraticStep
 from .wcsutils import create_fitsheader
 
@@ -195,7 +196,7 @@ def mapper_nl(tod, model, unpacking=None, priors=[], hypers=[], norms=[],
         comms = [var.comm_tod] + npriors * [var.comm_map]
 
     if isinstance(M, DiagonalOperator):
-        tmf.remove_nonfinite(M.data.T)
+        remove_nonfinite(M.data, out=M.data)
 
     hypers = np.asarray(hypers, dtype=var.FLOAT_DTYPE)
     ntods = int(np.sum(~tod.mask)) if getattr(tod, 'mask', None) is not None \
@@ -298,7 +299,7 @@ def _solver(A, b, tod, model, invntt, priors=[], hyper=0, x0=None, tol=1.e-5,
     npriors = len(priors)
 
     if isinstance(M, DiagonalOperator):
-        tmf.remove_nonfinite(M.data.T)
+        remove_nonfinite(M.data, out=M.data)
 
     if unpacking is None:
         unpacking = ReshapeOperator(b.size, b.shape)

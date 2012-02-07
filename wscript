@@ -281,7 +281,7 @@ def build(bld):
     # Python extension tamasisfortran.so
     target = 'tamasisfortran.so'
     source = [bld.srcnode.find_node('%s/src/tamasisfortran_%s.f90' % (s,s)) for s in subdirs]
-    additional_interfaces = ['operators', 'pointing']
+    additional_interfaces = ['operators', 'pointing', 'processing']
     if 'MPI' in libraries:
         additional_interfaces += [ 'mpi' ]
     for a in additional_interfaces:
