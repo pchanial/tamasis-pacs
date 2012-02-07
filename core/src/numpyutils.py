@@ -114,6 +114,10 @@ def any_neq(a, b, rtol=None, atol=0.):
             raise NotImplementedError('The inputs are not in single or double' \
                                       ' precision.')
 
+    if a.ndim > 0 and b.ndim > 0 and a.shape != b.shape:
+        print('Argument shapes differ.')
+        return True
+
     mask = np.isnan(a)
     if np.any(mask != np.isnan(b)):
         print('Argument NaNs differ.')
