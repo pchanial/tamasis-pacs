@@ -32,6 +32,7 @@ def test():
     filename = 'obs-' + uuid + '.fits'
     obs.save(filename, tod)
     obs2 = PacsObservation(filename, reject_bad_line=False)
+    obs2.pointing.chop[:] = 0
     tod2 = obs2.get_tod(raw=True)
     assert all_eq(obs.status, obs2.status)
     assert all_eq(tod, tod2)
@@ -155,7 +156,7 @@ def test_slice2():
     
     m1 = model1.T(tod1)
     m2 = model2.T(tod2)
-    assert all_eq(m1, m2, 1e-11)
+    assert all_eq(m1, m2, 1e-10)
     assert all_eq(model1(m1), model2(m1))
 
     
