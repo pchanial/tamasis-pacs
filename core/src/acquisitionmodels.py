@@ -64,11 +64,14 @@ def block_diagonal(*partition_args, **keywords):
     """
     Class decorator that partitions an Operator along a specified axis.
     It adds a 'partition' keyed argument to the class constructor.
+
+    Subclasses can also benefit from a decorated class, as long as they do not
+    define a __init__ or __new__ method.
     
     Parameters
     ----------
-    axis: int
-        Partition axis of the input (default is 0)
+    axisin: int
+        Input partition axis.
 
     *partition_args: string varargs
        Specify the class' arguments of the __init__ method that  can be a
@@ -76,7 +79,7 @@ def block_diagonal(*partition_args, **keywords):
 
     Example
     -------
-    >>> @block_diagonal('value')
+    >>> @block_diagonal('value', axisin=0)
     >>> @linear
     >>> class MyOp(Operator):
     >>>     def __init__(self, value, shapein=None):
@@ -84,7 +87,7 @@ def block_diagonal(*partition_args, **keywords):
     >>>         Operator.__init__(self, lambda i,o: np.multiply(i,value,o),
     >>>                           shapein=shapein)
     >>>
-    >>> op = MyOp([1,2,3], shapein=3, partition=(1,1,1))
+    >>> op = MyOp([1,2,3], shapein=3, partitionin=(1,1,1))
     >>> op.todense()
     array([[ 1.,  0.,  0.],
            [ 0.,  2.,  0.],
@@ -95,11 +98,12 @@ def block_diagonal(*partition_args, **keywords):
         
     """
     # the following way to extract keywords is unnecessary in Python3 (PEP 3102)
-    if 'axis' in keywords:
-        axisin = keywords['axis']
-        del keywords['axis']
-    else:
-        axisin = 0
+    if 'axisin' not in keywords:
+        raise TypeError("Missing 'axisin' keyword.")
+
+    axisin = keywords['axisin']
+    del keywords['axisin']
+
     if len(keywords) > 0:
         raise TypeError('Invalid keyed argument.')
 
@@ -107,18 +111,50 @@ def block_diagonal(*partition_args, **keywords):
 
         @functools.wraps(cls.__new__)
         def partition_new(cls_, *args, **keywords):
-            if 'partition' in keywords and keywords['partition'] is not None:
-                partitionin = tointtuple(keywords['partition'])
-                del keywords['partition']
-            else:
-                inst = cls.__new_original__(cls_, *args, **keywords)
-                cls_.__init__ = partition_init
-                return inst
+
+            # get number of blocks through the partitionin keyword
+            n1 = 0
+            partitionin = None
+            if 'partitionin' in keywords:
+                if keywords['partitionin'] is not None:
+                    partitionin = tointtuple(keywords['partitionin'])
+                    n1 = len(partitionin)
+                del keywords['partitionin']
+
+            # get __init__ argument names, except self
+            class_args, jk, jk, jk = inspect.getargspec(cls.__init_original__)
+            class_args.pop(0)
+
+            # get number of blocks through the arguments
+            ns = [0 if isscalar(a) else len(a) for i,a in enumerate(args) \
+                  if class_args[i] in partition_args] + \
+                 [0 if isscalar(v) else len(v) for k,v in keywords.items() \
+                  if k in partition_args]
+
+            # required for copy.copy, which calls __new__ without arguments
+            if n1 == 0 and len(ns) == 0:
+                result = cls.__new_original__(cls_)
+                if len(class_args) == 0:
+                    cls.__init_original__(result)
+                return result
+
+            n2 = 0 if len(ns) == 0 else max(ns)
+            if any(n not in (0, n2) for n in ns):
+                raise ValueError('The partition variables do not have the same '
+                                 'number of elements.')
+
+            # check the two methods are compatible
+            if n1 != 0 and n2 != 0 and n1 != n2:
+                raise ValueError('The specified partitioning is incompatible wi'
+                    'th the number of elements in the partition variables.')
+            n = max(n1, n2, 1)
+
+            # Implicit partition
+            if partitionin is None:
+                partitionin = n * (None,)
 
             # dispatch arguments
             n = len(partitionin)
-            class_args, jk, jk, jk = inspect.getargspec(cls_.__init_original__)
-            class_args.pop(0)
             argss = tuple(tuple(a[i] if class_args[j] in partition_args and \
                 not isscalar(a) else a for j,a in enumerate(args)) \
                 for i in range(n))
@@ -143,23 +179,17 @@ def block_diagonal(*partition_args, **keywords):
             # instantiate the partitioned operators
             ops = [cls.__new_original__(cls_, *a, **k) \
                    for a,k in zip(argss, keyss)]
-            for o,a,k in zip(ops, argss, keyss):
+            for o, a, k in zip(ops, argss, keyss):
                 if isinstance(o, cls):
-                    o.__init_original__(*a, **k)
-            if len(ops) == 1:
-                return ops[0]
+                    cls.__init_original__(o, *a, **k)
 
             return BlockDiagonalOperator(ops, partitionin=partitionin,
                                          axisin=axisin)
 
         @functools.wraps(cls.__init__)
-        def partition_init(self, *args, **keywords):
-            if 'partition' in keywords:
-                partitionin = tointtuple(keywords['partition'])
-                if partitionin is not None and len(partitionin) == 1:
-                    return
-                del keywords['partition']
-            cls.__init_original__(self, *args, **keywords)
+        def partition_init(self, *args, **keys):
+            # opearator has already been initialised
+            pass
 
         cls.__new_original__ = staticmethod(cls.__new__)
         cls.__new__ = staticmethod(partition_new)
@@ -235,7 +265,7 @@ class BlackBodyFixedTemperatureOperator(NumexprOperator):
         NumexprOperator.__init__(self, expr, global_dict, dtype=float)
 
 
-@block_diagonal('factor', axis=-1)
+@block_diagonal('factor', axisin=-1)
 @real
 @linear
 class CompressionOperator(Operator):
@@ -405,7 +435,7 @@ class InvNttUncorrelatedPythonOperator(Operator):
         return padding.T * fft.T * invntt * fft * padding
 
 
-@block_diagonal('left', 'right', axis=-1)
+@block_diagonal('left', 'right', axisin=-1)
 @real
 @linear
 class PadOperator(Operator):
@@ -726,12 +756,14 @@ class ProjectionOperator(Operator):
                                   attrin=op.attrin, attrout=op.attrout,
                                   classin=op.classin, classout=op.classout,
                                   dtype=self.dtype, **keywords)
+                op.validatein(tointtuple(shapein))
                 op.packed = True
 
             if ismapdistributed:
                 self *= DistributionLocalOperator(mask)
             else:
                 self *= PackOperator(mask)
+                self.operands[0].validatein(tointtuple(shapein))
 
         if istoddistributed and not ismapdistributed:
             self *= DistributionIdentityOperator(commout=self.commout)

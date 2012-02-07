@@ -9,12 +9,10 @@ from tamasis.numpyutils import all_eq
 
 def test_partitioning():
 
-    @block_diagonal('value', 'mykey')
+    @block_diagonal('value', 'mykey', axisin=0)
     @decorators.square
     class MyOp(Operator):
-        """ Bla1. """
         def __init__(self, arg1, value, arg3, mykey=None, **keywords):
-            """ Bla2. """
             Operator.__init__(self, **keywords)
             self.arg1 = arg1
             self.value = value
@@ -24,45 +22,73 @@ def test_partitioning():
             output[...] = self.value * input
         __str__ = Operator.__repr__
 
-    arg1 = [1,2,3,4,5]
+    @block_diagonal('value', 'mykey', axisin=0)
+    @decorators.square
+    class MySupOp(Operator):
+        def __init__(self, arg1, value, arg3, mykey=None, **keywords):
+            Operator.__init__(self, **keywords)
+            self.arg1 = arg1
+            self.value = value
+            self.arg3 = arg3
+            self.mykey = mykey
+    class MySubOp(MySupOp):
+        def direct(self, input, output):
+            output[...] = self.value * input
+        __str__ = Operator.__repr__
+
+    arg1 = [1, 2, 3, 4, 5]
     arg3 = ['a', 'b', 'c', 'd']
 
-    def func(op, n, v, k):
-        input = np.ones(np.sum(n))
-        if not isinstance(n, tuple) or len(n) == 1:
-            if n is not None:
-                if not isscalar(v): v = v[0]
-                if not isscalar(k): k = k[0]
-            assert op.__class__ is MyOp
-            assert op.arg1 is arg1
-            assert op.value is v
-            assert op.arg3 is arg3
-            assert op.mykey is k
-            if not isinstance(v, tuple):
-                output = op(input)
-                assert_equal(output, v)
+    def func(cls, n, v, k):
+        n1 = 1 if isscalar(v) else len(v)
+        n2 = 1 if isscalar(k) else len(k)
+        nn = max(n1,n2) if n is None else 1 if isscalar(n) else len(n)
+        if not isscalar(v) and not isscalar(k) and n1 != n2:
+            # the partitioned arguments do not have the same length
+            assert_raises(ValueError, lambda: cls(arg1, v, arg3, mykey=k,
+                                                  partitionin=n))
+            return
+        if nn != max(n1, n2) and (not isscalar(v) or not isscalar(k)):
+            # the partition is incompatible with the partitioned arguments
+            return # test assert_raises(ValueError)
+
+        op = cls(arg1, v, arg3, mykey=k, partitionin=n)
+        if nn == 1:
+            v = v if isscalar(v) else v[0]
+            k = k if isscalar(k) else k[0]
+            func2(cls, op, v, k)
         else:
             assert op.__class__ is BlockDiagonalOperator
-            v = len(n) * [v] if isscalar(v) else v[0:len(n)]
-            k = len(n) * [k] if isscalar(k) else k[0:len(n)]
-            for i, p in enumerate(n):
-                func(op.operands[i], None, v[i], k[i])
+            assert len(op.operands) == nn
+            if n is None:
+                assert op.partitionin == nn * (None,)
+                assert op.partitionout == nn * (None,)
+                return
+            v = nn * [v] if isscalar(v) else v
+            k = nn * [k] if isscalar(k) else k
+            for op_, v_, k_ in zip(op.operands, v, k):
+                func2(cls, op_, v_, k_)
             expected = np.hstack(n_*[v_] for n_, v_ in zip(n,v))
+            input = np.ones(np.sum(n))
             output = op(input)
             assert_equal(output, expected)
 
-    for n in (None, 2, (2,), (4,2), (5,4,2)):
-        for v in (2., (2.,), (2., 3)):
-            for k in (0., (0.,), (0., 1.)):
-                if isinstance(n, tuple) and len(n) > 1 and \
-                  (isinstance(v, tuple) and len(v) < len(n) or \
-                   isinstance(k, tuple) and len(k) < len(n)):
-                    yield assert_raises, IndexError, \
-                          lambda: MyOp(arg1, v, arg3, mykey=k, partition=n)
-                else:
-                    myop = MyOp(arg1, v, arg3, mykey=k, partition=n)
-                    yield func, myop, n, v, k
+    def func2(cls, op, v, k):
+        assert op.__class__ is cls
+        assert op.arg1 is arg1
+        assert op.value is v
+        assert hasattr(op, 'arg3')
+        assert op.arg3 is arg3
+        assert op.mykey is k
+        input = np.ones(1)
+        output = op(input)
+        assert_equal(output, v)
 
+    for c in (MyOp, MySubOp):
+        for n in (None, 2, (2,), (4,2)):
+            for v in (2., (2.,), (2., 3)):
+                for k in (0., (0.,), (0., 1.)):
+                    yield func, c, n, v, k
 
 def test_blackbody():
     def bb(w,T):
@@ -98,7 +124,7 @@ def test_compression_average2():
     tod = np.empty((2,15), float)
     tod[0,:] = [1,1,1,1,1,3,3,3,3,3,4,4,4,4,4]
     tod[1,:] = [1,2,1.,0.5,0.5,5,0,0,0,0,1,2,1,2,1.5]
-    compression = CompressionAverageOperator(5, partition=partition)
+    compression = CompressionAverageOperator(5, partitionin=partition)
     tod2 = compression(tod)
     assert tod2.shape == (2,3)
     assert_equal(tod2, [[1.,3.,4.],[1.,1.,1.5]])
@@ -108,7 +134,7 @@ def test_compression_average2():
     assert_almost_equal(tod3[0,:], (0.2,0.2,0.2,0.2,0.2,0.6,0.6,0.6,0.6,0.6,0.8,0.8,0.8,0.8,0.8))
     
     tod = np.array([1,2,2,3,3,3,4,4,4,4])
-    compression = CompressionAverageOperator([1,2,3,4], partition=[1,2,3,4])
+    compression = CompressionAverageOperator([1,2,3,4], partitionin=[1,2,3,4])
     tod2 = compression(tod)
     assert_almost_equal(tod2, [1,2,3,4])
     tod3 = compression.T(tod2)
@@ -121,7 +147,7 @@ def test_compression_average3():
 def test_downsampling1():
     partition = (1,2,3,4)
     tod = np.array([1,2,1,3,1,1,4,1,1,1])
-    compression=DownSamplingOperator([1,2,3,4], partition=partition)
+    compression=DownSamplingOperator([1,2,3,4], partitionin=partition)
     tod2 = compression(tod)
     assert_equal(tod2, [1,2,3,4])
     tod3 = compression.T(tod2)
@@ -144,7 +170,7 @@ def test_padding1():
     assert_equal(padding.T.todense(shapeout), padding.todense(shapein).T)
 
 def test_padding2():
-    padding = PadOperator(left=1,right=(4,20), partition=(12,3))
+    padding = PadOperator(left=1,right=(4,20), partitionin=(12,3))
     a = np.arange(10*15).reshape((10,15))
     b = padding(a)
     assert b.shape == (10,41)
