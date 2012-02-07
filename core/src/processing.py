@@ -206,16 +206,16 @@ def filter_nonfinite(x, out=None):
 
     if x.__array_interface__['data'][0] == out.__array_interface__['data'][0]:
         if mask is None:
-            tmf.processing.filter_nonfinite_inplace(x.T)
+            tmf.processing.filter_nonfinite_inplace(x.ravel())
         else:
-            tmf.processing.filter_nonfinite_mask_inplace(x.T,
-                                                         mask.view(np.int8).T)
+            tmf.processing.filter_nonfinite_mask_inplace(x.ravel(),
+                mask.view(np.int8).ravel())
     else:
         if mask is None:
-            tmf.processing.filter_nonfinite_outplace(x.T, out.T)
+            tmf.processing.filter_nonfinite_outplace(x.ravel(), out.ravel())
         else:
-            tmf.processing.filter_nonfinite_mask_outplace(x.T, out.T,
-                                                          mask.view(np.int8).T)
+            tmf.processing.filter_nonfinite_mask_outplace(x.ravel(),
+                out.ravel(), mask.view(np.int8).ravel())
 
     return out
 

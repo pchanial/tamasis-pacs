@@ -63,10 +63,6 @@ def test_interpolate_linear():
     yield func, y2
     
 def test_filter_nonfinite():
-    mask = [False,False,False,True,False,True]
-    data1 = [1,np.nan,5,np.inf,-np.inf,8]
-    data2 = Tod(data1)
-    data3 = Tod(data1, mask=mask)
 
     def func(x):
         y = filter_nonfinite(x)
@@ -80,6 +76,19 @@ def test_filter_nonfinite():
         x = np.asanyarray(x)
         filter_nonfinite(x, out=x)
         assert_all_eq(x, y_expected)
+
+    mask = [False,False,False,True,False,True]
+    data1 = [1,np.nan,5,np.inf,-np.inf,8]
+    data2 = Tod(data1)
+    data3 = Tod(data1, mask=mask)
+
+    for x in (data1, data2, data3):
+        yield func, x
+
+    mask = [[False,False,False],[True,False,True]]
+    data1 = [[1,np.nan,5], [np.inf,-np.inf,8]]
+    data2 = Tod(data1)
+    data3 = Tod(data1, mask=mask)
 
     for x in (data1, data2, data3):
         yield func, x
