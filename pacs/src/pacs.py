@@ -414,13 +414,6 @@ class PacsBase(Observation):
 
         return data.T
 
-    def get_map_header(self, resolution=None, downsampling=False):
-        if not downsampling:
-            print 'get_map_header: downsampling=False is not implemented.'
-        return Observation.get_map_header(self, resolution=resolution,
-                                          downsampling=downsampling)
-    get_map_header.__doc__ = Observation.get_map_header.__doc__
-    
     def get_pointing_matrix(self, header, npixels_per_sample=0, method=None,
                             section=None, downsampling=False, **keywords):
         """
