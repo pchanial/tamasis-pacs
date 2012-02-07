@@ -484,8 +484,8 @@ class PointingMatrix(np.ndarray):
         self.info = getattr(obj, 'info', None)
 
     def __getattr__(self, name):
-        if name in self.dtype.names:
-            return self[name]
+        if self.dtype.names is not None and name in self.dtype.names:
+            return self[name].view(np.ndarray)
         return super(PointingMatrix, self).__getattribute__(name)
 
     @classmethod
