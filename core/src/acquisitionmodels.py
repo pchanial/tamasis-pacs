@@ -553,7 +553,7 @@ class ProjectionOperator(Operator):
     def __new__(cls, input=None, method=None, header=None, resolution=None,
                 npixels_per_sample=0, units=None, derived_units=None,
                 downsampling=False, packed=False, shapein=None, shapeout=None,
-                commin=None, commout=None, **keywords):
+                commin=MPI.COMM_WORLD, commout=MPI.COMM_WORLD, **keywords):
 
         # check if there is only one pointing matrix
         isobservation = hasattr(input, 'get_pointing_matrix')
@@ -570,11 +570,17 @@ class ProjectionOperator(Operator):
                                 'ence of).')
             nmatrices = len(input)
 
-        if nmatrices == 1:
+        ismapdistributed = commin is not None and commin.size > 1
+        istoddistributed = commout is not None and commout.size > 1
+
+        # the output class will be a ProjectionOperator
+        if nmatrices == 1 and not ismapdistributed and not istoddistributed \
+           and not packed:
             instance = Operator.__new__(cls)
             return instance
 
-        # the input has multiple pointing matrices
+        # the input has multiple pointing matrices or will be multiplied by an
+        # operator
         if isobservation:
             if header is None:
                 if not hasattr(input, 'get_map_header'):
@@ -602,34 +608,34 @@ class ProjectionOperator(Operator):
         if isobservation:
             input = input.get_pointing_matrix(header, npixels_per_sample,
                         method=method, downsampling=downsampling)
+        if nmatrices == 1:
+            input = (input,)
+
         operands = [ProjectionOperator(p, packed=False, shapein=shapein,
-                                       **keywords) for p in input]
+                    commin=None, commout=None, **keywords) for p in input]
         result = BlockColumnOperator(operands, axisout=-1)
 
-        # get the global mask
-        def get_mask(output=None):
-            if output is None:
-                #FIXME shapein_global = collect_shape(shapein)
-                shapein_global = shapein
-                output = Map.ones(shapein_global, dtype=np.bool8, header=header)
-            for p in result.operands:
-                p.get_mask(output)
-            return output
-        result.header = header
-        result.get_mask = get_mask
+        if nmatrices > 1:
+            # get the global mask
+            def get_mask(output=None):
+                if output is None:
+                    #FIXME shapein_global = collect_shape(shapein)
+                    shapein_global = shapein
+                    output = Map.ones(shapein_global, dtype=np.bool8,
+                                      header=header)
+                for p in result.operands:
+                    p.get_mask(output)
+                return output
+            result.header = header
+            result.get_mask = get_mask
 
-        # handle distributed input and output
-        cls.distribute(result, commin, commout, packed)
-
-        return result
+        # handle packed or distributed input and output
+        return cls.distribute(result, commin, commout, packed)
 
     def __init__(self, input, method=None, header=None, resolution=None,
                  npixels_per_sample=0, units=None, derived_units=None,
-                 downsampling=False, commin=None, commout=None,
-                 packed=False, shapein=None, shapeout=None, **keywords):
-
-        commin = commin or MPI.COMM_WORLD
-        commout = commout or MPI.COMM_WORLD
+                 downsampling=False, packed=False, shapein=None, shapeout=None,
+                 commin=MPI.COMM_WORLD, commout=MPI.COMM_WORLD, **keywords):
 
         if hasattr(input, 'get_pointing_matrix'):
             if header is None:
@@ -732,9 +738,6 @@ class ProjectionOperator(Operator):
         self.unit = unit
         self.duout, self.duin = derived_units
 
-        # handle distributed input and output
-        self.distribute(self, commin, commout, packed)
-
     @staticmethod
     def distribute(self, commin, commout, packed, **keywords):
 
@@ -742,7 +745,7 @@ class ProjectionOperator(Operator):
         istoddistributed = commout is not None and commout.size > 1
 
         if not ismapdistributed and not istoddistributed and not packed:
-            return
+            return self
 
         if packed or ismapdistributed:
             mask = self.get_mask()
@@ -765,13 +768,15 @@ class ProjectionOperator(Operator):
                 self *= PackOperator(mask)
                 self.operands[0].validatein(tointtuple(shapein))
 
-        if istoddistributed and not ismapdistributed:
+        else:
             self *= DistributionIdentityOperator(commout=self.commout)
 
         s = self.operands[0]
         self.header = s.header
         self.ndetectors = s.ndetectors
         self.npixels_per_sample = s.npixels_per_sample
+
+        return self
 
     def direct(self, input, output):
         if not output.flags.contiguous:
@@ -803,7 +808,8 @@ class ProjectionOperator(Operator):
         shapein_global = self.shapein
         #XXX FIXME: shapein_global = collect_shape(self.shapein)
         if output is None:
-            output = Map.ones(shapein_global, dtype=np.bool8, header=self.header)
+            output = Map.ones(shapein_global, dtype=np.bool8,
+                              header=self.header)
         elif output.dtype != bool or output.shape != shapein_global:
             raise ValueError('The argument to store the mask is incompatible.')
         tmf.pointing_matrix_mask(self._matrix, output.view(np.int8).T, 
