@@ -20,14 +20,16 @@ def test_filter_polynomial():
         assert o_.shape == y_.shape
         yield func, o_
         
+    for y_, m_ in zip((y, [y,y], [[y],[y]]), (m, [m,m], [[m],[m]])):
+        y_ = np.asarray(y_)
+        filter_polynomial(y_, 1, m_, out=y_)
+        yield func, y_
+        
     y2 = np.concatenate([y,y])
     m2 = np.concatenate([m,m])
     o2 = filter_polynomial(y2, 1, m2, partition=(4,4))
     assert o2.shape == y2.shape
     yield func, o2
-
-    #interpolate_linear(y2, m2, partition=(4,4), out=y2)
-    #yield func, y2
 
 def test_interpolate_linear():
     y = [1.,0,3,4]

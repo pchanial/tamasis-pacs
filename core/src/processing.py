@@ -107,14 +107,14 @@ def filter_median(tod, length=10, mask=None, partition=None):
 #-------------------------------------------------------------------------------
 
 
-def filter_polynomial(tod, degree, mask=None, partition=None):
+def filter_polynomial(x, degree, mask=None, partition=None, out=None):
     """
     Filter by subtracting a fitted polynomial of arbitrary degree along
     the last dimension.
 
     Parameters
     ----------
-    tod : array_like
+    x : array_like
         The input array from which a polynomial fit will be removed.
         If it contains a mask attribute of the same shape, the masked values
         are not used to compute the polynomial fit. A True value in the mask
@@ -122,7 +122,7 @@ def filter_polynomial(tod, degree, mask=None, partition=None):
     degree : int
         The polynomial degree.
     mask : array_like, boolean
-        Mask array compatible with argument tod. If supplied, it overrides
+        Mask array compatible with argument x. If supplied, it overrides
         the first argument mask.
     partition : sequence of int
         Partition along the last dimension, to perform filtering along
@@ -137,37 +137,38 @@ def filter_polynomial(tod, degree, mask=None, partition=None):
     array([ 1.03496984,  1.0357345 ])
 
     """
-    tod = np.asanyarray(tod)
-    filtered = tod.copy()
-    filtered_ = filtered.reshape((-1,tod.shape[-1]))
+    x = np.asanyarray(x)
+    if out is None:
+        out = x.copy()
+    out_ = out.reshape((-1,x.shape[-1]))
     if mask is None:
-        mask = getattr(tod, 'mask', None)
+        mask = getattr(x, 'mask', None)
     if mask is not None:
         mask = np.asarray(mask)
-        mask = mask.reshape((-1,tod.shape[-1]))
+        mask = mask.reshape((-1,x.shape[-1]))
     if partition is None:
-        partition = (tod.shape[-1],)
-    elif np.sum(partition) != tod.shape[-1]:
+        partition = (x.shape[-1],)
+    elif np.sum(partition) != x.shape[-1]:
         raise ValueError('The partition is not compatible with the input.')
 
     dest = 0
     for n in partition:
-        arange = np.arange(n, dtype=tod.dtype)
-        for i in xrange(filtered_.shape[0]):
+        arange = np.arange(n, dtype=x.dtype)
+        for i in xrange(out_.shape[0]):
             if mask is None:
                 x = arange
-                y = filtered_[i,dest:dest+n]
+                y = out_[i,dest:dest+n]
             else:
                 m = ~mask[i,dest:dest+n]
                 x = arange[m]
                 if x.size == 0:
                     continue
-                y = filtered_[i,dest:dest+n][m]
+                y = out_[i,dest:dest+n][m]
             slope = scipy.polyfit(x, y, deg=degree)
-            filtered_[i,dest:dest+n] -= scipy.polyval(slope, arange)
+            out_[i,dest:dest+n] -= scipy.polyval(slope, arange)
         dest += n
 
-    return filtered
+    return out
 
 
 #-------------------------------------------------------------------------------
