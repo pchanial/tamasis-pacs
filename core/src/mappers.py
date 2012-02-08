@@ -6,7 +6,6 @@ from __future__ import division
 import cProfile
 import numpy as np
 import os
-import tamasisfortran as tmf
 import time
 
 from . import MPI
@@ -196,7 +195,7 @@ def mapper_nl(tod, model, unpacking=None, priors=[], hypers=[], norms=[],
         comms = [var.comm_tod] + npriors * [var.comm_map]
 
     if isinstance(M, DiagonalOperator):
-        remove_nonfinite(M.data, out=M.data)
+        filter_nonfinite(M.data, out=M.data)
 
     hypers = np.asarray(hypers, dtype=var.FLOAT_DTYPE)
     ntods = int(np.sum(~tod.mask)) if getattr(tod, 'mask', None) is not None \
@@ -299,7 +298,7 @@ def _solver(A, b, tod, model, invntt, priors=[], hyper=0, x0=None, tol=1.e-5,
     npriors = len(priors)
 
     if isinstance(M, DiagonalOperator):
-        remove_nonfinite(M.data, out=M.data)
+        filter_nonfinite(M.data, out=M.data)
 
     if unpacking is None:
         unpacking = ReshapeOperator(b.size, b.shape)
