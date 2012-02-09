@@ -265,6 +265,7 @@ end program test
 #
 
 def build(bld):
+    global libraries
 
     # Build static libraries libtamasis*.a
     for subdir in subdirs:
@@ -282,7 +283,7 @@ def build(bld):
     target = 'tamasisfortran.so'
     source = [bld.srcnode.find_node('%s/src/tamasisfortran_%s.f90' % (s,s)) for s in subdirs]
     additional_interfaces = ['operators', 'pointing', 'processing']
-    if 'MPI' in libraries:
+    if bld.env.HAVE_MPI:
         additional_interfaces += [ 'mpi' ]
     for a in additional_interfaces:
         source += bld.srcnode.ant_glob('core/src/tamasisfortran_core_{0}.f90' \
@@ -290,7 +291,7 @@ def build(bld):
 
     #XXX this should be a Task...
     cmd = ''
-    if 'MPI' in libraries:
+    if bld.env.HAVE_MPI:
         cmd += 'OMPI_FC=${OMPI_FC} '
     cmd = '${F2PY} --fcompiler=${F2PYFCOMPILER} --f90exec=${FC}'
     cmd += ' --f90flags="${FCFLAGS}'
@@ -337,7 +338,7 @@ def build(bld):
     bld.install_files('${LIBDIR}/jython/tamasishcss', bld.srcnode.ant_glob('pacs/hcss/tamasishcss/*py'))
 
 
-        
+
 #
 # test, test-fortran, test-python
 #
