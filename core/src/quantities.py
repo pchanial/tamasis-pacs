@@ -221,7 +221,8 @@ class Quantity(np.ndarray):
 
     def __new__(cls, data, unit=None, derived_units=None, dtype=None, copy=True, order='C', subok=False, ndmin=0):
 
-        if dtype is None:
+        data = np.asanyarray(data)
+        if dtype is None and data.dtype.kind in ('b', 'i'):
             dtype = var.get_default_dtype(data)
 
         # get a new Quantity instance (or a subclass if subok is True)

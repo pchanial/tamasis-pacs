@@ -1,7 +1,6 @@
 from __future__ import division
 
 import numpy as np
-import tamasis
 from nose.tools import assert_equal, assert_raises
 from numpy.testing import assert_almost_equal, assert_array_equal
 from pyoperators.utils import assert_eq, assert_is, assert_is_instance
@@ -161,7 +160,7 @@ def test_dtype():
     assert_is(Quantity(1., dtype=np.complex128).dtype, np.dtype(np.complex128))
     assert_is(Quantity(1., dtype=np.complex256).dtype, np.dtype(np.complex256))
     assert_is(Quantity(np.array(complex(1,0))).dtype, COMPLEX_DTYPE)
-    assert_is(Quantity(np.array(np.complex64(1.))).dtype, COMPLEX_DTYPE)
+    assert_is(Quantity(np.array(np.complex64(1.))).dtype, np.dtype(np.complex64))
     assert_is(Quantity(np.array(np.complex128(1.))).dtype, COMPLEX_DTYPE)
 
 def test_derived_units1():
