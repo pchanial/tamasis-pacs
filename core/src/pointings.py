@@ -3,7 +3,6 @@ from __future__ import division
 import kapteyn
 import numpy as np
 from matplotlib import pyplot
-from pyoperators.utils import isscalar
 
 from . import var
 from .datatypes import FitsArray, Map
