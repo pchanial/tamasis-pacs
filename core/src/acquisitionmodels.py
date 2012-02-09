@@ -825,6 +825,38 @@ class ProjectionOperator(Operator):
         return tmf.pointing_matrix_ptp(self._matrix, self.npixels_per_sample,
             self.nsamples_tot, self.ndetectors, npixels).T
 
+    def intersects(self, fitscoords, axis=None, f=None):
+        """
+        Return True if a map pixel is seen by the pointing matrix.
+
+        """
+
+        naxes = self.header['NAXIS']
+        axes = [1] + [self.header['NAXIS'+str(i+1)] for i in range(naxes-1)]
+        index = np.array(fitscoords) - 1
+        index = int(np.sum(index * np.cumproduct(axes)))
+
+        shape = self.matrix.shape
+        if f is not None:
+            out = f(self._matrix, index, shape[-1], shape[-2], shape[-3])
+        elif axis is None:
+            out = tmf.operators.pmatrix_intersects(self._matrix, index,
+                      shape[-1], shape[-2], shape[-3])
+        elif axis == 0 or axis == -3:
+            out = tmf.operators.pmatrix_intersects_axis3(self._matrix, index,
+                      shape[-1], shape[-2], shape[-3])
+        elif axis == 1 or axis == -2:
+            out = tmf.operators.pmatrix_intersects_axis2(self._matrix, index,
+                      shape[-1], shape[-2], shape[-3])
+        else:
+            raise ValueError('Invalid axis.')
+
+        if isinstance(out, np.ndarray):
+            out = out.view(bool)
+        else:
+            out = bool(out)
+        return out
+
 
 @real
 @linear
