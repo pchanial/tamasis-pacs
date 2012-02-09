@@ -670,6 +670,11 @@ contains
 
         call ft_close(unit, status)
 
+        ! flag abnormal values
+        where (this%p%ra == 0 .and. this%p%dec == 0)
+            this%p%invalid = .true.
+        end where
+
     end subroutine set_astrometry
 
 
