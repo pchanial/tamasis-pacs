@@ -192,17 +192,21 @@ def filter_nonfinite(x, out=None):
     x = np.asanyarray(x)
     
     if out is None:
-        cls = ndarraywrap if type(x) is np.ndarray else type(x)
-        out = np.empty(x.shape).view(cls)
-        if out.__array_finalize__ is not None:
-            out.__array_finalize__(x)
-        if hasattr(out, 'mask') and out.mask is not None:
-            out.mask = out.mask.copy()
+        out = np.empty(x.shape)
+        if type(x) is not np.ndarray:
+            out = out.view(type(x))
+            if out.__array_finalize__ is not None:
+                out.__array_finalize__(x)
+            if hasattr(x, 'mask') and isinstance(x.mask, np.ndarray):
+                out.mask = x.mask.copy()
     else:
         if not isinstance(out, np.ndarray):
             raise TypeError('The output argument is not an ndarray.')
-        
-    mask = getattr(out, 'mask', np.zeros(x.shape, bool))
+
+    mask = getattr(out, 'mask', None)    
+    if mask is not None and mask.shape != x.shape:
+        raise ValueError("The mask shape '{0}' is incompatible with that of the"
+                         " input '{1}'.".format(mask.shape, x.shape))
 
     if x.__array_interface__['data'][0] == out.__array_interface__['data'][0]:
         if mask is None:

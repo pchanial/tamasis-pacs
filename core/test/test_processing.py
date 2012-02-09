@@ -64,6 +64,9 @@ def test_interpolate_linear():
     
 def test_filter_nonfinite():
 
+    class ndarraywrap(np.ndarray):
+        pass
+
     def func(x):
         y = filter_nonfinite(x)
         y_expected = np.asanyarray(x).copy()
@@ -79,17 +82,19 @@ def test_filter_nonfinite():
 
     mask = [False,False,False,True,False,True]
     data1 = [1,np.nan,5,np.inf,-np.inf,8]
-    data2 = Tod(data1)
-    data3 = Tod(data1, mask=mask)
+    data2 = np.array(data1).view(ndarraywrap); data2.mask = np.array(mask)
+    data3 = Tod(data1)
+    data4 = Tod(data1, mask=mask)
 
-    for x in (data1, data2, data3):
+    for x in (data1, data2, data3, data4):
         yield func, x
 
     mask = [[False,False,False],[True,False,True]]
     data1 = [[1,np.nan,5], [np.inf,-np.inf,8]]
-    data2 = Tod(data1)
-    data3 = Tod(data1, mask=mask)
+    data2 = np.array(data1).view(ndarraywrap); data2.mask = np.array(mask)
+    data3 = Tod(data1)
+    data4 = Tod(data1, mask=mask)
 
-    for x in (data1, data2, data3):
+    for x in (data1, data2, data3, data4):
         yield func, x
 
