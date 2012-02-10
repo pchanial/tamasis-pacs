@@ -129,11 +129,16 @@ def plot_tod(tod, mask=None, **kw):
     tod = tod.view().reshape((ndetectors, -1))
     if mask is not None:
         mask = mask.view().reshape((ndetectors, -1))
+        if np.all(mask):
+            print('There is no valid sample.')
+            return
+
     for idetector in range(ndetectors):
         pyplot.plot(tod[idetector], **kw)
         if mask is not None:
             index=np.where(mask[idetector])
             pyplot.plot(index, tod[idetector,index],'ro')
+
     unit = getattr(tod, 'unit', '')
     if unit:
         pyplot.ylabel('Signal [' + unit + ']')
