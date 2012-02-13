@@ -200,13 +200,19 @@ class Observation(object):
                 header = self.pointing.get_map_header(naxis=1)
         annim = self.pointing[self.slice[0].start:self.slice[0].stop].plot(
             map=map, header=header, new_figure=new_figure, **keywords)
+
+        mask = ~self.pointing.removed & ~self.pointing.masked
+        if np.max(mask) == 0:
+            return
+        
         for s in self.slice[1:]:
             self.pointing[s.start:s.stop].plot(header=header, new_figure=False,
                                                **keywords)
         if detectors:
             d = self.instrument.detector
-            coords = d.corner if 'corner'  in d.dtype.names else d.center
-            xy = self.instrument.instrument2xy(coords, self.pointing[0], header)
+            coords = d.corner if 'corner' in d.dtype.names else d.center
+            first = self.pointing[mask.searchsorted(True)]
+            xy = self.instrument.instrument2xy(coords, first, header)
             if 'corner' in d.dtype.names:
                 Instrument.plot_grid(xy, update_axes=map is None)
             else:
