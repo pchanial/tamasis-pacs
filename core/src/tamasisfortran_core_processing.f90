@@ -8,14 +8,20 @@ contains
 
     subroutine filter_nonfinite_inplace(signal, nsamples)
 
-        integer, intent(in)    :: nsamples
+        integer*8, intent(in)  :: nsamples
         real(p), intent(inout) :: signal(nsamples)
 
-        !$omp parallel workshare
-        where (signal /= signal .or. signal == mInf .or. signal == pInf)
-            signal = 0._p
-        end where
-        !$omp end parallel workshare
+        integer*8              :: i
+        real(p)                :: value
+
+        !$omp parallel do private(value)
+        do i = 1, nsamples
+            value = signal(i)
+            if (value /= value .or. value == mInf .or. value == pInf) then
+                signal(i) = 0._p
+            end if
+        end do
+        !$omp end parallel do
 
     end subroutine filter_nonfinite_inplace
 
@@ -25,17 +31,23 @@ contains
 
     subroutine filter_nonfinite_outplace(signal, output, nsamples)
 
-        integer, intent(in)      :: nsamples
+        integer*8, intent(in)    :: nsamples
         real(p), intent(in)      :: signal(nsamples)
         real(p), intent(inout)   :: output(nsamples)
 
-        !$omp parallel workshare
-        where (signal /= signal .or. signal == mInf .or. signal == pInf)
-            output = 0._p
-        else where
-            output = signal
-        end where
-        !$omp end parallel workshare
+        integer*8                :: i
+        real(p)                  :: value
+
+        !$omp parallel do private(value)
+        do i = 1, nsamples
+            value = signal(i)
+            if (value /= value .or. value == mInf .or. value == pInf) then
+                output(i) = 0._p
+            else
+                output(i) = value
+            end if
+        end do
+        !$omp end parallel do
 
     end subroutine filter_nonfinite_outplace
 
@@ -45,16 +57,22 @@ contains
 
     subroutine filter_nonfinite_mask_inplace(signal, mask, nsamples)
 
-        integer, intent(in)      :: nsamples
+        integer*8, intent(in)    :: nsamples
         real(p), intent(inout)   :: signal(nsamples)
         logical*1, intent(inout) :: mask(nsamples)
 
-        !$omp parallel workshare
-        where (signal /= signal .or. signal == mInf .or. signal == pInf)
-            signal = 0._p
-            mask   = .true.
-        end where
-        !$omp end parallel workshare
+        integer*8                :: i
+        real(p)                  :: value
+
+        !$omp parallel do private(value)
+        do i = 1, nsamples
+            value = signal(i)
+            if (value /= value .or. value == mInf .or. value == pInf) then
+                signal(i) = 0._p
+                mask(i)   = .true.
+            end if
+        end do
+        !$omp end parallel do
 
     end subroutine filter_nonfinite_mask_inplace
 
@@ -64,19 +82,25 @@ contains
 
     subroutine filter_nonfinite_mask_outplace(signal, output, mask, nsamples)
 
-        integer, intent(in)      :: nsamples
+        integer*8, intent(in)    :: nsamples
         real(p), intent(in)      :: signal(nsamples)
         real(p), intent(inout)   :: output(nsamples)
         logical*1, intent(inout) :: mask(nsamples)
 
-        !$omp parallel workshare
-        where (signal /= signal .or. signal == mInf .or. signal == pInf)
-            output = 0._p
-            mask   = .true.
-        else where
-            output = signal
-        end where
-        !$omp end parallel workshare
+        integer*8                :: i
+        real(p)                  :: value
+
+        !$omp parallel do private(value)
+        do i = 1, nsamples
+            value = signal(i)
+            if (value /= value .or. value == mInf .or. value == pInf) then
+                output(i) = 0._p
+                mask(i)   = .true.
+            else
+                output(i) = value
+            end if
+        end do
+        !$omp end parallel do
 
     end subroutine filter_nonfinite_mask_outplace
 
