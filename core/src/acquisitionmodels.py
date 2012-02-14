@@ -758,7 +758,7 @@ class ProjectionOperator(Operator):
                   self.operands
             for op in ops:
                 tmf.pointing_matrix_pack(self._matrix, mask.view(np.int8).T,
-                    self.npixels_per_sample, self.nsamples, self.ndetectors)
+                    self.npixels_per_sample, self.nsamples * self.ndetectors)
                 Operator.__init__(op, shapein=shapein, shapeout=self.shapeout,
                                   attrin=op.attrin, attrout=op.attrout,
                                   classin=op.classin, classout=op.classout,
@@ -817,7 +817,7 @@ class ProjectionOperator(Operator):
         elif output.dtype != bool or output.shape != shapein_global:
             raise ValueError('The argument to store the mask is incompatible.')
         tmf.pointing_matrix_mask(self._matrix, output.view(np.int8).T, 
-            self.npixels_per_sample, self.nsamples, self.ndetectors)
+            self.npixels_per_sample, self.nsamples * self.ndetectors)
         return output
 
     def get_ptp(self):

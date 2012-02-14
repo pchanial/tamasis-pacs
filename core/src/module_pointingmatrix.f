@@ -187,23 +187,22 @@ contains
 
     subroutine pmatrix_mask(pmatrix, mask)
         ! True means: not observed
-        type(pointingelement), intent(in) :: pmatrix(:,:,:)
+        type(pointingelement), intent(in) :: pmatrix(:,:)
         logical(1), intent(out)           :: mask(0:)
-        integer                           :: idetector, isample, ipixel, npixels, nsamples, ndetectors, pixel
+
+        integer*8 :: isample, ipixel, npixels, nsamples
+        integer*4 :: pixel
 
         npixels    = size(pmatrix, 1)
         nsamples   = size(pmatrix, 2)
-        ndetectors = size(pmatrix, 3)
 
         !$omp parallel do private(pixel)
-        do idetector = 1, ndetectors
-            do isample = 1, nsamples
-                do ipixel = 1, npixels
-                    pixel = pmatrix(ipixel,isample,idetector)%pixel
-                    if (pixel == -1) exit
-                    if (pmatrix(ipixel,isample,idetector)%weight <= 0) cycle
-                    mask(pixel) = .false.
-                end do
+        do isample = 1, nsamples
+            do ipixel = 1, npixels
+                pixel = pmatrix(ipixel,isample)%pixel
+                if (pixel == -1) exit
+                if (pmatrix(ipixel,isample)%weight <= 0) cycle
+                mask(pixel) = .false.
             end do
         end do
         !$omp end parallel do
@@ -217,11 +216,12 @@ contains
     subroutine pmatrix_pack(pmatrix, mask)
         ! True means: not observed
 
-        type(pointingelement), intent(inout) :: pmatrix(:,:,:)
+        type(pointingelement), intent(inout) :: pmatrix(:,:)
         logical(1), intent(in)               :: mask(0:)
 
-        integer :: table(lbound(mask,1):ubound(mask,1))
-        integer :: idetector, isample, ipixel, ipacked, npixels, nsamples, ndetectors, pixel
+        integer   :: table(lbound(mask,1):ubound(mask,1))
+        integer*8 :: isample, ipixel, ipacked, npixels, nsamples
+        integer*4 :: pixel
 
         ! fill a table which contains the packed indices of the non-masked pixels
         ipacked = 0
@@ -233,17 +233,21 @@ contains
 
         npixels    = size(pmatrix, 1)
         nsamples   = size(pmatrix, 2)
-        ndetectors = size(pmatrix, 3)
 
-        !$omp parallel do private(pixel)
-        do idetector = 1, ndetectors
-            do isample = 1, nsamples
-                do ipixel = 1, npixels
-                    pixel = pmatrix(ipixel,isample,idetector)%pixel
-                    if (pixel == -1) exit
-                    if (mask(pixel)) cycle
-                    pmatrix(ipixel,isample,idetector)%pixel = table(pixel)
-                end do
+        !$omp parallel do private(pixel, ipixel)
+        do isample = 1, nsamples
+            ipixel = 1
+            do while (ipixel <= npixels)
+                pixel = pmatrix(ipixel,isample)%pixel
+                if (pixel == -1) exit
+                if (pmatrix(ipixel,isample)%weight <= 0 .or. mask(pixel)) then
+                    pmatrix(ipixel:npixels-1,isample) = pmatrix(ipixel+1:npixels,isample)
+                    pmatrix(npixels,isample)%pixel = -1
+                    pmatrix(npixels,isample)%weight = 0
+                    cycle
+                end if
+                pmatrix(ipixel,isample)%pixel = table(pixel)
+                ipixel = ipixel + 1
             end do
         end do
         !$omp end parallel do
