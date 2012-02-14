@@ -21,7 +21,8 @@ def test1():
     # creation of the simulation
     scan = PacsObservation.create_scan((header['CRVAL1'], header['CRVAL2']),
                instrument_angle=0., length=60, nlegs=1, angle=20.)
-    simul = PacsSimulation(scan, 'red', policy_bad_detector='keep')
+    simul = PacsSimulation(scan, 'red', policy_bad_detector='keep',
+                           policy_other='keep')
 
     # build the acquisition model
     model = CompressionAverageOperator(simul.slice.compression_factor) * \
@@ -34,7 +35,8 @@ def test1():
 
     try:
         simul.save(filename, tod)
-        simul2 = PacsObservation(filename, policy_bad_detector='keep')
+        simul2 = PacsObservation(filename, policy_bad_detector='keep',
+                                 policy_other='keep')
         status2 = simul2.status
         tod2 = simul2.get_tod(raw=True)
     finally:

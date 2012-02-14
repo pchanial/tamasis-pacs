@@ -579,15 +579,10 @@ contains
         do itarget = 1, this%nsamples
             if (inscan(itarget)) exit
         end do
-        if (itarget <= this%nsamples) then
-            ! backward search of the first non turnaround sample (but don't go back too much, we would include too much of the slew)
-            do isample = itarget-1, max(itarget-201,1), -1
-                if (.not. turnaround(isample)) exit
-            end do
-            ! mask as off-scan all samples before the 0x4000 block that precedes the first inscan block
-            turnaround(1:isample) = .false.
-        end if
-        
+
+        ! flag as 'other' all samples before the first inscan sample
+        turnaround(1:itarget-1) = .false.
+
         ! flag as 'other' the masklength_calblock samples after each calibration blocks
         masklength_calblock = ceiling(masktime_calblock / this%sampling_interval)
         isample = 0

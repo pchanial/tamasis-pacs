@@ -598,9 +598,13 @@ class PacsBase(Observation):
                 raise ValueError("Input compression_factor must be 1, 4 or 8.")
             sampling_period = PacsBase.SAMPLING_PERIOD * compression_factor
 
-        return Observation.create_scan(center, length, step, sampling_period,
+        scan = Observation.create_scan(center, length, step, sampling_period,
             speed, acceleration, nlegs, angle, instrument_angle, cross_scan,
             PacsBase.POINTING_DTYPE)
+
+        first = (scan.info == scan.INSCAN).nonzero()[0][0]
+        scan.info[:first] = scan.OTHER
+        return scan
 
     def __str__(self):
 
