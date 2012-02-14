@@ -16,9 +16,11 @@ def test():
     # all observation
     obs = PacsObservation(data_dir+'frames_blue.fits', reject_bad_line=False)
     obs.pointing.chop[:] = 0
+    header = obs.get_map_header()
 
     # get mask
-    proj = ProjectionOperator(obs, npixels_per_sample=6, downsampling=True)
+    proj = ProjectionOperator(obs, npixels_per_sample=6, downsampling=True,
+                              header=header)
     o = Tod.ones(proj.shapeout)
     nocoverage = mapper_naive(o, proj).coverage == 0
     assert all_eq(nocoverage, proj.get_mask())
@@ -26,8 +28,11 @@ def test():
 
     # packed projection
     proj2 = ProjectionOperator(obs, npixels_per_sample=6, packed=True,
-                               downsampling=True)
-    assert all_eq(proj.T(tod), proj2.T(tod), 1.e-12)
+                               downsampling=True, header=header)
+    m1 = proj.matrix
+    m2 = proj2.operands[0].matrix
+    assert all_eq(m1.value, m2.value)
+    assert all_eq(proj.T(tod), proj2.T(tod), 1.e-11)
 
     filename = 'obs-' + uuid + '.fits'
     obs.save(filename, tod)
