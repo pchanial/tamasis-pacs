@@ -4,6 +4,7 @@ import os
 import pickle
 import tamasis
 from numpy.testing import assert_array_equal
+from pyoperators.utils import assert_is_none
 from tamasis import Quantity, FitsArray, Map, Tod, create_fitsheader
 from tamasis.numpyutils import all_eq, get_attributes
 from uuid import uuid1
@@ -168,3 +169,46 @@ def test_pickling():
         assert False
     for o in objs[1:]:
         yield func2, o
+
+def test_ndarray_funcs():
+    data = [[1,2,3,4],[5,6,7,8]]
+    mask = [[True,False,False,False],[False,True,True,False]]
+    funcs = np.min, np.max, np.sum, np.mean, np.ptp, np.round, np.std, np.var
+    axes = (None, 0, 1)
+
+    def f(cls, func, axis, m):
+        keywords_array = {'unit':'u'}
+        if cls is Tod:
+            keywords_array['mask'] = m
+        array = cls(data, **keywords_array)
+        keywords_func = {'axis':axis} if func is not np.round else {}
+        result = func(array, **keywords_func)
+        if cls is Tod:
+            ref = func(np.ma.MaskedArray(array.magnitude,
+                       mask=m), **keywords_func)
+            if not isinstance(ref, np.ndarray):
+                ref = np.ma.MaskedArray(ref)
+        else:
+            ref = func(array.magnitude, **keywords_func)
+            if not isinstance(ref, np.ndarray):
+                ref = np.array(ref)
+        assert all_eq(result, ref)
+        if func is np.var:
+            assert result._unit == {'u':2}
+        else:
+            assert result._unit == {'u':1}
+        if cls is Map:
+            assert_is_none(result.coverage)
+            assert_is_none(result.error)
+        elif cls is Tod:
+            assert all_eq(result.mask, ref.mask)
+
+    for cls in (Quantity, FitsArray, Map, Tod):
+        if cls is Tod:
+            masks = None, mask
+        else:
+            masks = None,
+        for func in funcs:
+            for axis in (None,) if func is np.round else axes:
+                for m in masks:
+                    yield f, cls, func, axis, m

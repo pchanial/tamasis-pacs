@@ -655,36 +655,47 @@ ities of different units may have changed operands to common unit '" + \
                         copy=False)
 
     def min(self, *args, **kw):
-        return _wrap_func(np.min, self, self._unit, *args, **kw)
+        return self._wrap_func(np.min, self.unit, *args, **kw)
     min.__doc__ = np.ndarray.min.__doc__
 
     def max(self, *args, **kw):
-        return _wrap_func(np.max, self, self._unit, *args, **kw)
+        return self._wrap_func(np.max, self.unit, *args, **kw)
     max.__doc__ = np.ndarray.max.__doc__
 
     def sum(self, *args, **kw):
-        return _wrap_func(np.sum, self, self._unit, *args, **kw)
+        return self._wrap_func(np.sum, self.unit, *args, **kw)
     sum.__doc__ = np.ndarray.sum.__doc__
 
     def mean(self, *args, **kw):
-        return _wrap_func(np.mean, self, self._unit, *args, **kw)
+        return self._wrap_func(np.mean, self.unit, *args, **kw)
     mean.__doc__ = np.ndarray.mean.__doc__
 
     def ptp(self, *args, **kw):
-        return _wrap_func(np.ptp, self, self._unit, *args, **kw)
+        return self._wrap_func(np.ptp, self.unit, *args, **kw)
     ptp.__doc__ = np.ndarray.ptp.__doc__
 
     def round(self, *args, **kw):
-        return _wrap_func(np.round, self, self._unit, *args, **kw)
+        return self._wrap_func(np.round, self.unit, *args, **kw)
     round.__doc__ = np.ndarray.round.__doc__
 
     def std(self, *args, **kw):
-        return _wrap_func(np.std, self, self._unit, *args, **kw)
+        return self._wrap_func(np.std, self.unit, *args, **kw)
     std.__doc__ = np.ndarray.std.__doc__
 
     def var(self, *args, **kw):
-        return _wrap_func(np.var, self, _power_unit(self._unit, 2), *args, **kw)
+        return self._wrap_func(np.var, _power_unit(self._unit, 2),
+                               *args, **kw)
     var.__doc__ = np.ndarray.var.__doc__
+
+    def _wrap_func(self, func, unit, *args, **kw):
+        result = func(self.magnitude, *args, **kw).view(type(self))
+        if not isinstance(result, np.ndarray):
+            return type(self)(result, unit=unit, derived_units= \
+                              self.derived_units)
+        result.__array_finalize__(self)
+        if unit is not None:
+            result.unit = unit
+        return result
 
 def _check_du(input, key, val, derived_units):
     if len(derived_units) == 0:
@@ -859,11 +870,6 @@ class Unit(dict):
                 setattr(self, k, Quantity(1, k))
 
 units = Unit()
-
-def _wrap_func(func, array, unit, *args, **kw):
-    result = func(array.magnitude, *args, **kw)
-    result = Quantity(result, unit, array.derived_units, copy=False)
-    return result
 
 
 

@@ -665,6 +665,15 @@ class Map(FitsArray):
         if self.error is not None:
             write_fits(filename, self.error, None, True, 'Error', comm)
 
+    def _wrap_func(self, func, unit, *args, **kw):
+        result = super(Map, self)._wrap_func(func, unit, *args, **kw)
+        if not isinstance(result, np.ndarray):
+            return type(self)(result, unit=unit, derived_units= \
+                              self.derived_units)
+        result.coverage = None
+        result.error = None
+        return result
+
 
 #-------------------------------------------------------------------------------
 
@@ -868,3 +877,15 @@ class Tod(FitsArray):
         if self.mask is not None:
             mask = self.mask.view('uint8')
             write_fits(filename, mask, None, True, 'Mask', comm)
+
+    def _wrap_func(self, func, unit, *args, **kw):
+        self_ma = np.ma.MaskedArray(self.magnitude, mask=self.mask, copy=False)
+        output = func(self_ma, *args, **kw)
+        if not isinstance(output, np.ndarray):
+            return type(self)(output, unit=unit, derived_units= \
+                              self.derived_units)
+        result = output.view(type(self))
+        result.__array_finalize__(self)
+        result.mask = output.mask if output.mask is not np.ma.nomask else None
+        result.unit = unit
+        return result
