@@ -48,7 +48,11 @@ def mapper_naive(tod, model, unit=None, local_mask=None):
     """
 
     # apply mask
-    tod = _validate_tod(tod)
+    if hasattr(tod, 'mask') and tod.mask is not None:
+        mask = MaskOperator(tod.mask)
+    else:
+        mask = IdentityOperator()
+    tod = mask(tod)
 
     # get tod units
     if not hasattr(tod, '_unit') or len(tod._unit) == 0:
@@ -83,7 +87,8 @@ def mapper_naive(tod, model, unit=None, local_mask=None):
 
     # compute model.T(tod)/model.T(one)
     mymap = model.T(tod.magnitude)
-    tod[:] = 1
+    tod[...] = 1
+    mask(tod, tod)
     map_weights = model.T(tod.magnitude)
     old_settings = np.seterr(divide='ignore', invalid='ignore')
     mymap /= map_weights
