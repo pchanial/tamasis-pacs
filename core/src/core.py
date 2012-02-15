@@ -4,7 +4,7 @@
 import tamasisfortran as tmf
 from . import MPI
 import var
-from .var import VERSION as __version__
+from .var import __version__
 from .numpyutils import *
 from .linalg import *
 from .mpiutils import *

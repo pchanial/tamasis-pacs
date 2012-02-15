@@ -24,7 +24,10 @@ COMPLEX_DTYPE = {
     16 : np.dtype(np.complex256),
 }[tmf.info_nbytes_real()]
 
-VERSION = tmf.info_version().strip()
+# preprocessed by wscript
+__version__ = '@VERSION@'
+ENABLED_MPI = @HAVE_MPI@
+ENABLED_WCSLIB = @HAVE_WCSLIB@
 
 def get_default_dtype(data):
     if np.iscomplexobj(data):

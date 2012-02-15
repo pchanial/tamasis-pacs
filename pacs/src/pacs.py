@@ -1625,7 +1625,7 @@ def _write_status(obs, filename, fitskw=None):
         cc('NAXIS', 0), 
         cc('EXTEND', True, 'May contain datasets'), 
         cc('TYPE', 'HPPAVG'+band_type, 'Product Type Identification'), 
-        cc('CREATOR', 'TAMASIS v' + var.VERSION, 'Generator of this file'), 
+        cc('CREATOR', 'TAMASIS v' + var.__version__, 'Generator of this file'), 
         cc('INSTRUME', 'PACS', 'Instrument attached to this file'), 
         cc('TELESCOP', 'Herschel Space Observatory', 'Name of telescope'),
         cc('OBS_MODE', 'Scan map', 'Observation mode name'),

@@ -23,21 +23,6 @@ end subroutine test_broken_locale
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine info_version(version)
-
-    use module_tamasis, only : tamasis_version
-    implicit none
-
-    character(len=80), intent(out) :: version
-
-    version = tamasis_version
-
-end subroutine info_version
-
-
-!-----------------------------------------------------------------------------------------------------------------------------------
-
-
 subroutine info_nbytes_real(nbytes)
 
     implicit none

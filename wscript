@@ -238,11 +238,11 @@ end program test
         for f77file in f77dir.ant_glob('*inc'):
             f90file = conf.bldnode.make_node('include/'+f77file.name)
             f77_to_f90(f77file, f90file)
+        conf.define('HAVE_WCSLIB', 1)
 
     conf.env.SHAREDIR = os.path.abspath(conf.env.PYTHONDIR + '/../../../share')
     conf.define(conf.env.FC_NAME, 1)
     conf.define('TAMASIS_DIR', os.path.join(conf.env.SHAREDIR, 'tamasis'))
-    conf.define('TAMASIS_VERSION', VERSION)
     conf.define('PRECISION_REAL', int(conf.options.precision_real))
 
     # Write the file .f2py_f2cmap which maps the real or complex type parameter
@@ -311,8 +311,17 @@ def build(bld):
         target=target,
         use=libraries)
 
+    # include configuration information in Python files
+    bld(features= 'subst', # feature 'subst' overrides source/target processing
+        source='core/src/var.py.in',
+        target='core/src/var.py',
+        VERSION=VERSION, # variable to use in the substitution
+        HAVE_MPI=str(bld.env.HAVE_MPI == 1),
+        HAVE_WCSLIB=str(bld.env.HAVE_WCSLIB == 1))
+
     # Installation
-    files = bld.srcnode.ant_glob('*/src/*py')
+    files = bld.path.ant_glob('*/src/*py') + \
+            [bld.bldnode.find_or_declare('core/src/var.py')]
     pyfiles = [f for f in files if not os.access(f.abspath(), os.X_OK)]
     execfiles = [f for f in files if os.access(f.abspath(), os.X_OK)]
     bld.install_files('${PYTHONDIR}/tamasis', pyfiles + ['tamasisfortran.so'])

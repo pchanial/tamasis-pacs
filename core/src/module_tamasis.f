@@ -10,12 +10,10 @@ module module_tamasis
 
     public :: p, POLICY_KEEP, POLICY_MASK, POLICY_REMOVE
     public :: tamasis_dir  ! Tamasis data directory
-    public :: tamasis_version
     public :: info_time
 
     character(len=*), parameter :: tamasis_dir =                                                                                   &
 TAMASIS_DIR
-    character(len=*), parameter :: tamasis_version = TAMASIS_VERSION
 
 #if PRECISION_REAL == 4
     integer, parameter :: p = sp
