@@ -15,8 +15,8 @@ from pyoperators import (Operator, IdentityOperator, DiagonalOperator,
 from pyoperators.decorators import (linear, orthogonal, real, square, symmetric,
                                     unitary, inplace)
 from pyoperators.utils import isscalar, tointtuple, openmp_num_threads
+from pyoperators.utils.mpi import MPI, distribute_shape
 
-from . import MPI
 from . import var
 from .datatypes import Map, Tod
 from .quantities import Quantity, _divide_unit, _multiply_unit

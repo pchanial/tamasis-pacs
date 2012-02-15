@@ -1,6 +1,7 @@
 import numpy as np
 import os
 import tamasis
+from pyoperators.utils.mpi import distribute_slice
 from tamasis import PacsObservation, Map, DistributionGlobalOperator, DistributionLocalOperator, MaskOperator, PackOperator, ProjectionOperator, mapper_naive, MPI
 from tamasis.numpyutils import assert_all_eq
 
@@ -45,7 +46,7 @@ mlocalunpacked = packing.T(mlocalpacked)
 
 pb = False
 for irank in range(size):
-    s = tamasis.mpiutils.distribute_slice(proj.mask.shape[0], rank=irank)
+    s = distribute_slice(proj.mask.shape[0], rank=irank)
     if np.any((mlocalunpacked[s] != 0) & (mlocalunpacked[s] != irank+1)):
         pb = True
         print 'Problem in rank ' + str(rank) + ' with local ' + str(irank)

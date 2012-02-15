@@ -7,7 +7,8 @@ from __future__ import division
 import numpy as np
 from matplotlib import pyplot
 from pyoperators.utils import isscalar, strenum
-from . import MPI
+from pyoperators.utils.mpi import MPI
+
 from .instruments import Instrument
 from .pointings import POINTING_DTYPE, Pointing
 from .wcsutils import create_fitsheader

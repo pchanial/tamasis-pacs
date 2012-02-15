@@ -8,9 +8,10 @@ import numpy as np
 import os
 import time
 
-from . import MPI
-from . import var
 from pyoperators import AdditionOperator, DiagonalOperator, IdentityOperator, MaskOperator, ReshapeOperator, asoperator
+from pyoperators.utils.mpi import MPI
+
+from . import var
 from .acquisitionmodels import DdTddOperator, DiscreteDifferenceOperator
 from .datatypes import Map, Tod
 from .linalg import Function, norm2, norm2_ellipsoid

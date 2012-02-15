@@ -4,8 +4,8 @@ from __future__ import division
 import numpy as np
 
 from pyoperators import IdentityOperator, asoperator
+from pyoperators.utils.mpi import MPI
 
-from . import MPI
 from .linalg import dot, norm2
 
 

@@ -2,9 +2,9 @@ from __future__ import division
 
 import os
 import numpy as np
-import tamasis
 from glob import glob
 from numpy.testing import assert_equal
+from pyoperators.utils.mpi import distribute_shape
 from tamasis import Map, MPI
 from tamasis.numpyutils import assert_all_eq
 from uuid import uuid1
@@ -20,7 +20,7 @@ lmap = Map(filename, comm=MPI.COMM_WORLD)
 
 def test_read():
     shape_global = ref.shape
-    shape_local = tamasis.mpiutils.distribute_shape(shape_global)
+    shape_local = distribute_shape(shape_global)
     assert_equal(shape_local, lmap.shape)
 
     lmaps = MPI.COMM_WORLD.allgather(lmap)

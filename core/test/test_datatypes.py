@@ -4,7 +4,7 @@ import os
 import pickle
 import tamasis
 from numpy.testing import assert_array_equal
-from pyoperators.utils import assert_is_none
+from pyoperators.utils.testing import assert_is_none
 from tamasis import Quantity, FitsArray, Map, Tod, create_fitsheader
 from tamasis.numpyutils import all_eq, get_attributes
 from uuid import uuid1

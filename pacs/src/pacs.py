@@ -15,8 +15,8 @@ import time
 from pyoperators import (Operator, HomothetyOperator, IdentityOperator,
                          MaskOperator, RoundOperator, ClipOperator, I)
 from pyoperators.utils import strenum, strplural, openmp_num_threads
+from pyoperators.utils.mpi import MPI
 
-from . import MPI
 from . import var
 from tamasis.core import (Quantity, Tod, MaskPolicy, Instrument, Pointing, tmf,
                           CompressionAverageOperator, ProjectionOperator,

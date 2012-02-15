@@ -2,8 +2,8 @@
 # All rights reserved
 #
 import tamasisfortran as tmf
-from . import MPI
 import var
+from pyoperators.utils.mpi import MPI
 from .var import __version__
 from .numpyutils import *
 from .linalg import *

@@ -3,7 +3,7 @@ from __future__ import division
 import numpy as np
 from nose.tools import assert_equal, assert_raises
 from numpy.testing import assert_almost_equal, assert_array_equal
-from pyoperators.utils import assert_eq, assert_is, assert_is_instance
+from pyoperators.utils.testing import assert_eq, assert_is, assert_is_instance
 from tamasis.quantities import Quantity, UnitError
 from tamasis.numpyutils import all_eq
 from tamasis.var import FLOAT_DTYPE, COMPLEX_DTYPE

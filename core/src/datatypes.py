@@ -27,8 +27,8 @@ except:
     ds9 = None
 
 from functools import reduce
+from pyoperators.utils.mpi import MPI
 
-from . import MPI
 from .mpiutils import read_fits, write_fits
 from .quantities import Quantity
 from .wcsutils import create_fitsheader

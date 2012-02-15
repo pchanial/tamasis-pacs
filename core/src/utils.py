@@ -10,8 +10,8 @@ import tamasisfortran as tmf
 import scipy.signal
 
 from matplotlib import pyplot
+from pyoperators.utils.mpi import MPI
 
-from . import MPI
 from . import var
 from . import numpyutils as nu
 from .datatypes import Map

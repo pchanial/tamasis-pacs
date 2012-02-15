@@ -3,7 +3,8 @@ from __future__ import division
 import numpy as np
 import pyoperators as op
 import tamasisfortran as tmf
-from . import MPI
+
+from pyoperators.utils.mpi import MPI
 from . import var
 
 __all__ = []
