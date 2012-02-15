@@ -2,21 +2,22 @@
 # Creation of a map using the regularised least square method
 #-------------------------------------------------------------
 import os
+import scipy
 from tamasis import *
 
 # Specify the Frames observations as FITS files
 # The optional brackets can be used to remove the beginning or the end of an
 # an observation
 path = os.getenv('PACS_DATA')+'transpScan/'
-frames_files = [path+'1342185454_red_PreparedFrames.fits[10001:]',
-                path+'1342185455_red_PreparedFrames.fits[10001:]']
+frames_files = [path+'1342184598_blue_PreparedFrames.fits[10001:]',
+                path+'1342184599_blue_PreparedFrames.fits[10001:]']
 
 # Setup the instrument and pointings for these files
 # The policy for each read-out can be 'mask', 'remove' or 'keep'
 obs = PacsObservation(frames_files,
                       policy_inscan='keep',
                       policy_turnaround='keep',
-                      policy_other='remove',
+                      policy_other='mask',
                       policy_invalid='mask')
 
 # Read the Time Ordered Data: the signal and mask
@@ -32,10 +33,11 @@ tod = obs.get_tod(flatfielding=True,
 # 'downsampling=True' means that the acquisition model will not
 # sample at the instrument frequency of 40Hz, but at the compressed frequency
 # (10Hz for prime mode, 5Hz for parallel mode)
-projection = ProjectionOperator(obs,
-                                method='sharp',
-                                downsampling=True,
-                                npixels_per_sample=5)
+projection = ProjectionOperator(obs.get_pointing_matrix(
+                 header=obs.get_map_header(),
+                 npixels_per_sample=5,
+                 method='sharp',
+                 downsampling=True))
 
 # Map-level deglitching using the MAD (median absolute deviation to
 # the mean). We highpass filter the Tod using a short filtering 
@@ -51,16 +53,21 @@ plot_tod(tod[40])
 # distributed, i.e. that the bright sources have not been impacted
 projection.T(tod.mask-tod_glitch.mask).imshow()
 
+# we don't need the coarse pointing matrix anymore
+del projection
+
+# remove the very low frequency drift by subtraction a polynomial of degree 3
+tod = filter_polynomial(tod, 3)
+
 # Remove low frequency drifts. The specified window length is the
 # number of samples used to compute the median (unlike HCSS, where
 # half the length should be specified).
 # If these are all masked, an interpolated value will be computed 
 # once the whole filtered timeline is computed.
+# Remove very low frequency drifts
+
 hpf_length = 1000
 tod = filter_median(tod, hpf_length)
-
-# Remove very low frequency drifts
-tod = filter_polynomial(tod, 3)
 
 # Inspect the tod by displaying the Tod as an image: X for time and Y for
 # the detector number. In the following a example a stride of 10 is used
@@ -78,12 +85,12 @@ obs.save('obs_preprocessed.fits', tod)
 # and H the acquisition model.
 # To take into account bad samples such as glitches, we solve
 # M y == M H x, M is the mask operator which sets bad samples values to 0
-projection = ProjectionOperator(obs,
-                                method='sharp',
-                                resolution=3.2,
-                                npixels_per_sample=5)
+projection = ProjectionOperator(obs.get_pointing_matrix(
+                 header=obs.get_map_header(resolution=3.2),
+                 npixels_per_sample=5,
+                 method='sharp'))
 response = ConvolutionTruncatedExponentialOperator(obs.pack(
-    obs.instrument.detector.time_constant) / obs.SAMPLING_PERIOD)
+                 obs.instrument.detector.time_constant) / obs.SAMPLING_PERIOD)
 compression = CompressionAverageOperator(obs.slice.compression_factor)
 masking = MaskOperator(tod.mask)
 model = masking * compression * response * projection
@@ -102,7 +109,8 @@ map_tamasis = mapper_rls(tod, model,
                          invntt=InvNttOperator(obs),
                          unpacking=UnpackOperator(projection.get_mask()),
                          tol=1.e-5,
+                         solver=scipy.sparse.linalg.bicgstab,
                          hyper=hyper)
 
-# save the map a as fits file
+# save the map as FITS file
 map_tamasis.save('map_tamasis_h'+str(hyper)+'_hpf'+str(hpf_length)+'.fits')
