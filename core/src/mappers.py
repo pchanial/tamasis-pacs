@@ -25,7 +25,7 @@ __all__ = [ 'mapper_naive',
             'mapper_nl',
 ]
 
-def mapper_naive(tod, model, unit=None, local_mask=None):
+def mapper_naive(tod, model, unit=None):
     """
     Returns a naive map, i.e.: map = model.T(tod) / model.T(1)
 
