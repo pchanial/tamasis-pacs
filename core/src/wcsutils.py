@@ -325,6 +325,20 @@ def get_cdelt_pa(header):
 #-------------------------------------------------------------------------------
 
 
+def has_wcs(header):
+    """
+    Returns True is the input FITS header has a defined World Coordinate System.
+    """
+
+    required = 'CRPIX,CRVAL,CTYPE'.split(',')
+    keywords = np.concatenate([(lambda i: [r+str(i+1) for r in required])(i) 
+                               for i in range(header['NAXIS'])])
+    return all([k in header for k in keywords])
+
+
+#-------------------------------------------------------------------------------
+
+
 def mean_degrees(array):
     """
     Returns the mean value of an array of values in degrees, by taking into 

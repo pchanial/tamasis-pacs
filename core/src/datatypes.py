@@ -31,7 +31,7 @@ from pyoperators.utils.mpi import MPI
 
 from .mpiutils import read_fits, write_fits
 from .quantities import Quantity
-from .wcsutils import create_fitsheader
+from .wcsutils import create_fitsheader, has_wcs
 
 __all__ = [ 'FitsArray', 'Map', 'Tod' ]
 
@@ -182,15 +182,7 @@ class FitsArray(Quantity):
         Returns True is the array has a FITS header with a defined World
         Coordinate System.
         """
-        if self.header is None:
-            return False
-
-        required = 'CRPIX,CRVAL,CTYPE'.split(',')
-        keywords = np.concatenate(
-            [(lambda i: [r+str(i+1) for r in required])(i) 
-             for i in range(self.header['NAXIS'])])
-
-        return all([k in self.header for k in keywords])
+        return has_wcs(self.header)
 
     @property
     def header(self):

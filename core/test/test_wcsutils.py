@@ -2,7 +2,7 @@ import numpy as np
 from kapteyn import wcs
 from numpy.testing import assert_almost_equal
 from tamasis.numpyutils import all_eq
-from tamasis.wcsutils import angle_lonlat, barycenter_lonlat, combine_fitsheader, create_fitsheader, get_cdelt_pa, mean_degrees
+from tamasis.wcsutils import angle_lonlat, barycenter_lonlat, combine_fitsheader, create_fitsheader, get_cdelt_pa, has_wcs, mean_degrees
 
 def test_mean_degrees():
     assert mean_degrees([1,2]) == 1.5
@@ -72,3 +72,9 @@ def test_combine_fitsheader():
             assert x0[0] <= 1.5 and y0[-1] >= header0['NAXIS2']-0.5
     for iheader, header in enumerate(headers):
         yield func, iheader, header
+
+def test_has_wcs():
+    header = create_fitsheader([2,4])
+    assert not has_wcs(header)
+    header = create_fitsheader([2,4], cdelt=1)
+    assert has_wcs(header)
