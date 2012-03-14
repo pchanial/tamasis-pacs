@@ -7,6 +7,13 @@ try:
     del pydebug
 except:
     pass
+
+# force gfortran's read statement to always use the dot sign as fraction
+# separator (PR47007)
+import locale
+locale.setlocale(locale.LC_NUMERIC, 'POSIX')
+del locale
+
 from pyoperators import *
 from .core import *
 from .madcap import *
