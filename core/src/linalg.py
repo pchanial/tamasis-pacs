@@ -52,7 +52,7 @@ class Function(object):
             output = np.empty_like(x)
         else:
             output = np.array(np.nan)
-        self.direct(x, output, inwork=inwork, outwork=outwork, comm=None)
+        self.direct(x, output, inwork=inwork, outwork=outwork, comm=comm)
         return output[()]
     def set_out(self, out, value):
         if out is not None:
