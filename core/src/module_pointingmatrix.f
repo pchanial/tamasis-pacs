@@ -21,7 +21,7 @@ module module_pointingmatrix
     public :: xy2roi
     public :: xy2pmatrix
     public :: roi2pmatrix
-    public :: backprojection_weighted
+    public :: backprojection_weight
     public :: backprojection_weighted_roi
 
     type pointingelement
@@ -34,25 +34,21 @@ contains
 
     subroutine pmatrix_direct(pmatrix, map, timeline)
 
-        type(pointingelement), intent(in) :: pmatrix(:,:,:)
+        type(pointingelement), intent(in) :: pmatrix(:,:)
         real(p), intent(in)               :: map(0:)
-        real(p), intent(inout)            :: timeline(:,:)
-        integer                           :: ipixel, isample, idetector, npixels_per_sample, nsamples, ndetectors
+        real(p), intent(inout)            :: timeline(:)
+        integer                           :: ipixel, isample, npixels_per_sample, nsamples
 
         npixels_per_sample = size(pmatrix,1)
-        nsamples   = size(pmatrix, 2)
-        ndetectors = size(pmatrix, 3)
+        nsamples = size(pmatrix, 2)
 
-        !$omp parallel do private(idetector, isample, ipixel)
-        do idetector = 1, ndetectors
-            do isample = 1, nsamples
-!!$                timeline(isample,idetector) = sum(map(pmatrix(:,isample,idetector)%pixel) * pmatrix(:,isample,idetector)%weight)
-                timeline(isample,idetector) = 0
-                do ipixel = 1, npixels_per_sample
-                    if (pmatrix(ipixel,isample,idetector)%pixel == -1) exit
-                    timeline(isample,idetector) = timeline(isample,idetector) + map(pmatrix(ipixel,isample,idetector)%pixel) *     &
-                        pmatrix(ipixel,isample,idetector)%weight
-                end do
+        !$omp parallel do
+        do isample = 1, nsamples
+!!$            timeline(isample) = sum(map(pmatrix(:,isample)%pixel) * pmatrix(:,isample)%weight)
+            timeline(isample) = 0
+            do ipixel = 1, npixels_per_sample
+                if (pmatrix(ipixel,isample)%pixel == -1) exit
+                timeline(isample) = timeline(isample) + map(pmatrix(ipixel,isample)%pixel) * pmatrix(ipixel,isample)%weight
             end do
         end do
         !$omp end parallel do
@@ -65,21 +61,18 @@ contains
 
     subroutine pmatrix_direct_one_pixel_per_sample(pmatrix, map, timeline)
 
-        type(pointingelement), intent(in) :: pmatrix(:,:)
+        type(pointingelement), intent(in) :: pmatrix(:)
         real(p), intent(in)               :: map(0:)
-        real(p), intent(inout)            :: timeline(:,:)
-        integer                           :: isample, idetector, nsamples, ndetectors
+        real(p), intent(inout)            :: timeline(:)
+        integer                           :: isample, nsamples
 
-        nsamples   = size(pmatrix, 1)
-        ndetectors = size(pmatrix, 2)
+        nsamples = size(pmatrix, 1)
 
-        !$omp parallel do private(idetector, isample)
-        do idetector = 1, ndetectors
-            do isample = 1, nsamples
-                if (pmatrix(isample,idetector)%pixel >= 0) then
-                    timeline(isample,idetector) = map(pmatrix(isample,idetector)%pixel) * pmatrix(isample,idetector)%weight
-                end if
-            end do
+        !$omp parallel do
+        do isample = 1, nsamples
+            if (pmatrix(isample)%pixel >= 0) then
+                timeline(isample) = map(pmatrix(isample)%pixel) * pmatrix(isample)%weight
+            end if
         end do
         !$omp end parallel do
 
@@ -90,30 +83,27 @@ contains
 
 
     subroutine pmatrix_transpose(pmatrix, timeline, map)
-        type(pointingelement), intent(in) :: pmatrix(:,:,:)
-        real(kind=p), intent(in)          :: timeline(:,:)
+        type(pointingelement), intent(in) :: pmatrix(:,:)
+        real(kind=p), intent(in)          :: timeline(:)
         real(kind=p), intent(out)         :: map(0:)
-        integer                           :: idetector, isample, ipixel, npixels, nsamples, ndetectors
+        integer                           :: isample, ipixel, npixels, nsamples
 
-        npixels    = size(pmatrix, 1)
-        nsamples   = size(pmatrix, 2)
-        ndetectors = size(pmatrix, 3)
+        npixels  = size(pmatrix, 1)
+        nsamples = size(pmatrix, 2)
 
 #ifdef GFORTRAN
-        !$omp parallel do reduction(+:map) private(idetector, isample, ipixel)
+        !$omp parallel do reduction(+:map)
 #else
-        !$omp parallel do private(idetector, isample, ipixel)
+        !$omp parallel do
 #endif
-        do idetector = 1, ndetectors
-            do isample = 1, nsamples
-                do ipixel = 1, npixels
-                    if (pmatrix(ipixel,isample,idetector)%pixel == -1) exit
+        do isample = 1, nsamples
+            do ipixel = 1, npixels
+                if (pmatrix(ipixel,isample)%pixel == -1) exit
 #ifndef GFORTRAN
-                    !$omp atomic
+                !$omp atomic
 #endif
-                    map(pmatrix(ipixel,isample,idetector)%pixel) = map(pmatrix(ipixel,isample,idetector)%pixel) +                  &
-                        pmatrix(ipixel,isample,idetector)%weight * timeline(isample,idetector)
-                end do
+                map(pmatrix(ipixel,isample)%pixel) = map(pmatrix(ipixel,isample)%pixel) +                                          &
+                    pmatrix(ipixel,isample)%weight * timeline(isample)
             end do
         end do
         !$omp end parallel do
@@ -125,21 +115,17 @@ contains
 
 
     subroutine pmatrix_transpose_one_pixel_per_sample(pmatrix, timeline, map)
-        type(pointingelement), intent(in) :: pmatrix(:,:)
-        real(kind=p), intent(in)          :: timeline(:,:)
+        type(pointingelement), intent(in) :: pmatrix(:)
+        real(kind=p), intent(in)          :: timeline(:)
         real(kind=p), intent(out)         :: map(0:)
-        integer                           :: idetector, isample, nsamples, ndetectors
+        integer                           :: isample, nsamples
 
-        nsamples   = size(pmatrix, 1)
-        ndetectors = size(pmatrix, 2)
+        nsamples = size(pmatrix, 1)
 
-        do idetector = 1, ndetectors
-            do isample = 1, nsamples
-                if (pmatrix(isample,idetector)%pixel >= 0) then
-                    map(pmatrix(isample,idetector)%pixel) = map(pmatrix(isample,idetector)%pixel) +                                &
-                        pmatrix(isample,idetector)%weight * timeline(isample,idetector)
-                end if
-            end do
+        do isample = 1, nsamples
+            if (pmatrix(isample)%pixel >= 0) then
+                map(pmatrix(isample)%pixel) = map(pmatrix(isample)%pixel) + pmatrix(isample)%weight * timeline(isample)
+            end if
         end do
 
     end subroutine pmatrix_transpose_one_pixel_per_sample
@@ -149,31 +135,27 @@ contains
    
    
     subroutine pmatrix_ptp(pmatrix, ptp)
-        type(pointingelement), intent(in) :: pmatrix(:,:,:)
-        real(kind=p), intent(out)         :: ptp(0:,0:)
-        integer                           :: idetector, isample
+        type(pointingelement), intent(in) :: pmatrix(:,:)
+        real(kind=p), intent(inout)       :: ptp(0:,0:)
+        integer                           :: isample
         integer                           :: ipixel, jpixel, i, j
-        integer                           :: npixels, nsamples, ndetectors
+        integer                           :: npixels, nsamples
         real(kind(pmatrix%weight))        :: pi, pj
        
-        npixels    = size(pmatrix, 1)
-        nsamples   = size(pmatrix, 2)
-        ndetectors = size(pmatrix, 3)
+        npixels  = size(pmatrix, 1)
+        nsamples = size(pmatrix, 2)
        
-        ptp = 0
-        !$omp parallel do reduction(+:ptp) private(idetector, isample, ipixel, jpixel, i, j, pi, pj)
-        do idetector = 1, ndetectors
-            do isample = 1, nsamples
-                do ipixel = 1, npixels
-                    if (pmatrix(ipixel,isample,idetector)%pixel == -1) exit
-                    i  = pmatrix(ipixel,isample,idetector)%pixel
-                    pi = pmatrix(ipixel,isample,idetector)%weight
-                    do jpixel = 1, npixels
-                        if (pmatrix(jpixel,isample,idetector)%pixel == -1) exit
-                        j  = pmatrix(jpixel,isample,idetector)%pixel
-                        pj = pmatrix(jpixel,isample,idetector)%weight
-                        ptp(i,j) = ptp(i,j) + pi * pj
-                    end do
+        !$omp parallel do reduction(+:ptp) private(isample, ipixel, jpixel, i, j, pi, pj)
+        do isample = 1, nsamples
+            do ipixel = 1, npixels
+                if (pmatrix(ipixel,isample)%pixel == -1) exit
+                i  = pmatrix(ipixel,isample)%pixel
+                pi = pmatrix(ipixel,isample)%weight
+                do jpixel = 1, npixels
+                    if (pmatrix(jpixel,isample)%pixel == -1) exit
+                    j  = pmatrix(jpixel,isample)%pixel
+                    pj = pmatrix(jpixel,isample)%weight
+                    ptp(i,j) = ptp(i,j) + pi * pj
                 end do
             end do
         end do
@@ -188,20 +170,20 @@ contains
     subroutine pmatrix_mask(pmatrix, mask)
         ! True means: not observed
         type(pointingelement), intent(in) :: pmatrix(:,:)
-        logical(1), intent(out)           :: mask(0:)
+        logical(1), intent(inout)         :: mask(0:)
 
         integer*8 :: isample, ipixel, npixels, nsamples
         integer*4 :: pixel
 
-        npixels    = size(pmatrix, 1)
-        nsamples   = size(pmatrix, 2)
+        npixels  = size(pmatrix, 1)
+        nsamples = size(pmatrix, 2)
 
         !$omp parallel do private(pixel)
         do isample = 1, nsamples
             do ipixel = 1, npixels
                 pixel = pmatrix(ipixel,isample)%pixel
                 if (pixel == -1) exit
-                if (pmatrix(ipixel,isample)%weight <= 0) cycle
+                if (pmatrix(ipixel,isample)%weight == 0) cycle
                 mask(pixel) = .false.
             end do
         end do
@@ -231,8 +213,8 @@ contains
             ipacked = ipacked + 1
         end do
 
-        npixels    = size(pmatrix, 1)
-        nsamples   = size(pmatrix, 2)
+        npixels  = size(pmatrix, 1)
+        nsamples = size(pmatrix, 2)
 
         !$omp parallel do private(pixel, ipixel)
         do isample = 1, nsamples
@@ -240,7 +222,7 @@ contains
             do while (ipixel <= npixels)
                 pixel = pmatrix(ipixel,isample)%pixel
                 if (pixel == -1) exit
-                if (pmatrix(ipixel,isample)%weight <= 0 .or. mask(pixel)) then
+                if (pmatrix(ipixel,isample)%weight == 0 .or. mask(pixel)) then
                     pmatrix(ipixel:npixels-1,isample) = pmatrix(ipixel+1:npixels,isample)
                     pmatrix(npixels,isample)%pixel = -1
                     pmatrix(npixels,isample)%weight = 0
@@ -258,56 +240,37 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine backprojection_weighted(pmatrix, timeline, mask, map, weight, threshold)
-        type(pointingelement), intent(in)     :: pmatrix(:,:,:)
-        real(kind=p), intent(in)              :: timeline(:,:)
-        real(kind=p), intent(out)             :: map(0:)
-        real(kind=p), intent(out)             :: weight(0:)
-        logical(kind=1), intent(in), optional :: mask(:,:)
-        real(kind=p), intent(in), optional    :: threshold
-        integer                               :: npixels, nsamples, ndetectors
-        integer                               :: ipixel, isample, idetector,imap
-        real(kind=p)                          :: threshold_
-          
-        logical :: domask
+    subroutine backprojection_weight(pmatrix, timeline, mask, map, weight)
+        type(pointingelement), intent(in)     :: pmatrix(:,:)
+        real(kind=p), intent(in)              :: timeline(:)
+        logical(kind=1), intent(in), optional :: mask(:)
+        real(kind=p), intent(inout)           :: map(0:)
+        real(kind=p), intent(inout)           :: weight(0:)
 
-        npixels    = size(pmatrix, 1)
-        nsamples   = size(pmatrix, 2)
-        ndetectors = size(pmatrix, 3)
-        domask     = present(mask)
+        integer                               :: npixels, nsamples
+        integer                               :: ipixel, isample, imap          
+        logical                               :: domask
 
-        map    = 0
-        weight = 0
+        npixels  = size(pmatrix, 1)
+        nsamples = size(pmatrix, 2)
+        domask   = present(mask)
+
         !$omp parallel do default(shared) reduction(+:map,weight) &
-        !$omp private(idetector,isample,ipixel,imap)
-        do idetector = 1, ndetectors
-            do isample = 1, nsamples
-                if (domask) then
-                   if (mask(isample,idetector)) cycle
-                end if
-                do ipixel = 1, npixels
-                    imap = pmatrix(ipixel,isample,idetector)%pixel
-                    if (imap == -1) exit
-                    map   (imap) = map   (imap) + pmatrix(ipixel,isample,idetector)%weight * timeline(isample,idetector)
-                    weight(imap) = weight(imap) + pmatrix(ipixel,isample,idetector)%weight
-                end do
+        !$omp private(isample,ipixel,imap)
+        do isample = 1, nsamples
+            if (domask) then
+                if (mask(isample)) cycle
+            end if
+            do ipixel = 1, npixels
+                imap = pmatrix(ipixel,isample)%pixel
+                if (imap == -1) exit
+                map   (imap) = map   (imap) + pmatrix(ipixel,isample)%weight * timeline(isample)
+                weight(imap) = weight(imap) + pmatrix(ipixel,isample)%weight
             end do
         end do
         !$omp end parallel do
 
-        map = map / weight
-
-        if (present(threshold)) then
-            threshold_ = threshold
-        else
-            threshold_ = 0
-        endif
-
-        where (weight <= threshold_)
-            map = NaN
-        end where
-
-    end subroutine backprojection_weighted
+    end subroutine backprojection_weight
 
 
     !-------------------------------------------------------------------------------------------------------------------------------
@@ -360,7 +323,7 @@ contains
         end do
 
         map = map / weight
-        where (weight <= 0)
+        where (weight == 0)
             map = NaN
         end where
 
@@ -452,7 +415,7 @@ contains
                     polygon(1,:) = coords(1,(idetector-1)*nvertices+1:idetector*nvertices) - (ix-0.5_p)
                     polygon(2,:) = coords(2,(idetector-1)*nvertices+1:idetector*nvertices) - (iy-0.5_p)
                     weight = abs(intersection_polygon_unity_square(polygon, nvertices))
-                    if (weight <= 0) cycle
+                    if (weight == 0) cycle
                     if (iroi <= npixels_per_sample) then
                         pmatrix(iroi,idetector)%pixel  = ix - 1 + (iy - 1) * nx
                         pmatrix(iroi,idetector)%weight = weight

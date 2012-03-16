@@ -14,6 +14,7 @@ from pyoperators import (Operator, IdentityOperator, DiagonalOperator,
                          MaskOperator, NumexprOperator)
 from pyoperators.decorators import (linear, orthogonal, real, square, symmetric,
                                     unitary, inplace)
+from pyoperators.memory import allocate
 from pyoperators.utils import isscalar, tointtuple, openmp_num_threads
 from pyoperators.utils.mpi import MPI, distribute_shape
 
@@ -22,6 +23,7 @@ from .datatypes import Map, Tod
 from .quantities import Quantity, _divide_unit, _multiply_unit
 from .utils import diff, diffT, diffTdiff, shift
 from .wcsutils import str2fitsheader
+from .mpiutils import gather_fitsheader_if_needed, scatter_fitsheader
 
 try:
     import fftw3
@@ -475,13 +477,15 @@ class PadOperator(Operator):
 
 class PointingMatrix(np.ndarray):
     DTYPE = np.dtype([('value', np.float32), ('index', np.int32)])
-    def __new__(cls, array, info=None, copy=True, ndmin=0):
+    def __new__(cls, array, shape_input, info=None, copy=True, ndmin=0):
         result = np.array(array, copy=copy, ndmin=ndmin).view(cls)
         result.info = info
+        result.shape_input = shape_input
         return result
 
     def __array_finalize__(self, obj):
         self.info = getattr(obj, 'info', None)
+        self.shape_input = getattr(obj, 'shape_input', None)
 
     def __getattr__(self, name):
         if self.dtype.names is not None and name in self.dtype.names:
@@ -489,32 +493,56 @@ class PointingMatrix(np.ndarray):
         return super(PointingMatrix, self).__getattribute__(name)
 
     @classmethod
-    def empty(cls, shape, info=None, verbose=True):
-        if verbose:
-            n = np.product(shape)
-            if n > 0:
-                print('Info: Allocating ' + str(np.product(shape) / 2**17) + \
-                  ' MiB for the pointing matrix.')
-        return PointingMatrix(np.empty(shape, dtype=cls.DTYPE), info=info,
-                              copy=False)
+    def empty(cls, shape, shape_input, info=None, verbose=True):
+        buffer = allocate(shape, cls.DTYPE, ' for the pointing matrix',
+                          verbose=True)
+        return PointingMatrix(buffer, shape_input, info=info, copy=False)
 
     @classmethod
-    def zeros(cls, shape, info=None, verbose=True):
-        if verbose:
-            n = np.product(shape)
-            if n > 0:
-                print('Info: Allocating ' + str(np.product(shape) / 2**17) + \
-                  ' MiB for the pointing matrix.')
-        result = PointingMatrix(np.zeros(shape, dtype=cls.DTYPE), info=info,
-                                copy=False)
-        result.index = -1
-        return result
+    def zeros(cls, shape, shape_input, info=None, verbose=True):
+        buffer = allocate(shape, cls.DTYPE, ' for the pointing matrix',
+                          verbose=True)
+        buffer.value = 0
+        buffer.index = -1
+        return PointingMatrix(buffer, shape_input, info=info, copy=False)
 
-@real
-@linear
-class ProjectionOperator(Operator):
+    def pack(self, mask):
+        """
+        Inplace renumbering of the pixel indices in the pointing matrix,
+        discarding masked or unobserved pixels.
+
+        """
+        if self.size == 0:
+            return
+        tmf.pointing_matrix_pack(self.ravel().view(np.int64), mask.view(
+            np.int8).T, self.shape[-1], self.size // self.shape[-1])
+        self.shape_input = tointtuple(mask.size - np.sum(mask))
+
+    def get_mask(self, out=None):
+        if out is None:
+            out = allocate(self.shape_input, np.bool8, ' as new mask')
+            out[...] = True
+            out = Map(out, header=self.info.get('header', None), copy=False,
+                      dtype=bool)
+        elif out.dtype != bool:
+            raise TypeError('The output mask argument has an invalid type.')
+        elif out.shape != self.shape_input:
+            raise ValueError('The output mask argument has an incompatible shap'
+                             'e.')
+        if self.size == 0:
+            return out
+        tmf.pointing_matrix_mask(self.ravel().view(np.int64), out.view(
+            np.int8).T, self.shape[-1], self.size // self.shape[-1])
+        return out
+
+
+def ProjectionOperator(input, method=None, header=None, resolution=None,
+                       npixels_per_sample=0, units=None, derived_units=None,
+                       downsampling=False, packed=False, commin=MPI.COMM_WORLD,
+                       commout=MPI.COMM_WORLD, **keywords):
     """
-    This class handles operations by the pointing matrix
+    Projection operator factory, to handle operations by one or more pointing
+    matrices.
 
     It is assumed that each pointing matrix row has at most 'npixels_per_sample'
     non-null elements, or in other words, an output element can only intersect
@@ -533,137 +561,292 @@ class ProjectionOperator(Operator):
 
     Arguments
     ---------
-    input : pointing matrix or Observation
-        It is recommended to use a pointing matrix or a list of pointing
-        matrices instead of an observation:
-            proj = ProjectionOperator(obs.get_pointing_matrix(...))
-    packed : boolean
-        If true, the input indices are renumbered to discard the input elements
-        which are not projected onto the output. This feature is used to handle
-        MPI-distributed input arrays.
-    commin: mpi4py.Comm
-        The input MPI communicator.
-    commout: mpi4py.Comm
-        The output MPI communicator.
+    input : pointing matrix (or sequence of) or observation (deprecated)
+    method : deprecated
+    header : deprecated
+    resolution : deprecated
+    npixels_per_sample : deprecated
+    downsampling : deprecated
+    packed deprecated
+
+    """
+    # check if there is only one pointing matrix
+    isobservation = hasattr(input, 'get_pointing_matrix')
+    if isobservation:
+        if hasattr(input, 'slice'):
+            nmatrices = len(input.slice)
+        else:
+            nmatrices = 1
+    else:
+        if isinstance(input, PointingMatrix):
+            input = (input,)
+        if any(not isinstance(i, PointingMatrix) for i in input):
+            raise TypeError('The input is not a PointingMatrix, (nor a sequence'
+                            ' of).')
+        nmatrices = len(input)
+
+    ismapdistributed = commin.size > 1
+    istoddistributed = commout.size > 1
+
+    # get the pointing matrix from the input observation
+    if isobservation:
+        if header is None:
+            if not hasattr(input, 'get_map_header'):
+                raise AttributeError("No map header has been specified and "
+                    "the observation has no 'get_map_header' method.")
+            header_global = input.get_map_header(resolution=resolution,
+                                downsampling=downsampling)
+        else:
+            if isinstance(header, str):
+                header = str2fitsheader(header)
+            header_global = gather_fitsheader_if_needed(header, comm=commin)
+        #XXX we should hand over the local header
+        input = input.get_pointing_matrix(header_global, npixels_per_sample,
+                    method=method, downsampling=downsampling, comm=commin)
+        if isinstance(input, PointingMatrix):
+            input = (input,)
+    else:
+        header_global = input[0].info['header']
+
+    # check shapein
+    shapeins = [i.shape_input for i in input]
+    if any(s != shapeins[0] for s in shapeins):
+        raise ValueError('The pointing matrices do not have the same input '
+            "shape: {0}.".format(', '.join(str(shapeins))))
+    shapein = shapeins[0]
+
+    # the output is simply a ProjectionOperator instance
+    if nmatrices == 1 and not ismapdistributed and not istoddistributed \
+       and not packed:
+        return ProjectionInMemoryOperator(input[0], units=units, derived_units=
+            derived_units, commin=commin, commout=commout, **keywords)
+
+    if packed or ismapdistributed:
+        # compute the map mask before this information is lost while packing
+        mask_global = Map.ones(shapein, dtype=np.bool8, header=header_global)
+        for i in input:
+            i.get_mask(out=mask_global)
+        for i in input:
+            i.pack(mask_global)
+        if ismapdistributed:
+            shape = distribute_shape(mask_global.shape, comm=commin)
+            mask = np.empty(shape, bool)
+            commin.Reduce_scatter([mask_global, MPI.BYTE], [mask, MPI.BYTE],
+                                  None, op=MPI.BAND)
+        else:
+            mask = mask_global
+
+    operands = [ProjectionInMemoryOperator(i, units=units, derived_units=
+                derived_units, commout=commout, **keywords)
+                for i in input]
+    result = BlockColumnOperator(operands, axisout=-1)
+
+    if nmatrices > 1:
+        def get_mask(out=None):
+            if out is None:
+                out = allocate(result.shapein, np.bool8, ' as new mask')
+                out[...] = True
+                out = Map(out, header=header_global, dtype=np.bool8, copy=False)
+            for p in result.operands:
+                p.get_mask(out=out)
+            return out
+        def get_ptp(out=None):
+            if out is None:
+                npixels = int(np.product(result.shapein))
+                out = allocate((npixels,npixels), np.bool8, ' for pTp array')
+                out[...] = 0
+            for p in result.operands:
+                p.get_ptp(out=out)
+            return out
+        def intersects(out=None):
+            raise NotImplementedError('email-me')
+
+        result.get_mask = get_mask
+        result.get_ptp = get_ptp
+        result.intersects = intersects
+
+    if not istoddistributed and not ismapdistributed and not packed:
+        return result
+
+    def not_implemented(out=None):
+        raise NotImplementedError('email-me')
+
+    if packed or ismapdistributed:
+        def get_mask(out=None):
+            if out is not None:
+                out &= mask
+            else:
+                out = mask
+            return out
+        if ismapdistributed:
+            header = scatter_fitsheader(header_global, comm=commin)
+            result *= DistributionLocalOperator(mask_global, commin=commin,
+                                                attrin={'header':header})
+        elif packed:
+            result *= PackOperator(mask)
+        result.get_mask = get_mask
+
+    if istoddistributed and not ismapdistributed:
+        get_mask_closure = result.get_mask
+        def get_mask(out=None):
+            out = get_mask_closure(out=out)
+            commout.Allreduce(MPI.IN_PLACE, [out, MPI.BYTE], op=MPI.BAND)
+            return out        
+        result *= DistributionIdentityOperator(commout=commout)
+        result.get_mask = get_mask
+
+    result.get_ptp = not_implemented
+    result.intersects = not_implemented
+
+    return result
+
+
+@real
+@linear
+class ProjectionBaseOperator(Operator):
+    """
+    Abstract class for projection operators.
+
+    """
+    def direct(self, input, output):
+        matrix = self.matrix
+        if matrix.size == 0:
+            return
+        if not output.flags.contiguous:
+            if pyoperators.memory.verbose:
+                print 'Optimize me: Projection output is not contiguous.'
+            output_ = np.empty_like(output)
+        else:
+            output_ = output
+        tmf.pointing_matrix_direct(matrix.ravel().view(np.int64), input.T,
+                                   output_.T, matrix.shape[-1])
+        if not output.flags.contiguous:
+            output[...] = output_
+
+    def transpose(self, input, output, operation=None):
+        matrix = self.matrix
+        if operation is None:
+            output[...] = 0
+        elif operation is not operator.__iadd__:
+            raise ValueError('Invalid operation.')
+        if matrix.size == 0:
+            return
+        if not input.flags.contiguous:
+            if pyoperators.memory.verbose:
+                print 'Optimize me: Projection.T input is not contiguous.'
+            input_ = np.ascontiguousarray(input)
+        else:
+            input_ = input
+        tmf.pointing_matrix_transpose(matrix.ravel().view(np.int64),
+                                      input_.T, output.T, matrix.shape[-1])
+
+    def set_attrin(self, attr):
+        matrix = self.matrix
+        header = matrix.info.get('header', None)
+        if header is not None:
+            attr['header'] = header.copy()
+        unitout = attr['_unit'] if '_unit' in attr else {}
+        if unitout:
+            attr['_unit'] = _divide_unit(unitout, self.unit)
+        if self.duin is not None:
+            attr['_derived_units'] = self.duin
+
+    def set_attrout(self, attr):
+        if 'header' in attr:
+            del attr['header']
+        unitin = attr['_unit'] if '_unit' in attr else {}
+        if unitin:
+            attr['_unit'] = _multiply_unit(unitin, self.unit)
+        if self.duout is not None:
+            attr['_derived_units'] = self.duout
+
+    def get_mask(self, out=None):
+        return self.matrix.get_mask(out=out)
+
+    def get_ptp(self, out=None):
+        matrix = self.matrix
+        npixels = int(np.product(matrix.shape_input))
+        if out is None:
+            out = allocate((npixels,npixels), np.bool8, ' for pTp array')
+            out[...] = 0
+        elif out.dtype != np.bool8:
+            raise TypeError('The output ptp argument has an invalid type.')
+        elif out.shape != (npixels, npixels):
+            raise ValueError('The output ptp argument has an incompatible shape'
+                             '.')
+        if matrix.size == 0:
+            return out
+        tmf.pointing_matrix_ptp(matrix.ravel().view(np.int64), out.T,
+            matrix.shape[-1], matrix.size // matrix.shape[-1], npixels)
+        return out
+
+    def intersects(self, fitscoords, axis=None, f=None):
+        """
+        Return True if a map pixel is seen by the pointing matrix.
+
+        """
+        matrix = self.matrix
+        axes = [1] + matrix.shape_input[:0:-1]
+        index = np.array(fitscoords) - 1
+        index = int(np.sum(index * np.cumproduct(axes)))
+
+        shape = matrix.shape
+        matrix_ = matrix.ravel().view(np.int64)
+        if f is not None:
+            out = f(matrix_, index, shape[-1], shape[-2], shape[-3])
+        elif axis is None:
+            out = tmf.operators.pmatrix_intersects(matrix_, index, shape[-1],
+                      shape[-2], shape[-3])
+        elif axis == 0 or axis == -3:
+            out = tmf.operators.pmatrix_intersects_axis3(matrix_, index,
+                      shape[-1], shape[-2], shape[-3])
+        elif axis == 1 or axis == -2:
+            out = tmf.operators.pmatrix_intersects_axis2(matrix_, index,
+                      shape[-1], shape[-2], shape[-3])
+        else:
+            raise ValueError('Invalid axis.')
+
+        if isinstance(out, np.ndarray):
+            out = out.view(bool)
+        else:
+            out = bool(out)
+        return out
+
+
+@real
+@linear
+class ProjectionInMemoryOperator(ProjectionBaseOperator):
+    """
+    Projection operator that stores the pointing matrix in memory.
+
+    Parameters
+    ----------
+    matrix : PointingMatrix
+        The pointing matrix.
+    units : unit
+        Unit of the pointing matrix. It is used to infer the output unit
+        from that of the input.
+    derived_units : tuple (derived_units_out, derived_units_in)
+        Derived units to be added to the direct or transposed outputs.
 
     Attributes
     ----------
     header : pyfits.Header
         The map FITS header
     matrix : composite dtype ('value', 'f4'), ('index', 'i4')
-        The pointing matrix. 
+        The pointing matrix.
+
     """
+    def __init__(self, matrix, units=None, derived_units=None, **keywords):
 
-    def __new__(cls, input=None, method=None, header=None, resolution=None,
-                npixels_per_sample=0, units=None, derived_units=None,
-                downsampling=False, packed=False, shapein=None, shapeout=None,
-                commin=MPI.COMM_WORLD, commout=MPI.COMM_WORLD, **keywords):
+        if 'shapein' in keywords:
+            raise TypeError("The 'shapein' keyword should not be used.")
+        shapein = matrix.shape_input
 
-        # check if there is only one pointing matrix
-        isobservation = hasattr(input, 'get_pointing_matrix')
-        if isobservation or input is None:
-            if hasattr(input, 'slice'):
-                nmatrices = len(input.slice)
-            else:
-                nmatrices = 1
-        else:
-            if isinstance(input, PointingMatrix):
-                input = (input,)
-            if any(not isinstance(i, PointingMatrix) for i in input):
-                raise TypeError('The input is not a PointingMatrix, (nor a sequ'
-                                'ence of).')
-            nmatrices = len(input)
+        if 'shapeout' in keywords:
+            raise TypeError("The 'shapeout' keyword should not be used.")
+        shapeout = matrix.shape[:-1]
 
-        ismapdistributed = commin is not None and commin.size > 1
-        istoddistributed = commout is not None and commout.size > 1
-
-        # the output class will be a ProjectionOperator
-        if nmatrices == 1 and not ismapdistributed and not istoddistributed \
-           and not packed:
-            instance = Operator.__new__(cls)
-            return instance
-
-        # the input has multiple pointing matrices or will be multiplied by an
-        # operator
-        if isobservation:
-            if header is None:
-                if not hasattr(input, 'get_map_header'):
-                    raise AttributeError("No map header has been specified and "
-                        "the observation has no 'get_map_header' method.")
-                header = input.get_map_header(resolution=resolution,
-                                              downsampling=downsampling)
-        else:
-            headers = [i.info['header'] for i in input]
-            shapein_headers = [tuple([h['NAXIS' + str(i+1)] for i in \
-                               range(h['NAXIS'])])[::-1] for h in headers]
-            if any(s != shapein_headers[0] for s in shapein_headers):
-                raise ValueError('The pointing matrices do not have the same in'
-                    "put shape: {0}.".format(', '.join(str(shapein_headers))))
-            if header is None:
-                header = headers[0]
-
-        if isinstance(header, str):
-            header = str2fitsheader(header)
-
-        shapein = shapein if shapein is not None else tuple([header['NAXIS' + \
-            str(i+1)] for i in range(header['NAXIS'])])[::-1]
-
-        # get the block column operator
-        if isobservation:
-            input = input.get_pointing_matrix(header, npixels_per_sample,
-                        method=method, downsampling=downsampling)
-        if nmatrices == 1:
-            input = (input,)
-
-        operands = [ProjectionOperator(p, packed=False, shapein=shapein,
-                    commin=None, commout=None, **keywords) for p in input]
-        result = BlockColumnOperator(operands, axisout=-1)
-
-        if nmatrices > 1:
-            # get the global mask
-            def get_mask(output=None):
-                if output is None:
-                    #FIXME shapein_global = collect_shape(shapein)
-                    shapein_global = shapein
-                    output = Map.ones(shapein_global, dtype=np.bool8,
-                                      header=header)
-                for p in result.operands:
-                    p.get_mask(output)
-                return output
-            result.header = header
-            result.get_mask = get_mask
-
-        # handle packed or distributed input and output
-        return cls.distribute(result, commin, commout, packed)
-
-    def __init__(self, input, method=None, header=None, resolution=None,
-                 npixels_per_sample=0, units=None, derived_units=None,
-                 downsampling=False, packed=False, shapein=None, shapeout=None,
-                 commin=MPI.COMM_WORLD, commout=MPI.COMM_WORLD, **keywords):
-
-        if hasattr(input, 'get_pointing_matrix'):
-            if header is None:
-                if not hasattr(input, 'get_map_header'):
-                    raise AttributeError("No map header is specified and the ob"
-                        "servation has no 'get_map_header' method.")
-                header = input.get_map_header(resolution=resolution,
-                                              downsampling=downsampling)
-            elif isinstance(header, str):
-                header = str2fitsheader(header)
-
-            commout = input.comm_tod
-            matrix = input.get_pointing_matrix(header, npixels_per_sample,
-                method=method, downsampling=downsampling)
-        else:
-            if not isinstance(input, PointingMatrix):
-                input = input[0]
-            if input.ndim != 3:
-                raise ValueError('The input pointing matrix has not 3 dimension'
-                                 's.')
-            matrix = input
-
-        if header is None:
-            header = matrix.info.get('header', None)
         if units is None:
             units = matrix.info.get('units', None)
         if derived_units is None:
@@ -677,185 +860,13 @@ class ProjectionOperator(Operator):
         unit = _divide_unit(Quantity(1, units[0])._unit,
                             Quantity(1, units[1])._unit)
 
-        ndetectors, nsamples, npixels_per_sample = matrix.shape
-
-        # validate shapein
-        shapein_expected = None if header is None else tuple([header['NAXIS' + \
-            str(i+1)] for i in range(header['NAXIS'])])[::-1]
-        if shapein is None and shapein_expected is None:
-            raise ValueError("The pointing matrix itself does not contain infor"
-                "mation about the input shape. Use the 'header' or 'shapein' ke"
-                "ywords to specify it.")
-        if shapein is None:
-            shapein = shapein_expected
-        elif shapein_expected is not None and shapein != shapein_expected:
-            raise ValueError("The specified input shape '{0}' is incompatible w"
-                "ith that of the header '{1}'.".format(shapein,
-                shapein_expected))
-
-        # validate shapeout
-        shapeout_expected = (ndetectors, nsamples)
-        if shapeout is None:
-            shapeout = shapeout_expected
-        elif shapeout != shapeout_expected:
-            raise ValueError("The specified output shape '{0}' is incompatible "
-                "with that of the pointing matrix '{1}'.".format(shapeout,
-                shapeout_expected))
-
-        # attribute setting functions
-        def set_attrin(attr):
-            if header is not None:
-                attr['header'] = self.header.copy()
-            unitout = attr['_unit'] if '_unit' in attr else {}
-            if unitout:
-                attr['_unit'] = _divide_unit(unitout, unit)
-            if derived_units[1] is not None:
-                attr['_derived_units'] = derived_units[1]
-
-        def set_attrout(attr):
-            attr['header'] = None
-            unitin = attr['_unit'] if '_unit' in attr else {}
-            if unitin:
-                attr['_unit'] = _multiply_unit(unitin, unit)
-            if derived_units[0] is not None:
-                attr['_derived_units'] = derived_units[0]
-
-        # f2py doesn't accept zero-sized opaque arguments
-        if matrix.size == 0:
-            _matrix = np.empty(1, np.int64)
-        else:
-            _matrix = matrix.ravel().view(np.int64)
-
-        # initialise operator
         Operator.__init__(self, shapein=shapein, shapeout=shapeout,
-                          attrin=set_attrin, attrout=set_attrout,
                           classin=Map, classout=Tod, dtype=var.FLOAT_DTYPE,
+                          attrin=self.set_attrin, attrout=self.set_attrout,
                           **keywords)
         self.matrix = matrix
-        self._matrix = _matrix
-        self.commin = commin
-        self.commout = commout
-        self.header = header
-        self.ndetectors = ndetectors
-        self.nsamples = nsamples
-        self.npixels_per_sample = npixels_per_sample
         self.unit = unit
         self.duout, self.duin = derived_units
-
-    @staticmethod
-    def distribute(self, commin, commout, packed, **keywords):
-
-        ismapdistributed = commin is not None and commin.size > 1
-        istoddistributed = commout is not None and commout.size > 1
-
-        if not ismapdistributed and not istoddistributed and not packed:
-            return self
-
-        if packed or ismapdistributed:
-            mask = self.get_mask()
-            shapein = int(np.sum(~mask))
-            ops = (self,) if isinstance(self, ProjectionOperator) else \
-                  self.operands
-            for op in ops:
-                tmf.pointing_matrix_pack(self._matrix, mask.view(np.int8).T,
-                    self.npixels_per_sample, self.nsamples * self.ndetectors)
-                Operator.__init__(op, shapein=shapein, shapeout=self.shapeout,
-                                  attrin=op.attrin, attrout=op.attrout,
-                                  classin=op.classin, classout=op.classout,
-                                  dtype=self.dtype, **keywords)
-                op.validatein(tointtuple(shapein))
-                op.packed = True
-
-            if ismapdistributed:
-                self *= DistributionLocalOperator(mask)
-            else:
-                self *= PackOperator(mask)
-                self.operands[0].validatein(tointtuple(shapein))
-
-        else:
-            self *= DistributionIdentityOperator(commout=self.commout)
-
-        s = self.operands[0]
-        self.header = s.header
-        self.ndetectors = s.ndetectors
-        self.npixels_per_sample = s.npixels_per_sample
-
-        return self
-
-    def direct(self, input, output):
-        if not output.flags.contiguous:
-            if pyoperators.memory.verbose:
-                print 'Optimize me: Projection output is not contiguous.'
-            output_ = np.empty_like(output)
-        else:
-            output_ = output
-        tmf.pointing_matrix_direct(self._matrix, input.T, output_.T,
-                                   self.npixels_per_sample)
-        if not output.flags.contiguous:
-            output[...] = output_
-
-    def transpose(self, input, output, operation=None):
-        if not input.flags.contiguous:
-            if pyoperators.memory.verbose:
-                print 'Optimize me: Projection.T input is not contiguous.'
-            input_ = np.ascontiguousarray(input)
-        else:
-            input_ = input
-        if operation is None:
-            output[...] = 0
-        elif operation is not operator.__iadd__:
-            raise ValueError('Invalid operation.')
-        tmf.pointing_matrix_transpose(self._matrix, input_.T, output.T,
-                                      self.npixels_per_sample)
-
-    def get_mask(self, output=None):
-        shapein_global = self.shapein
-        #XXX FIXME: shapein_global = collect_shape(self.shapein)
-        if output is None:
-            output = Map.ones(shapein_global, dtype=np.bool8,
-                              header=self.header)
-        elif output.dtype != bool or output.shape != shapein_global:
-            raise ValueError('The argument to store the mask is incompatible.')
-        tmf.pointing_matrix_mask(self._matrix, output.view(np.int8).T, 
-            self.npixels_per_sample, self.nsamples * self.ndetectors)
-        return output
-
-    def get_ptp(self):
-        npixels = np.product(self.shapein)
-        return tmf.pointing_matrix_ptp(self._matrix, self.npixels_per_sample,
-            self.nsamples_tot, self.ndetectors, npixels).T
-
-    def intersects(self, fitscoords, axis=None, f=None):
-        """
-        Return True if a map pixel is seen by the pointing matrix.
-
-        """
-
-        naxes = self.header['NAXIS']
-        axes = [1] + [self.header['NAXIS'+str(i+1)] for i in range(naxes-1)]
-        index = np.array(fitscoords) - 1
-        index = int(np.sum(index * np.cumproduct(axes)))
-
-        shape = self.matrix.shape
-        if f is not None:
-            out = f(self._matrix, index, shape[-1], shape[-2], shape[-3])
-        elif axis is None:
-            out = tmf.operators.pmatrix_intersects(self._matrix, index,
-                      shape[-1], shape[-2], shape[-3])
-        elif axis == 0 or axis == -3:
-            out = tmf.operators.pmatrix_intersects_axis3(self._matrix, index,
-                      shape[-1], shape[-2], shape[-3])
-        elif axis == 1 or axis == -2:
-            out = tmf.operators.pmatrix_intersects_axis2(self._matrix, index,
-                      shape[-1], shape[-2], shape[-3])
-        else:
-            raise ValueError('Invalid axis.')
-
-        if isinstance(out, np.ndarray):
-            out = out.view(bool)
-        else:
-            out = bool(out)
-        return out
 
 
 @real
@@ -907,21 +918,20 @@ class DiscreteDifferenceOperator(Operator):
     Calculate the nth order discrete difference along given axis.
     """
 
-    def __init__(self, axis=-1, comm=None, **keywords):
+    def __init__(self, axis=-1, **keywords):
         Operator.__init__(self, dtype=var.FLOAT_DTYPE, **keywords)
         self.axis = axis
-        self.comm = comm or var.comm_map
         self.set_rule('.T.', self._rule_ddtdd, CompositionOperator)
 
     def direct(self, input, output):
-        diff(input, output, self.axis, comm=self.comm)
+        diff(input, output, self.axis, comm=self.commin)
 
     def transpose(self, input, output):
-        diffT(input, output, self.axis, comm=self.comm)
+        diffT(input, output, self.axis, comm=self.commin)
 
     @staticmethod
     def _rule_ddtdd(dT, self):
-        return DdTddOperator(self.axis, comm=self.comm)
+        return DdTddOperator(self.axis, commin=self.commin)
 
 
 @real
@@ -930,19 +940,20 @@ class DiscreteDifferenceOperator(Operator):
 class DdTddOperator(Operator):
     """Calculate operator dX.T dX along a given axis."""
 
-    def __init__(self, axis=-1, scalar=1., comm=None, **keywords):
+    def __init__(self, axis=-1, scalar=1., **keywords):
         Operator.__init__(self, dtype=var.FLOAT_DTYPE, **keywords)
-        self.__name__ = (str(scalar) + ' ' if scalar != 1 else '') + \
-            self.__name__
         self.axis = axis
         self.scalar = scalar
-        self.comm = comm or var.comm_map        
         self.set_rule('{HomothetyOperator}.', lambda o,s: DdTddOperator(
                       self.axis, o.data * s.scalar), CompositionOperator)
 
     def direct(self, input, output):
-        diffTdiff(input, output, self.axis, self.scalar, comm=self.comm)
+        diffTdiff(input, output, self.axis, self.scalar, comm=self.commin)
 
+    def __str__(self):
+        s = (str(self.scalar) + ' ') if self.scalar != 1 else ''
+        s += super(DdTddOperator, self).__str__(self)
+        return s
 
 @real
 @linear
@@ -952,34 +963,48 @@ class DistributionLocalOperator(Operator):
     local non-distributed mask.
     """
 
-    def __init__(self, mask, operator=MPI.SUM, comm=None, **keywords):
-        if comm is None:
-            comm = var.comm_map
-        shapeout = (int(np.sum(~mask)),)
-        shapein = distribute_shape(mask.shape, comm)
-        attrin = { 'comm':comm, 'shape_global':mask.shape }
-        attrout = { 'comm':MPI.COMM_SELF, 'shape_global':shapeout}
-        Operator.__init__(self, classin=Map, shapein=shapein,
-                                shapeout=shapeout, attrin=attrin,
-                                attrout=attrout, **keywords)
-        self.comm = comm
+    def __init__(self, mask, operator=MPI.SUM, commin=MPI.COMM_WORLD,
+                 **keywords):
+        commout = commin
+        shapeout = mask.size - int(np.sum(mask))
+        shapein = distribute_shape(mask.shape, comm=commin)
+        Operator.__init__(self, shapein=shapein, shapeout=shapeout,
+                          commin=commin, commout=commout, **keywords)
         self.mask = mask
+        self.chunk_size = int(np.product(mask.shape[1:]))
         self.operator = operator
 
     def direct(self, input, output):
-        status = tmf.operators_mpi.allscatterlocal(input.T, self.mask.view(
-            np.int8).T, output.T, self.comm.py2f())
+        ninput = input.size
+        noutput = output.size
+        input = input.ravel() if ninput > 0 else np.array(0.)
+        output = output.ravel() if noutput > 0 else np.array(0.)
+        status = tmf.operators_mpi.allscatterlocal(input, self.mask.view(
+            np.int8).T, output, self.chunk_size, self.commin.py2f(),
+            ninput=ninput, noutput=noutput)
         if status == 0: return
         if status < 0:
-            raise RuntimeError('Incompatible sizes.')
+            rank = self.commin.rank
+            if status == -1:
+                raise ValueError('Invalid mask on node {0}.'.format(rank))
+            if status == -2:
+                raise ValueError('Invalid input on node {0}.'.format(rank))
+            if status == -3:
+                raise RuntimeError('Transmission failure {0}.'.format(rank))
+            assert False
         raise MPI.Exception(status)
 
     def transpose(self, input, output):
+        output[...] = 0
         status = tmf.operators_mpi.allreducelocal(input.T, self.mask.view(
-            np.int8).T, output.T, self.operator.py2f(), self.comm.py2f())
+            np.int8).T, output.T, self.chunk_size, self.operator.py2f(),
+            self.commin.py2f())
         if status == 0: return
         if status < 0:
-            raise RuntimeError('Incompatible mask.')
+            rank = self.commin.rank
+            if status == -1:
+                raise ValueError('Invalid mask on node {0}.'.format(rank))
+            assert False
         raise MPI.Exception(status)
 
 
@@ -1257,6 +1282,13 @@ def _ravel_strided(array):
     return flat, array_.shape, s2
 
 def obsolete(cls):
+    if type(cls) is not type:
+        def func(*args, **kwargs):
+            print("The class factory '{0}' has been renamed. Use '{1}' instead."
+                  .format(cls.__name__, cls.__name__ + 'Operator'))
+            return cls(*args, **kwargs)
+        return func
+
     @functools.wraps(cls.__base__.__init__)
     def init(self, *args, **keywords):
         print("The class '{0}' has been renamed. Use class '{1}' instead." \
@@ -1286,8 +1318,8 @@ class Masking(MaskOperator):
 class Packing(PackOperator):
     pass
 @obsolete
-class Projection(ProjectionOperator):
-    pass
+def Projection(*args, **kwargs):
+    return ProjectionOperator(*args, **kwargs)
 @obsolete
 class ResponseTruncatedExponential(ConvolutionTruncatedExponentialOperator):
     pass

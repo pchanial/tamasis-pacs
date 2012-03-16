@@ -7,19 +7,18 @@ program test_deglitching
     use module_tamasis,        only : p
     implicit none
 
-    type(pointingelement),allocatable :: pmatrix(:,:,:)
+    type(pointingelement),allocatable :: pmatrix(:,:,:), pmatrix2d(:,:)
     integer                           :: i, j
 !   integer                           :: itime, idetector, ipixel
     integer                           :: ntimes, ndetectors, npixels_per_sample
     integer                           :: nrepeats
     integer                           :: nx, ny
     real(p), allocatable              :: xc(:), yc(:)
-    real(p), allocatable              :: map(:), signal(:,:)
+    real(p), allocatable              :: map(:), signal(:,:), signal1d(:)
     logical(kind=1), allocatable      :: mask(:,:)
     
     nrepeats = 6
     ndetectors = 3
-    npixels_per_sample = 2
     nx = 6
     ny = 1
     ntimes = (nx-3)*nrepeats
@@ -27,7 +26,6 @@ program test_deglitching
     allocate (map(0:nx*ny-1))
     allocate (xc(ntimes))
     allocate (yc(ntimes))
-    allocate (signal(ntimes,ndetectors))
     allocate (mask(ntimes,ndetectors))
 
     map = linspace(1._p, 2.25_p, nx*ny)
@@ -61,13 +59,21 @@ program test_deglitching
     ! xxx : glitch
     ! ooo : no glitch
 
-    allocate (pmatrix(1, ntimes, 2))
+    ndetectors = 2
+    npixels_per_sample = 1
+    allocate (pmatrix(npixels_per_sample, ntimes, ndetectors))
+    allocate (pmatrix2d(npixels_per_sample, ntimes * ndetectors))
+    allocate (signal(ntimes, ndetectors))
+    allocate (signal1d(ntimes * ndetectors))
     mask = .false.
     call get_pmatrix(pmatrix(:,:,1:1), nx, ny, xc,      yc, 1._p)
     call get_pmatrix(pmatrix(:,:,2:2), nx, ny, xc+1._p, yc, 1._p)
+    pmatrix2d = reshape(pmatrix, [npixels_per_sample, ntimes * ndetectors])
 
     ! read timeline from map
-    call pmatrix_direct(pmatrix(:,:,1:2), map, signal(:,1:2))
+    call pmatrix_direct(pmatrix2d, map, signal1d)
+    signal(:,1) = signal1d(1:ntimes)
+    signal(:,2) = signal1d(ntimes+1:)
     ! add noise
     signal(:,1) = signal(:,1) + [([(0.001_p, j=1,nx-3)]*(i-1), i=1, nrepeats)]
     signal(:,2) = signal(:,2) - [([(0.001_p, j=1,nx-3)]*(i-1), i=1, nrepeats)]
@@ -78,7 +84,7 @@ program test_deglitching
     call deglitch_l2b(pmatrix(:,:,1:2), nx, ny, signal(:,1:2), mask(:,1:2), 5._p, .true.)
     if (count(mask) /= 6 .or. any(.not. mask([1,4,17],1)) .or. any(.not. mask([3,8,9],2))) call failure('deglitch_l2b 1')
 
-    deallocate (pmatrix)
+    deallocate (pmatrix, pmatrix2d, signal, signal1d)
 
 
     !-------------------------------------
@@ -105,14 +111,22 @@ program test_deglitching
     ! oox : masked by contamination
     ! ooo : no glitch
 
+    ndetectors = 2
+    npixels_per_sample = 2
     allocate (pmatrix(npixels_per_sample, ntimes, ndetectors))
+    allocate (pmatrix2d(npixels_per_sample, ntimes * ndetectors))
+    allocate (signal(ntimes, ndetectors))
+    allocate (signal1d(ntimes * ndetectors))
     mask = .false.
     call get_pmatrix(pmatrix(:,:,1:1), nx, ny, xc+0.5_p, yc, 1._p)
     call get_pmatrix(pmatrix(:,:,2:2), nx, ny, xc+1.5_p, yc, 1._p)
+    pmatrix2d = reshape(pmatrix, [npixels_per_sample, ntimes * ndetectors])
 
     ! read map
-    call pmatrix_direct(pmatrix(:,:,1:2), map, signal(:,1:2))
-    ! add noise
+    call pmatrix_direct(pmatrix2d, map, signal1d)
+    signal(:,1) = signal1d(1:ntimes)
+    signal(:,2) = signal1d(ntimes+1:)
+     ! add noise
     signal(:,1) = signal(:,1) + [([(0.001_p, j=1,nx-3)]*(i-1), i=1, nrepeats)]
     signal(:,2) = signal(:,2) - [([(0.001_p, j=1,nx-3)]*(i-1), i=1, nrepeats)]
     ! add glitches
@@ -123,6 +137,7 @@ program test_deglitching
     if (count(mask) /= 14 .or. any(.not. mask([1,3,4,8,9,16,17],1)) .or. &
         any(.not. mask([1,3,4,8,9,16,17],2))) call failure('deglitch_l2b 2')
 
+    deallocate (pmatrix, pmatrix2d, signal, signal1d)
 
     !-------------------------------------
     ! test 3: 3 detectors overlap map pixels
@@ -155,14 +170,24 @@ program test_deglitching
     ! oox : masked by contamination
     ! ooo : no glitch
 
+    ndetectors = 3
+    npixels_per_sample = 2
+    allocate (pmatrix(npixels_per_sample, ntimes, ndetectors))
+    allocate (pmatrix2d(npixels_per_sample, ntimes * ndetectors))
+    allocate (signal(ntimes, ndetectors))
+    allocate (signal1d(ntimes * ndetectors))
 
     mask = .false.
     call get_pmatrix(pmatrix(:,:,1:1), nx, ny, xc+0.5_p, yc, 1._p)
     call get_pmatrix(pmatrix(:,:,2:2), nx, ny, xc+1.5_p, yc, 1._p)
     call get_pmatrix(pmatrix(:,:,3:3), nx, ny, xc+2.5_p, yc, 1._p)
+    pmatrix2d = reshape(pmatrix, [npixels_per_sample, ntimes * ndetectors])
 
     ! read map
-    call pmatrix_direct(pmatrix, map, signal)
+    call pmatrix_direct(pmatrix2d, map, signal1d)
+    signal(:,1) = signal1d(0*ntimes+1:1*ntimes)
+    signal(:,2) = signal1d(1*ntimes+1:2*ntimes)
+    signal(:,3) = signal1d(2*ntimes+1:3*ntimes)
     ! add noise
     signal(:,1) = signal(:,1) + [([(0.001_p, j=1,nx-3)]*(i-1), i=1, nrepeats)]
     signal(:,2) = signal(:,2) - [([(0.001_p, j=1,nx-3)]*(i-1), i=1, nrepeats)]
@@ -190,6 +215,8 @@ program test_deglitching
 !!$            write (*,*)
 !!$        end do
 !!$    end do
+
+    deallocate (pmatrix, pmatrix2d, signal, signal1d)
 
 contains
 

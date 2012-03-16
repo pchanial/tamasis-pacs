@@ -4,7 +4,6 @@ program test_madcap
     use module_filtering,      only : FilterUncorrelated
     use module_madcap
     use module_math,           only : neq_real
-    use module_pointingmatrix, only : backprojection_weighted, pointingelement
     use module_tamasis,        only : p
     implicit none
 

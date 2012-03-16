@@ -9,6 +9,7 @@ from pyoperators.utils.mpi import MPI
 
 from .acquisitionmodels import PointingMatrix
 from .datatypes import Map
+from .mpiutils import gather_fitsheader_if_needed
 from .wcsutils import barycenter_lonlat, combine_fitsheader, create_fitsheader
 
 __all__ = ['Instrument']
@@ -283,7 +284,7 @@ class Instrument(object):
         return combine_fitsheader(headers)
 
     def get_pointing_matrix(self, pointing, header, npixels_per_sample=0,
-                            method=None, **keywords):
+                            method=None, comm=MPI.COMM_WORLD, **keywords):
         """
         Return the pointing matrix for a given set of pointings.
 
@@ -305,6 +306,8 @@ class Instrument(object):
                 'nearest' : the value of the sky pixel closest to the detector
                             center is taken as the sample value, assuming
                             surface brightness conservation.
+            comm : mpi4py.MPI.Comm
+                MPI communicator, only used if the input FITS header is local.
 
         """
         if method is None:
@@ -315,8 +318,16 @@ class Instrument(object):
         method = method.lower()
         choices = ('nearest', 'sharp')
         if method not in choices:
-            raise ValueError("Invalid method '" + method + \
-                "'. Expected values are " + strenum(choices) + '.')
+            raise ValueError("Invalid method '" + method + "'. Expected values "
+                "are " + strenum(choices) + '.')
+
+        header = gather_fitsheader_if_needed(header, comm=comm)
+        shape_input = tuple(header['NAXIS' + str(i+1)]
+                            for i in range(header['NAXIS']))[::-1]
+        if np.product(shape_input) > np.iinfo(np.int32).max:
+            raise RuntimeError('The map is too large: pixel indices cannot be s'
+                'stored using 32 bits: {0}>{1}'.format(np.product(shape_input),
+                np.iinfo(np.int32).max))
 
         mask = ~pointing['removed']
         pointing = pointing[mask]
@@ -336,10 +347,11 @@ class Instrument(object):
                 'units':('/detector', '/pixel'),
                 'derived_units':(None, None)}
         try:
-            pmatrix = PointingMatrix.empty(shape, info=info, verbose=True)
+            pmatrix = PointingMatrix.empty(shape, shape_input, info=info)
         except MemoryError:
             gc.collect()
-            pmatrix = PointingMatrix.empty(shape, info=info, verbose=True)
+            pmatrix = PointingMatrix.empty(shape, shape_input, info=info,
+                                           verbose=True)
 
         # compute the pointing matrix
         if method == 'sharp':

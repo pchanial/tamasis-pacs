@@ -21,7 +21,7 @@ from . import var
 from tamasis.core import (Quantity, Tod, MaskPolicy, Instrument, Pointing, tmf,
                           CompressionAverageOperator, ProjectionOperator,
                           PointingMatrix, create_fitsheader, filter_nonfinite)
-from tamasis.mpiutils import distribute_observation
+from tamasis.mpiutils import distribute_observation, gather_fitsheader_if_needed
 from tamasis.observations import Observation
 
 __all__ = [ 'PacsObservation',
@@ -186,7 +186,8 @@ class PacsInstrument(Instrument):
 
     def get_pointing_matrix(self, pointing, header, npixels_per_sample, method,
                             downsampling=None, compression_factor=None,
-                            delay=None, derived_units=None, **keywords):
+                            delay=None, derived_units=None, comm=MPI.COMM_WORLD,
+                            **keywords):
         """
         Return the PACS-specific pointing matrix for a given set of pointings.
 
@@ -217,6 +218,8 @@ class PacsInstrument(Instrument):
                 The on-board compression factor.
             delay : float
                 Instrument clock lag wrt the spacecraft clock, in ms.
+            comm : mpi4py.MPI.Comm
+                MPI communicator, only used if the input FITS header is local.
 
         """
         if method is None:
@@ -226,6 +229,14 @@ class PacsInstrument(Instrument):
         if method not in choices:
             raise ValueError("Invalid method '" + method + \
                 "'. Expected values are " + strenum(choices) + '.')
+
+        header = gather_fitsheader_if_needed(header, comm=comm)
+        shape_input = tuple(header['NAXIS' + str(i+1)]
+                            for i in range(header['NAXIS']))[::-1]
+        if np.product(shape_input) > np.iinfo(np.int32).max:
+            raise RuntimeError('The map is too large: pixel indices cannot be s'
+                'stored using 32 bits: {0}>{1}'.format(np.product(shape_input),
+                np.iinfo(np.int32).max))
 
         nvalids = int(np.sum(~pointing.removed))
         if not downsampling:
@@ -240,10 +251,11 @@ class PacsInstrument(Instrument):
                 'downsampling':downsampling}
 
         try:
-            pmatrix = PointingMatrix.empty(shape, info=info, verbose=True)
+            pmatrix = PointingMatrix.empty(shape, shape_input, info=info)
         except MemoryError:
             gc.collect()
-            pmatrix = PointingMatrix.empty(shape, info=info, verbose=False)
+            pmatrix = PointingMatrix.empty(shape, shape_input, info=info,
+                                           verbose=False)
 
         if pmatrix.size == 0:
             # f2py doesn't accept zero-sized opaque arguments
@@ -286,7 +298,7 @@ class PacsInstrument(Instrument):
         return self.get_pointing_matrix(pointing, header,
             new_npixels_per_sample, method, compression_factor= \
             compression_factor, delay=delay, derived_units=derived_units,
-            downsampling=downsampling)
+            downsampling=downsampling, comm=comm)
 
 
 class PacsBase(Observation):

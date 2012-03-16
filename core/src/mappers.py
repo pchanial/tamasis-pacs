@@ -115,7 +115,10 @@ def mapper_naive(tod, model, unit=None):
 
 def mapper_ls(tod, model, invntt=None, unpacking=None, x0=None, tol=1.e-5,
               maxiter=300, M=None, solver=None, verbose=True, callback=None,
-              criterion=True, profile=None, comm_map=None):
+              criterion=True, profile=None):
+
+    comm_map = model.commin or MPI.COMM_WORLD
+    comm_tod = model.commout or comm_map
 
     tod = _validate_tod(tod)
 
@@ -131,7 +134,7 @@ def mapper_ls(tod, model, invntt=None, unpacking=None, x0=None, tol=1.e-5,
     return _solver(A, b, tod, model, invntt, hyper=0, x0=x0, tol=tol,
                    maxiter=maxiter, M=M, solver=solver, verbose=verbose,
                    callback=callback, criterion=criterion, profile=profile,
-                   unpacking=unpacking, comm_map=comm_map)
+                   unpacking=unpacking, comm_map=comm_map, comm_tod=comm_tod)
 
 
 #-------------------------------------------------------------------------------
@@ -139,28 +142,28 @@ def mapper_ls(tod, model, invntt=None, unpacking=None, x0=None, tol=1.e-5,
 
 def mapper_rls(tod, model, invntt=None, unpacking=None, hyper=1.0, x0=None,
                tol=1.e-5, maxiter=300, M=None, solver=None, verbose=True,
-               callback=None, criterion=True, profile=None, comm_map=None):
+               callback=None, criterion=True, profile=None):
+
+    comm_map = model.commin or MPI.COMM_WORLD
+    comm_tod = model.commout or comm_map
 
     tod = _validate_tod(tod)
 
     if invntt is None:
         invntt = IdentityOperator()
 
-    if comm_map is None:
-        comm_map = var.comm_map
-
     A = model.T * invntt * model
 
     ntods = int(np.sum(~tod.mask)) if getattr(tod, 'mask', None) is not None \
             else tod.size
-    ntods = var.comm_tod.allreduce(ntods, op=MPI.SUM)
+    ntods = comm_tod.allreduce(ntods, op=MPI.SUM)
     nmaps = A.shape[1] * comm_map.Get_size()
 
     npriors = len(model.shapein)
-    priors = [ DiscreteDifferenceOperator(axis=axis, shapein=model.shapein,
-               comm=comm_map) for axis in range(npriors) ]
+    priors = [DiscreteDifferenceOperator(axis=axis, shapein=model.shapein,
+              commin=comm_map) for axis in range(npriors)]
     prior = AdditionOperator([DdTddOperator(axis=axis, scalar=hyper * ntods / \
-                              nmaps, comm=comm_map) for axis in range(npriors)])
+                nmaps, commin=comm_map) for axis in range(npriors)])
     if hyper != 0 and (comm_map.Get_rank() == 0 or comm_map.Get_size() > 1):
         A += prior
 
@@ -169,7 +172,8 @@ def mapper_rls(tod, model, invntt=None, unpacking=None, hyper=1.0, x0=None,
     return _solver(A, b, tod, model, invntt, hyper=hyper, priors=priors, x0=x0,
                    tol=tol, maxiter=maxiter, M=M, solver=solver,
                    verbose=verbose, callback=callback, criterion=criterion,
-                   profile=profile, unpacking=unpacking, comm_map=comm_map)
+                   profile=profile, unpacking=unpacking, comm_map=comm_map,
+                   comm_tod=comm_tod)
 
 
 #-------------------------------------------------------------------------------
@@ -180,12 +184,15 @@ def mapper_nl(tod, model, unpacking=None, priors=[], hypers=[], norms=[],
               linesearch=None, descent_method='pr', M=None, verbose=True,
               callback=None, profile=None):
 
+    comm_map = model.commin or MPI.COMM_WORLD
+    comm_tod = model.commout or comm_map
+
     tod = _validate_tod(tod)
 
     if len(priors) == 0 and len(hypers) != 0:
         npriors = len(model.shapein)
         priors = [ DiscreteDifferenceOperator(axis=axis, shapein=model.shapein,
-                   comm=var.comm_map) for axis in range(npriors) ]
+                   commin=comm_map) for axis in range(npriors) ]
     else:
         npriors = len(priors)
 
@@ -198,7 +205,7 @@ def mapper_nl(tod, model, unpacking=None, priors=[], hypers=[], norms=[],
         norms = (npriors+1) * [norm2]
 
     if len(comms) == 0:
-        comms = [var.comm_tod] + npriors * [var.comm_map]
+        comms = [comm_tod] + npriors * [comm_map]
 
     if isinstance(M, DiagonalOperator):
         filter_nonfinite(M.data, out=M.data)
@@ -206,8 +213,8 @@ def mapper_nl(tod, model, unpacking=None, priors=[], hypers=[], norms=[],
     hypers = np.asarray(hypers, dtype=var.FLOAT_DTYPE)
     ntods = int(np.sum(~tod.mask)) if getattr(tod, 'mask', None) is not None \
             else tod.size
-    ntods = var.comm_tod.allreduce(ntods, op=MPI.SUM)
-    nmaps = model.shape[1] * var.comm_map.Get_size()
+    ntods = comm_tod.allreduce(ntods, op=MPI.SUM)
+    nmaps = model.shape[1] * comm_map.Get_size()
     hypers /= nmaps
     hypers = np.hstack([1/ntods, hypers])
     
@@ -235,7 +242,7 @@ def mapper_nl(tod, model, unpacking=None, priors=[], hypers=[], norms=[],
 
     if linesearch is None:
         linesearch = QuadraticStep(hypers, norms, [model] + priors, comms,
-                                   unpacking, var.comm_map)
+                                   unpacking, comm_map)
 
     if callback is None:
         callback = CgCallback(verbose=verbose)
@@ -244,7 +251,7 @@ def mapper_nl(tod, model, unpacking=None, priors=[], hypers=[], norms=[],
 
     solution = nlcg(objfunc, model.shape[1], M=M, maxiter=maxiter, tol=tol,
                     descent_method=descent_method,  linesearch=linesearch,
-                    callback=callback, comm=var.comm_map)
+                    callback=callback, comm=comm_map)
 
     time0 = time.time() - time0
     Js = objfunc(solution)
@@ -299,7 +306,8 @@ def _validate_tod(tod):
 
 def _solver(A, b, tod, model, invntt, priors=[], hyper=0, x0=None, tol=1.e-5,
             maxiter=300, M=None, solver=None, verbose=True, callback=None,
-            criterion=True, profile=None, unpacking=None, comm_map=None):
+            criterion=True, profile=None, unpacking=None, comm_map=None,
+            comm_tod=None):
 
     npriors = len(priors)
 
@@ -324,19 +332,16 @@ def _solver(A, b, tod, model, invntt, priors=[], hyper=0, x0=None, tol=1.e-5,
     if np.min(b) == np.max(b) == 0:
         print('Warning: in equation Ax=b, b is zero.')
 
-    if comm_map is None:
-        comm_map = var.comm_map
-
     ntods = int(np.sum(~tod.mask)) if getattr(tod, 'mask', None) is not None \
             else tod.size
-    ntods = var.comm_tod.allreduce(ntods, op=MPI.SUM)
+    ntods = comm_tod.allreduce(ntods, op=MPI.SUM)
 
     if hyper != 0:
         hc = np.hstack([1, npriors * [hyper]]) / ntods
     else:
         hc = [ 1 / ntods ]
     norms = [norm2_ellipsoid(invntt)] + npriors * [norm2]
-    comms = [var.comm_tod] + npriors * [comm_map]
+    comms = [comm_tod] + npriors * [comm_map]
     def criter(x):
         x = unpacking(x)
         rs = [model(x) - tod.view(np.ndarray) ] + [p(x) for p in priors]
@@ -379,6 +384,7 @@ def _solver(A, b, tod, model, invntt, priors=[], hyper=0, x0=None, tol=1.e-5,
         os.system('dot -Tpng ' + profile + '.dot > ' + profile)
         os.system('rm -f ' + profile + '.prof' + ' ' + profile + '.dot')
         return None
+
     try:
         solution, info = solver(A, b, x0=x0, tol=tol, maxiter=maxiter, M=M,
                                 callback=callback, comm=comm_map)

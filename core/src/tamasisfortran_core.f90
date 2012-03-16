@@ -37,24 +37,23 @@ end subroutine info_nbytes_real
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine pointing_matrix_direct(pmatrix, map1d, signal, npixels_per_sample, nsamples, ndetectors, npixels)
+subroutine pointing_matrix_direct(pmatrix, map1d, signal, npixels_per_sample, nsamples, npixels)
 
     use module_pointingmatrix, only : PointingElement, pmatrix_direct, pmatrix_direct_one_pixel_per_sample
     use module_tamasis,        only : p
     implicit none
 
-    !f2py integer*8, dimension(npixels_per_sample*nsamples*ndetectors), intent(inout) :: pmatrix
+    !f2py integer*8, dimension(npixels_per_sample*nsamples), intent(inout) :: pmatrix
 
-    type(PointingElement), intent(inout) :: pmatrix(npixels_per_sample, nsamples, ndetectors)
+    type(PointingElement), intent(inout) :: pmatrix(npixels_per_sample, nsamples)
     real(p), intent(in)    :: map1d(npixels)
-    real(p), intent(inout) :: signal(nsamples, ndetectors)
+    real(p), intent(inout) :: signal(nsamples)
     integer, intent(in)    :: npixels_per_sample
     integer*8, intent(in)  :: nsamples
-    integer, intent(in)    :: ndetectors
     integer, intent(in)    :: npixels
 
     if (npixels_per_sample == 1) then
-        call pmatrix_direct_one_pixel_per_sample(pmatrix(1,:,:), map1d, signal)
+        call pmatrix_direct_one_pixel_per_sample(pmatrix(1,:), map1d, signal)
     else
         call pmatrix_direct(pmatrix, map1d, signal)
     end if
@@ -65,24 +64,23 @@ end subroutine pointing_matrix_direct
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine pointing_matrix_transpose(pmatrix, signal, map1d, npixels_per_sample, nsamples, ndetectors, npixels)
+subroutine pointing_matrix_transpose(pmatrix, signal, map1d, npixels_per_sample, nsamples, npixels)
 
     use module_pointingmatrix, only : PointingElement, pmatrix_transpose, pmatrix_transpose_one_pixel_per_sample
     use module_tamasis,        only : p
     implicit none
 
-    !f2py integer*8, dimension(npixels_per_sample*nsamples*ndetectors), intent(inout) :: pmatrix
+    !f2py integer*8, dimension(npixels_per_sample*nsamples), intent(inout) :: pmatrix
 
-    type(PointingElement), intent(inout) :: pmatrix(npixels_per_sample, nsamples, ndetectors)
-    real(p), intent(in)    :: signal(nsamples, ndetectors)
+    type(PointingElement), intent(inout) :: pmatrix(npixels_per_sample, nsamples)
+    real(p), intent(in)    :: signal(nsamples)
     real(p), intent(inout) :: map1d(npixels)
     integer, intent(in)    :: npixels_per_sample
     integer*8, intent(in)  :: nsamples
-    integer, intent(in)    :: ndetectors
     integer, intent(in)    :: npixels
 
     if (npixels_per_sample == 1) then
-        call pmatrix_transpose_one_pixel_per_sample(pmatrix(1,:,:), signal, map1d)
+        call pmatrix_transpose_one_pixel_per_sample(pmatrix(1,:), signal, map1d)
     else
         call pmatrix_transpose(pmatrix, signal, map1d)
     end if
@@ -93,19 +91,18 @@ end subroutine pointing_matrix_transpose
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine pointing_matrix_ptp(pmatrix, ptp, npixels_per_sample, nsamples, ndetectors, npixels)
+subroutine pointing_matrix_ptp(pmatrix, ptp, npixels_per_sample, nsamples, npixels)
 
     use module_pointingmatrix, only : PointingElement, pmatrix_ptp
     use module_tamasis,        only : p
     implicit none
 
-    !f2py integer*8, dimension(npixels_per_sample*nsamples*ndetectors), intent(inout) :: pmatrix
+    !f2py integer*8, dimension(npixels_per_sample*nsamples), intent(inout) :: pmatrix
 
-    type(PointingElement), intent(inout) :: pmatrix(npixels_per_sample, nsamples, ndetectors)
-    real(p), intent(out)                 :: ptp(npixels, npixels)
+    type(PointingElement), intent(inout) :: pmatrix(npixels_per_sample, nsamples)
+    real(p), intent(inout)               :: ptp(npixels, npixels)
     integer, intent(in)                  :: npixels_per_sample
     integer*8, intent(in)                :: nsamples
-    integer, intent(in)                  :: ndetectors
     integer, intent(in)                  :: npixels
 
     call pmatrix_ptp(pmatrix, ptp)
@@ -264,27 +261,26 @@ end subroutine downsampling_transpose
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine backprojection_weighted(pmatrix, data, mask, map1d, weight1d, npixels_per_sample, nsamples, ndetectors, npixels)
+subroutine backprojection_weight(pmatrix, data, mask, map1d, weight1d, npixels_per_sample, nsamples, npixels)
 
-    use module_pointingmatrix, only : bpw => backprojection_weighted, PointingElement
+    use module_pointingmatrix, only : bpw => backprojection_weight, PointingElement
     use module_tamasis,        only : p
     implicit none
 
-    !f2py integer*8,intent(in)        :: pmatrix(npixels_per_sample*nsamples*ndetectors)
+    !f2py integer*8,intent(in)        :: pmatrix(npixels_per_sample*nsamples)
 
-    type(PointingElement), intent(in) :: pmatrix(npixels_per_sample,nsamples,ndetectors)
-    real(p), intent(in)               :: data(nsamples,ndetectors)
-    logical*1, intent(in)             :: mask(nsamples,ndetectors)
+    type(PointingElement), intent(in) :: pmatrix(npixels_per_sample, nsamples)
+    real(p), intent(in)               :: data(nsamples)
+    logical*1, intent(in)             :: mask(nsamples)
     real(p), intent(inout)            :: map1d(npixels)
     real(p), intent(inout)            :: weight1d(npixels)
     integer, intent(in)               :: npixels_per_sample
     integer*8, intent(in)             :: nsamples
-    integer, intent(in)               :: ndetectors
     integer, intent(in)               :: npixels
 
     call bpw(pmatrix, data, mask, map1d, weight1d)
 
-end subroutine backprojection_weighted
+end subroutine backprojection_weight
 
 
 !-----------------------------------------------------------------------------------------------------------------------------------

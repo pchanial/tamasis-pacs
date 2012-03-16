@@ -11,10 +11,12 @@ import re
 
 from . import var
 from . import tmf
+from pyoperators.utils.mpi import MPI
 from tamasis.acquisitionmodels import PointingMatrix
 from tamasis.datatypes import Tod
 from tamasis.instruments import Instrument
 from tamasis.observations import Observation
+from tamasis.mpiutils import gather_fitsheader_if_needed
 
 __all__ = [ 'MadMap1Observation' ]
 
@@ -98,7 +100,7 @@ class MadMap1Observation(Observation):
         return header
 
     def get_pointing_matrix(self, header, npixels_per_sample, method=None,
-                            section=None, **keywords):
+                            section=None, comm=MPI.COMM_WORLD, **keywords):
         """
         Method to get the pointing matrix.
         """
@@ -118,6 +120,14 @@ class MadMap1Observation(Observation):
         if method != 'default':
             raise ValueError("Invalid pointing matrix method '" + method + "'.")
 
+        header = gather_fitsheader_if_needed(header, comm=comm)
+        shape_input = tuple(header['NAXIS' + str(i+1)]
+                            for i in range(header['NAXIS']))[::-1]
+        if np.product(shape_input) > np.iinfo(np.int32).max:
+            raise RuntimeError('The map is too large: pixel indices cannot be s'
+                'stored using 32 bits: {0}>{1}'.format(np.product(shape_input),
+                np.iinfo(np.int32).max))
+
         pointing = self.pointing[section.start:section.stop]
         ndetectors = self.get_ndetectors()
         nsamples = int(np.sum(~pointing.removed))
@@ -134,10 +144,11 @@ class MadMap1Observation(Observation):
         info = {'header' : header,
                 'method' : method}
         try:
-            pmatrix = PointingMatrix.empty(shape, info=info, verbose=True)
+            pmatrix = PointingMatrix.empty(shape, shape_input, info=info)
         except MemoryError:
             gc.collect()
-            pmatrix = PointingMatrix.empty(shape, info=info)
+            pmatrix = PointingMatrix.empty(shape, shape_input, info=info,
+                                           verbose=False)
         status = tmf.madmap1_read_tod(self.info.todfile, self.info.invnttfile,
             self.info.convert, self.info.npixels_per_sample, islice + 1, tod.T,
             pmatrix.ravel().view(np.int64))

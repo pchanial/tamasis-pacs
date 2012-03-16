@@ -153,21 +153,29 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine allreducelocal(input, ninputs, mask, nmasks, output, noutputs, op, comm, status)
+    subroutine allreducelocal(input, ninput, mask, nmask, output, noutput, chunk_size, op, comm, status)
 
-        use module_math,    only : mInf, pInf
+        use module_math, only : mInf, pInf
 
-        real(p), intent(in)    :: input(ninputs)
-        logical*1, intent(in)  :: mask(nmasks)
-        real(p), intent(inout) :: output(noutputs)
-        integer, intent(in)    :: ninputs, nmasks, noutputs, op, comm
-        integer, intent(out)   :: status
+        real(p), intent(in)    :: input(ninput)   ! packed local input
+        logical*1, intent(in)  :: mask(nmask)     ! global mask controlling how the input is packed
+        real(p), intent(inout) :: output(noutput) ! local output (section of the global output) that will host the reduction
+        integer, intent(in)    :: ninput, nmask, noutput, chunk_size, op, comm
+        integer, intent(out)   :: status ! >0:MPI, -1: invalid mask, 
 
-        integer :: size, root, a, z, iinput, imask
-        real(p) :: input_(noutputs), field
+        integer                :: size, root, iinput, imask, nglobal, nlocal, a, z
+        real(p)                :: field
+        real(p), allocatable   :: buffer(:)
 
         call MPI_Comm_size(comm, size, status)
         if (status /= 0) return
+
+        ! get the global number of work items
+        if (modulo(nmask, chunk_size) /= 0) then
+            status = -1
+            return
+        end if
+        nglobal = nmask / chunk_size
 
         select case (op)
         case (MPI_PROD)
@@ -180,28 +188,29 @@ contains
             field = 0
         end select
 
-        output = 0
+        allocate (buffer((nglobal / size + 1) * chunk_size))
+
         iinput = 1
+        ! loop over output sections
         do root = 0, size - 1
 
-            ! unpack the input under the control of mask
-            a = root * noutputs + 1
-            z = (root + 1) * noutputs
+            call distribute(nglobal, root, size, nlocal)
+            call distribute_slice(nglobal, root, size, a, z)
+            a = (a - 1) * chunk_size + 1
+            z = z * chunk_size
+
+            ! unpack input as a local section corresponding to the running output section, under the control of the mask
             do imask = a, z
-                if (imask > nmasks) then
-                    input_(imask-a+1:) = field
-                    exit
-                end if
                 if (mask(imask)) then
-                    input_(imask-a+1) = field
+                    buffer(imask-a+1) = field
                 else
-                    input_(imask-a+1) = input(iinput)
+                    buffer(imask-a+1) = input(iinput)
                     iinput = iinput + 1
                 end if
             end do
 
             ! reduce on node root
-            call MPI_Reduce(input_, output, noutputs, MPI_DOUBLE_PRECISION, op, root, comm, status)
+            call MPI_Reduce(buffer, output, nlocal * chunk_size, MPI_DOUBLE_PRECISION, op, root, comm, status)
             if (status /= 0) return
 
         end do
@@ -212,25 +221,38 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine allscatterlocal(input, ninputs, mask, nmasks, output, noutputs, comm, status)
+    subroutine allscatterlocal(input, ninput, mask, nmask, output, noutput, chunk_size, comm, status)
 
-        real(p), intent(in)    :: input(ninputs) ! local image of the distributed map
-        logical*1, intent(in)  :: mask(nmasks)   ! global mask for the locally observed pixels
-        real(p), intent(inout) :: output(noutputs)
-        integer, intent(in)    :: ninputs, nmasks, noutputs, comm
-        integer, intent(out)   :: status
+        real(p), intent(in)    :: input(ninput)   ! local input (section of the global input)
+        logical*1, intent(in)  :: mask(nmask)     ! global mask controlling how to pack the output
+        real(p), intent(inout) :: output(noutput) ! the packed output
+        integer, intent(in)    :: ninput, nmask, noutput, chunk_size, comm
+        integer, intent(out)   :: status          ! >0:MPI, -1: invalid mask, -2: invalid input, -3: transmission check
 
-        integer :: a_unpacked, z_unpacked, tag, nrecvs, nsends, mpistatus(6), ioutput, imask
+        integer :: a_unpacked, z_unpacked, tag, nrecv, nsend, mpistatus(6), ioutput, imask, nglobal, nlocal
         integer :: source, dest, dp, rank, size
         integer, allocatable :: a_packed(:), z_packed(:)
 
-        logical*1 :: maskbuffer(ninputs)
-        real(p)   :: databuffer(min(ninputs,noutputs))
+        logical*1 :: maskbuffer(ninput)
+        real(p)   :: databuffer(ninput)
 
         call MPI_Comm_size(comm, size, status)
         if (status /= 0) return
         call MPI_Comm_rank(comm, rank, status)
         if (status /= 0) return
+
+        ! get the global number of work items
+        if (modulo(nmask, chunk_size) /= 0) then
+            status = -1
+            return
+        end if
+        nglobal = nmask / chunk_size
+
+        call distribute(nglobal, rank, size, nlocal)
+        if (ninput /= nlocal * chunk_size) then
+            status = -2
+            return
+        end if
 
         ! before exchanging data, compute the local map bounds in the packed output
         allocate (a_packed(0:size-1), z_packed(0:size-1))
@@ -238,13 +260,18 @@ contains
         z_packed(0) = 0
         source = 0
         do
-            do imask = source * ninputs + 1, min((source+1) * ninputs, nmasks)
+            call distribute_slice(nglobal, source, size, a_unpacked, z_unpacked)
+            a_unpacked = (a_unpacked - 1) * chunk_size + 1
+            z_unpacked = z_unpacked * chunk_size
+
+            ! unpack input as a local section corresponding to the running output section, under the control of the mask
+            do imask = a_unpacked, z_unpacked
                 if (mask(imask)) cycle
                 z_packed(source) = z_packed(source) + 1
             end do
             if (source == size - 1) exit
             source = source + 1
-            a_packed(source) = min(z_packed(source-1) + 1, noutputs)
+            a_packed(source) = min(z_packed(source-1) + 1, noutput)
             z_packed(source) = a_packed(source) - 1
         end do
 
@@ -256,32 +283,71 @@ contains
             dest = modulo(rank + dp, size)
             source = modulo(rank - dp, size)
 
-            ! send mask to 'dest' and receive it from source
-            a_unpacked = min(dest * ninputs + 1, nmasks+1)
-            z_unpacked = min((dest+1) * ninputs, nmasks)
+            ! send mask to 'dest' and receive it from 'source'
+            call distribute_slice(nglobal, dest, size, a_unpacked, z_unpacked)
+            a_unpacked = (a_unpacked - 1) * chunk_size + 1
+            z_unpacked = z_unpacked * chunk_size
             call MPI_Sendrecv(mask(a_unpacked:z_unpacked), z_unpacked-a_unpacked+1, MPI_BYTE, dest, tag,                           &
-                 maskbuffer, ninputs, MPI_BYTE, source, tag, comm, mpistatus, status)
+                 maskbuffer, ninput, MPI_BYTE, source, tag, comm, mpistatus, status)
             if (status /= 0) return
-            call MPI_Get_count(mpistatus, MPI_BYTE, nrecvs, status)
+            call MPI_Get_count(mpistatus, MPI_BYTE, nrecv, status)
             if (status /= 0) return
 
+            if (nrecv /= ninput) then
+                status = -3
+                return
+            end if
+
             ! pack pixels observed by 'source' from local map of the current processor
-            nsends = 0
-            do imask = 1, nrecvs
+            nsend = 0
+            do imask = 1, ninput
                 if (maskbuffer(imask)) cycle
-                nsends = nsends + 1
-                databuffer(nsends) = input(imask)
+                nsend = nsend + 1
+                databuffer(nsend) = input(imask)
             end do
 
             ! send data to 'source' and receive them from 'dest'
-            call MPI_Sendrecv(databuffer, nsends, MPI_DOUBLE_PRECISION, source, tag + 1, output(a_packed(dest)),                   &
+            call MPI_Sendrecv(databuffer, nsend, MPI_DOUBLE_PRECISION, source, tag + 1, output(a_packed(dest):z_packed(dest)),     &
                  z_packed(dest) - a_packed(dest) + 1, MPI_DOUBLE_PRECISION, dest, tag + 1, comm, mpistatus, status)
-            if (status /= 0) return
-            call MPI_Get_count(mpistatus, MPI_DOUBLE_PRECISION, nrecvs, status)
+             if (status /= 0) return
+            call MPI_Get_count(mpistatus, MPI_DOUBLE_PRECISION, nrecv, status)
             if (status /= 0) return
 
         end do
 
     end subroutine allscatterlocal
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine distribute(nglobal, rank, size, nlocal)
+
+        integer, intent(in)  :: nglobal, rank, size
+        integer, intent(out) :: nlocal
+
+        nlocal = nglobal / size
+        if (modulo(nglobal, size) > rank) then
+            nlocal = nlocal + 1
+        end if
+
+    end subroutine distribute
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine distribute_slice(nglobal, rank, size, a, z)
+
+        integer, intent(in)  :: nglobal, rank, size
+        integer, intent(out) :: a, z
+        integer              :: nlocal
+
+        call distribute(nglobal, rank, size, nlocal)
+        a = nglobal / size * rank + min(rank, modulo(nglobal, size)) + 1
+        z = a + nlocal - 1
+
+    end subroutine distribute_slice
+
 
 end module operators_mpi

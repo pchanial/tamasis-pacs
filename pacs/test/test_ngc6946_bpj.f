@@ -22,7 +22,7 @@ program test_ngc6946_bpj
     character(len=*), parameter         :: dir = '/home/pchanial/data/pacs/transpScan/'
     character(len=*), parameter         :: filename(1) = dir // '1342184520_blue_PreparedFrames.fits[12001:16000]'
     integer, parameter                  :: npixels_per_sample = 6
-    real(p), allocatable                :: signal(:,:)
+    real(p), allocatable                :: signal(:,:), signal1d(:)
     real(p), allocatable                :: coords(:,:), coords_yz(:,:)
     real(p)                             :: ra, dec, pa, chop, chop_old
     real(p), allocatable                :: surface1(:,:), surface2(:,:)
@@ -35,6 +35,7 @@ program test_ngc6946_bpj
     real(p), allocatable                :: map1d(:)
     type(pointingelement), allocatable  :: pmatrix(:,:,:)
     logical*1                           :: detector_mask(32,64)
+    integer                             :: nsamples
 
     ! initialise observation
     allocate (pacsobs)
@@ -55,6 +56,7 @@ program test_ngc6946_bpj
     detector_mask(1:16,17:32) = .false.
     call pacs%init_with_calfiles(pacsobs%band, detector_mask, 1, status)
     if (status /= 0) call failure('pacs%init_with_calfiles')
+    nsamples = obs%nvalids * pacs%ndetectors
 
     ! get header map
     call pacs%compute_map_header(obs, .false., 3._p, header, status)
@@ -70,6 +72,7 @@ program test_ngc6946_bpj
 
     ! read the signal file
     allocate (signal(obs%nvalids, pacs%ndetectors))
+    allocate (signal1d(obs%nvalids * pacs%ndetectors))
     allocate (mask  (obs%nvalids, pacs%ndetectors))
     call pacs%read(pacsobs%slice(1)%filename, obs%pointing%masked, obs%pointing%removed, [''], signal, mask, status)
     if (status /= 0) call failure('read_tod')
@@ -124,7 +127,7 @@ program test_ngc6946_bpj
     ! back project the timeline
     signal = 1._p / surface1
     map1d = 0
-    call pmatrix_transpose(pmatrix, signal, map1d)
+    call pmatrix_transpose(reshape(pmatrix, [npixels_per_sample, nsamples]), reshape(signal, [nsamples]), map1d)
 
     ! test the back projected map
     if (neq_real(sum_kahan(map1d), real(pacs%ndetectors*obs%nvalids,p), 10._p * epsilon(1.0))) then
@@ -133,7 +136,13 @@ program test_ngc6946_bpj
 
     ! project the map
     map1d = 1._p
-    call pmatrix_direct(pmatrix, map1d, signal)
+    call pmatrix_direct(reshape(pmatrix, [npixels_per_sample, nsamples]), map1d, signal1d)
+    do idetector = 1, pacs%ndetectors
+        do isample = 1, obs%nvalids
+            signal(isample,idetector) = signal1d((idetector-1)*obs%nvalids + isample)
+        end do
+    end do
+
 
     ! test the back projected map
     if (any(neq_real(signal, surface1, 10._p * epsilon(1.0)))) then

@@ -43,7 +43,7 @@ def test():
     assert all_eq(tod, tod2)
 
     telescope  = IdentityOperator()
-    projection = ProjectionOperator(obs, resolution=3.2, downsampling=True,
+    projection = ProjectionOperator(obs, header=header, downsampling=True,
                                     npixels_per_sample=6)
     crosstalk  = IdentityOperator()
     masking    = MaskOperator(tod.mask)
@@ -58,7 +58,6 @@ def test():
     weights = model.T(unity)
     map_naive = Map(backmap / weights, unit='Jy/arcsec^2')
 
-    header = projection.header
     header2 = header.copy()
     header2['NAXIS1'] += 500
     header2['CRPIX1'] += 250
@@ -83,7 +82,7 @@ def test_detector_policy():
     obs.pointing.chop[:] = 0
     projection = ProjectionOperator(obs, header=map_naive_ref.header,
                                     downsampling=True, npixels_per_sample=6)
-    tod = obs.get_tod(flatfielding=False)
+    tod = obs.get_tod(flatfielding=False, subtraction_mean=False)
     masking = MaskOperator(tod.mask)
     model = masking * projection
     map_naive = mapper_naive(tod, model)
@@ -95,7 +94,7 @@ def test_detector_policy():
     obs_rem.pointing.chop[:] = 0
     projection_rem = ProjectionOperator(obs_rem, header=map_naive.header,
                                         downsampling=True, npixels_per_sample=7)
-    tod_rem = obs_rem.get_tod(flatfielding=False)
+    tod_rem = obs_rem.get_tod(flatfielding=False, subtraction_mean=False)
     masking_rem = MaskOperator(tod_rem.mask)
     model_rem = masking_rem * projection_rem
     map_naive_rem = mapper_naive(tod_rem, model_rem)
@@ -114,11 +113,10 @@ def test_pack():
 
 def test_npixels_per_sample_is_zero():
     obs = PacsObservation(data_dir + 'frames_blue.fits')
-    proj = ProjectionOperator(obs, npixels_per_sample=2)
-    header = proj.header.copy()
+    header = obs.get_map_header()
     header['crval1'] += 1
     proj2 = ProjectionOperator(obs, header=header)
-    assert proj2.npixels_per_sample == 0
+    assert proj2.matrix.shape[-1] == 0
     t = proj2(np.ones((header['NAXIS2'],header['NAXIS1'])))
     assert all_eq(minmax(t), [0,0])
     t[:] = 1

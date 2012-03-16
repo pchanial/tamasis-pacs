@@ -8,7 +8,7 @@ import numpy as np
 import scipy
 import tamasisfortran as tmf
 from .datatypes import Tod
-from acquisitionmodels import ProjectionOperator
+from acquisitionmodels import ProjectionBaseOperator
 
 __all__ = [ 'deglitch_l2std',
             'deglitch_l2mad',
@@ -21,11 +21,11 @@ class ndarraywrap(np.ndarray):
     pass
 
 def _deglitch(tod, projection, nsigma, func):
-    if isinstance(projection, ProjectionOperator):
+    if isinstance(projection, ProjectionBaseOperator):
         matrix = projection.matrix
         npixels_per_sample = matrix.shape[-1]
     elif hasattr(projection, 'operands') and \
-         all([isinstance(p, ProjectionOperator) for p in projection.operands]):
+         all([isinstance(p, ProjectionBaseOperator) for p in projection.operands]):
         ops = projection.operands
         npixels_per_sample = max(p.matrix.shape[-1] for p in ops)
         if tod.shape[-1] != sum(p.matrix.shape[-2] for p in ops):
@@ -34,13 +34,13 @@ def _deglitch(tod, projection, nsigma, func):
         matrix['index'] = -1
         dest = 0
         for p in ops:
-            matrix[...,dest:dest+p.nsamples,:p.npixels_per_sample] = p.matrix
-            dest += p.nsamples
+            nsamples = p.matrix.shape[-2]
+            matrix[...,dest:dest+nsamples,:p.matrix.shape[-1]] = p.matrix
+            dest += nsamples
     else:
         raise TypeError('The operator is not a projection.')
 
-    nx = projection.header['naxis1']
-    ny = projection.header['naxis2']
+    ny, nx = projection.shapein
     if tod.mask is None:
         mask = np.zeros(tod.shape, np.bool8)
     else:
