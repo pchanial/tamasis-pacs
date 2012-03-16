@@ -4,9 +4,10 @@ import os
 import numpy as np
 from glob import glob
 from numpy.testing import assert_equal
-from pyoperators.utils.mpi import distribute_shape
-from tamasis import Map, MPI
+from pyoperators.utils.mpi import distribute, distribute_shape
+from tamasis import Map, MPI, create_fitsheader
 from tamasis.numpyutils import assert_all_eq
+from tamasis.mpiutils import gather_fitsheader, scatter_fitsheader
 from uuid import uuid1
 
 rank = MPI.COMM_WORLD.rank
@@ -17,6 +18,14 @@ id = MPI.COMM_WORLD.bcast(str(uuid1()))
 filename = path_data + 'frames_blue_map_naive.fits'
 ref = Map(filename, comm=MPI.COMM_SELF)
 lmap = Map(filename, comm=MPI.COMM_WORLD)
+
+def test_fitsheader():
+    def func(n, hdr):
+        hdr_local = scatter_fitsheader(hdr)
+        assert_equal(hdr_local['NAXIS2'], distribute(n))
+        assert gather_fitsheader(hdr_local) == hdr
+    for n in range(10):
+        yield func, n, create_fitsheader((5,n), crval=(1,1), cdelt=1.)
 
 def test_read():
     shape_global = ref.shape

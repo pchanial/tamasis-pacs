@@ -9,16 +9,87 @@ import pyfits
 import sys
 
 from pyoperators.utils import openmp_num_threads, strshape
-from pyoperators.utils.mpi import MPI, distribute_slice
-from .wcsutils import create_fitsheader
+from pyoperators.utils.mpi import MPI, combine, distribute_slice
+from .wcsutils import create_fitsheader, has_wcs
 
 __all__ = []
 
 
-def distribute_observation(detectors, observations, rank=None, comm=None):
+def gather_fitsheader(header, comm=MPI.COMM_WORLD):
+    """
+    Combine headers of local arrays into a global one.
 
-    if comm is None:
-        comm = MPI.COMM_WORLD
+    """
+    if 'NAXIS' not in header:
+        raise KeyError("The FITS header does not contain the 'NAXIS' keyword.")
+    if 'NAXIS1' not in header:
+        raise KeyError('Scalar FITS headers cannot be gathered.')
+    naxis = str(header['NAXIS'])
+    nlocal = header['NAXIS' + naxis]
+    nglobal = combine(nlocal, comm=comm)
+    s = distribute_slice(nglobal, comm=comm)
+    header = header.copy()
+    header['NAXIS' + naxis] = nglobal
+    if 'CRPIX' + naxis in header:
+        header['CRPIX' + naxis] += s.start
+    return header
+
+
+def gather_fitsheader_if_needed(header, comm=MPI.COMM_WORLD):
+    """
+    Combine headers of local arrays into a global one unless the input is
+    global.
+
+    """
+    if 'NAXIS' not in header:
+        raise KeyError("The FITS header does not contain the 'NAXIS' keyword.")
+    if 'NAXIS1' not in header:
+        raise KeyError('Scalar FITS headers cannot be combined.')
+    if comm.size == 1:
+        return header
+    if not has_wcs(header):
+        raise ValueError('The input FITS header does not define a world coordin'
+                         'ate system.')
+    naxis = header['NAXIS']
+    required_same = ['CRVAL1', 'CRVAL2', 'CRTYPE1', 'CRTYPE2',
+                     'CDELT1', 'CDELT2']
+    required_same += ['NAXIS' + str(i+1) for i in range(naxis-1)]
+    required_same += ['CRPIX' + str(i+1) for i in range(naxis-1)]
+    headers = comm.allgather(header)
+    for keyword in required_same:
+        if keyword not in header:
+            continue
+        values = [h[keyword] for h in headers]
+        if any(v != headers[0][keyword] for v in values):
+            raise ValueError("The FITS keyword '{0}' has different values acros"
+                             "s MPI processes: {1}".format(keyword, values))
+    
+    keyword = 'CRPIX' + str(naxis)
+    if all(h[keyword] == headers[0][keyword] for h in headers):
+        return header
+    return gather_fitsheader(header, comm=comm)
+
+
+def scatter_fitsheader(header, comm=MPI.COMM_WORLD):
+    """
+    Return the header of local arrays given that of the global array.
+    """
+    if 'NAXIS' not in header:
+        raise KeyError("The FITS header does not contain the 'NAXIS' keyword.")
+    if 'NAXIS1' not in header:
+        raise KeyError('Scalar FITS headers cannot be split.')
+    axis = str(header['NAXIS'])
+    nglobal = header['NAXIS' + axis]
+    s = distribute_slice(nglobal, comm=comm)
+    header = header.copy()
+    header['NAXIS' + axis] = s.stop - s.start
+    if 'CRPIX' + axis  in header:
+        header['CRPIX' + axis] -= s.start
+    return header
+
+
+def distribute_observation(detectors, observations, rank=None,
+                           comm=MPI.COMM_WORLD):
     
     size  = comm.Get_size()
     if size == 1:
