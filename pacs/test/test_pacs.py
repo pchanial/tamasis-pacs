@@ -162,6 +162,32 @@ def test_slice2():
     assert all_eq(m1, m2, 1e-10)
     assert all_eq(model1(m1), model2(m1))
 
+def test_pTx_pT1():
+    obs1 = PacsObservation(data_dir + 'frames_blue.fits')
+    obs2 = PacsObservation([data_dir + 'frames_blue.fits[1:41]',
+                            data_dir + 'frames_blue.fits[42:43]',
+                            data_dir + 'frames_blue.fits[44:360]'])
+    obs1.pointing.chop = 0
+    obs2.pointing.chop = 0
+
+    tod = obs1.get_tod(subtraction_mean=False)
+
+    model1 = ProjectionOperator(obs1, downsampling=True)
+    m1 = mapper_naive(tod, model1, unit='Jy/arcsec^2')
+
+    model1.apply_mask(tod.mask)
+    tod.inunit('Jy/arcsec^2')
+    b,w = model1.get_pTx_pT1(tod)
+    m2 = (b / w)
+    assert all_eq(m1, m2)
+
+    model3 = ProjectionOperator(obs2, downsampling=True)
+    model3.apply_mask(tod.mask)
+    
+    b,w = model3.get_pTx_pT1(tod)
+    m3 = (b / w)
+    assert all_eq(m1, m3, 1e-10)
+
     
 def teardown():
     files = glob('*' + uuid + '.fits')

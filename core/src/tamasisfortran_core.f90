@@ -261,7 +261,31 @@ end subroutine downsampling_transpose
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine backprojection_weight(pmatrix, data, mask, map1d, weight1d, npixels_per_sample, nsamples, npixels)
+subroutine backprojection_weight(pmatrix, data, map1d, weight1d, npixels_per_sample, nsamples, npixels)
+
+    use module_pointingmatrix, only : bpw => backprojection_weight, PointingElement
+    use module_tamasis,        only : p
+    implicit none
+
+    !f2py integer*8,intent(in)        :: pmatrix(npixels_per_sample*nsamples)
+
+    type(PointingElement), intent(in) :: pmatrix(npixels_per_sample, nsamples)
+    real(p), intent(in)               :: data(nsamples)
+    real(p), intent(inout)            :: map1d(npixels)
+    real(p), intent(inout)            :: weight1d(npixels)
+    integer, intent(in)               :: npixels_per_sample
+    integer*8, intent(in)             :: nsamples
+    integer, intent(in)               :: npixels
+
+    call bpw(pmatrix, data, map=map1d, weight=weight1d)
+
+end subroutine backprojection_weight
+
+
+!-----------------------------------------------------------------------------------------------------------------------------------
+
+
+subroutine backprojection_weight_mask(pmatrix, data, mask, map1d, weight1d, npixels_per_sample, nsamples, npixels)
 
     use module_pointingmatrix, only : bpw => backprojection_weight, PointingElement
     use module_tamasis,        only : p
@@ -280,7 +304,7 @@ subroutine backprojection_weight(pmatrix, data, mask, map1d, weight1d, npixels_p
 
     call bpw(pmatrix, data, mask, map1d, weight1d)
 
-end subroutine backprojection_weight
+end subroutine backprojection_weight_mask
 
 
 !-----------------------------------------------------------------------------------------------------------------------------------

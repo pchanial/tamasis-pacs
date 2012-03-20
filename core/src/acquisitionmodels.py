@@ -642,27 +642,39 @@ def ProjectionOperator(input, method=None, header=None, resolution=None,
     result = BlockColumnOperator(operands, axisout=-1)
 
     if nmatrices > 1:
+        def apply_mask(mask):
+            mask = np.asarray(mask, np.bool8)
+            dest = 0
+            if mask.shape != result.shapeout:
+                raise ValueError("The mask shape '{0}' is incompatible with tha"
+                    "t of the projection operator '{1}'.".format(mask.shape,
+                    result.shapeout))
+            for p in result.operands:
+                n = p.matrix.shape[1]
+                p.apply_mask(mask[...,dest:dest+n])
+                dest += n
         def get_mask(out=None):
-            if out is None:
-                out = allocate(result.shapein, np.bool8, ' as new mask')
-                out[...] = True
-                out = Map(out, header=header_global, dtype=np.bool8, copy=False)
             for p in result.operands:
-                p.get_mask(out=out)
+                out = p.get_mask(out=out)
             return out
-        def get_ptp(out=None):
-            if out is None:
-                npixels = int(np.product(result.shapein))
-                out = allocate((npixels,npixels), np.bool8, ' for pTp array')
-                out[...] = 0
+        def get_pTp(out=None):
             for p in result.operands:
-                p.get_ptp(out=out)
+                out = p.get_pTp(out=out)
+            return out
+        def get_pTx_pT1(x, out=None, mask=None):
+            dest = 0
+            for p in result.operands:
+                n = p.matrix.shape[1]
+                out = p.get_pTx_pT1(x[...,dest:dest+n], out=out, mask=mask)
+                dest += n
             return out
         def intersects(out=None):
             raise NotImplementedError('email-me')
 
+        result.apply_mask = apply_mask
         result.get_mask = get_mask
-        result.get_ptp = get_ptp
+        result.get_pTp = get_pTp
+        result.get_pTx_pT1 = get_pTx_pT1
         result.intersects = intersects
 
     if not istoddistributed and not ismapdistributed and not packed:
@@ -695,7 +707,9 @@ def ProjectionOperator(input, method=None, header=None, resolution=None,
         result *= DistributionIdentityOperator(commout=commout)
         result.get_mask = get_mask
 
-    result.get_ptp = not_implemented
+    result.apply_mask = not_implemented
+    result.get_pTp = not_implemented
+    result.get_pTx_pT1 = not_implemented
     result.intersects = not_implemented
 
     return result
@@ -744,7 +758,7 @@ class ProjectionBaseOperator(Operator):
         matrix = self.matrix
         header = matrix.info.get('header', None)
         if header is not None:
-            attr['header'] = header.copy()
+            attr['_header'] = header.copy()
         unitout = attr['_unit'] if '_unit' in attr else {}
         if unitout:
             attr['_unit'] = _divide_unit(unitout, self.unit)
@@ -760,10 +774,17 @@ class ProjectionBaseOperator(Operator):
         if self.duout is not None:
             attr['_derived_units'] = self.duout
 
+    def apply_mask(self, mask):
+        """
+        Set pointing matrix values to zero following an input mask of shape
+        the operator output shape.
+        """
+        raise NotImplementedError()
+
     def get_mask(self, out=None):
         return self.matrix.get_mask(out=out)
 
-    def get_ptp(self, out=None):
+    def get_pTp(self, out=None):
         matrix = self.matrix
         npixels = int(np.product(matrix.shape_input))
         if out is None:
@@ -778,6 +799,32 @@ class ProjectionBaseOperator(Operator):
             return out
         tmf.pointing_matrix_ptp(matrix.ravel().view(np.int64), out.T,
             matrix.shape[-1], matrix.size // matrix.shape[-1], npixels)
+        return out
+
+    def get_pTx_pT1(self, x, out=None, mask=None):
+        """
+        Return a tuple of two arrays: the transpose of the projection
+        applied over the input and over one. In other words, it returns the back
+        projection of the input and its coverage.
+
+        """
+        matrix = self.matrix
+        if out is None:
+            shape = matrix.shape_input
+            out = Map.zeros(shape), Map.zeros(shape)
+            self.set_attrin(out[0].__dict__)
+            if hasattr(x, 'unit'):
+                out[0].unit = x.unit
+        if matrix.size == 0:
+            return out
+        mask = mask or getattr(x, 'mask', None)
+        if mask is not None:
+            tmf.backprojection_weight_mask(matrix.ravel().view(np.int64),
+                x.ravel(), x.mask.ravel().view(np.int8), out[0].ravel(),
+                out[1].ravel(), matrix.shape[-1])
+        else:
+            tmf.backprojection_weight(matrix.ravel().view(np.int64),
+                x.ravel(), out[0].ravel(), out[1].ravel(), matrix.shape[-1])
         return out
 
     def intersects(self, fitscoords, axis=None, f=None):
@@ -867,6 +914,14 @@ class ProjectionInMemoryOperator(ProjectionBaseOperator):
         self.matrix = matrix
         self.unit = unit
         self.duout, self.duin = derived_units
+
+    def apply_mask(self, mask):
+        mask = np.asarray(mask, np.bool8)
+        matrix = self.matrix
+        if mask.shape != self.shapeout:
+            raise ValueError("The mask shape '{0}' is incompatible with that of"
+                " the pointing matrix '{1}'.".format(mask.shape, matrix.shape))
+        matrix.value.T[...] *= 1 - mask.T
 
 
 @real
