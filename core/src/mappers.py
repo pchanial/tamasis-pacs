@@ -98,6 +98,7 @@ def mapper_naive(tod, model, unit=None):
    
     if unit is not None:
         mymap.inunit(unit)
+        return mymap
 
     # set map units according to model
     attr = {'_unit' : tod_unit, '_derived_units' : tod_du}
