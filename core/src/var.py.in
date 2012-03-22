@@ -4,7 +4,7 @@
 import numpy as np
 import os
 import tamasisfortran as tmf
-from . import MPI
+from pyoperators.utils.mpi import MPI
 
 comm_tod = MPI.COMM_WORLD
 comm_map = MPI.COMM_SELF
@@ -30,9 +30,10 @@ ENABLED_MPI = @HAVE_MPI@
 ENABLED_WCSLIB = @HAVE_WCSLIB@
 
 def get_default_dtype(data):
+    import numpy as np
     if np.iscomplexobj(data):
         return COMPLEX_DTYPE
     else:
         return FLOAT_DTYPE
 
-del MPI, os, tmf
+del MPI, os, tmf, np
