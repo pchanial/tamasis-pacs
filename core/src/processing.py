@@ -80,28 +80,29 @@ def deglitch_l2mad(tod, projection, nsigma=25.):
 #-------------------------------------------------------------------------------
 
 
-def filter_median(tod, length=10, mask=None, partition=None):
+def filter_median(x, length=10, mask=None, partition=None, out=None):
     """
     Median filtering, O(1) in window length
     """
-    filtered = Tod(tod)
+    if out is None:
+        out = x.copy()
     if mask is not None :
         mask = np.ascontiguousarray(mask, np.bool8).view(np.int8)
-    elif hasattr(tod, 'mask') and tod.mask is not None and \
-         tod.mask is not np.ma.nomask:
-        mask = tod.mask.view(np.int8)
+    elif hasattr(x, 'mask') and x.mask is not None and \
+         x.mask is not np.ma.nomask:
+        mask = x.mask.view(np.int8)
     else:
-        mask = np.zeros(tod.shape, np.int8)
+        mask = np.zeros(x.shape, np.int8)
 
-    n = tod.shape[-1]
+    n = x.shape[-1]
     if partition is None:
         partition = (n,)
-    status = tmf.filter_median(filtered.reshape((-1,n)).T,
+    status = tmf.filter_median(out.reshape((-1,n)).T,
         mask.reshape((-1,n)).T, length,
         np.array(partition, np.int32, ndmin=1))
     if status != 0:
         raise RuntimeError()
-    return filtered
+    return out
 
 
 #-------------------------------------------------------------------------------
