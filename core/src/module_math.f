@@ -1029,9 +1029,9 @@ contains
 
     subroutine shift_fast(input, output, m, n, offset)
 
+        integer*8, intent(in)  :: m, n
         real(p), intent(in)    :: input(m,n)
         real(p), intent(inout) :: output(m,n)
-        integer*8, intent(in)  :: m, n
         integer*8, intent(in)  :: offset(:)
 
         integer*8 :: i, j, d

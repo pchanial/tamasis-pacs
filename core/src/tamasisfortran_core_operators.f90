@@ -126,8 +126,8 @@ contains
 
     subroutine xxx_diff_fast_inplace(input, m, n)
 
-        real(p), intent(inout) :: input(m,n)
         integer*8, intent(in)  :: m, n
+        real(p), intent(inout) :: input(m,n)
 
         integer*8 :: i, j
 
@@ -153,9 +153,9 @@ contains
 
     subroutine xxx_diff_fast_outplace(input, output, m, n)
 
+        integer*8, intent(in)  :: m, n
         real(p), intent(in)    :: input(m,n)
         real(p), intent(inout) :: output(m,n)
-        integer*8, intent(in)  :: m, n
 
         integer*8 :: i, j
 
@@ -248,8 +248,8 @@ contains
 
     subroutine xxx_diff_slow_inplace(input, m, n, boundary, islastrank)
 
-        real(p), intent(inout)        :: input(m,n)
         integer*8, intent(in)         :: m, n
+        real(p), intent(inout)        :: input(m,n)
         real(p), intent(in), optional :: boundary(m)
         logical, intent(in), optional :: islastrank
 
@@ -285,9 +285,9 @@ contains
 
     subroutine xxx_diff_slow_outplace(input, output, m, n, boundary, islastrank)
 
+        integer*8, intent(in)         :: m, n
         real(p), intent(in)           :: input(m,n)
         real(p), intent(inout)        :: output(m,n)
-        integer*8, intent(in)         :: m, n
         real(p), intent(in), optional :: boundary(m)
         logical, intent(in), optional :: islastrank
 
@@ -323,8 +323,8 @@ contains
 
     subroutine xxx_diffT_fast_inplace(input, m, n)
 
-        real(p), intent(inout) :: input(m,n)
         integer*8, intent(in)  :: m, n
+        real(p), intent(inout) :: input(m,n)
 
         integer*8 :: i, j
 
@@ -351,9 +351,9 @@ contains
 
     subroutine xxx_diffT_fast_outplace(input, output, m, n)
 
+        integer*8, intent(in)  :: m, n
         real(p), intent(in)    :: input(m,n)
         real(p), intent(inout) :: output(m,n)
-        integer*8, intent(in)  :: m, n
 
         integer*8 :: i, j
 
@@ -447,8 +447,8 @@ contains
 
     subroutine xxx_diffT_slow_inplace(input, m, n, boundary, isfirstrank, islastrank)
 
-        real(p), intent(inout)        :: input(m,n)
         integer*8, intent(in)         :: m, n
+        real(p), intent(inout)        :: input(m,n)
         real(p), intent(in), optional :: boundary(m)
         logical, intent(in), optional :: isfirstrank
         logical, intent(in), optional :: islastrank
@@ -566,8 +566,8 @@ contains
 
     subroutine xxx_diffTdiff_fast_inplace(input, m, n, scalar)
 
-        real(p), intent(inout)        :: input(m,n)
         integer*8, intent(in)         :: m, n
+        real(p), intent(inout)        :: input(m,n)
         real(p), intent(in), optional :: scalar
 
         integer*8 :: i, j
@@ -605,9 +605,9 @@ contains
 
     subroutine xxx_diffTdiff_fast_outplace(input, output, m, n, scalar)
 
+        integer*8, intent(in)         :: m, n
         real(p), intent(in)           :: input(m,n)
         real(p), intent(inout)        :: output(m,n)
-        integer*8, intent(in)         :: m, n
         real(p), intent(in), optional :: scalar
 
         integer*8 :: i, j
@@ -738,8 +738,8 @@ contains
 
     subroutine xxx_diffTdiff_slow_inplace(input, m, n, scalar, boundary1, boundary2, isfirstrank, islastrank)
 
-        real(p), intent(inout)        :: input(m,n)
         integer*8, intent(in)         :: m, n
+        real(p), intent(inout)        :: input(m,n)
         real(p), intent(in), optional :: scalar
         real(p), intent(in), optional :: boundary1(m), boundary2(m)
         logical, intent(in), optional :: isfirstrank
@@ -886,10 +886,10 @@ contains
     subroutine pmatrix_intersects(pmatrix, pixel, npixels_per_sample, nsamples, ndetectors, out)
         !f2py integer*8, dimension(npixels_per_sample*nsamples*ndetectors), intent(in) :: pmatrix
 
+        integer*8, intent(in)                     :: nsamples
         type(PointingElement), intent(in)         :: pmatrix(npixels_per_sample, nsamples, ndetectors)
         integer(kind(pmatrix%weight)), intent(in) :: pixel
         integer, intent(in)                       :: npixels_per_sample
-        integer*8, intent(in)                     :: nsamples
         integer, intent(in)                       :: ndetectors
         logical*1, intent(out)                    :: out
         
@@ -904,10 +904,10 @@ contains
     subroutine pmatrix_intersects_openmp2(pmatrix, pixel, npixels_per_sample, nsamples, ndetectors, out)
         !f2py integer*8, dimension(npixels_per_sample*nsamples*ndetectors), intent(in) :: pmatrix
 
+        integer*8, intent(in)                     :: nsamples
         type(PointingElement), intent(in)         :: pmatrix(npixels_per_sample, nsamples, ndetectors)
         integer(kind(pmatrix%weight)), intent(in) :: pixel
         integer, intent(in)                       :: npixels_per_sample
-        integer*8, intent(in)                     :: nsamples
         integer, intent(in)                       :: ndetectors
         logical*1, intent(out)                    :: out
         
@@ -924,10 +924,10 @@ contains
     subroutine pmatrix_intersects_axis2(pmatrix, pixel, npixels_per_sample, nsamples, ndetectors, out)
         !f2py integer*8, dimension(npixels_per_sample*nsamples*ndetectors), intent(in) :: pmatrix
 
+        integer*8, intent(in)                     :: nsamples
         type(PointingElement), intent(in)         :: pmatrix(npixels_per_sample, nsamples, ndetectors)
         integer(kind(pmatrix%weight)), intent(in) :: pixel
         integer, intent(in)                       :: npixels_per_sample
-        integer*8, intent(in)                     :: nsamples
         integer, intent(in)                       :: ndetectors
         logical*1, intent(out)                    :: out(ndetectors)
 
@@ -957,10 +957,10 @@ contains
     subroutine pmatrix_intersects_axis3(pmatrix, pixel, npixels_per_sample, nsamples, ndetectors, out)
         !f2py integer*8, dimension(npixels_per_sample*nsamples*ndetectors), intent(in) :: pmatrix
 
+        integer*8, intent(in)                     :: nsamples
         type(PointingElement), intent(in)         :: pmatrix(npixels_per_sample, nsamples, ndetectors)
         integer(kind(pmatrix%weight)), intent(in) :: pixel
         integer, intent(in)                       :: npixels_per_sample
-        integer*8, intent(in)                     :: nsamples
         integer, intent(in)                       :: ndetectors
         logical*1, intent(out)                    :: out(nsamples)
 
