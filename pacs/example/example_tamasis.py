@@ -90,7 +90,8 @@ projection = ProjectionOperator(obs.get_pointing_matrix(
                  npixels_per_sample=5,
                  method='sharp'))
 response = ConvolutionTruncatedExponentialOperator(obs.pack(
-                 obs.instrument.detector.time_constant) / obs.SAMPLING_PERIOD)
+               obs.instrument.detector.time_constant) / 
+               obs.instrument.SAMPLING_PERIOD)
 compression = CompressionAverageOperator(obs.slice.compression_factor)
 masking = MaskOperator(tod.mask)
 model = masking * compression * response * projection

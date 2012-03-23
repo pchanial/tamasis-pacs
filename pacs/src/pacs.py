@@ -24,7 +24,8 @@ from tamasis.core import (Quantity, Tod, MaskPolicy, Instrument, Pointing, tmf,
 from tamasis.mpiutils import distribute_observation, gather_fitsheader_if_needed
 from tamasis.observations import Observation
 
-__all__ = [ 'PacsObservation',
+__all__ = [ 'PacsInstrument',
+            'PacsObservation',
             'PacsSimulation',
             'PacsConversionAdu',
             'PacsConversionVolts',
@@ -37,10 +38,118 @@ __all__ = [ 'PacsObservation',
 CALIBFILE_DTC = var.path + '/pacs/PCalPhotometer_PhotTimeConstant_FM_v2.fits'
 CALIBFILE_GAI = var.path + '/pacs/PCalPhotometer_Gain_FM_v1.fits'
 CALIBFILE_STD = var.path + '/pacs/PCalPhotometer_Stddev_Tamasis_v1.fits'
-CALIBFILE_INV = [var.path + '/pacs/PCalPhotometer_Invntt{0}_FM_v1.fits' \
-                 .format(b) for b in ('BS', 'BL', 'Red')]
+CALIBFILE_INV = [var.path + '/pacs/PCalPhotometer_Invntt{0}_FM_v1.fits'.
+                 format(b) for b in ('BS', 'BL', 'Red')]
 
 class PacsInstrument(Instrument):
+
+    DEFAULT_RESOLUTION = {'blue':3.2, 'green':3.2, 'red':6.4}
+    DETECTOR_DTYPE = [
+        ('masked', np.bool8), ('removed', np.bool8),
+        ('column', int), ('row', int), ('p', int), ('q', int), ('matrix', int),
+        ('center', var.FLOAT_DTYPE, 2),
+        ('corner', var.FLOAT_DTYPE, (4,2)),
+        ('area', var.FLOAT_DTYPE), ('time_constant', var.FLOAT_DTYPE),
+        ('flat_total', var.FLOAT_DTYPE), ('flat_detector', var.FLOAT_DTYPE),
+        ('flat_optical', var.FLOAT_DTYPE)]
+    SAMPLING_PERIOD = 0.024996 # in seconds
+
+    def __init__(self, band, active_fraction=0, delay=0.,
+                 fine_sampling_factor=1, policy_bad_detector='mask',
+                 reject_bad_line=True, comm_tod=MPI.COMM_WORLD):
+
+        """
+        Set up the PACS instrument.
+
+        Parameters
+        ----------
+        band : 'blue', 'green' or 'red'
+              The PACS filter.
+        fine_sampling_factor: integer
+              Set this value to a power of two, which will increase the
+              acquisition model's sampling frequency beyond 40Hz
+        policy_bad_detector : 'keep', 'mask' or 'remove'
+              This keyword controls the handling of the bad detectors.
+              'keep' will handle bad detectors like valid ones.
+              'mask' will  enforce a zero data value and a True mask value in
+              the Tod returned by get_tod().
+              'remove' will discard the bad detectors from the Tod returned by
+              get_tod().
+        reject_bad_line : boolean
+              If True, the erratic line [11,16:32] (starting from 0) in
+              the blue channel will be filtered out
+        active_fraction : ratio of the geometric and reference detector area
+              If set to 0, the value from the calibration file will be used
+        delay : instrument clock lag wrt the spacecraft clock, in ms
+
+        """
+        band = band.lower().strip()
+        expected = 'blue', 'green', 'red'
+        if band not in expected:
+            raise ValueError("Invalid band '{0}'. Expected values are {1}.".
+                format(band, strenum(expected)))
+        policy_bad_detector = policy_bad_detector.lower().strip()
+        expected = 'keep', 'mask', 'remove'
+        if policy_bad_detector not in expected:
+            raise ValueError("Invalid detector policy '{0}'. Expected values ar"
+                "e {1}.".format(policy_bad_detector, strenum(expected)))
+
+        # get instrument information from calibration files
+        shape = (16,32) if band == 'red' else (32,64)
+        detector_bad, detector_center, detector_corner, detector_area, \
+        distortion_yz, oflat, dflat, responsivity, active_fraction, status = \
+            tmf.pacs_info_instrument(band, shape[0], shape[1], active_fraction)
+        if status != 0: raise RuntimeError()
+
+        detector_bad = detector_bad.view(np.bool8)
+        if policy_bad_detector == 'keep':
+            detector_bad[:] = False
+        elif reject_bad_line and band != 'red':
+            detector_bad[11,16:32] = True
+
+        dflat[detector_bad] = np.nan
+        detector_center = detector_center.T.swapaxes(0,1)
+        detector_corner = detector_corner.T.swapaxes(0,1)
+
+        Instrument.__init__(self, 'PACS/' + band.capitalize(), shape,
+            detector_corner=detector_corner, default_resolution=\
+            self.DEFAULT_RESOLUTION[band], dtype=self.DETECTOR_DTYPE,
+            comm_tod=comm_tod)
+        self.band = band
+        self.active_fraction = float(active_fraction)
+        self.reject_bad_line = reject_bad_line
+        self.fine_sampling_factor = fine_sampling_factor
+        self.detector.masked = detector_bad
+        pq = np.indices(shape)
+        self.detector.row = pq[0] % 16
+        self.detector.column = pq[1] % 16
+        self.detector.p = pq[0]
+        self.detector.q = pq[1]
+        self.detector.matrix = pq[1] // 16 + 1
+        if band != 'red':
+            self.detector.matrix[0:16,:] += 4
+        else:
+            self.detector.matrix = 10 - self.detector.matrix
+        self.detector.center = detector_center
+        self.detector.corner = detector_corner
+        self.detector.time_constant = pyfits.open(CALIBFILE_DTC) \
+            [{'red':1, 'green':2, 'blue':3}[band]].data / 1000 # 's'
+        self.detector.time_constant[detector_bad] = np.nan
+        self.detector.area = detector_area # arcsec^2
+        self.detector.flat_total = dflat * oflat
+        self.detector.flat_detector = dflat
+        self.detector.flat_optical = oflat
+        self.distortion_yz = distortion_yz.T.view(dtype=[('y', \
+            var.FLOAT_DTYPE), ('z',var.FLOAT_DTYPE)]).view(np.recarray)
+        self.responsivity = Quantity(responsivity, 'V/Jy')
+        fits = pyfits.open(CALIBFILE_GAI)
+        v = fits['photGain'].data
+        self.adu_converter_gain = {'low':v[0], 'high':v[1],
+                                         'nominal':v[2]}
+        v = fits['photOffset'].data
+        self.adu_converter_offset = {'direct':v[0], 'ddcs':v[1]}
+        self.adu_converter_min = {'direct':0, 'ddcs':-32768}
+        self.adu_converter_max = {'direct':65535, 'ddcs':32767}
 
     def get_valid_detectors(self, masked=False):
         mask = ~self.detector.removed
@@ -305,93 +414,12 @@ class PacsBase(Observation):
     """ Abstract class for PacsObservation and PacsSimulation. """
 
     ACCELERATION = Quantity(4., '"/s^2')
-    DEFAULT_RESOLUTION = {'blue':3.2, 'green':3.2, 'red':6.4}
     PSF_FWHM = {'blue':5.2, 'green':7.7, 'red':12.}
     POINTING_DTYPE = [('ra', var.FLOAT_DTYPE), ('dec', var.FLOAT_DTYPE),
                       ('pa', var.FLOAT_DTYPE), ('chop', var.FLOAT_DTYPE),
                       ('time', var.FLOAT_DTYPE), ('info', np.int64),
                       ('masked', np.bool8), ('removed', np.bool8)]
-    DETECTOR_DTYPE = [
-        ('masked', np.bool8), ('removed', np.bool8),
-        ('column', int), ('row', int), ('p', int), ('q', int), ('matrix', int),
-        ('center', var.FLOAT_DTYPE, 2),
-        ('corner', var.FLOAT_DTYPE, (4,2)),
-        ('area', var.FLOAT_DTYPE), ('time_constant', var.FLOAT_DTYPE),
-        ('flat_total', var.FLOAT_DTYPE), ('flat_detector', var.FLOAT_DTYPE),
-        ('flat_optical', var.FLOAT_DTYPE)]
-    SAMPLING_PERIOD = 0.024996 # in seconds
-
-
-    def __init__(self, band, active_fraction, delay, fine_sampling_factor,
-                 policy_bad_detector, reject_bad_line, comm_tod):
-
-        """
-        Set up the PACS instrument.
-        """
-
-        policy_bad_detector = policy_bad_detector.lower()
-        if policy_bad_detector not in ('keep', 'mask', 'remove'):
-            raise ValueError("Invalid detector policy '" + policy_bad_detector \
-                  + "'. Expected values are 'keep', 'mask' or 'remove'.")
-
-        # get instrument information from calibration files
-        shape = (16,32) if band == 'red' else (32,64)
-        detector_bad, detector_center, detector_corner, detector_area, \
-        distortion_yz, oflat, dflat, responsivity, active_fraction, status = \
-            tmf.pacs_info_instrument(band, shape[0], shape[1], active_fraction)
-        if status != 0: raise RuntimeError()
-
-        detector_bad = detector_bad.view(np.bool8)
-        if policy_bad_detector == 'keep':
-            detector_bad[:] = False
-        elif reject_bad_line and band != 'red':
-            detector_bad[11,16:32] = True
-
-        dflat[detector_bad] = np.nan
-        detector_center = detector_center.T.swapaxes(0,1)
-        detector_corner = detector_corner.T.swapaxes(0,1)
-
-        instrument = PacsInstrument('PACS/' + band.capitalize(), shape,
-            detector_corner=detector_corner, default_resolution=\
-            self.DEFAULT_RESOLUTION[band], dtype=self.DETECTOR_DTYPE)
-        instrument.band = band
-        instrument.active_fraction = active_fraction
-        instrument.reject_bad_line = reject_bad_line
-        instrument.fine_sampling_factor = fine_sampling_factor
-        instrument.detector.masked = detector_bad
-        pq = np.indices(shape)
-        instrument.detector.row = pq[0] % 16
-        instrument.detector.column = pq[1] % 16
-        instrument.detector.p = pq[0]
-        instrument.detector.q = pq[1]
-        instrument.detector.matrix = pq[1] // 16 + 1
-        if band != 'red':
-            instrument.detector.matrix[0:16,:] += 4
-        else:
-            instrument.detector.matrix = 10 - instrument.detector.matrix
-        instrument.detector.center = detector_center
-        instrument.detector.corner = detector_corner
-        instrument.detector.time_constant = pyfits.open(CALIBFILE_DTC) \
-            [{'red':1, 'green':2, 'blue':3}[band]].data / 1000 # 's'
-        instrument.detector.time_constant[detector_bad] = np.nan
-        instrument.detector.area = detector_area # arcsec^2
-        instrument.detector.flat_total = dflat * oflat
-        instrument.detector.flat_detector = dflat
-        instrument.detector.flat_optical = oflat
-        instrument.distortion_yz = distortion_yz.T.view(dtype=[('y', \
-            var.FLOAT_DTYPE), ('z',var.FLOAT_DTYPE)]).view(np.recarray)
-        instrument.responsivity = Quantity(responsivity, 'V/Jy')
-        fits = pyfits.open(CALIBFILE_GAI)
-        v = fits['photGain'].data
-        instrument.adu_converter_gain = {'low':v[0], 'high':v[1],
-                                         'nominal':v[2]}
-        v = fits['photOffset'].data
-        instrument.adu_converter_offset = {'direct':v[0], 'ddcs':v[1]}
-        instrument.adu_converter_min = {'direct':0, 'ddcs':-32768}
-        instrument.adu_converter_max = {'direct':65535, 'ddcs':32767}
-        self.instrument = instrument
-
-        self.comm_tod = comm_tod or var.comm_tod
+    SAMPLING_PERIOD = PacsInstrument.SAMPLING_PERIOD
 
     def get_derived_units(self):
         volt = Quantity(1/self.instrument.responsivity, 'Jy')
@@ -414,7 +442,7 @@ class PacsBase(Observation):
         """
         
         if filename is None:
-            filename = CALIBFILE_INV[{'blue':0,'green':1,'red':2}
+            filename = CALIBFILE_INV[{'blue':0, 'green':1, 'red':2}
                                      [self.instrument.band]]
 
         ncorrelations = pyfits.open(filename)[1].header['NAXIS1'] - 1
@@ -608,7 +636,7 @@ class PacsBase(Observation):
         if sampling_period is None:
             if int(compression_factor) not in (1, 4, 8):
                 raise ValueError("Input compression_factor must be 1, 4 or 8.")
-            sampling_period = PacsBase.SAMPLING_PERIOD * compression_factor
+            sampling_period = PacsInstrument.SAMPLING_PERIOD*compression_factor
 
         scan = Observation.create_scan(center, length, step, sampling_period,
             speed, acceleration, nlegs, angle, instrument_angle, cross_scan,
@@ -641,9 +669,9 @@ class PacsBase(Observation):
         ndetectors = self.get_ndetectors()
         sp = len('Info ')*' '
         unit = 'unknown' if self.slice[0].unit == '' else self.slice[0].unit
-        if var.comm_tod.Get_size() > 1:
-            mpistr = 'Process ' + str(var.comm_tod.Get_rank()+1) + '/' + \
-                     str(var.comm_tod.Get_size()) + ', '
+        if self.comm_tod.Get_size() > 1:
+            mpistr = 'Process ' + str(self.comm_tod.Get_rank()+1) + '/' + \
+                     str(self.comm_tod.Get_size()) + ', '
         else:
             mpistr = ''
         
@@ -762,42 +790,44 @@ class PacsObservation(PacsBase):
                  policy_inscan='keep', policy_turnaround='keep',
                  policy_other='remove', policy_invalid='mask',
                  active_fraction=0, delay=0., calblock_extension_time=None,
-                 comm_tod=None):
+                 comm_tod=MPI.COMM_WORLD):
         """
         Parameters
         ----------
-        filenames: string or array of string
+        filenames : string or array of string
               This argument indicates the filenames of the observations
               to be processed. The files must be FITS files, as saved by
               the HCSS method FitsArchive.
-        fine_sampling_factor: integer
+        fine_sampling_factor : integer
               Set this value to a power of two, which will increase the
               acquisition model's sampling frequency beyond 40Hz
-        policy_bad_detector: 'keep', 'mask' or 'remove'
+        policy_bad_detector : 'keep', 'mask' or 'remove'
               This keyword controls the handling of the bad detectors.
               'keep' will handle bad detectors like valid ones.
               'mask' will  enforce a zero data value and a True mask value in
               the Tod returned by get_tod().
               'remove' will discard the bad detectors from the Tod returned by
               get_tod().
-        reject_bad_line: boolean
+        reject_bad_line : boolean
               If True, the erratic line [11,16:32] (starting from 0) in
               the blue channel will be filtered out
-        policy_inscan: 'keep', 'mask' or 'remove'
+        policy_inscan : 'keep', 'mask' or 'remove'
               This sets the policy for the in-scan frames
         policy_turnaround: 'keep', 'mask' or 'remove'
               This sets the policy for the turnaround frames
-        policy_other: 'keep', 'mask' or 'remove'
+        policy_other : 'keep', 'mask' or 'remove'
               This sets the policy for the other frames
-        policy_invalid: 'keep', 'mask' or 'remove'
+        policy_invalid : 'keep', 'mask' or 'remove'
               This sets the policy for the invalid frames
-        active_fraction: ratio of the geometric and reference detector area
+        active_fraction : ratio of the geometric and reference detector area
               If set to 0, the value from the calibration file will be used
-        delay: instrument clock lag wrt the spacecraft clock, in ms
+        delay : instrument clock lag wrt the spacecraft clock, in ms
         calblock_extension_time: float
               Elapsed time in seconds during which samples after a calibration
               block are flagged as 'other', similarly to the calibration block
               itself. Default is 20s for the blue channel, 40s for the red one.
+        comm_tod : mpi4py.Comm
+              The TOD communicator.
 
         Returns
         -------
@@ -820,17 +850,18 @@ class PacsObservation(PacsBase):
         band, transparent_mode, status = tmf.pacs_info_instrument_init(
             filename_, nfilenames)
         if status != 0: raise RuntimeError()
-        band = band.strip()
 
         # set up the instrument
-        PacsBase.__init__(self, band, active_fraction, delay,
-            fine_sampling_factor, policy_bad_detector, reject_bad_line,
-            comm_tod)
+        self.instrument = PacsInstrument(band, active_fraction=active_fraction,
+            delay=delay, fine_sampling_factor=fine_sampling_factor,
+            policy_bad_detector=policy_bad_detector,
+            reject_bad_line=reject_bad_line, comm_tod=comm_tod)
+        band = self.instrument.band
 
         # get work load according to detector policy and MPI process
         self.instrument.detector.removed, filename = _get_workload(band,
             filename, self.instrument.detector.masked, policy_bad_detector,
-            transparent_mode, self.comm_tod)
+            transparent_mode, comm_tod)
         filename_, nfilenames = _files2tmf(filename)
 
         # get the observations and detector mask for the current processor
@@ -1084,22 +1115,23 @@ class PacsSimulation(PacsBase):
                  policy_bad_detector='mask', reject_bad_line=True,
                  policy_inscan='keep', policy_turnaround='keep',
                  policy_other='keep', policy_invalid='keep', active_fraction=0,
-                 delay=0., comm_tod=None):
+                 delay=0., comm_tod=MPI.COMM_WORLD):
+
+        # get work load according to detector policy and MPI process
+        self.instrument = PacsInstrument(band, active_fraction=active_fraction,
+            delay=delay, fine_sampling_factor=fine_sampling_factor,
+            policy_bad_detector=policy_bad_detector,
+            reject_bad_line=reject_bad_line)
+        self.comm_tod = comm_tod
+        band = self.instrument.band
 
         if not isinstance(pointings, (list,tuple)):
             pointings = (pointings,)
-        active_fraction = float(active_fraction)
-
-        band = band.lower()
-        choices = ('blue', 'green', 'red')
-        if band not in choices:
-            raise ValueError("Invalid band '" + band + \
-                "'. Expected values are " + strenum(choices) + '.')
 
         # get compression factor from input pointing
         deltas = [p.time[1:] - p.time[0:-1] for p in pointings if p.size > 1]
         if len(deltas) == 0:
-            delta = self.SAMPLING_PERIOD
+            delta = PacsInstrument.SAMPLING_PERIOD
         else:
             deltas = [np.median(d) for d in deltas]
             delta = np.median(np.hstack(deltas))
@@ -1107,12 +1139,12 @@ class PacsSimulation(PacsBase):
                 raise ValueError('The input pointings do not have the same samp'
                                  'ling period: '+str(deltas)+'.')
 
-        compression_factor = int(np.round(delta / self.SAMPLING_PERIOD))
+        compression_factor = int(np.round(delta/PacsInstrument.SAMPLING_PERIOD))
         if compression_factor <= 0:
-            raise ValueError('Invalid time in pointing argument. Use PacsSimula'
-                             'tion.SAMPLING_PERIOD.')
-        if np.abs(delta / compression_factor - self.SAMPLING_PERIOD) > 0.01 * \
-           self.SAMPLING_PERIOD:
+            raise ValueError('Invalid time in pointing argument. Use PacsInstru'
+                             'ment.SAMPLING_PERIOD.')
+        if np.abs(delta / compression_factor - PacsInstrument.SAMPLING_PERIOD) \
+           > 0.01 * PacsInstrument.SAMPLING_PERIOD:
             print('Warning: the pointing time has an unexpected sampling rate. '
                   'Assuming a compression factor of {0}.'.format(
                   compression_factor))
@@ -1138,16 +1170,6 @@ class PacsSimulation(PacsBase):
                 raise ValueError("The observing mode '" + mode + "' in the " + \
                     band + " band is incompatible with the compression factor '"
                     "" + str(compression_factor) + "'.")
-
-        # set up the instrument
-        PacsBase.__init__(self, band, active_fraction, delay,
-            fine_sampling_factor, policy_bad_detector, reject_bad_line,
-            comm_tod)
-
-        # get work load according to detector policy and MPI process
-        self.instrument.detector.removed, pointings = _get_workload(band,
-            pointings, self.instrument.detector.masked, policy_bad_detector,
-            mode == 'transparent', self.comm_tod)
 
         nslices = len(pointings)
         nsamples = tuple([p.size for p in pointings])

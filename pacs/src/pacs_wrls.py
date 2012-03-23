@@ -162,7 +162,8 @@ def pipeline_wrls(filenames, output_file, keywords, verbose=False):
     projection = tm.ProjectionOperator(obs, **keywords["Projection"])
     # build instrument model
     response = tm.ResponseTruncatedExponentialOperator(obs.pack(
-            obs.instrument.detector.time_constant) / obs.SAMPLING_PERIOD)
+                   obs.instrument.detector.time_constant) / 
+                   obs.instrument.SAMPLING_PERIOD)
     compression = tm.CompressionAverageOperator(obs.slice.compression_factor)
     masking = tm.MaskOperator(tod.mask)
     model = masking * compression * response * projection
