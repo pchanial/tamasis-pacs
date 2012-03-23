@@ -11,6 +11,7 @@ from uuid import uuid1
 tamasis.var.verbose = True
 data_dir = os.path.dirname(__file__) + '/data/'
 uuid = str(uuid1())
+tol = 1.e-10
 
 def test():
     # all observation
@@ -159,7 +160,7 @@ def test_slice2():
     
     m1 = model1.T(tod1)
     m2 = model2.T(tod2)
-    assert all_eq(m1, m2, 1e-10)
+    assert all_eq(m1, m2, tol)
     assert all_eq(model1(m1), model2(m1))
 
 def test_pTx_pT1():
@@ -179,14 +180,14 @@ def test_pTx_pT1():
     tod.inunit('Jy/arcsec^2')
     b,w = model1.get_pTx_pT1(tod)
     m2 = (b / w)
-    assert all_eq(m1, m2)
+    assert all_eq(m1, m2, tol)
 
     model3 = ProjectionOperator(obs2, downsampling=True)
     model3.apply_mask(tod.mask)
     
     b,w = model3.get_pTx_pT1(tod)
     m3 = (b / w)
-    assert all_eq(m1, m3, 1e-10)
+    assert all_eq(m1, m3, tol)
 
     
 def teardown():
