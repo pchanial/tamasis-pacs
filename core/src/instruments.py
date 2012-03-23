@@ -22,7 +22,7 @@ class Instrument(object):
     Attributes
     ----------
     name
-    comm_tod
+    comm
     detector.removed
     detector.masked
     detector.center
@@ -30,12 +30,12 @@ class Instrument(object):
     """
     def __init__(self, name, shape, removed=None, masked=None,
                  detector_center=None, detector_corner=None,
-                 default_resolution=None, dtype=None, comm_tod=MPI.COMM_WORLD):
+                 default_resolution=None, dtype=None, comm=MPI.COMM_WORLD):
 
         self.name = str(name)
         shape = tuple(shape)
         self.default_resolution = default_resolution
-        self.comm_tod = comm_tod
+        self.comm = comm
 
         dtype_default = [('masked', np.bool8), ('removed', np.bool8)]
 
@@ -280,34 +280,41 @@ class Instrument(object):
                                    crval=(ra0,dec0), crpix=(-ixmin+2,-iymin+2))
 
         # gather and combine the FITS headers
-        headers = self.comm_tod.allgather(header)
+        headers = self.comm.allgather(header)
         return combine_fitsheader(headers)
 
     def get_pointing_matrix(self, pointing, header, npixels_per_sample=0,
-                            method=None, comm=MPI.COMM_WORLD, **keywords):
+                            method=None, downsampling=False,
+                            units=('/detector', '/pixel'),
+                            derived_units=(None,None), comm=MPI.COMM_WORLD,
+                            **keywords):
         """
         Return the pointing matrix for a given set of pointings.
 
         Parameters
         ----------
-            pointing : Pointing
-                The pointing containing the astrometry of the array center.
-            header : pyfits.Header
-                The map FITS header
-            npixels_per_sample : int
-                Maximum number of sky pixels intercepted by a detector.
-                By setting 0 (the default), the actual value will be determined
-                automatically.
-            method : string
-                'sharp' : the intersection of the sky pixels and the detectors
-                          is computed assuming that the transmission outside
-                          the detector is zero and one otherwise (sharp edge
-                          geometry)
-                'nearest' : the value of the sky pixel closest to the detector
-                            center is taken as the sample value, assuming
-                            surface brightness conservation.
-            comm : mpi4py.MPI.Comm
-                MPI communicator, only used if the input FITS header is local.
+        pointing : Pointing
+            The pointing containing the astrometry of the array center.
+        header : pyfits.Header
+            The map FITS header
+        npixels_per_sample : int
+            Maximum number of sky pixels intercepted by a detector.
+            By setting 0 (the default), the actual value will be determined
+            automatically.
+        method : string
+            'sharp' : the intersection of the sky pixels and the detectors
+                      is computed assuming that the transmission outside
+                      the detector is zero and one otherwise (sharp edge
+                      geometry)
+            'nearest' : the value of the sky pixel closest to the detector
+                        center is taken as the sample value, assuming
+                        surface brightness conservation.
+        downsampling : boolean
+            If True, return a pointing matrix downsampled by the instrument
+            fine sampling factor. Otherwise return a pointing matrix sampled
+            at the instrument fine sampling factor.
+        comm : mpi4py.MPI.Comm
+            MPI communicator, only used if the input FITS header is local.
 
         """
         if method is None:
@@ -321,6 +328,9 @@ class Instrument(object):
             raise ValueError("Invalid method '" + method + "'. Expected values "
                 "are " + strenum(choices) + '.')
 
+        if not downsampling and self.fine_sampling_factor > 1:
+            raise NotImplementedError('Oversampling is not implemented.')
+
         header = gather_fitsheader_if_needed(header, comm=comm)
         shape_input = tuple(header['NAXIS' + str(i+1)]
                             for i in range(header['NAXIS']))[::-1]
@@ -333,19 +343,16 @@ class Instrument(object):
         pointing = pointing[mask]
         nvalids = pointing.size
 
-        if method == 'sharp':
-            coords = self.pack(self.detector.corner)
-        else:
-            coords = self.pack(self.detector.center)
+        if method == 'nearest':
             npixels_per_sample = 1
 
         # Allocate memory for the pointing matrix
-        ndetectors = coords.shape[0]
+        ndetectors = self.get_ndetectors()
         shape = (ndetectors, nvalids, npixels_per_sample)
         info = {'header':header,
                 'method':method,
-                'units':('/detector', '/pixel'),
-                'derived_units':(None, None)}
+                'units':units,
+                'derived_units':derived_units}
         try:
             pmatrix = PointingMatrix.empty(shape, shape_input, info=info)
         except MemoryError:
@@ -355,11 +362,15 @@ class Instrument(object):
 
         # compute the pointing matrix
         if method == 'sharp':
+            coords = self.pack(self.detector.corner)
             new_npixels_per_sample, out = self. \
                 instrument2pmatrix_sharp_edges(coords, pointing, header,
                                                pmatrix, npixels_per_sample)
-        else:
+        elif method == 'nearest':
+            coords = self.pack(self.detector.center)
             new_npixels_per_sample = 1
+            raise NotImplementedError()
+        else:
             raise NotImplementedError()
 
         if ndetectors > 0 and nvalids > 0:
@@ -380,7 +391,7 @@ class Instrument(object):
         # the specified one, redo the computation of the pointing matrix
         del pmatrix
         return self.get_pointing_matrix(pointing, header,
-                                        new_npixels_per_sample, method)
+            new_npixels_per_sample, method, downsampling, comm, **keywords)
 
     @staticmethod
     def instrument2ad(coords, pointing):

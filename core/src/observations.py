@@ -23,9 +23,6 @@ class Observation(object):
         self.policy = None
         self.slice = None
 
-    comm_map = MPI.COMM_WORLD
-    comm_tod = MPI.COMM_WORLD
-
     def get_ndetectors(self):
         return self.instrument.get_ndetectors()
     get_ndetectors.__doc__ = Instrument.get_ndetectors.__doc__
@@ -55,7 +52,8 @@ class Observation(object):
                                               resolution=resolution)
 
     def get_pointing_matrix(self, header, npixels_per_sample=0, method=None,
-                            section=None, **keywords):
+                            downsampling=False, section=None, 
+                            comm=MPI.COMM_WORLD, **keywords):
         """
         Return the pointing matrix for the observation.
 
@@ -64,29 +62,36 @@ class Observation(object):
 
         Parameters
         ----------
-            header : pyfits.Header
-                The map FITS header
-            npixels_per_sample : int
-                Maximum number of sky pixels intercepted by a detector.
-                By setting 0 (the default), the actual value will be determined
-                automatically.
-            method : string
-                'sharp' : the intersection of the sky pixels and the detectors
-                          is computed assuming that the transmission outside
-                          the detector is zero and one otherwise (sharp edge
-                          geometry)
-                'nearest' : the value of the sky pixel closest to the detector
-                            center is taken as the sample value, assuming
-                            surface brightness conservation.
-            section : PacsObservation.slice
-                If specified, return the pointing matrix for a specific slice.
+        header : pyfits.Header
+            The map FITS header
+        npixels_per_sample : int
+            Maximum number of sky pixels intercepted by a detector.
+            By setting 0 (the default), the actual value will be determined
+            automatically.
+        method : string
+            'sharp' : the intersection of the sky pixels and the detectors
+                      is computed assuming that the transmission outside
+                      the detector is zero and one otherwise (sharp edge
+                      geometry)
+            'nearest' : the value of the sky pixel closest to the detector
+                        center is taken as the sample value, assuming
+                        surface brightness conservation.
+        downsampling : boolean
+            If True, return a pointing matrix downsampled by the instrument
+            fine sampling factor. Otherwise return a pointing matrix sampled
+            at the instrument fine sampling factor.
+        section : PacsObservation.slice
+            If specified, return the pointing matrix for a specific slice.
+        comm : mpi4py.MPI.Comm
+            Map communicator, only used if the input FITS header is local.
 
         """
         # if section is None, return as many pointing matrices as slices
         if section is None:
             if self.slice is not None:
                 pmatrix = [self.get_pointing_matrix(header, npixels_per_sample,
-                           method, section=s, **keywords) for s in self.slice]
+                           method, downsampling, section=s, comm=comm,
+                           **keywords) for s in self.slice]
                 if len(pmatrix) == 1:
                     pmatrix = pmatrix[0]
                 return pmatrix
@@ -97,7 +102,8 @@ class Observation(object):
                 section = slice(section.start, section.stop)
             pointing = self.pointing[section]
         result = self.instrument.get_pointing_matrix(pointing, header,
-                     npixels_per_sample, method, **keywords)
+                     npixels_per_sample, method, downsampling, comm=comm,
+                     **keywords)
         result.info.update(keywords)
         return result
 

@@ -23,7 +23,7 @@ header_ref_global = create_fitsheader((97,108), cdelt=3.2/3600,
                                       crval=(245.998427916727,61.5147650744551))
 comm_tod = MPI.COMM_SELF
 comm_map = MPI.COMM_SELF
-obs_ref = PacsObservation(data_dir + 'frames_blue.fits', comm_tod=comm_tod)
+obs_ref = PacsObservation(data_dir + 'frames_blue.fits', comm=comm_tod)
 obs_ref.pointing.chop = 0
 tod_ref = obs_ref.get_tod(flatfielding=False, subtraction_mean=False)
 model_ref = MaskOperator(tod_ref.mask) * \

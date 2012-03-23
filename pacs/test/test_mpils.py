@@ -20,7 +20,7 @@ data_dir = os.path.dirname(__file__) + '/data/'
 # reference map (no communication)
 comm_tod = MPI.COMM_SELF
 comm_map = MPI.COMM_SELF
-obs_ref = PacsObservation(data_dir + 'frames_blue.fits', comm_tod=comm_tod)
+obs_ref = PacsObservation(data_dir + 'frames_blue.fits', comm=comm_tod)
 obs_ref.pointing.chop = 0
 tod_ref = obs_ref.get_tod(flatfielding=False, subtraction_mean=False)
 model_ref = MaskOperator(tod_ref.mask) * \

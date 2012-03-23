@@ -21,9 +21,12 @@ from tamasis.mpiutils import gather_fitsheader_if_needed
 __all__ = [ 'MadMap1Observation' ]
 
 class MadMap1Observation(Observation):
-    """Class for the handling of an observation in the MADMAP1 format"""
+    """
+    Class for the handling of an observation in the MADMAP1 format.
+
+    """
     def __init__(self, todfile, invnttfile, mapmaskfile, convert, ndetectors,
-                 missing_value=None, comm_tod=None):
+                 missing_value=None, comm=MPI.COMM_WORLD):
 
         # Get information from files
         nslices, status = tmf.madmap1_nslices(invnttfile, ndetectors)
@@ -52,7 +55,7 @@ class MadMap1Observation(Observation):
             mapmask[mask == missing_value] = True
 
         # Store instrument information
-        self.instrument = Instrument('Unknown', (ndetectors,))
+        self.instrument = Instrument('Unknown', (ndetectors,), comm=comm)
 
         # Store observation information
         class MadMap1ObservationInfo(object):
@@ -84,9 +87,8 @@ class MadMap1Observation(Observation):
         self.pointing = np.recarray(np.sum(nsamples), [('removed', np.bool_)])
         self.pointing.removed = False
 
-        # Store communicator information
-        self.comm_tod = comm_tod or var.comm_tod
-        if self.comm_tod.Get_size() > 1:
+        # Check communicator information
+        if self.instrument.comm.size > 1:
             raise NotImplementedError('The parallelisation of the TOD is not ' \
                                       'implemented')
 
@@ -100,10 +102,8 @@ class MadMap1Observation(Observation):
         return header
 
     def get_pointing_matrix(self, header, npixels_per_sample, method=None,
-                            section=None, comm=MPI.COMM_WORLD, **keywords):
-        """
-        Method to get the pointing matrix.
-        """
+                            downsampling=False, section=None,
+                            comm=MPI.COMM_WORLD):
 
         # if no slice is provided, return a pointing matrix for each of them
         if section is None:

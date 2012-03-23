@@ -54,9 +54,9 @@ class PacsInstrument(Instrument):
         ('flat_optical', var.FLOAT_DTYPE)]
     SAMPLING_PERIOD = 0.024996 # in seconds
 
-    def __init__(self, band, active_fraction=0, delay=0.,
-                 fine_sampling_factor=1, policy_bad_detector='mask',
-                 reject_bad_line=True, comm_tod=MPI.COMM_WORLD):
+    def __init__(self, band, active_fraction=0, fine_sampling_factor=1,
+                 policy_bad_detector='mask', reject_bad_line=True,
+                 comm=MPI.COMM_WORLD):
 
         """
         Set up the PACS instrument.
@@ -80,7 +80,6 @@ class PacsInstrument(Instrument):
               the blue channel will be filtered out
         active_fraction : ratio of the geometric and reference detector area
               If set to 0, the value from the calibration file will be used
-        delay : instrument clock lag wrt the spacecraft clock, in ms
 
         """
         band = band.lower().strip()
@@ -114,7 +113,7 @@ class PacsInstrument(Instrument):
         Instrument.__init__(self, 'PACS/' + band.capitalize(), shape,
             detector_corner=detector_corner, default_resolution=\
             self.DEFAULT_RESOLUTION[band], dtype=self.DETECTOR_DTYPE,
-            comm_tod=comm_tod)
+            comm=comm)
         self.band = band
         self.active_fraction = float(active_fraction)
         self.reject_bad_line = reject_bad_line
@@ -293,10 +292,10 @@ class PacsInstrument(Instrument):
 
         return new_npixels_per_sample, out
 
-    def get_pointing_matrix(self, pointing, header, npixels_per_sample, method,
-                            downsampling=None, compression_factor=None,
-                            delay=None, derived_units=None, comm=MPI.COMM_WORLD,
-                            **keywords):
+    def get_pointing_matrix(self, pointing, header, npixels_per_sample=0,
+                            method='sharp', downsampling=False,
+                            compression_factor=None, delay=0., units=None,
+                            derived_units=None, comm=MPI.COMM_WORLD):
         """
         Return the PACS-specific pointing matrix for a given set of pointings.
 
@@ -324,11 +323,11 @@ class PacsInstrument(Instrument):
                 unless the instrument has been setup with a higher sampling rate
                 via the 'fine_sampling_factor' keyword.
             compression_factor : int
-                The on-board compression factor.
+                The compression factor, used if downsampling is True.
             delay : float
                 Instrument clock lag wrt the spacecraft clock, in ms.
             comm : mpi4py.MPI.Comm
-                MPI communicator, only used if the input FITS header is local.
+                Map communicator, only used if the input FITS header is local.
 
         """
         if method is None:
@@ -349,13 +348,15 @@ class PacsInstrument(Instrument):
 
         nvalids = int(np.sum(~pointing.removed))
         if not downsampling:
+            if compression_factor is None:
+                raise ValueError('The compression factor is missing.')
             nvalids *= self.fine_sampling_factor * compression_factor
 
         ndetectors = self.get_ndetectors()
         shape = (ndetectors, nvalids, npixels_per_sample)
         info = {'header':header,
                 'method':method,
-                'units':('/detector', '/pixel'),
+                'units':units,
                 'derived_units':derived_units,
                 'downsampling':downsampling}
 
@@ -406,8 +407,8 @@ class PacsInstrument(Instrument):
         del pmatrix_, pmatrix
         return self.get_pointing_matrix(pointing, header,
             new_npixels_per_sample, method, compression_factor= \
-            compression_factor, delay=delay, derived_units=derived_units,
-            downsampling=downsampling, comm=comm)
+            compression_factor, delay=delay, units=units,
+            derived_units=derived_units, downsampling=downsampling, comm=comm)
 
 
 class PacsBase(Observation):
@@ -455,7 +456,8 @@ class PacsBase(Observation):
         return data.T
 
     def get_pointing_matrix(self, header, npixels_per_sample=0, method=None,
-                            section=None, downsampling=False, **keywords):
+                            downsampling=False, section=None, 
+                            comm=MPI.COMM_WORLD):
         """
         Return the PACS-specific pointing matrix for the observation.
 
@@ -485,17 +487,19 @@ class PacsBase(Observation):
                 factor. Otherwise return a pointing matrix sampled at 40Hz,
                 unless the instrument has been setup with a higher sampling rate
                 via the 'fine_sampling_factor' keyword.
+            comm : mpi4py.MPI.Comm
+                MPI communicator, only used if the input FITS header is local.
 
         """
         if section is None:
             return super(PacsBase, self).get_pointing_matrix(header,
-                         npixels_per_sample, method, downsampling=downsampling,
-                         derived_units=self.get_derived_units())
+                         npixels_per_sample, method, downsampling, comm=comm)
 
         return super(PacsBase, self).get_pointing_matrix(header,
-            npixels_per_sample, method, section, compression_factor= \
-            section.compression_factor, delay=section.delay, downsampling= \
-            downsampling, derived_units=self.get_derived_units())
+            npixels_per_sample, method, downsampling, compression_factor=
+            section.compression_factor, delay=section.delay, units=
+            ('/detector', '/pixel'), derived_units=self.get_derived_units(),
+            section=section, comm=comm)
 
     def get_random(self, flatfielding=True, subtraction_mean=True):
         """
@@ -669,9 +673,9 @@ class PacsBase(Observation):
         ndetectors = self.get_ndetectors()
         sp = len('Info ')*' '
         unit = 'unknown' if self.slice[0].unit == '' else self.slice[0].unit
-        if self.comm_tod.Get_size() > 1:
-            mpistr = 'Process ' + str(self.comm_tod.Get_rank()+1) + '/' + \
-                     str(self.comm_tod.Get_size()) + ', '
+        if self.instrument.comm.size > 1:
+            mpistr = 'Process ' + str(self.instrument.comm.rank()+1) + '/' + \
+                     str(self.instrument.comm.size) + ', '
         else:
             mpistr = ''
         
@@ -790,7 +794,7 @@ class PacsObservation(PacsBase):
                  policy_inscan='keep', policy_turnaround='keep',
                  policy_other='remove', policy_invalid='mask',
                  active_fraction=0, delay=0., calblock_extension_time=None,
-                 comm_tod=MPI.COMM_WORLD):
+                 comm=MPI.COMM_WORLD):
         """
         Parameters
         ----------
@@ -826,7 +830,7 @@ class PacsObservation(PacsBase):
               Elapsed time in seconds during which samples after a calibration
               block are flagged as 'other', similarly to the calibration block
               itself. Default is 20s for the blue channel, 40s for the red one.
-        comm_tod : mpi4py.Comm
+        comm : mpi4py.MPI.Comm
               The TOD communicator.
 
         Returns
@@ -853,15 +857,15 @@ class PacsObservation(PacsBase):
 
         # set up the instrument
         self.instrument = PacsInstrument(band, active_fraction=active_fraction,
-            delay=delay, fine_sampling_factor=fine_sampling_factor,
+            fine_sampling_factor=fine_sampling_factor,
             policy_bad_detector=policy_bad_detector,
-            reject_bad_line=reject_bad_line, comm_tod=comm_tod)
+            reject_bad_line=reject_bad_line, comm=comm)
         band = self.instrument.band
 
         # get work load according to detector policy and MPI process
         self.instrument.detector.removed, filename = _get_workload(band,
             filename, self.instrument.detector.masked, policy_bad_detector,
-            transparent_mode, comm_tod)
+            transparent_mode, comm)
         filename_, nfilenames = _files2tmf(filename)
 
         # get the observations and detector mask for the current processor
@@ -1115,14 +1119,16 @@ class PacsSimulation(PacsBase):
                  policy_bad_detector='mask', reject_bad_line=True,
                  policy_inscan='keep', policy_turnaround='keep',
                  policy_other='keep', policy_invalid='keep', active_fraction=0,
-                 delay=0., comm_tod=MPI.COMM_WORLD):
+                 delay=0., comm=MPI.COMM_WORLD):
+
+        if comm.size > 1:
+            raise NotImplementedError()
 
         # get work load according to detector policy and MPI process
         self.instrument = PacsInstrument(band, active_fraction=active_fraction,
-            delay=delay, fine_sampling_factor=fine_sampling_factor,
+            fine_sampling_factor=fine_sampling_factor,
             policy_bad_detector=policy_bad_detector,
-            reject_bad_line=reject_bad_line)
-        self.comm_tod = comm_tod
+            reject_bad_line=reject_bad_line, comm=comm)
         band = self.instrument.band
 
         if not isinstance(pointings, (list,tuple)):

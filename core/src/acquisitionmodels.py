@@ -350,6 +350,7 @@ class InvNttOperator(Operator):
         if obs is None:
             return Operator.__new__(cls)
         nsamples = obs.get_nsamples()
+        comm_tod = obs.instrument.comm
         method = method.lower()
         if method not in ('uncorrelated', 'uncorrelated python'):
             raise ValueError("Invalid method '{0}'.".format(method))
@@ -372,7 +373,7 @@ class InvNttOperator(Operator):
             if status != 0: raise RuntimeError()
             np.maximum(fft_filter, 0, fft_filter)
             fft_filters.append(fft_filter.T)
-            norm = var.comm_tod.allreduce(max([np.max(f) for f in fft_filters]),
+            norm = comm_tod.allreduce(max([np.max(f) for f in fft_filters]),
                                           op=MPI.MAX)
         for f in fft_filters:
             np.divide(f, norm, f)
@@ -577,6 +578,7 @@ def ProjectionOperator(input, method=None, header=None, resolution=None,
             nmatrices = len(input.slice)
         else:
             nmatrices = 1
+        commout = input.instrument.comm
     else:
         if isinstance(input, PointingMatrix):
             input = (input,)
