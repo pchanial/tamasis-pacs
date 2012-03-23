@@ -1707,7 +1707,7 @@ def _write_status(obs, filename, fitskw=None):
     hdu = pyfits.PrimaryHDU(None, header)
     fits.append(hdu)
     
-    status = pyfits.BinTableHDU(status, None, 'STATUS')
+    status = pyfits.BinTableHDU(status, None, name='STATUS')
     fits.append(status)
     fits.writeto(filename, clobber=True)
 
