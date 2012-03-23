@@ -47,6 +47,10 @@ def _deglitch(tod, projection, nsigma, func):
         mask = tod.mask.copy()
     func(matrix.view(int).ravel(), nx, ny, tod.T, mask.view(np.int8).T,
          nsigma, npixels_per_sample)
+
+    # IFORT stores .true. as -1, it conflicts with numpy algebra on booleans
+    np.abs(mask, mask)
+
     return mask
     
 def deglitch_l2std(tod, projection, nsigma=5.):

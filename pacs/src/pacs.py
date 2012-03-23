@@ -1059,6 +1059,9 @@ class PacsObservation(PacsBase):
             first = last + 1
         print('Reading timeline... {0:.2f}'.format(time.time()-time0))
 
+        # IFORT stores .true. as -1, it conflicts with numpy algebra on booleans
+        np.abs(tod.mask, tod.mask)
+
         filter_nonfinite(tod, out=tod)
 
         if not raw:
