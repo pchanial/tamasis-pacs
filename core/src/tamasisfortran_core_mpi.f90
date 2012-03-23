@@ -39,7 +39,8 @@ contains
         integer, intent(in)    :: comm
         integer, intent(out)   :: status
 
-        integer                :: rank, size, nfast, ndiff, nslow, mpistatus(6)
+        integer                :: rank, size, mpistatus(6)
+        integer*8              :: nfast, ndiff, nslow
         real(p), allocatable   :: boundary(:)
 
         nfast = product(ashape(1:dim-1))
@@ -80,7 +81,8 @@ contains
         integer, intent(in)    :: comm
         integer, intent(out)   :: status
 
-        integer                :: rank, size, nfast, ndiff, nslow, mpistatus(6)
+        integer                :: rank, size, mpistatus(6)
+        integer*8              :: nfast, ndiff, nslow
         real(p), allocatable   :: boundary(:)
 
         nfast = product(ashape(1:dim-1))
@@ -122,7 +124,8 @@ contains
         integer, intent(in)    :: comm
         integer, intent(out)   :: status
 
-        integer                :: rank, size, nfast, ndiff, nslow, mpistatus(6)
+        integer                :: rank, size, mpistatus(6)
+        integer*8              :: nfast, ndiff, nslow
         real(p), allocatable   :: boundary1(:), boundary2(:)
 
         nfast = product(ashape(1:dim-1))

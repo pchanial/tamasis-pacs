@@ -40,7 +40,7 @@ subroutine madmap1_info(todfile, invnttfile, convert, ndetectors, nslices, npixe
     integer, intent(in)          :: ndetectors
     integer, intent(in)          :: nslices
     integer, intent(out)         :: npixels_per_sample
-    integer, intent(out)         :: nsamples(nslices)
+    integer*8, intent(out)       :: nsamples(nslices)
     integer, intent(out)         :: ncorrelations
     integer, intent(out)         :: status
 
@@ -110,7 +110,7 @@ subroutine madmap1_read_tod(todfile, invnttfile, convert, npixels_per_sample, ns
     character(len=*), intent(in)         :: invnttfile
     character(len=*), intent(in)         :: convert
     integer, intent(in)                  :: npixels_per_sample
-    integer, intent(in)                  :: nsamples_tot
+    integer*8, intent(in)                :: nsamples_tot
     integer, intent(in)                  :: ndetectors
     integer, intent(in)                  :: islice
     real(p), intent(inout)               :: tod(nsamples_tot,ndetectors)
@@ -118,7 +118,7 @@ subroutine madmap1_read_tod(todfile, invnttfile, convert, npixels_per_sample, ns
     integer, intent(out)                 :: status
 
     type(FilterUncorrelated), allocatable :: filter(:)
-    integer, allocatable                  :: nsamples(:)
+    integer*8, allocatable                :: nsamples(:)
     
     call read_filter(invnttfile, convert, ndetectors, filter, nsamples, status)
     if (status /= 0) return
@@ -145,11 +145,11 @@ subroutine madmap1_read_filter(filename, convert, ncorrelations, ndetectors, nsl
     integer, intent(in)          :: ndetectors
     integer, intent(in)          :: nslices
     real(p), intent(out)         :: data(ncorrelations+1, ndetectors, nslices)
-    integer, intent(out)         :: nsamples(nslices)
+    integer*8, intent(out)       :: nsamples(nslices)
     integer, intent(out)         :: status
 
     type(FilterUncorrelated), allocatable :: filter(:)
-    integer, allocatable                  :: nsamples_(:)
+    integer*8, allocatable                :: nsamples_(:)
     integer                               :: islice
 
     call read_filter(filename, convert, ndetectors, filter, nsamples_, status)

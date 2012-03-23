@@ -25,7 +25,7 @@ contains
         integer*8, intent(in)  :: ashape(arank)
         logical, intent(in)    :: inplace
 
-        integer :: nfast, ndiff, nslow
+        integer*8 :: nfast, ndiff, nslow
 
         nfast = product(ashape(1:dim-1))
         ndiff = ashape(dim)
@@ -61,7 +61,7 @@ contains
         integer*8, intent(in)  :: ashape(arank)
         logical, intent(in)    :: inplace
 
-        integer :: nfast, ndiff, nslow
+        integer*8 :: nfast, ndiff, nslow
 
         nfast = product(ashape(1:dim-1))
         ndiff = ashape(dim)
@@ -98,7 +98,7 @@ contains
         real(p), intent(in)    :: scalar
         logical, intent(in)    :: inplace
 
-        integer :: nfast, ndiff, nslow
+        integer*8 :: nfast, ndiff, nslow
 
         nfast = product(ashape(1:dim-1))
         ndiff = ashape(dim)
@@ -127,9 +127,9 @@ contains
     subroutine xxx_diff_fast_inplace(input, m, n)
 
         real(p), intent(inout) :: input(m,n)
-        integer, intent(in)    :: m, n
+        integer*8, intent(in)  :: m, n
 
-        integer :: i, j
+        integer*8 :: i, j
 
         if (m <= 1) then
             input = 0
@@ -155,9 +155,9 @@ contains
 
         real(p), intent(in)    :: input(m,n)
         real(p), intent(inout) :: output(m,n)
-        integer, intent(in)    :: m, n
+        integer*8, intent(in)  :: m, n
 
-        integer :: i, j
+        integer*8 :: i, j
 
         if (m <= 1) then
             output = 0
@@ -181,11 +181,11 @@ contains
 
     subroutine xxx_diff_medium_inplace(input, m, n, o)
 
-        integer, intent(in)    :: m, n, o
+        integer*8, intent(in)  :: m, n, o
         real(p), intent(inout) :: input(m,n,o)
 
         integer, parameter     :: block = 4096
-        integer                :: i, j, k, a, z
+        integer*8              :: i, j, k, a, z
 
         if (n <= 1) then
             input = 0
@@ -214,12 +214,12 @@ contains
 
     subroutine xxx_diff_medium_outplace(input, output, m, n, o)
 
-        integer, intent(in)    :: m, n, o
+        integer*8, intent(in)  :: m, n, o
         real(p), intent(in)    :: input(m,n,o)
         real(p), intent(inout) :: output(m,n,o)
 
         integer, parameter     :: block = 4096
-        integer                :: i, j, k, a, z
+        integer*8              :: i, j, k, a, z
 
         if (n <= 1) then
             output = 0
@@ -249,12 +249,12 @@ contains
     subroutine xxx_diff_slow_inplace(input, m, n, boundary, islastrank)
 
         real(p), intent(inout)        :: input(m,n)
-        integer, intent(in)           :: m, n
+        integer*8, intent(in)         :: m, n
         real(p), intent(in), optional :: boundary(m)
         logical, intent(in), optional :: islastrank
 
         integer, parameter :: block = 4096
-        integer            :: i, j, a, z
+        integer*8          :: i, j, a, z
         logical            :: islastrank_
 
         if (n == 0) return
@@ -287,12 +287,12 @@ contains
 
         real(p), intent(in)           :: input(m,n)
         real(p), intent(inout)        :: output(m,n)
-        integer, intent(in)           :: m, n
+        integer*8, intent(in)         :: m, n
         real(p), intent(in), optional :: boundary(m)
         logical, intent(in), optional :: islastrank
 
         integer, parameter :: block = 4096
-        integer            :: i, j, a, z
+        integer*8          :: i, j, a, z
         logical            :: islastrank_
 
         if (n == 0) return
@@ -324,9 +324,9 @@ contains
     subroutine xxx_diffT_fast_inplace(input, m, n)
 
         real(p), intent(inout) :: input(m,n)
-        integer, intent(in)    :: m, n
+        integer*8, intent(in)  :: m, n
 
-        integer :: i, j
+        integer*8 :: i, j
 
         if (m <= 1) then
             input = 0
@@ -353,9 +353,9 @@ contains
 
         real(p), intent(in)    :: input(m,n)
         real(p), intent(inout) :: output(m,n)
-        integer, intent(in)    :: m, n
+        integer*8, intent(in)  :: m, n
 
-        integer :: i, j
+        integer*8 :: i, j
 
         if (m <= 1) then
             output = 0
@@ -380,11 +380,11 @@ contains
 
     subroutine xxx_diffT_medium_inplace(input, m, n, o)
 
-        integer, intent(in)    :: m, n, o
+        integer*8, intent(in)  :: m, n, o
         real(p), intent(inout) :: input(m,n,o)
 
         integer, parameter     :: block = 4096
-        integer                :: i, j, k, a, z
+        integer*8              :: i, j, k, a, z
 
         if (n <= 1) then
             input = 0
@@ -413,12 +413,12 @@ contains
 
     subroutine xxx_diffT_medium_outplace(input, output, m, n, o)
 
-        integer, intent(in)    :: m, n, o
+        integer*8, intent(in)  :: m, n, o
         real(p), intent(in)    :: input(m,n,o)
         real(p), intent(inout) :: output(m,n,o)
 
         integer, parameter     :: block = 4096
-        integer                :: i, j, k, a, z
+        integer*8              :: i, j, k, a, z
 
         if (n <= 1) then
             output = 0
@@ -448,13 +448,13 @@ contains
     subroutine xxx_diffT_slow_inplace(input, m, n, boundary, isfirstrank, islastrank)
 
         real(p), intent(inout)        :: input(m,n)
-        integer, intent(in)           :: m, n
+        integer*8, intent(in)         :: m, n
         real(p), intent(in), optional :: boundary(m)
         logical, intent(in), optional :: isfirstrank
         logical, intent(in), optional :: islastrank
 
         integer, parameter :: block = 4096
-        integer            :: i, j, a, z
+        integer*8          :: i, j, a, z
         logical            :: isfirstrank_, islastrank_
 
         if (n == 0) return
@@ -505,7 +505,7 @@ contains
 
     subroutine xxx_diffT_slow_outplace(input, output, m, n, boundary, isfirstrank, islastrank)
 
-        integer, intent(in)           :: m, n
+        integer*8, intent(in)         :: m, n
         real(p), intent(in)           :: input(m,n)
         real(p), intent(inout)        :: output(m,n)
         real(p), intent(in), optional :: boundary(m)
@@ -513,7 +513,7 @@ contains
         logical, intent(in), optional :: islastrank
 
         integer, parameter :: block = 4096
-        integer            :: i, j, a, z
+        integer*8          :: i, j, a, z
         logical            :: isfirstrank_, islastrank_
 
         if (n == 0) return
@@ -567,11 +567,11 @@ contains
     subroutine xxx_diffTdiff_fast_inplace(input, m, n, scalar)
 
         real(p), intent(inout)        :: input(m,n)
-        integer, intent(in)           :: m, n
+        integer*8, intent(in)         :: m, n
         real(p), intent(in), optional :: scalar
 
-        integer :: i, j
-        real(p) :: v, w, s
+        integer*8 :: i, j
+        real(p)   :: v, w, s
 
         if (m <= 1) then
             input = 0
@@ -607,11 +607,11 @@ contains
 
         real(p), intent(in)           :: input(m,n)
         real(p), intent(inout)        :: output(m,n)
-        integer, intent(in)           :: m, n
+        integer*8, intent(in)         :: m, n
         real(p), intent(in), optional :: scalar
 
-        integer :: i, j
-        real(p) :: v, w, s
+        integer*8 :: i, j
+        real(p)   :: v, w, s
 
         if (m <= 1) then
             output = 0
@@ -645,13 +645,13 @@ contains
 
     subroutine xxx_diffTdiff_medium_inplace(input, m, n, o, scalar)
 
-        integer, intent(in)           :: m, n, o
+        integer*8, intent(in)         :: m, n, o
         real(p), intent(inout)        :: input(m,n,o)
         real(p), intent(in), optional :: scalar
 
         integer, parameter :: block = 4096
-        integer :: h, i, j, k, a, z
-        real(p) :: w, v(block), s
+        integer*8 :: h, i, j, k, a, z
+        real(p)   :: w, v(block), s
         
         if (n <= 1) then
             input = 0
@@ -691,14 +691,14 @@ contains
 
     subroutine xxx_diffTdiff_medium_outplace(input, output, m, n, o, scalar)
 
-        integer, intent(in)           :: m, n, o
+        integer*8, intent(in)         :: m, n, o
         real(p), intent(in)           :: input(m,n,o)
         real(p), intent(inout)        :: output(m,n,o)
         real(p), intent(in), optional :: scalar
 
         integer, parameter :: block = 4096
-        integer :: h, i, j, k, a, z
-        real(p) :: w, v(block), s
+        integer*8 :: h, i, j, k, a, z
+        real(p)   :: w, v(block), s
         
         if (n <= 1) then
             output = 0
@@ -739,14 +739,14 @@ contains
     subroutine xxx_diffTdiff_slow_inplace(input, m, n, scalar, boundary1, boundary2, isfirstrank, islastrank)
 
         real(p), intent(inout)        :: input(m,n)
-        integer, intent(in)           :: m, n
+        integer*8, intent(in)         :: m, n
         real(p), intent(in), optional :: scalar
         real(p), intent(in), optional :: boundary1(m), boundary2(m)
         logical, intent(in), optional :: isfirstrank
         logical, intent(in), optional :: islastrank
 
         integer, parameter :: block = 4096
-        integer            :: h, i, j, a, z
+        integer*8          :: h, i, j, a, z
         logical            :: isfirstrank_, islastrank_
         real(p)            :: w, v(block), s
 
@@ -811,7 +811,7 @@ contains
 
     subroutine xxx_diffTdiff_slow_outplace(input, output, m, n, scalar, boundary1, boundary2, isfirstrank, islastrank)
 
-        integer, intent(in)           :: m, n
+        integer*8, intent(in)         :: m, n
         real(p), intent(in)           :: input(m,n)
         real(p), intent(inout)        :: output(m,n)
         real(p), intent(in), optional :: scalar
@@ -820,7 +820,7 @@ contains
         logical, intent(in), optional :: islastrank
 
         integer, parameter :: block = 4096
-        integer            :: h, i, j, a, z
+        integer*8          :: h, i, j, a, z
         logical            :: isfirstrank_, islastrank_
         real(p)            :: w, v(block), s
 
@@ -883,37 +883,15 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine pmatrix_intersects_openmp(pmatrix, pixel, npixels_per_sample, nsamples, ndetectors, out)
-        !f2py integer*8, dimension(npixels_per_sample*nsamples*ndetectors), intent(in) :: pmatrix
-
-        type(PointingElement), intent(in) :: pmatrix(npixels_per_sample, nsamples, ndetectors)
-        integer*4, intent(in)             :: pixel
-        integer, intent(in)               :: npixels_per_sample, nsamples, ndetectors
-        logical*1, intent(out)            :: out
-
-        integer                           :: idetector
-        
-        out = .false.
-        !$omp parallel do reduction(.or.:out)
-        do idetector = 1, ndetectors
-            if (out) cycle
-            out = any(pmatrix(:,:,idetector)%pixel == pixel)
-        end do
-        !$omp end parallel do
-
-    end subroutine pmatrix_intersects_openmp
-
-
-    !-------------------------------------------------------------------------------------------------------------------------------
-
-
     subroutine pmatrix_intersects(pmatrix, pixel, npixels_per_sample, nsamples, ndetectors, out)
         !f2py integer*8, dimension(npixels_per_sample*nsamples*ndetectors), intent(in) :: pmatrix
 
-        type(PointingElement), intent(in) :: pmatrix(npixels_per_sample, nsamples, ndetectors)
-        integer*4, intent(in)             :: pixel
-        integer, intent(in)               :: npixels_per_sample, nsamples, ndetectors
-        logical*1, intent(out)            :: out
+        type(PointingElement), intent(in)         :: pmatrix(npixels_per_sample, nsamples, ndetectors)
+        integer(kind(pmatrix%weight)), intent(in) :: pixel
+        integer, intent(in)                       :: npixels_per_sample
+        integer*8, intent(in)                     :: nsamples
+        integer, intent(in)                       :: ndetectors
+        logical*1, intent(out)                    :: out
         
         out = any(pmatrix%pixel == pixel)
 
@@ -926,10 +904,12 @@ contains
     subroutine pmatrix_intersects_openmp2(pmatrix, pixel, npixels_per_sample, nsamples, ndetectors, out)
         !f2py integer*8, dimension(npixels_per_sample*nsamples*ndetectors), intent(in) :: pmatrix
 
-        type(PointingElement), intent(in) :: pmatrix(npixels_per_sample, nsamples, ndetectors)
-        integer*4, intent(in)             :: pixel
-        integer, intent(in)               :: npixels_per_sample, nsamples, ndetectors
-        logical*1, intent(out)            :: out
+        type(PointingElement), intent(in)         :: pmatrix(npixels_per_sample, nsamples, ndetectors)
+        integer(kind(pmatrix%weight)), intent(in) :: pixel
+        integer, intent(in)                       :: npixels_per_sample
+        integer*8, intent(in)                     :: nsamples
+        integer, intent(in)                       :: ndetectors
+        logical*1, intent(out)                    :: out
         
         !$omp parallel workshare
         out = any(pmatrix%pixel == pixel)
@@ -944,12 +924,15 @@ contains
     subroutine pmatrix_intersects_axis2(pmatrix, pixel, npixels_per_sample, nsamples, ndetectors, out)
         !f2py integer*8, dimension(npixels_per_sample*nsamples*ndetectors), intent(in) :: pmatrix
 
-        type(PointingElement), intent(in) :: pmatrix(npixels_per_sample, nsamples, ndetectors)
-        integer*4, intent(in)             :: pixel
-        integer, intent(in)               :: npixels_per_sample, nsamples, ndetectors
-        logical*1, intent(out)            :: out(ndetectors)
+        type(PointingElement), intent(in)         :: pmatrix(npixels_per_sample, nsamples, ndetectors)
+        integer(kind(pmatrix%weight)), intent(in) :: pixel
+        integer, intent(in)                       :: npixels_per_sample
+        integer*8, intent(in)                     :: nsamples
+        integer, intent(in)                       :: ndetectors
+        logical*1, intent(out)                    :: out(ndetectors)
 
-        integer                           :: idetector, isample, ipixel
+        integer   :: idetector, ipixel
+        integer*8 :: isample
 
         out = .false.
         !$omp parallel do schedule(guided)
@@ -974,12 +957,15 @@ contains
     subroutine pmatrix_intersects_axis3(pmatrix, pixel, npixels_per_sample, nsamples, ndetectors, out)
         !f2py integer*8, dimension(npixels_per_sample*nsamples*ndetectors), intent(in) :: pmatrix
 
-        type(PointingElement), intent(in) :: pmatrix(npixels_per_sample, nsamples, ndetectors)
-        integer*4, intent(in)             :: pixel
-        integer, intent(in)               :: npixels_per_sample, nsamples, ndetectors
-        logical*1, intent(out)            :: out(nsamples)
+        type(PointingElement), intent(in)         :: pmatrix(npixels_per_sample, nsamples, ndetectors)
+        integer(kind(pmatrix%weight)), intent(in) :: pixel
+        integer, intent(in)                       :: npixels_per_sample
+        integer*8, intent(in)                     :: nsamples
+        integer, intent(in)                       :: ndetectors
+        logical*1, intent(out)                    :: out(nsamples)
 
-        integer                           :: idetector, ipixel, isample
+        integer   :: idetector, ipixel
+        integer*8 :: isample
 
         out = .false.
         !$omp parallel do schedule(guided)

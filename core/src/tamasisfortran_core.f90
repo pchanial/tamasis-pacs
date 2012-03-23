@@ -1262,9 +1262,9 @@ subroutine shift(input, output, asize, dim, ashape, arank, offset, offsetsize)
     integer, intent(in)    :: arank
     integer*8, intent(in)  :: ashape(arank)
     integer, intent(in)    :: offsetsize
-    integer, intent(in)    :: offset(offsetsize)
+    integer*8, intent(in)  :: offset(offsetsize)
 
-    integer :: nfast, nshift, nslow
+    integer*8 :: nfast, nshift, nslow
 
     nfast = product(ashape(1:dim-1))
     nshift = ashape(dim)

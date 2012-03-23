@@ -201,9 +201,9 @@ contains
         type(pointingelement), intent(inout) :: pmatrix(:,:)
         logical(1), intent(in)               :: mask(0:)
 
-        integer   :: table(lbound(mask,1):ubound(mask,1))
-        integer*8 :: isample, ipixel, ipacked, npixels, nsamples
-        integer*4 :: pixel
+        integer*8 :: isample, nsamples
+        integer*4 :: table(lbound(mask,1):ubound(mask,1))
+        integer*4 :: pixel, ipixel, ipacked, npixels
 
         ! fill a table which contains the packed indices of the non-masked pixels
         ipacked = 0
@@ -414,7 +414,7 @@ contains
 
                     polygon(1,:) = coords(1,(idetector-1)*nvertices+1:idetector*nvertices) - (ix-0.5_p)
                     polygon(2,:) = coords(2,(idetector-1)*nvertices+1:idetector*nvertices) - (iy-0.5_p)
-                    weight = abs(intersection_polygon_unity_square(polygon, nvertices))
+                    weight = real(abs(intersection_polygon_unity_square(polygon, nvertices)), kind=sp)
                     if (weight == 0) cycle
                     if (iroi <= npixels_per_sample) then
                         pmatrix(iroi,idetector)%pixel  = ix - 1 + (iy - 1) * nx

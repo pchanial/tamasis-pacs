@@ -1031,10 +1031,10 @@ contains
 
         real(p), intent(in)    :: input(m,n)
         real(p), intent(inout) :: output(m,n)
-        integer, intent(in)    :: m, n
-        integer, intent(in)    :: offset(:)
+        integer*8, intent(in)  :: m, n
+        integer*8, intent(in)  :: offset(:)
 
-        integer :: i, j, d
+        integer*8 :: i, j, d
 
         !$omp parallel do private(i,j,d)
         do j = 1, n
@@ -1065,12 +1065,12 @@ contains
 
     subroutine shift_medium(input, output, m, n, o, offset)
 
-        integer, intent(in)    :: m, n, o
+        integer*8, intent(in)  :: m, n, o
         real(p), intent(in)    :: input(m,n,o)
         real(p), intent(inout) :: output(m,n,o)
-        integer, intent(in)    :: offset(:)
+        integer*8, intent(in)  :: offset(:)
 
-        integer :: j, k, d
+        integer*8 :: j, k, d
 
         !$omp parallel do private(d)
         do k = 1, o

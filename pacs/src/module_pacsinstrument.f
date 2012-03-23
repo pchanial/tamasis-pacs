@@ -770,7 +770,7 @@ contains
                 ! with weight = detector_area / pixel_area
                 ! and pixel_area = reference_area / s
                 call xy2pmatrix(x, y, nx, ny, out, pmatrix(1,itime,:))
-                pmatrix(1,itime,:)%weight = s * this%detector_area / reference_area
+                pmatrix(1,itime,:)%weight = real(s * this%detector_area / reference_area, kind=kind(pmatrix%weight))
             end do
         end do
 

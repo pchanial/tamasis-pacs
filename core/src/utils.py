@@ -394,7 +394,7 @@ def shift(input, output, n, axis=-1):
                         str(var.FLOAT_DTYPE.name) + '.')
 
     rank = input.ndim
-    n = np.array(n, ndmin=1, dtype='int32').ravel()
+    n = np.array(n, ndmin=1).ravel()
     
     if axis < 0:
         axis = rank + axis

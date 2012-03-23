@@ -122,7 +122,8 @@ contains
         integer*8, intent(out)       :: nsamples
         integer, intent(out)         :: npixels_per_sample, status
 
-        integer*8 :: npixels_map, npixels_per_sample_, filesize, first, last
+        integer*8 :: npixels_map, filesize, first, last
+        integer*8 :: npixels_per_sample_
         logical   :: exist
 #ifdef GFORTRAN
         integer   :: sarray(13)
@@ -153,7 +154,7 @@ contains
         first = first + 1
         last  = last + 1
         nsamples = last - first + 1
-        npixels_per_sample = npixels_per_sample_
+        npixels_per_sample = int(npixels_per_sample_, kind(npixels_per_sample))
 
         if (first < 1 .or. last < 1 .or. npixels_per_sample < 1 .or. npixels_per_sample > 1000 .or. npixels_map < 1) then
             write (ERROR_UNIT,'(a,4(i0,a))') 'Error: Invalid tod header (first=', first, ', last=', last, ', npixels_per_sample=', &
@@ -179,12 +180,13 @@ contains
 
         character(len=*), intent(in)       :: signalfile, weightfile, pixelfile
         character(len=*), intent(in)       :: convert
-        integer, intent(in)                :: nsamples(:)
+        integer*8, intent(in)              :: nsamples(:)
         real(p), intent(out)               :: tod(:,:)
         type(pointingelement), intent(out) :: pmatrix(:,:,:)
         integer, intent(out)               :: status
 
-        integer :: dest, ndetectors, nslices, idetector, islice
+        integer   :: ndetectors, nslices, idetector, islice
+        integer*8 :: dest
 
         nslices = size(nsamples)
         ndetectors = size(tod,2)
@@ -253,14 +255,15 @@ contains
 
         character(len=*), intent(in)       :: filename
         character(len=*), intent(in)       :: convert
-        integer, intent(in)                :: nsamples(:)
+        integer*8, intent(in)              :: nsamples(:)
         integer, intent(in)                :: islice
         real(p), intent(out)               :: tod(:,:)
         type(pointingelement), intent(out) :: pmatrix(:,:,:)
         integer, intent(out)               :: status
 
         integer*8 :: filesize, pos
-        integer   :: dest, idetector, isample, islice_, ndetectors, npixels_per_sample, nsamples_tot, nslices
+        integer*8 :: dest, nsamples_tot, isample
+        integer   :: idetector, islice_, ndetectors, npixels_per_sample, nslices
 #ifdef GFORTRAN
         integer   :: sarray(13)
 #else
@@ -359,7 +362,7 @@ contains
         integer   :: filesize
         integer*8 :: ncorrelations_
 #ifdef GFORTRAN
-        integer   :: sarray(13)
+        integer :: sarray(13)
 #endif
     
         status = 1
@@ -386,7 +389,7 @@ contains
 
         first = first + 1
         last  = last  + 1
-        ncorrelations = ncorrelations_
+        ncorrelations = int(ncorrelations_, kind=kind(ncorrelations))
 
         if (first < 1 .or. last < 1 .or. ncorrelations < 0) then
             write (ERROR_UNIT,'(a,3(i0,a))') 'Error: Invalid filter header (first=', first, ', last=', last, ', ncorrelations=',   &
@@ -484,7 +487,7 @@ contains
         character(len=*), intent(in)                       :: convert
         integer, intent(in)                                :: ndetectors
         type(FilterUncorrelated), allocatable, intent(out) :: filter(:)
-        integer, allocatable, intent(out)                  :: nsamples(:)
+        integer*8, allocatable, intent(out)                :: nsamples(:)
         integer, intent(out)                               :: status
 
         integer*8, allocatable :: first(:), last(:)

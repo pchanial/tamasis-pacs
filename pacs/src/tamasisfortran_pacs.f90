@@ -595,7 +595,7 @@ subroutine pacs_uv2ad(uv, ncoords, ra, dec, pa, chop, nsamples, distortion_yz, a
     real(p), intent(in)    :: distortion_yz(2,3,3,3)
     real(p), intent(inout) :: ad(2,ncoords,nsamples)
 
-    integer :: isample
+    integer*8 :: isample
 
     !$omp parallel do
     do isample = 1, nsamples
@@ -641,7 +641,7 @@ contains
 
         real(p), allocatable :: hull_instrument(:,:), hull(:,:)
         integer, allocatable :: ihull(:)
-        integer              :: ipointing
+        integer*8            :: ipointing
         external :: pacs_uv2ad
 
         call init_astrometry(header, status=status)
@@ -694,8 +694,9 @@ contains
         logical, intent(out)                         :: out
         integer, intent(out)                         :: status
 
-        real(p) :: coords2(2,ncoords), x(ncoords), y(ncoords), s(ncoords)
-        integer :: ipointing, nx, ny
+        real(p)   :: coords2(2,ncoords), x(ncoords), y(ncoords), s(ncoords)
+        integer*8 :: ipointing
+        integer   :: nx, ny
 
         out = .false.
         call init_astrometry(header, status=status)
@@ -725,7 +726,7 @@ contains
             ! with weight = detector_area / pixel_area
             ! and pixel_area = reference_area / s
             call xy2pmatrix(x, y, nx, ny, out, pmatrix(1,ipointing,:))
-            pmatrix(1,ipointing,:)%weight = s * area
+            pmatrix(1,ipointing,:)%weight = real(s * area, kind=kind(pmatrix%weight))
 
         end do
         !$omp end parallel do
@@ -751,9 +752,10 @@ contains
         logical, intent(out) :: out                    ! true if some coordinates fall outside of the map
         integer, intent(out) :: status
 
-        real(p) :: coords2(2,ncoords)
-        integer :: roi(2,2,ncoords/4)
-        integer :: ipointing, nx, ny
+        real(p)   :: coords2(2,ncoords)
+        integer   :: roi(2,2,ncoords/4)
+        integer*8 :: ipointing
+        integer   :: nx, ny
 
         new_npixels_per_sample = 0
         out = .false.

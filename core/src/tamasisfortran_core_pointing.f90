@@ -66,7 +66,7 @@ contains
 
         real(p), allocatable :: hull_instrument(:,:), hull(:,:)
         integer, allocatable :: ihull(:)
-        integer              :: ipointing
+        integer*8            :: ipointing
 
         call init_astrometry(header, status=status)
         if (status /= 0) return
@@ -116,8 +116,9 @@ contains
         logical, intent(out)                         :: out
         integer, intent(out)                         :: status
 
-        real(p) :: coords2(2,ncoords), x(ncoords), y(ncoords), s(ncoords)
-        integer :: isample, nx, ny
+        real(p)   :: coords2(2,ncoords), x(ncoords), y(ncoords), s(ncoords)
+        integer*8 :: isample
+        integer   :: nx, ny
 
         out = .false.
         call init_astrometry(header, status=status)
@@ -147,7 +148,7 @@ contains
             ! with weight = detector_area / pixel_area
             ! and pixel_area = reference_area / s
             call xy2pmatrix(x, y, nx, ny, out, pmatrix(1,isample,:))
-            pmatrix(1,isample,:)%weight = s * area
+            pmatrix(1,isample,:)%weight = real(s * area, kind=kind(pmatrix%weight))
 
         end do
         !$omp end parallel do
@@ -172,9 +173,10 @@ contains
         logical, intent(out) :: out                    ! true if some coordinates fall outside of the map
         integer, intent(out) :: status
 
-        real(p) :: coords2(2,ncoords)
-        integer :: roi(2,2,ncoords/4)
-        integer :: isample, nx, ny
+        real(p)   :: coords2(2,ncoords)
+        integer   :: roi(2,2,ncoords/4)
+        integer*8 :: isample
+        integer   :: nx, ny
 
         new_npixels_per_sample = 0
         out = .false.
