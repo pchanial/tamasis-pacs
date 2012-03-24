@@ -1,16 +1,16 @@
 program test_madcap
 
-    use iso_fortran_env,       only : ERROR_UNIT
-    use module_filtering,      only : FilterUncorrelated
+    use iso_fortran_env,  only : ERROR_UNIT
+    use module_filtering, only : FilterUncorrelated
     use module_madcap
-    use module_math,           only : neq_real
-    use module_tamasis,        only : p
+    use module_math,      only : neq_real
+    use module_tamasis,   only : p
     implicit none
 
     character(len=*), parameter :: invnttfile1 = 'madcap/test/data/madmap1/invntt_'
     type(FilterUncorrelated), allocatable :: filter_le(:), filter_be(:)
     integer                     :: status
-    integer, allocatable        :: nsamples(:)
+    integer*8, allocatable      :: nsamples(:)
 
     call read_filter(invnttfile1 // 'le', 'little_endian', 2, filter_le, nsamples, status)
     if (status /= 0) call failure('read_filter little_endian')
