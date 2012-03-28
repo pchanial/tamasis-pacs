@@ -107,6 +107,7 @@ program test_pacsinstrument
     allocate (pacsobs)
     call pacsobs%init(filename, policy, status)
     if (status /= 0) call failure('init_pacsobservation')
+    allocate (obs)
     call pacsobs2obs(pacsobs, 1, obs, status)
     if (status /= 0) call failure('pacsobs2obs')
 
@@ -296,12 +297,11 @@ contains
 
 
     subroutine pacsobs2obs(pacsobs, islice, obs, status)
-        class(PacsObservation), intent(in)           :: pacsobs
-        integer, intent(in)                          :: islice
-        class(Observation), allocatable, intent(out) :: obs
-        integer, intent(out)                         :: status
+        class(PacsObservation), intent(in) :: pacsobs
+        integer, intent(in)                :: islice
+        class(Observation), intent(out)    :: obs
+        integer, intent(out)               :: status
         
-        allocate (obs)
         call obs%init(pacsobs%slice(islice)%p%time, pacsobs%slice(islice)%p%ra, pacsobs%slice(islice)%p%dec,                       &
                       pacsobs%slice(islice)%p%pa, pacsobs%slice(islice)%p%chop, pacsobs%slice(islice)%p%masked,                    &
                       pacsobs%slice(islice)%p%removed, pacsobs%slice(islice)%compression_factor,                                   &

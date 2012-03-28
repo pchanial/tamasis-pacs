@@ -38,7 +38,7 @@ program test_ngc6946_bpj
     integer                             :: nsamples
 
     ! initialise observation
-    allocate (pacsobs)
+    allocate (pacsobs, obs)
     call pacsobs%init(filename, policy, status, verbose=.true.)
     if (status == 104) then
        print *, 'Aborting test: file not found.'
@@ -161,12 +161,11 @@ contains
     end subroutine failure
 
     subroutine pacsobs2obs(pacsobs, islice, obs, status)
-        class(PacsObservation), intent(in)           :: pacsobs
-        integer, intent(in)                          :: islice
-        class(Observation), allocatable, intent(out) :: obs
-        integer, intent(out)                         :: status
+        class(PacsObservation), intent(in) :: pacsobs
+        integer, intent(in)                :: islice
+        class(Observation), intent(out)    :: obs
+        integer, intent(out)               :: status
         
-        allocate (obs)
         call obs%init(pacsobs%slice(islice)%p%time, pacsobs%slice(islice)%p%ra, pacsobs%slice(islice)%p%dec,                       &
                       pacsobs%slice(islice)%p%pa, pacsobs%slice(islice)%p%chop, pacsobs%slice(islice)%p%masked,                    &
                       pacsobs%slice(islice)%p%removed, pacsobs%slice(islice)%compression_factor,                                   &

@@ -26,7 +26,7 @@ program test_pacsobservation
     integer                     :: first, last
  
     allocate (afilename(1))
-    allocate(pacsobs)
+    allocate(pacsobs, obs)
 
     ! valid calls
     afilename(1) = filename
@@ -162,7 +162,6 @@ contains
         class(Observation), allocatable, intent(out) :: obs
         integer, intent(out)                         :: status
         
-        allocate (obs)
         call obs%init(pacsobs%slice(islice)%p%time, pacsobs%slice(islice)%p%ra, pacsobs%slice(islice)%p%dec,                       &
                       pacsobs%slice(islice)%p%pa, pacsobs%slice(islice)%p%chop, pacsobs%slice(islice)%p%masked,                    &
                       pacsobs%slice(islice)%p%removed, pacsobs%slice(islice)%compression_factor,                                   &
