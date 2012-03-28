@@ -14,12 +14,12 @@ import time
 
 from pyoperators import (Operator, HomothetyOperator, IdentityOperator,
                          MaskOperator, RoundOperator, ClipOperator, I)
-from pyoperators.utils import strenum, strplural, openmp_num_threads
+from pyoperators.utils import isscalar, strenum, strplural, openmp_num_threads
 from pyoperators.utils.mpi import MPI
 
 from . import var
-from tamasis.core import (Quantity, Tod, MaskPolicy, Instrument, Pointing, tmf,
-                          CompressionAverageOperator, ProjectionOperator,
+from tamasis.core import (Quantity, Map, Tod, MaskPolicy, Instrument, Pointing,
+                          tmf, CompressionAverageOperator, ProjectionOperator,
                           PointingMatrix, create_fitsheader, filter_nonfinite)
 from tamasis.mpiutils import distribute_observation, gather_fitsheader_if_needed
 from tamasis.observations import Observation
@@ -35,11 +35,18 @@ __all__ = [ 'PacsInstrument',
             'step_scanline_masking',
             'step_deglitching']
 
-CALIBFILE_DTC = var.path + '/pacs/PCalPhotometer_PhotTimeConstant_FM_v2.fits'
-CALIBFILE_GAI = var.path + '/pacs/PCalPhotometer_Gain_FM_v1.fits'
-CALIBFILE_STD = var.path + '/pacs/PCalPhotometer_Stddev_Tamasis_v1.fits'
-CALIBFILE_INV = [var.path + '/pacs/PCalPhotometer_Invntt{0}_FM_v1.fits'.
-                 format(b) for b in ('BS', 'BL', 'Red')]
+p = var.path + '/pacs/'
+
+class PacsInfo(object):
+    CALFILE_BADP = p + 'PCalPhotometer_BadPixelMask_FM_v6.fits'
+    CALFILE_TCST = p + 'PCalPhotometer_PhotTimeConstant_FM_v2.fits'
+    CALFILE_GAIN = p + 'PCalPhotometer_Gain_FM_v1.fits'
+    CALFILE_INVN = [p + 'PCalPhotometer_Invntt{0}_FM_v1.fits'.format(b)
+                    for b in ('BS', 'BL', 'Red')]
+    CALFILE_RESP = p + 'PCalPhotometer_Responsivity_FM_v6.fits'
+    CALFILE_STDD = p + 'PCalPhotometer_Stddev_Tamasis_v1.fits'
+
+del p
 
 class PacsInstrument(Instrument):
 
@@ -53,6 +60,8 @@ class PacsInstrument(Instrument):
         ('flat_total', var.FLOAT_DTYPE), ('flat_detector', var.FLOAT_DTYPE),
         ('flat_optical', var.FLOAT_DTYPE)]
     SAMPLING_PERIOD = 0.024996 # in seconds
+
+    info = PacsInfo()
 
     def __init__(self, band, active_fraction=0, fine_sampling_factor=1,
                  policy_bad_detector='mask', reject_bad_line=True,
@@ -87,6 +96,8 @@ class PacsInstrument(Instrument):
         if band not in expected:
             raise ValueError("Invalid band '{0}'. Expected values are {1}.".
                 format(band, strenum(expected)))
+        self.band = band
+
         policy_bad_detector = policy_bad_detector.lower().strip()
         expected = 'keep', 'mask', 'remove'
         if policy_bad_detector not in expected:
@@ -94,13 +105,20 @@ class PacsInstrument(Instrument):
                 "e {1}.".format(policy_bad_detector, strenum(expected)))
 
         # get instrument information from calibration files
+        # the call to pacs_info_instrument should be avoided, so that
+        # all calibration files are defined and can be modified in PacsInfo.
+        # Done: -responsivity
+        #       -badpixel
+        # TBD:  -arrayinstrument
+        #       -subarrayarray
+        #       -flatfield
         shape = (16,32) if band == 'red' else (32,64)
-        detector_bad, detector_center, detector_corner, detector_area, \
-        distortion_yz, oflat, dflat, responsivity, active_fraction, status = \
+        junk, detector_center, detector_corner, detector_area, \
+        distortion_yz, oflat, dflat, active_fraction, status = \
             tmf.pacs_info_instrument(band, shape[0], shape[1], active_fraction)
         if status != 0: raise RuntimeError()
 
-        detector_bad = detector_bad.view(np.bool8)
+        detector_bad = self.get_calibration('badpixel')
         if policy_bad_detector == 'keep':
             detector_bad[:] = False
         elif reject_bad_line and band != 'red':
@@ -114,7 +132,6 @@ class PacsInstrument(Instrument):
             detector_corner=detector_corner, default_resolution=\
             self.DEFAULT_RESOLUTION[band], dtype=self.DETECTOR_DTYPE,
             comm=comm)
-        self.band = band
         self.active_fraction = float(active_fraction)
         self.reject_bad_line = reject_bad_line
         self.fine_sampling_factor = fine_sampling_factor
@@ -131,8 +148,7 @@ class PacsInstrument(Instrument):
             self.detector.matrix = 10 - self.detector.matrix
         self.detector.center = detector_center
         self.detector.corner = detector_corner
-        self.detector.time_constant = pyfits.open(CALIBFILE_DTC) \
-            [{'red':1, 'green':2, 'blue':3}[band]].data / 1000 # 's'
+        self.detector.time_constant = self.get_calibration('timeconstant') # s
         self.detector.time_constant[detector_bad] = np.nan
         self.detector.area = detector_area # arcsec^2
         self.detector.flat_total = dflat * oflat
@@ -140,13 +156,11 @@ class PacsInstrument(Instrument):
         self.detector.flat_optical = oflat
         self.distortion_yz = distortion_yz.T.view(dtype=[('y', \
             var.FLOAT_DTYPE), ('z',var.FLOAT_DTYPE)]).view(np.recarray)
-        self.responsivity = Quantity(responsivity, 'V/Jy')
-        fits = pyfits.open(CALIBFILE_GAI)
-        v = fits['photGain'].data
-        self.adu_converter_gain = {'low':v[0], 'high':v[1],
-                                         'nominal':v[2]}
-        v = fits['photOffset'].data
-        self.adu_converter_offset = {'direct':v[0], 'ddcs':v[1]}
+        self.responsivity = self.get_calibration('responsivity')
+        gain, offset = self.get_calibration('gain')
+        self.adu_converter_gain = {'low':gain[0], 'high':gain[1],
+                                   'nominal':gain[2]}
+        self.adu_converter_offset = {'direct':offset[0], 'ddcs':offset[1]}
         self.adu_converter_min = {'direct':0, 'ddcs':-32768}
         self.adu_converter_max = {'direct':65535, 'ddcs':32767}
 
@@ -410,6 +424,65 @@ class PacsInstrument(Instrument):
             compression_factor, delay=delay, units=units,
             derived_units=derived_units, downsampling=downsampling, comm=comm)
 
+    def get_calibration(self, name):
+        name = name.lower()
+        expected = ('badpixel', 'gain', 'invntt', 'responsivity',
+                    'timeconstant', 'stddev')
+        if name not in expected:
+            raise ValueError("Invalid calibration type '{0}'. Expected values a"
+                             "re {1}.".format(name, strenum(expected)))
+
+        if  name == 'badpixel':
+            hdus = self._get_calfile(self.info.CALFILE_BADP, 1.0)
+            return Map(hdus[self.band].data, dtype=np.bool8, origin='upper')
+
+        if name == 'gain':
+            hdus = self._get_calfile(self.info.CALFILE_GAIN, 1.0)
+            return hdus['photGain'].data, hdus['photOffset'].data
+
+        if name == 'invntt':
+            filter = {'blue':0, 'green':1, 'red':2}[self.band]
+            filename = self.info.CALFILE_INVN[filter]
+            hdus = self._get_calfile(filename, 1.0)
+            ncorrelations = hdus[1].header['NAXIS1'] - 1
+            data, status = tmf.pacs_read_filter_uncorrelated(filename,
+                ncorrelations, self.get_ndetectors(),
+                np.asfortranarray(self.detector.removed, np.int8))
+            if status != 0: raise RuntimeError()
+            return data.T
+
+        if name == 'responsivity':
+            hdus = self._get_calfile(self.info.CALFILE_RESP, 2.0)
+            filter = {'blue':6, 'green':4, 'red':2}[self.band]
+            return Quantity(hdus[filter].data, 'V/Jy')
+
+        if name == 'timeconstant':
+            hdus = self._get_calfile(self.info.CALFILE_TCST, None)
+            return hdus[{'red':1,'green':2,'blue':3}[self.band]].data / 1000 # s
+
+        if name == 'stddev':
+            hdus = self._get_calfile(self.info.CALFILE_STDD, None)
+            lengths = hdus[0].data
+            stddevs = hdus[self.band].data
+            return lengths, stddevs
+
+    def _get_calfile(self, filename, versions):
+        """ Return FITS file as an HDU list and check format version. """
+        if isscalar(versions):
+            versions = (versions,)
+        if not os.path.isfile(filename):
+            raise IOError("The calibration '{0}' file does not exist or is "
+                          "not a valid file.".format(filename))
+
+        hdus = pyfits.open(filename)
+        header = hdus[0].header
+        version = _hcss_fits_keyword(header, 'formatVersion', None)
+        if version is not None:
+            version = float(version)
+        if version not in versions:
+            raise ValueError("Invalid format version '{0}'. Expected version is"
+                             " {1}.".format(version, strenum(versions)))
+        return hdus
 
 class PacsBase(Observation):
     """ Abstract class for PacsObservation and PacsSimulation. """
@@ -436,24 +509,11 @@ class PacsBase(Observation):
             }
             )
 
-    def get_filter_uncorrelated(self, filename=None, **keywords):
+    def get_filter_uncorrelated(self):
         """
-        Read an inverse noise time-time correlation matrix from a calibration
-        file, in PACS-DP format.
+        Return the inverse noise time-time correlation coefficients.
         """
-        
-        if filename is None:
-            filename = CALIBFILE_INV[{'blue':0, 'green':1, 'red':2}
-                                     [self.instrument.band]]
-
-        ncorrelations = pyfits.open(filename)[1].header['NAXIS1'] - 1
-
-        data, status = tmf.pacs_read_filter_uncorrelated(filename,
-            ncorrelations, self.get_ndetectors(),
-            np.asfortranarray(self.instrument.detector.removed, np.int8))
-        if status != 0: raise RuntimeError()
-
-        return data.T
+        return self.instrument.get_calibration('invntt')
 
     def get_pointing_matrix(self, header, npixels_per_sample=0, method=None,
                             downsampling=False, section=None, 
@@ -542,9 +602,7 @@ class PacsBase(Observation):
 
     def get_detector_stddev(self, length=0):
         """Returns detector's standard deviation from calibration file"""
-        file = pyfits.open(CALIBFILE_STD)
-        lengths = file[0].data
-        stddevs = file[self.instrument.band].data
+        lengths, stddevs = self.instrument.get_calibration('stddev')
         if length == 0:
             return self.pack(stddevs[...,-1])
         if length < lengths[0]:
@@ -1599,6 +1657,23 @@ def _files2tmf(filename):
     for f in filename:
         filename_ += f + (length-len(f))*' '
     return filename_, nfilenames
+
+
+#-------------------------------------------------------------------------------
+
+
+def _hcss_fits_keyword(header, keyword, *args):
+    """ Return FITS keyword, according to HCSS handling. """
+    if len(args) > 1:
+        raise ValueError('Invalid number of arguments.')
+    for k in header.keys():
+        if not k.startswith('KEY.'):
+            continue
+        if header[k] == keyword:
+            return header[k[4:]]
+    if len(args) == 1:
+        return args[0]
+    raise KeyError("Keyword '{0}' not found.".format(keyword))
 
 
 #-------------------------------------------------------------------------------

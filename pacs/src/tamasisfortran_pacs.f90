@@ -97,9 +97,8 @@ end subroutine pacs_info_instrument_init
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine pacs_info_instrument(band, nrows, ncolumns, input_active_fraction, detector_bad, detector_center,        &
-                                detector_corner, detector_area, distortion_yz, flatfield_optical, flatfield_detector, responsivity,&
-                                output_active_fraction, status)
+subroutine pacs_info_instrument(band, nrows, ncolumns, input_active_fraction, detector_bad, detector_center, detector_corner,      &
+                                detector_area, distortion_yz, flatfield_optical, flatfield_detector, output_active_fraction, status)
 
     use module_pacsinstrument, only : read_calibration_files
     use module_tamasis,        only : p
@@ -115,7 +114,6 @@ subroutine pacs_info_instrument(band, nrows, ncolumns, input_active_fraction, de
     real(p), intent(out)         :: distortion_yz(2,3,3,3)
     real(p), intent(out)         :: flatfield_optical(nrows,ncolumns)
     real(p), intent(out)         :: flatfield_detector(nrows,ncolumns)
-    real(p), intent(out)         :: responsivity
     real(p), intent(out)         :: output_active_fraction
     integer, intent(out)         :: status
 
@@ -129,7 +127,7 @@ subroutine pacs_info_instrument(band, nrows, ncolumns, input_active_fraction, de
     ! read calibration files
     output_active_fraction = input_active_fraction
     call read_calibration_files(band, detector_bad_all, detector_center_all, detector_corner_all, detector_area_all,               &
-         flatfield_optical_all, flatfield_detector_all, distortion_yz, responsivity, output_active_fraction, status)
+         flatfield_optical_all, flatfield_detector_all, distortion_yz, output_active_fraction, status)
     if (status /= 0) return
 
     ! copy the allocatable arrays

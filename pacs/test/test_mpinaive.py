@@ -3,7 +3,7 @@ import os
 import tamasis
 from pyoperators.utils.mpi import distribute_slice
 from pyoperators import DistributionGlobalOperator
-from tamasis import PacsObservation, Map, ProjectionOperator, UnpackOperator, mapper_naive, MPI
+from tamasis import PacsInstrument, PacsObservation, Map, ProjectionOperator, UnpackOperator, mapper_naive, MPI
 from tamasis.numpyutils import assert_all_eq
 
 
@@ -11,6 +11,11 @@ data_dir = os.path.dirname(__file__) + '/data/'
 rank = MPI.COMM_WORLD.rank
 size = MPI.COMM_WORLD.size
 tamasis.var.verbose = True
+
+PacsInstrument.info.CALFILE_BADP = tamasis.var.path + '/pacs/PCalPhotometer_Ba'\
+                                   'dPixelMask_FM_v5.fits'
+PacsInstrument.info.CALFILE_RESP = tamasis.var.path + '/pacs/PCalPhotometer_Re'\
+                                   'sponsivity_FM_v5.fits'
 
 map_ref_local = Map(data_dir + '../../../core/test/data/frames_blue_map_naive.fits')
 mask_ref_local = map_ref_local.coverage == 0

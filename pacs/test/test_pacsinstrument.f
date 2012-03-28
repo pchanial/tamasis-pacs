@@ -33,7 +33,6 @@ program test_pacsinstrument
     real(p), allocatable   :: flatfield_optical_all(:,:)
     real(p), allocatable   :: flatfield_detector_all(:,:)
     real(p)                :: distortion_yz(2,3,3,3)
-    real(p)                :: responsivity
     real(p)                :: active_fraction
     real(p)                :: signal_ref(360)
     logical*1              :: mask_ref(360)
@@ -50,8 +49,7 @@ program test_pacsinstrument
     ! read calibration files
     active_fraction = 0
     call pacs%read_calibration_files('blue', detector_bad_all, detector_center_all, detector_corner_all, detector_area_all,        &
-                                     flatfield_optical_all, flatfield_detector_all, distortion_yz, responsivity, active_fraction,  &
-                                     status)
+                                     flatfield_optical_all, flatfield_detector_all, distortion_yz, active_fraction, status)
     if (status /= 0) call failure('read_calibration_files')
 
     detector_mask_blue = .false.

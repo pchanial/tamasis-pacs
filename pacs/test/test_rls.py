@@ -10,6 +10,12 @@ pyoperators.memory.verbose = False
 tamasis.var.verbose = False
 profile = None#'test_rls.png'
 data_dir = os.path.dirname(__file__) + '/data/'
+
+PacsInstrument.info.CALFILE_BADP = tamasis.var.path + '/pacs/PCalPhotometer_Ba'\
+                                   'dPixelMask_FM_v5.fits'
+PacsInstrument.info.CALFILE_RESP = tamasis.var.path + '/pacs/PCalPhotometer_Re'\
+                                   'sponsivity_FM_v5.fits'
+
 obs = PacsObservation(filename=data_dir+'frames_blue.fits',
                       fine_sampling_factor=1, reject_bad_line=False)
 obs.pointing.chop[:] = 0

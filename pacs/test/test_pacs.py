@@ -4,7 +4,7 @@ import os
 import tamasis
 
 from glob import glob
-from tamasis import PacsObservation, PacsSimulation, Pointing, CompressionAverageOperator, ProjectionOperator, Map, Tod, IdentityOperator, MaskOperator, mapper_naive
+from tamasis import PacsInstrument, PacsObservation, PacsSimulation, Pointing, CompressionAverageOperator, ProjectionOperator, Map, Tod, IdentityOperator, MaskOperator, mapper_naive
 from tamasis.numpyutils import all_eq, minmax
 from uuid import uuid1
 
@@ -12,6 +12,10 @@ tamasis.var.verbose = True
 data_dir = os.path.dirname(__file__) + '/data/'
 uuid = str(uuid1())
 tol = 1.e-10
+PacsInstrument.info.CALFILE_BADP = tamasis.var.path + '/pacs/PCalPhotometer_Ba'\
+                                   'dPixelMask_FM_v5.fits'
+PacsInstrument.info.CALFILE_RESP = tamasis.var.path + '/pacs/PCalPhotometer_Re'\
+                                   'sponsivity_FM_v5.fits'
 
 def test():
     # all observation

@@ -42,15 +42,11 @@ module module_pacsinstrument
     integer, parameter :: DISTORTION_DEGREE = 3
     real(p), parameter :: SAMPLING_PERIOD = 0.024996_p
 
-    ! these calibration files are taken from HCSS 4.0.70
+    ! these calibration files are taken from HCSS 8
     character(len=*), parameter :: FILENAME_SAA = 'PCalPhotometer_SubArrayArray_FM_v5.fits'
     character(len=*), parameter :: FILENAME_AI  = 'PCalPhotometer_ArrayInstrument_FM_v6.fits'
-    character(len=*), parameter :: FILENAME_BPM = 'PCalPhotometer_BadPixelMask_FM_v5.fits'
+    character(len=*), parameter :: FILENAME_BPM = 'PCalPhotometer_BadPixelMask_FM_v5.fits' ! Outdated, not used in Python
     character(len=*), parameter :: FILENAME_FF  = 'PCalPhotometer_FlatField_FM_v3.fits'
-    character(len=*), parameter :: FILENAME_IB  = 'PCalPhotometer_InvnttBS_FM_v1.fits[Contents]'
-    character(len=*), parameter :: FILENAME_IG  = 'PCalPhotometer_InvnttBL_FM_v1.fits[Contents]'
-    character(len=*), parameter :: FILENAME_IR  = 'PCalPhotometer_InvnttRed_FM_v1.fits[Contents]'
-    character(len=*), parameter :: FILENAME_RES = 'PCalPhotometer_Responsivity_FM_v5.fits'
 
     type PacsInstrument
 
@@ -115,12 +111,12 @@ contains
         real(p), allocatable   :: flatfield_optical_all(:,:)
         real(p), allocatable   :: flatfield_detector_all(:,:)
         real(p)                :: distortion_yz(NDIMS,DISTORTION_DEGREE,DISTORTION_DEGREE,DISTORTION_DEGREE)
-        real(p)                :: responsivity, active_fraction
+        real(p)                :: active_fraction
 
         active_fraction = 0
 
         call this%read_calibration_files(band, detector_bad_all, detector_center_all, detector_corner_all, detector_area_all,      &
-             flatfield_optical_all, flatfield_detector_all, distortion_yz, responsivity,  active_fraction, status)
+             flatfield_optical_all, flatfield_detector_all, distortion_yz,  active_fraction, status)
         if (status /= 0) return
 
         call this%init_with_variables(band, detector_mask, fine_sampling_factor, status, detector_bad_all, detector_center_all,    &
@@ -313,8 +309,7 @@ contains
 
 
     subroutine read_calibration_files(band, detector_bad_all, detector_center_all, detector_corner_all, detector_area_all,         &
-                                      flatfield_optical_all, flatfield_detector_all, distortion_yz, responsivity, active_fraction, &
-                                      status)
+                                      flatfield_optical_all, flatfield_detector_all, distortion_yz, active_fraction, status)
 
         character(len=*), intent(in)        :: band
         logical*1, intent(out), allocatable :: detector_bad_all(:,:)
@@ -324,19 +319,16 @@ contains
         real(p), intent(out), allocatable   :: flatfield_optical_all(:,:)
         real(p), intent(out), allocatable   :: flatfield_detector_all(:,:)
         real(p), intent(out)                :: distortion_yz(NDIMS,DISTORTION_DEGREE,DISTORTION_DEGREE,DISTORTION_DEGREE)
-        real(p), intent(out)                :: responsivity
         real(p), intent(inout)              :: active_fraction
         integer, intent(out)                :: status
 
 
         ! hdu extension for the blue, green and red band, in this order
         integer, parameter   :: HDU_FLATFIELD(3)    = [12, 7, 2]                                    ! v3
-        integer, parameter   :: HDU_RESPONSIVITY(3) = [6, 4, 2]                                     ! v5
         integer, parameter   :: HDU_CORNER(4,2)     = reshape([7, 11, 15, 19, 5, 9, 13, 17], [4,2]) ! v5
 
         integer              :: iband, ichannel, ip, iq, iv, ncolumns, nrows, unit
         character(len=4)     :: channel
-        real(p), allocatable :: tmp1(:)
         real(p), allocatable :: tmp2(:,:)
         real(p), allocatable :: tmp3(:,:,:)
         real(p), allocatable :: flatfield_total_all(:,:)
@@ -420,11 +412,6 @@ contains
         call ft_read_image(get_calfile(FILENAME_FF) // '+' // strinteger(HDU_FLATFIELD(iband)),  tmp2, status)
         if (status /= 0) return
         flatfield_total_all = transpose(tmp2)
-
-        ! responsivity
-        call ft_read_image(get_calfile(FILENAME_RES) // '+' // strinteger(HDU_RESPONSIVITY(iband)), tmp1, status)
-        if (status /= 0) return
-        responsivity = tmp1(1)
 
         ! modify detector size if active_fraction is not set to zero
         if (active_fraction /= 0) then
