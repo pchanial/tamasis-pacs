@@ -732,7 +732,7 @@ class PacsBase(Observation):
         sp = len('Info ')*' '
         unit = 'unknown' if self.slice[0].unit == '' else self.slice[0].unit
         if self.instrument.comm.size > 1:
-            mpistr = 'Process ' + str(self.instrument.comm.rank()+1) + '/' + \
+            mpistr = 'Process ' + str(self.instrument.comm.rank+1) + '/' + \
                      str(self.instrument.comm.size) + ', '
         else:
             mpistr = ''
