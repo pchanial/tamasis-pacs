@@ -412,12 +412,27 @@ def test_python_fun(bld):
         files = bld.path.ant_glob(subdir + '/test/test_*.py')
         for file in files:
             file = file.abspath()
+            if 'test_display' in file: continue
             if 'test_mpi' in file: continue
             bld(rule='${NOSETESTS} ' + file + (' --nocapture'
                 if bld.options.verbose else ''), always=True)
             bld.add_group()
     if 'pacs' in subdirs:
         test_pacs_fun(bld)
+
+class test_display(BuildContext):
+    """run Python display suite"""
+    cmd = 'test-display'
+    fun = 'test_display_fun'
+
+def test_display_fun(bld):
+    for subdir in subdirs:
+        files = bld.path.ant_glob(subdir + '/test/test_display*.py')
+        for file in files:
+            file = file.abspath()
+            bld(rule='${PYTHON} ' + file + (' > /dev/null'
+                if not bld.options.verbose else ''), always=True)
+            bld.add_group()
 
 class test_pacs(BuildContext):
     """run PACS test suite"""
@@ -429,6 +444,7 @@ def test_pacs_fun(bld):
     files = bld.path.ant_glob(subdir+'/test/test_*.py')
     for file in files:
         file = file.abspath()
+        if 'test_display' in file: continue
         if bld.env.HAVE_MPI and 'test_mpi' in file: continue
         if '_nl_' in file: continue
         bld(rule='${NOSETESTS} ' + file + (' --nocapture'
