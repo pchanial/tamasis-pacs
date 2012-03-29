@@ -407,13 +407,17 @@ def test_python_fun(bld):
         'core/test/test_broken_locale.py').abspath(), always=True)
 
     for subdir in subdirs:
+        if subdir == 'pacs':
+            continue
         files = bld.path.ant_glob(subdir + '/test/test_*.py')
         for file in files:
             file = file.abspath()
             if 'test_mpi' in file: continue
-            if '_nl_' in file: continue
-            bld(rule='${NOSETESTS} ' + file, always=True)
+            bld(rule='${NOSETESTS} ' + file + (' --nocapture'
+                if bld.options.verbose else ''), always=True)
             bld.add_group()
+    if 'pacs' in subdirs:
+        test_pacs_fun(bld)
 
 class test_pacs(BuildContext):
     """run PACS test suite"""
@@ -425,9 +429,10 @@ def test_pacs_fun(bld):
     files = bld.path.ant_glob(subdir+'/test/test_*.py')
     for file in files:
         file = file.abspath()
-        if 'test_mpi' in file: continue
-        bld(rule='${PYTHON} ' + file + (' > /dev/null' \
-            if bld.options.verbose == 0 else ''), always=True)
+        if bld.env.HAVE_MPI and 'test_mpi' in file: continue
+        if '_nl_' in file: continue
+        bld(rule='${NOSETESTS} ' + file + (' --nocapture'
+            if bld.options.verbose else ''), always=True)
         bld.add_group()
 
 class test_mpi(BuildContext):
