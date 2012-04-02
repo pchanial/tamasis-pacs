@@ -345,8 +345,7 @@ class DownSamplingOperator(CompressionOperator):
 @symmetric
 class InvNttOperator(Operator):
 
-    def __new__(cls, obs=None, method='uncorrelated', filename=None,
-                **keywords):
+    def __new__(cls, obs=None, method='uncorrelated', **keywords):
         if obs is None:
             return Operator.__new__(cls)
         nsamples = obs.get_nsamples()
@@ -355,7 +354,7 @@ class InvNttOperator(Operator):
         if method not in ('uncorrelated', 'uncorrelated python'):
             raise ValueError("Invalid method '{0}'.".format(method))
 
-        filter = obs.get_filter_uncorrelated(filename=filename, **keywords)
+        filter = obs.get_filter_uncorrelated(**keywords)
         if filter.ndim == 2:
             filter = filter[np.newaxis,...]
         nfilters = filter.shape[0]
