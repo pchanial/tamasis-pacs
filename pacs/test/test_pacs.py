@@ -4,7 +4,7 @@ import os
 import tamasis
 
 from glob import glob
-from tamasis import PacsInstrument, PacsObservation, PacsSimulation, Pointing, CompressionAverageOperator, ProjectionOperator, Map, Tod, IdentityOperator, MaskOperator, mapper_naive
+from tamasis import PacsInstrument, PacsObservation, PacsSimulation, Pointing, CompressionAverageOperator, ProjectionOperator, Map, MaskOperator, mapper_naive
 from tamasis.numpyutils import all_eq, minmax
 from uuid import uuid1
 
@@ -17,51 +17,38 @@ PacsInstrument.info.CALFILE_BADP = tamasis.var.path + '/pacs/PCalPhotometer_Ba'\
 PacsInstrument.info.CALFILE_RESP = tamasis.var.path + '/pacs/PCalPhotometer_Re'\
                                    'sponsivity_FM_v5.fits'
 
-def test():
-    # all observation
+def test_save():
     obs = PacsObservation(data_dir+'frames_blue.fits', reject_bad_line=False)
-    obs.pointing.chop[:] = 0
-    header = obs.get_map_header()
-
-    # get mask
-    proj = ProjectionOperator(obs, npixels_per_sample=6, downsampling=True,
-                              header=header)
-    o = Tod.ones(proj.shapeout)
-    nocoverage = mapper_naive(o, proj).coverage == 0
-    assert all_eq(nocoverage, proj.get_mask())
-    tod = obs.get_tod()
-
-    # packed projection
-    proj2 = ProjectionOperator(obs, npixels_per_sample=6, packed=True,
-                               downsampling=True, header=header)
-    m1 = proj.matrix
-    m2 = proj2.operands[0].matrix
-    assert all_eq(m1.value, m2.value)
-    assert all_eq(proj.T(tod), proj2.T(tod), 1.e-11)
+    obs.pointing.ra += 0.1
+    obs.pointing.dec -= 0.1
+    obs.pointing.pa += 20
+    obs.pointing.chop = 0
+    tod = obs.get_tod(raw=True)
 
     filename = 'obs-' + uuid + '.fits'
     obs.save(filename, tod)
+
     obs2 = PacsObservation(filename, reject_bad_line=False)
-    obs2.pointing.chop[:] = 0
     tod2 = obs2.get_tod(raw=True)
+
+    assert all_eq(obs.pointing, obs2.pointing)
+
+    obs.status.RaArray = obs.pointing.ra
+    obs.status.DecArray = obs.pointing.dec
+    obs.status.PaArray = obs.pointing.pa
+    obs.status.CHOPFPUANGLE = obs.pointing.chop
     assert all_eq(obs.status, obs2.status)
     assert all_eq(tod, tod2)
 
-    telescope  = IdentityOperator()
+def test_header():
+    obs = PacsObservation(data_dir+'frames_blue.fits', reject_bad_line=False)
+    obs.pointing.chop = 0
+    header = obs.get_map_header()
     projection = ProjectionOperator(obs, header=header, downsampling=True,
                                     npixels_per_sample=6)
-    crosstalk  = IdentityOperator()
-    masking    = MaskOperator(tod.mask)
+    tod = obs.get_tod()
 
-    model = masking * crosstalk * projection * telescope
-    print model
-
-    # naive map
-    tod_sb = tod.tounit('Jy/arcsec^2')
-    backmap = model.T(tod_sb.magnitude)
-    unity = Tod.ones(tod_sb.shape)
-    weights = model.T(unity)
-    map_naive = Map(backmap / weights, unit='Jy/arcsec^2')
+    map_naive = mapper_naive(tod, projection)
 
     header2 = header.copy()
     header2['NAXIS1'] += 500

@@ -1699,6 +1699,7 @@ def _write_mask(obs, mask, filename):
 
 #-------------------------------------------------------------------------------
 
+
 def _write_status(obs, filename, fitskw=None):
 
     s = obs.slice[0]
@@ -1729,8 +1730,6 @@ def _write_status(obs, filename, fitskw=None):
     if obs.pointing.size != np.sum(obs.slice.nsamples_all):
         raise ValueError('The pointing and slice attribute are incompatible. Th'
                          'is should not happen.')
-
-    status = obs.status[~obs.pointing.removed]
 
     fits = pyfits.HDUList()
 
@@ -1791,8 +1790,15 @@ def _write_status(obs, filename, fitskw=None):
     hdu = pyfits.PrimaryHDU(None, header)
     fits.append(hdu)
     
-    status = pyfits.BinTableHDU(status, None, name='STATUS')
-    fits.append(status)
+    # Status
+    v = ~obs.pointing.removed
+    status = obs.status[v]
+    status.RaArray = obs.pointing.ra[v]
+    status.DecArray = obs.pointing.dec[v]
+    status.PaArray = obs.pointing.pa[v]
+    status.CHOPFPUANGLE = obs.pointing.chop[v]
+    hdu = pyfits.BinTableHDU(status, None, name='STATUS')
+    fits.append(hdu)
     fits.writeto(filename, clobber=True)
 
 
