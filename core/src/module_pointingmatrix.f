@@ -255,7 +255,10 @@ contains
         nsamples = size(pmatrix, 2)
         domask   = present(mask)
 
-        !$omp parallel do default(shared) reduction(+:map,weight) &
+        !$omp parallel do &
+#ifdef GFORTRAN
+        !$omp reduction(+:map,weight) &
+#endif
         !$omp private(isample,ipixel,imap)
         do isample = 1, nsamples
             if (domask) then
@@ -264,7 +267,13 @@ contains
             do ipixel = 1, npixels
                 imap = pmatrix(ipixel,isample)%pixel
                 if (imap == -1) exit
+#ifndef GFORTRAN
+                !$omp atomic
+#endif
                 map   (imap) = map   (imap) + pmatrix(ipixel,isample)%weight * timeline(isample)
+#ifndef GFORTRAN
+                !$omp atomic
+#endif
                 weight(imap) = weight(imap) + pmatrix(ipixel,isample)%weight
             end do
         end do
