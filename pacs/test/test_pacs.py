@@ -169,15 +169,15 @@ def test_pTx_pT1():
 
     model1.apply_mask(tod.mask)
     tod.inunit('Jy/arcsec^2')
-    b,w = model1.get_pTx_pT1(tod)
-    m2 = (b / w)
+    b2, w2 = model1.get_pTx_pT1(tod)
+    m2 = b2 / w2
     assert all_eq(m1, m2, tol)
 
     model3 = ProjectionOperator(obs2, downsampling=True)
     model3.apply_mask(tod.mask)
     
-    b,w = model3.get_pTx_pT1(tod)
-    m3 = (b / w)
+    b3, w3 = model3.get_pTx_pT1(tod)
+    m3 = b3 / w3
     assert all_eq(m1, m3, tol)
 
     
