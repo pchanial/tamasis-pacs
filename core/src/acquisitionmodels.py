@@ -494,13 +494,13 @@ class PointingMatrix(np.ndarray):
 
     @classmethod
     def empty(cls, shape, shape_input, info=None, verbose=True):
-        buffer = allocate(shape, cls.DTYPE, ' for the pointing matrix',
+        buffer = allocate(shape, cls.DTYPE, 'for the pointing matrix',
                           verbose=True)
         return PointingMatrix(buffer, shape_input, info=info, copy=False)
 
     @classmethod
     def zeros(cls, shape, shape_input, info=None, verbose=True):
-        buffer = allocate(shape, cls.DTYPE, ' for the pointing matrix',
+        buffer = allocate(shape, cls.DTYPE, 'for the pointing matrix',
                           verbose=True)
         buffer.value = 0
         buffer.index = -1
@@ -520,7 +520,7 @@ class PointingMatrix(np.ndarray):
 
     def get_mask(self, out=None):
         if out is None:
-            out = allocate(self.shape_input, np.bool8, ' as new mask')
+            out = allocate(self.shape_input, np.bool8, 'as new mask')
             out[...] = True
             out = Map(out, header=self.info.get('header', None), copy=False,
                       dtype=bool)
@@ -789,7 +789,7 @@ class ProjectionBaseOperator(Operator):
         matrix = self.matrix
         npixels = int(np.product(matrix.shape_input))
         if out is None:
-            out = allocate((npixels,npixels), np.bool8, ' for pTp array')
+            out = allocate((npixels,npixels), np.bool8, 'for pTp array')
             out[...] = 0
         elif out.dtype != np.bool8:
             raise TypeError('The output ptp argument has an invalid type.')
