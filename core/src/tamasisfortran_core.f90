@@ -533,54 +533,6 @@ end subroutine fft_plan_outplace
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine packing(input, mask, ninputs, output, noutputs)
-
-    use module_tamasis,  only : p
-    implicit none
-
-    real(p), intent(in)    :: input(ninputs)
-    logical*1, intent(in)  :: mask(ninputs)
-    integer, intent(in)    :: ninputs
-    real(p), intent(inout) :: output(noutputs)
-    integer, intent(in)    :: noutputs
-
-    output = pack(input, .not. mask)
-
-end subroutine packing
-
-
-!-----------------------------------------------------------------------------------------------------------------------------------
-
-
-subroutine unpacking(input, ninputs, mask, nmasks, output, noutputs)
-
-    use module_tamasis,  only : p
-    implicit none
-
-    real(p), intent(in)    :: input(ninputs)
-    logical*1, intent(in)  :: mask(nmasks)
-    real(p), intent(inout) :: output(noutputs)
-    integer, intent(in)    :: ninputs, nmasks, noutputs
-
-    integer :: ii, io
-
-    ! unlike unpack, the following works in-place
-    ii = ninputs
-    do io = noutputs, 1, -1
-        if (mask(io)) then
-            output(io) = 0
-        else
-            output(io) = input(ii)
-            ii = ii - 1
-        end if
-    end do
-
-end subroutine unpacking
-
-
-!-----------------------------------------------------------------------------------------------------------------------------------
-
-
 subroutine multiply_conjugate_complex(a, m, b, n, c)
 
     use module_tamasis, only : p
