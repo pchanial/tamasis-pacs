@@ -495,13 +495,13 @@ class PointingMatrix(np.ndarray):
     @classmethod
     def empty(cls, shape, shape_input, info=None, verbose=True):
         buffer = allocate(shape, cls.DTYPE, 'for the pointing matrix',
-                          verbose=True)
+                          verbose=verbose)
         return PointingMatrix(buffer, shape_input, info=info, copy=False)
 
     @classmethod
     def zeros(cls, shape, shape_input, info=None, verbose=True):
         buffer = allocate(shape, cls.DTYPE, 'for the pointing matrix',
-                          verbose=True)
+                          verbose=verbose)
         buffer.value = 0
         buffer.index = -1
         return PointingMatrix(buffer, shape_input, info=info, copy=False)
