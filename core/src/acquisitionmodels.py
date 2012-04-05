@@ -1070,22 +1070,40 @@ class DistributionLocalOperator(Operator):
 class PackOperator(Operator):
     """
     Convert an nd array in a 1d map, under the control of a mask.
-    The elements for which the mask is True are equal to the field argument.
+    The elements for which the mask is true are discarded.
     """
 
     def __init__(self, mask, **keywords):
-        mask = np.array(mask, np.bool8)
+        mask = np.array(mask, np.bool8, copy=False)
         Operator.__init__(self, shapein=mask.shape, shapeout=np.sum(mask == 0),
                           dtype=var.FLOAT_DTYPE, **keywords)
         self.mask = mask
+        self.set_rule('.T', lambda s: UnpackOperator(s.mask))
+        self.set_rule('.{UnpackOperator}', self._rule_left_unpack, CompositionOperator)
+        self.set_rule('{UnpackOperator}.', self._rule_right_unpack, CompositionOperator)
 
     def direct(self, input, output):
-        tmf.packing(input.ravel(), self.mask.view(np.int8).ravel(),
-                    output.ravel())
+        mask = self.mask.view(np.int8).ravel()
+        if self.same_data(input, output):
+            tmf.operators.pack_inplace(input.ravel(), mask, input.size)
+        else:
+            tmf.operators.pack_outplace(input.ravel(), mask, output)
 
-    def transpose(self, input, output):
-        tmf.unpacking(input.ravel(), self.mask.view(np.int8).ravel(),
-                      output.ravel())
+    @staticmethod
+    def _rule_left_unpack(self, op):
+        if self.mask.shape != op.mask.shape:
+            return
+        if np.any(self.mask != op.mask):
+            return
+        return IdentityOperator()
+
+    @staticmethod
+    def _rule_right_unpack(op, self):
+        if self.mask.shape != op.mask.shape:
+            return
+        if np.any(self.mask != op.mask):
+            return
+        return MaskOperator(self.mask)
 
 
 @real
@@ -1093,23 +1111,23 @@ class PackOperator(Operator):
 @inplace
 class UnpackOperator(Operator):
     """
-    Convert 1d map into an nd array, under the control of a mask.
-    The elements for which the mask is True are equal to the field argument.
+    Convert an nd array in a 1d map, under the control of a mask.
+    The elements for which the mask is true are set to zero.
     """
 
     def __init__(self, mask, **keywords):
-        mask = np.array(mask, np.bool8)
+        mask = np.array(mask, np.bool8, copy=False)
         Operator.__init__(self, shapein=np.sum(mask == 0), shapeout=mask.shape,
                           dtype=var.FLOAT_DTYPE, **keywords)
         self.mask = mask
+        self.set_rule('.T', lambda s: PackOperator(s.mask))
 
     def direct(self, input, output):
-        tmf.unpacking(input.ravel(), self.mask.view(np.int8).ravel(),
-                      output.ravel())
-
-    def transpose(self, input, output):
-        tmf.packing(input.ravel(), self.mask.view(np.int8).ravel(),
-                    output.ravel())
+        mask = self.mask.view(np.int8).ravel()
+        if self.same_data(input, output):
+            tmf.operators.unpack_inplace(output.ravel(), mask, input.size)
+        else:
+            tmf.operators.unpack_outplace(input, mask, output.ravel())
 
 
 @real

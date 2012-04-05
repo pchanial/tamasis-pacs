@@ -12,6 +12,10 @@ module operators
     public :: pmatrix_intersects
     public :: pmatrix_intersects_axis2
     public :: pmatrix_intersects_axis3
+    public :: pack_inplace
+    public :: pack_outplace
+    public :: unpack_inplace
+    public :: unpack_outplace
 
 contains
 
@@ -982,6 +986,87 @@ contains
         !$omp end parallel do
 
     end subroutine pmatrix_intersects_axis3
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine pack_inplace(array, mask, ninputs, noutputs)
+
+        real(p), intent(inout) :: array(ninputs)
+        logical*1, intent(in)  :: mask(ninputs)
+        integer, intent(in)    :: ninputs, noutputs
+
+        integer :: ii, io
+
+        io = 1
+        do ii = 1, ninputs
+            if (mask(ii)) then
+                array(io) = 0
+            else
+                array(io) = array(ii)
+                io = io + 1
+            end if
+        end do
+
+    end subroutine pack_inplace
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+    
+    
+    subroutine pack_outplace(input, mask, ninputs, output, noutputs)
+
+        real(p), intent(in)    :: input(ninputs)
+        logical*1, intent(in)  :: mask(ninputs)
+        integer, intent(in)    :: ninputs
+        real(p), intent(inout) :: output(noutputs)
+        integer, intent(in)    :: noutputs
+
+        output = pack(input, .not. mask)
+
+    end subroutine pack_outplace
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine unpack_inplace(array, mask, noutputs, ninputs)
+
+        real(p), intent(inout) :: array(noutputs)
+        logical*1, intent(in)  :: mask(noutputs)
+        integer, intent(in)    :: noutputs, ninputs
+
+        integer :: ii, io
+
+        ! unlike unpack, the following works in-place
+        ii = ninputs
+        do io = noutputs, 1, -1
+            if (mask(io)) then
+                array(io) = 0
+            else
+                array(io) = array(ii)
+                ii = ii - 1
+            end if
+        end do
+
+    end subroutine unpack_inplace
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+    
+    
+    subroutine unpack_outplace(input, ninputs, mask, output, noutputs)
+
+        real(p), intent(in)    :: input(ninputs)
+        integer, intent(in)    :: ninputs
+        logical*1, intent(in)  :: mask(noutputs)
+        real(p), intent(inout) :: output(noutputs)
+        integer, intent(in)    :: noutputs
+
+        output = unpack(input, .not. mask, 0._p)
+
+    end subroutine unpack_outplace
 
 
 end module operators

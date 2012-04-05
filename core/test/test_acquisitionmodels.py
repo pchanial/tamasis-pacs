@@ -3,8 +3,9 @@ import scipy
 
 from pyoperators import Operator, AdditionOperator, CompositionOperator, BlockDiagonalOperator, asoperator, decorators
 from pyoperators.utils import isscalar
+from pyoperators.utils.testing import assert_is_instance
 from numpy.testing import assert_equal, assert_almost_equal, assert_raises
-from tamasis.acquisitionmodels import BlackBodyOperator, ConvolutionOperator, CompressionAverageOperator, DdTddOperator, DiscreteDifferenceOperator, DownSamplingOperator, FftHalfComplexOperator, PackOperator, PadOperator, ConvolutionTruncatedExponentialOperator, RollOperator, ShiftOperator, UnpackOperator, block_diagonal
+from tamasis.acquisitionmodels import BlackBodyOperator, ConvolutionOperator, CompressionAverageOperator, DdTddOperator, DiscreteDifferenceOperator, DownSamplingOperator, FftHalfComplexOperator, IdentityOperator, MaskOperator, PackOperator, PadOperator, ConvolutionTruncatedExponentialOperator, RollOperator, ShiftOperator, UnpackOperator, block_diagonal
 from tamasis.numpyutils import all_eq
 
 def test_partitioning():
@@ -287,13 +288,24 @@ def test_compositionT():
 def test_packing():
 
     p = PackOperator([False, True, True, False])
-    assert np.allclose(p([1,2,3,4]), [1,4])
-    assert np.allclose(p.T([1,4]), [1,0,0,4])
+    assert all_eq(p([1,2,3,4]), [1,4])
+    assert all_eq(p.T([1,4]), [1,0,0,4])
 
     u = UnpackOperator([False, True, True, False])
-    assert np.allclose(u([1,4]), [1,0,0,4])
-    assert np.allclose(u.T([1,2,3,4]), [1,4])
+    assert all_eq(u([1,4]), [1,0,0,4])
+    assert all_eq(u.T([1,2,3,4]), [1,4])
 
+    pdense = p.todense()
+    udense = u.todense()
+    assert all_eq(pdense, p.todense(inplace=True))
+    assert all_eq(udense, u.todense(inplace=True))
+    assert all_eq(pdense, udense.T)
+
+    assert_is_instance(p*u, IdentityOperator)
+    assert_is_instance(u*p, MaskOperator)
+    m = u * p
+    assert all_eq(np.dot(udense, pdense), m.todense())
+    
 
 def test_convolution():
     imashape = (7, 7)
