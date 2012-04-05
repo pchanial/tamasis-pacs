@@ -452,7 +452,7 @@ end subroutine pacs_read_tod
 subroutine pacs_pointing_matrix(band, nvalids, nsamples, compression_factor, delay, fine_sampling_factor, oversampling,            &
                                 time, ra, dec, pa, chop, masked, removed, method, detector_mask, nrows, ncolumns, ndetectors,      &
                                 detector_center, detector_corner, detector_area, distortion_yz, npixels_per_sample, header,        &
-                                pmatrix, new_npixels_per_sample, status)
+                                pmatrix, new_npixels_per_sample, outside, status)
 
     use iso_fortran_env,        only : ERROR_UNIT
     use module_fitstools,       only : ft_read_keyword
@@ -485,11 +485,12 @@ subroutine pacs_pointing_matrix(band, nvalids, nsamples, compression_factor, del
     character(len=*), intent(in)                   :: header
     type(PointingElement), intent(inout)           :: pmatrix(npixels_per_sample,nvalids,ndetectors)
     integer, intent(out)                           :: new_npixels_per_sample
+    logical, intent(out)                           :: outside
     integer, intent(out)                           :: status
 
-    class(Observation), allocatable     :: obs
-    class(PacsInstrument), allocatable  :: pacs
-    integer                             :: nx, ny, nvalids_expected, method_
+    class(Observation), allocatable    :: obs
+    class(PacsInstrument), allocatable :: pacs
+    integer                            :: nx, ny, nvalids_expected, method_
 
     ! initialise observations
     allocate(obs)
@@ -548,7 +549,7 @@ subroutine pacs_pointing_matrix(band, nvalids, nsamples, compression_factor, del
     end select
 
     ! compute the projector
-    call pacs%compute_projection(method_, obs, oversampling, header, nx, ny, pmatrix, new_npixels_per_sample, status)
+    call pacs%compute_projection(method_, obs, oversampling, header, nx, ny, pmatrix, new_npixels_per_sample, outside, status)
 
 end subroutine pacs_pointing_matrix
 

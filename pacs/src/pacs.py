@@ -14,7 +14,8 @@ import time
 
 from pyoperators import (Operator, HomothetyOperator, IdentityOperator,
                          MaskOperator, RoundOperator, ClipOperator, I)
-from pyoperators.utils import isscalar, strenum, strplural, openmp_num_threads
+from pyoperators.utils import (isscalar, strelapsed, strenum, strplural,
+                               openmp_num_threads)
 from pyoperators.utils.mpi import MPI
 
 from . import var
@@ -372,10 +373,13 @@ class PacsInstrument(Instrument):
                 'method':method,
                 'units':units,
                 'derived_units':derived_units,
-                'downsampling':downsampling}
+                'downsampling':downsampling,
+                'outside':False,
+                'npixels_per_sample_min':0}
 
         try:
-            pmatrix = PointingMatrix.empty(shape, shape_input, info=info)
+            pmatrix = PointingMatrix.empty(shape, shape_input, info=info,
+                                           verbose=False)
         except MemoryError:
             gc.collect()
             pmatrix = PointingMatrix.empty(shape, shape_input, info=info,
@@ -387,7 +391,7 @@ class PacsInstrument(Instrument):
         else:
             pmatrix_ = pmatrix.ravel().view(np.int64)
 
-        new_npixels_per_sample, status = tmf.pacs_pointing_matrix(
+        new_npixels_per_sample, outside, status = tmf.pacs_pointing_matrix(
             self.band,
             nvalids,
             compression_factor,
@@ -413,11 +417,14 @@ class PacsInstrument(Instrument):
             pmatrix_)
         if status != 0: raise RuntimeError()
 
-        # if the actual number of pixels per sample is greater than
-        # the specified one, redo the computation of the pointing matrix
+        info['outside'] = bool(outside)
+        info['npixels_per_sample_min'] = new_npixels_per_sample
+
         if new_npixels_per_sample <= npixels_per_sample:
             return pmatrix
 
+        # if the actual number of pixels per sample is greater than
+        # the specified one, redo the computation of the pointing matrix
         del pmatrix_, pmatrix
         return self.get_pointing_matrix(pointing, header,
             new_npixels_per_sample, method, compression_factor= \
@@ -1115,7 +1122,7 @@ class PacsObservation(PacsBase):
                 sel_masks)
             if status != 0: raise RuntimeError()
             first = last + 1
-        print('Reading timeline... {0:.2f}'.format(time.time()-time0))
+        print(strelapsed(time0, 'Reading timeline'))
 
         # IFORT stores .true. as -1, it conflicts with numpy algebra on booleans
         np.abs(tod.mask, tod.mask)

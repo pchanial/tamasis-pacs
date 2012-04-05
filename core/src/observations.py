@@ -5,8 +5,9 @@
 from __future__ import division
 
 import numpy as np
+import time
 from matplotlib import pyplot
-from pyoperators.utils import isscalar, strenum
+from pyoperators.utils import isscalar, strelapsed, strenum, strnbytes
 from pyoperators.utils.mpi import MPI
 
 from .instruments import Instrument
@@ -89,9 +90,24 @@ class Observation(object):
         # if section is None, return as many pointing matrices as slices
         if section is None:
             if self.slice is not None:
+                time0 = time.time()
                 pmatrix = [self.get_pointing_matrix(header, npixels_per_sample,
                            method, downsampling, section=s, comm=comm,
                            **keywords) for s in self.slice]
+                info = [strnbytes(sum(p.nbytes for p in pmatrix))]
+                if all(p.shape[-1] == 0 for p in pmatrix):
+                    info += 'warning, all detectors fall outside the map'
+                else:
+                    n = max(p.info['npixels_per_sample_min'] for p in pmatrix)
+                    if npixels_per_sample == 0 or npixels_per_sample != n:
+                        info += ["set keyword 'npixels_per_sample' to {0} for b"
+                                 "etter performances".format(n)]
+                    outside = any(p.info['outside'] for p in pmatrix
+                                  if 'outside' in p.info)
+                    if outside:
+                        info += ['warning, some detectors fall outside the map']
+                print(strelapsed(time0, 'Computing the projector') + ' ({0})'.
+                      format(', '.join(info)))
                 if len(pmatrix) == 1:
                     pmatrix = pmatrix[0]
                 return pmatrix

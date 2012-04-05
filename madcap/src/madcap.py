@@ -9,7 +9,6 @@ import numpy as np
 import pyfits
 import re
 
-from . import var
 from . import tmf
 from pyoperators.utils.mpi import MPI
 from tamasis.acquisitionmodels import PointingMatrix
@@ -101,19 +100,21 @@ class MadMap1Observation(Observation):
         header.update('naxis1', np.sum(~self.info.mapmask))
         return header
 
-    def get_pointing_matrix(self, header, npixels_per_sample, method=None,
+    def get_pointing_matrix(self, header, npixels_per_sample=0, method=None,
                             downsampling=False, section=None,
                             comm=MPI.COMM_WORLD):
+
+        # let's get the pointing matrix associated to the section
+        if npixels_per_sample not in (0, self.info.npixels_per_sample):
+            raise ValueError('The npixels_per_sample value is incompatible wi' \
+                             'th the MADMAP1 file.')
+        npixels_per_sample = self.info.npixels_per_sample
 
         # if no slice is provided, return a pointing matrix for each of them
         if section is None:
             return super(MadMap1Observation, self).get_pointing_matrix(header,
                          npixels_per_sample, method)
 
-        # let's get the pointing matrix associated to the section
-        if npixels_per_sample not in (0, self.info.npixels_per_sample):
-            raise ValueError('The npixels_per_sample value is incompatible wi' \
-                             'th the MADMAP1 file.')
         if method is None:
             method = 'default'
         method = method.lower()
@@ -140,17 +141,21 @@ class MadMap1Observation(Observation):
             raise RuntimeError('Only observation slice can be specified through'
                                ' the section keyword.')
 
-        shape = (ndetectors, nsamples, self.info.npixels_per_sample)
+        shape = (ndetectors, nsamples, npixels_per_sample)
         info = {'header' : header,
-                'method' : method}
+                'method' : method,
+                'outside': False,
+                'npixels_per_sample_min': npixels_per_sample}
         try:
-            pmatrix = PointingMatrix.empty(shape, shape_input, info=info)
+            pmatrix = PointingMatrix.empty(shape, shape_input, info=info,
+                                           verbose=False)
         except MemoryError:
             gc.collect()
             pmatrix = PointingMatrix.empty(shape, shape_input, info=info,
                                            verbose=False)
+
         status = tmf.madmap1_read_tod(self.info.todfile, self.info.invnttfile,
-            self.info.convert, self.info.npixels_per_sample, islice + 1, tod.T,
+            self.info.convert, npixels_per_sample, islice + 1, tod.T,
             pmatrix.ravel().view(np.int64))
         if status != 0: raise RuntimeError()
         return pmatrix

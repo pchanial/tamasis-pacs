@@ -3,7 +3,7 @@
 !
 module module_pacsinstrument
 
-    use iso_fortran_env,        only : ERROR_UNIT, OUTPUT_UNIT
+    use iso_fortran_env,        only : ERROR_UNIT
     use module_filtering,       only : FilterUncorrelated
     use module_fitstools,       only : FLEN_VALUE, ft_check_error_cfitsio, ft_close, ft_create_header, ft_open, ft_open_image,     &
                                        ft_read_image, ft_read_keyword, ft_read_keyword_hcss, ft_read_slice, ft_test_extension
@@ -12,7 +12,7 @@ module module_pacsinstrument
     use module_pointingmatrix,  only : PointingElement, xy2pmatrix, xy2roi, roi2pmatrix
     use module_projection,      only : convex_hull, surface_convex_polygon
     use module_string,          only : strinteger, strlowcase
-    use module_tamasis,         only : tamasis_dir, p, POLICY_KEEP, POLICY_MASK, POLICY_REMOVE, info_time
+    use module_tamasis,         only : tamasis_dir, p, POLICY_KEEP, POLICY_MASK, POLICY_REMOVE
     use module_wcs,             only : init_astrometry, ad2xy_gnomonic, ad2xy_gnomonic_vect, ad2xys_gnomonic, refpix_area
     use omp_lib
     implicit none
@@ -637,7 +637,7 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine compute_projection(this, method, obs, oversampling, header, nx, ny, pmatrix, npixels_per_sample, status)
+    subroutine compute_projection(this, method, obs, oversampling, header, nx, ny, pmatrix, npixels_per_sample, outside, status)
 
         class(PacsInstrument), intent(in)  :: this
         integer, intent(in)                :: method
@@ -647,12 +647,8 @@ contains
         integer, intent(in)                :: nx, ny
         type(PointingElement), intent(out) :: pmatrix(:,:,:)
         integer, intent(out)               :: npixels_per_sample
+        logical, intent(out)               :: outside
         integer, intent(out)               :: status
-
-        integer :: count_start
-        logical :: out
-
-        call system_clock(count_start)
 
         call init_astrometry(header, status=status)
         if (status /= 0) return
@@ -660,29 +656,12 @@ contains
         select case (method)
 
             case (NEAREST_NEIGHBOUR)
-                call this%compute_projection_nearest_neighbour(obs, oversampling, nx, ny, pmatrix, npixels_per_sample, out)
+                call this%compute_projection_nearest_neighbour(obs, oversampling, nx, ny, pmatrix, npixels_per_sample, outside)
 
             case (SHARP_EDGES)
-                call this%compute_projection_sharp_edges(obs, oversampling, nx, ny, pmatrix, npixels_per_sample, out)
+                call this%compute_projection_sharp_edges(obs, oversampling, nx, ny, pmatrix, npixels_per_sample, outside)
 
         end select
-
-        if (size(pmatrix,1) > 0) then
-            call info_time('Computing the projector', count_start)
-        else
-            call info_time('Computing the projector size', count_start)
-        end if
-
-        if (npixels_per_sample /= size(pmatrix,1)) then
-            write (OUTPUT_UNIT,'(a,i0,a)') "Warning: For this observation, you can set the keyword 'npixels_per_sample' to ",      &
-                  npixels_per_sample, ' for better performances.'
-        end if
-
-        if (npixels_per_sample == 0) then
-            write (OUTPUT_UNIT,'(a)') 'Warning: All detectors fall outside the map.'
-        else if (out) then
-            write (OUTPUT_UNIT,'(a)') 'Warning: Some detectors fall outside the map.'
-        end if
 
     end subroutine compute_projection
 

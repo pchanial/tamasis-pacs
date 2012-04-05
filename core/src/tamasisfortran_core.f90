@@ -310,7 +310,7 @@ end subroutine backprojection_weight_mask
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine deglitch_l2b_std(pmatrix, nx, ny, data, mask, nsigma, npixels_per_sample, nsamples, ndetectors)
+subroutine deglitch_l2b_std(pmatrix, nx, ny, data, mask, nsigma, npixels_per_sample, nsamples, ndetectors, percent)
 
     use module_pointingmatrix, only : PointingElement
     use module_deglitching,    only : deglitch_l2b
@@ -327,8 +327,9 @@ subroutine deglitch_l2b_std(pmatrix, nx, ny, data, mask, nsigma, npixels_per_sam
     integer, intent(in)               :: npixels_per_sample
     integer*8, intent(in)             :: nsamples
     integer, intent(in)               :: ndetectors
+    real(p), intent(out)              :: percent
 
-    call deglitch_l2b(pmatrix, nx, ny, data, mask, nsigma, .false., verbose=.true.)
+    call deglitch_l2b(pmatrix, nx, ny, data, mask, nsigma, .false., percent)
 
 end subroutine deglitch_l2b_std
 
@@ -336,7 +337,7 @@ end subroutine deglitch_l2b_std
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine deglitch_l2b_mad(pmatrix, nx, ny, data, mask, nsigma, npixels_per_sample, nsamples, ndetectors)
+subroutine deglitch_l2b_mad(pmatrix, nx, ny, data, mask, nsigma, npixels_per_sample, nsamples, ndetectors, percent)
 
     use module_pointingmatrix, only : PointingElement
     use module_deglitching,    only : deglitch_l2b
@@ -353,8 +354,9 @@ subroutine deglitch_l2b_mad(pmatrix, nx, ny, data, mask, nsigma, npixels_per_sam
     integer, intent(in)               :: npixels_per_sample
     integer*8, intent(in)             :: nsamples
     integer, intent(in)               :: ndetectors
+    real(p), intent(out)              :: percent
 
-    call deglitch_l2b(pmatrix, nx, ny, data, mask, nsigma, .true., verbose=.true.)
+    call deglitch_l2b(pmatrix, nx, ny, data, mask, nsigma, .true., percent)
 
 end subroutine deglitch_l2b_mad
 
@@ -366,7 +368,7 @@ subroutine filter_median(data, mask, length, nsamples, nsamples_tot, ndetectors,
 
     use iso_fortran_env,     only : ERROR_UNIT, OUTPUT_UNIT
     use module_preprocessor, only : median_filtering
-    use module_tamasis,      only : p, info_time
+    use module_tamasis,      only : p
     use module_string,       only : strinteger
     implicit none
 
@@ -380,7 +382,6 @@ subroutine filter_median(data, mask, length, nsamples, nsamples_tot, ndetectors,
     integer, intent(out)   :: status
 
     integer :: islice, idetector, start
-    integer :: count_start
 
     if (sum(nsamples) /= nsamples_tot) then
         status = 1
@@ -396,7 +397,6 @@ subroutine filter_median(data, mask, length, nsamples, nsamples_tot, ndetectors,
 
     status = 0
 
-    call system_clock(count_start)
     start = 1
     do islice = 1, nslices
         call median_filtering(data(start:start+nsamples(islice)-1,:), mask(start:start+nsamples(islice)-1,:), length)
@@ -409,8 +409,6 @@ subroutine filter_median(data, mask, length, nsamples, nsamples_tot, ndetectors,
             data(:,idetector) = 0
         end if
     end do
-
-    call info_time('Median filtering (length=' // strinteger(length) // ')', count_start)
 
 end subroutine filter_median
 

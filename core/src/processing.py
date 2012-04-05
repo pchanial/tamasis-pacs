@@ -7,8 +7,9 @@ from __future__ import division
 import numpy as np
 import scipy
 import tamasisfortran as tmf
-from .datatypes import Tod
-from acquisitionmodels import ProjectionBaseOperator
+import time
+from pyoperators.utils import strelapsed
+from .acquisitionmodels import ProjectionBaseOperator
 
 __all__ = [ 'deglitch_l2std',
             'deglitch_l2mad',
@@ -20,7 +21,11 @@ __all__ = [ 'deglitch_l2std',
 class ndarraywrap(np.ndarray):
     pass
 
-def _deglitch(tod, projection, nsigma, func):
+def _deglitch(tod, projection, nsigma, method):
+    time0 = time.time()
+    if method not in ('std', 'mad'):
+        raise ValueError('Invalid deglitching method.')
+    func = {'std':tmf.deglitch_l2b_std, 'mad':tmf.deglitch_l2b_mad}[method]
     if isinstance(projection, ProjectionBaseOperator):
         matrix = projection.matrix
         npixels_per_sample = matrix.shape[-1]
@@ -45,11 +50,14 @@ def _deglitch(tod, projection, nsigma, func):
         mask = np.zeros(tod.shape, np.bool8)
     else:
         mask = tod.mask.copy()
-    func(matrix.view(int).ravel(), nx, ny, tod.T, mask.view(np.int8).T,
-         nsigma, npixels_per_sample)
+    percent = func(matrix.view(int).ravel(), nx, ny, tod.T,
+                   mask.view(np.int8).T, nsigma, npixels_per_sample)
 
     # IFORT stores .true. as -1, it conflicts with numpy algebra on booleans
     np.abs(mask, mask)
+
+    print(strelapsed(time0, 'Deglitching ({0})'.format(method)) +
+          ' (flagged samples: {0}%)'.format(percent))
 
     return mask
     
@@ -62,7 +70,7 @@ def deglitch_l2std(tod, projection, nsigma=5.):
     mean. In case of rejection (i. e. at a given time), each detector sample
     which contributes to the sky pixel value in the frame is masked.
     """
-    return _deglitch(tod, projection, nsigma, tmf.deglitch_l2b_std)
+    return _deglitch(tod, projection, nsigma, 'std')
 
 
 #-------------------------------------------------------------------------------
@@ -78,7 +86,7 @@ def deglitch_l2mad(tod, projection, nsigma=25.):
     each detector sample which contributes to the sky pixel value in the frame
     is masked.
     """
-    return _deglitch(tod, projection, nsigma, tmf.deglitch_l2b_mad)
+    return _deglitch(tod, projection, nsigma, 'mad')
 
 
 #-------------------------------------------------------------------------------
@@ -88,6 +96,8 @@ def filter_median(x, length=10, mask=None, partition=None, out=None):
     """
     Median filtering, O(1) in window length
     """
+    from pyoperators.utils import strelapsed
+    time0 = time.time()
     if out is None:
         out = x.copy()
     if mask is not None :
@@ -106,6 +116,7 @@ def filter_median(x, length=10, mask=None, partition=None, out=None):
         np.array(partition, np.int32, ndmin=1))
     if status != 0:
         raise RuntimeError()
+    print(strelapsed(time0, 'Median filtering') + ' (length={0})'.format(length))
     return out
 
 

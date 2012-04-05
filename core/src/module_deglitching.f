@@ -6,7 +6,7 @@ module module_deglitching
     use module_math,           only : moment, mad, sigma_clipping
     use module_pointingmatrix, only : pointingelement, backprojection_weighted_roi
     use module_string,         only : strreal, strternary
-    use module_tamasis,        only : p, info_time
+    use module_tamasis,        only : p
     implicit none
     private
 
@@ -16,7 +16,7 @@ module module_deglitching
 contains
 
 
-    subroutine deglitch_l2b(pmatrix, nx, ny, timeline, mask, nsigma, use_mad, verbose)
+    subroutine deglitch_l2b(pmatrix, nx, ny, timeline, mask, nsigma, use_mad, percent)
 
         type(pointingelement), intent(in) :: pmatrix(:,:,:)
         integer, intent(in)               :: nx, ny
@@ -24,7 +24,7 @@ contains
         logical(kind=1), intent(inout)    :: mask(:,:)
         real(p), intent(in)               :: nsigma
         logical, intent(in)               :: use_mad
-        logical, intent(in), optional     :: verbose
+        real(p), intent(out)              :: percent
 
         integer, parameter   :: MIN_SAMPLE_SIZE = 5
         integer              :: npixels_per_sample, npixels_per_frame
@@ -39,15 +39,9 @@ contains
         real(p), allocatable :: arrv(:)
         integer, allocatable :: arrt(:)
         logical, allocatable :: isglitch(:)
-        integer              :: count_start
         integer*8            :: nbads
-        logical              :: verbose_
-        
-        verbose_ = .false.
-        if (present(verbose)) verbose_ = verbose
 
         nbads = count(mask)
-        call system_clock(count_start)
 
         npixels_per_sample = size(pmatrix,1)
         ntimes     = size(pmatrix,2)
@@ -154,10 +148,7 @@ contains
 
         deallocate (map)
 
-        if (verbose_) then
-            call info_time('Deglitching (' // strternary(use_mad, 'mad', 'std') // ')', count_start,                               &
-                           '(flagged samples: ' // strreal(real(count(mask) - nbads, p) / (size(mask) - nbads) * 100, 5) // '%)')
-        end if
+        percent = real(count(mask) - nbads, p) / (size(mask) - nbads) * 100
 
     end subroutine deglitch_l2b
 

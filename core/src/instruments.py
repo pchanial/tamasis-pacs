@@ -352,18 +352,21 @@ class Instrument(object):
         info = {'header':header,
                 'method':method,
                 'units':units,
-                'derived_units':derived_units}
+                'derived_units':derived_units,
+                'outside':False,
+                'npixels_per_sample_min':0}
         try:
-            pmatrix = PointingMatrix.empty(shape, shape_input, info=info)
+            pmatrix = PointingMatrix.empty(shape, shape_input, info=info,
+                                           verbose=False)
         except MemoryError:
             gc.collect()
             pmatrix = PointingMatrix.empty(shape, shape_input, info=info,
-                                           verbose=True)
+                                           verbose=False)
 
         # compute the pointing matrix
         if method == 'sharp':
             coords = self.pack(self.detector.corner)
-            new_npixels_per_sample, out = self. \
+            new_npixels_per_sample, outside = self. \
                 instrument2pmatrix_sharp_edges(coords, pointing, header,
                                                pmatrix, npixels_per_sample)
         elif method == 'nearest':
@@ -373,16 +376,8 @@ class Instrument(object):
         else:
             raise NotImplementedError()
 
-        if ndetectors > 0 and nvalids > 0:
-            if new_npixels_per_sample == 0:
-                print('Warning:  All detectors fall outside the map.')
-            elif out:
-                print('Warning: Some detectors fall outside the map.')
-
-        if new_npixels_per_sample != npixels_per_sample:
-            print("Warning: For this observation, you can set the keyword 'npix"
-                  "els_per_sample' to {0} for better performances.".format(
-                  new_npixels_per_sample))
+        info['outside'] = bool(outside)
+        info['npixels_per_sample_min'] = new_npixels_per_sample
 
         if new_npixels_per_sample <= npixels_per_sample:
             return pmatrix

@@ -7,15 +7,16 @@ program test_deglitching
     use module_tamasis,        only : p
     implicit none
 
-    type(pointingelement),allocatable :: pmatrix(:,:,:), pmatrix2d(:,:)
-    integer                           :: i, j
-!   integer                           :: itime, idetector, ipixel
-    integer                           :: ntimes, ndetectors, npixels_per_sample
-    integer                           :: nrepeats
-    integer                           :: nx, ny
-    real(p), allocatable              :: xc(:), yc(:)
-    real(p), allocatable              :: map(:), signal(:,:), signal1d(:)
-    logical(kind=1), allocatable      :: mask(:,:)
+    type(pointingelement), allocatable :: pmatrix(:,:,:), pmatrix2d(:,:)
+    integer                            :: i, j
+!   integer                            :: itime, idetector, ipixel
+    integer                            :: ntimes, ndetectors, npixels_per_sample
+    integer                            :: nrepeats
+    integer                            :: nx, ny
+    real(p), allocatable               :: xc(:), yc(:)
+    real(p), allocatable               :: map(:), signal(:,:), signal1d(:)
+    logical(kind=1), allocatable       :: mask(:,:)
+    real(p)                            :: percent
     
     nrepeats = 6
     ndetectors = 3
@@ -81,7 +82,7 @@ program test_deglitching
     signal([1,4,17],1) = 100._p
     signal([3,8,9 ],2) = 10._p
 
-    call deglitch_l2b(pmatrix(:,:,1:2), nx, ny, signal(:,1:2), mask(:,1:2), 5._p, .true.)
+    call deglitch_l2b(pmatrix(:,:,1:2), nx, ny, signal(:,1:2), mask(:,1:2), 5._p, .true., percent)
     if (count(mask) /= 6 .or. any(.not. mask([1,4,17],1)) .or. any(.not. mask([3,8,9],2))) call failure('deglitch_l2b 1')
 
     deallocate (pmatrix, pmatrix2d, signal, signal1d)
@@ -133,7 +134,7 @@ program test_deglitching
     signal([1,4,17  ],1) = 100._p
     signal([3,8,9,16],2) = 100._p
 
-    call deglitch_l2b(pmatrix(:,:,1:2), nx, ny, signal(:,1:2), mask(:,1:2), 5._p, .true.)
+    call deglitch_l2b(pmatrix(:,:,1:2), nx, ny, signal(:,1:2), mask(:,1:2), 5._p, .true., percent)
     if (count(mask) /= 14 .or. any(.not. mask([1,3,4,8,9,16,17],1)) .or. &
         any(.not. mask([1,3,4,8,9,16,17],2))) call failure('deglitch_l2b 2')
 
@@ -197,7 +198,7 @@ program test_deglitching
     signal([3,8,9,16 ],2) = 100._p
     signal([10,15],    3) = 100._p
 
-    call deglitch_l2b(pmatrix, nx, ny, signal, mask, 20._p, .true.)
+    call deglitch_l2b(pmatrix, nx, ny, signal, mask, 20._p, .true., percent)
     if (count(mask) /= 22 .or. any(.not. mask([1,3,4,8,9,16,17],1)) .or. &
         any(.not. mask([1,3,4,8,9,10,15,16,17],2)) .or. &
         any(.not. mask([3,8,9,10,15,16],3))) call failure('deglitch_l2b 3')
