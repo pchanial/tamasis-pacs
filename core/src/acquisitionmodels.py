@@ -1009,7 +1009,7 @@ class DdTddOperator(Operator):
 
     def __str__(self):
         s = (str(self.scalar) + ' ') if self.scalar != 1 else ''
-        s += super(DdTddOperator, self).__str__(self)
+        s += super(DdTddOperator, self).__str__()
         return s
 
 @real
