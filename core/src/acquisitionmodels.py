@@ -15,7 +15,8 @@ from pyoperators import (Operator, IdentityOperator, DiagonalOperator,
 from pyoperators.decorators import (linear, orthogonal, real, square, symmetric,
                                     unitary, inplace)
 from pyoperators.memory import allocate
-from pyoperators.utils import isscalar, tointtuple, openmp_num_threads
+from pyoperators.utils import (isscalar, tointtuple, openmp_num_threads,
+                               operation_assignment)
 from pyoperators.utils.mpi import MPI, distribute_shape
 
 from . import var
@@ -738,12 +739,12 @@ class ProjectionBaseOperator(Operator):
         if not output.flags.contiguous:
             output[...] = output_
 
-    def transpose(self, input, output, operation=None):
+    def transpose(self, input, output, operation=operation_assignment):
         matrix = self.matrix
-        if operation is None:
+        if operation is operation_assignment:
             output[...] = 0
-        elif operation is not operator.__iadd__:
-            raise ValueError('Invalid operation.')
+        elif operation is not operator.iadd:
+            raise ValueError('Invalid reduction operation.')
         if matrix.size == 0:
             return
         if not input.flags.contiguous:
