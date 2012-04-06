@@ -991,22 +991,19 @@ contains
     !-------------------------------------------------------------------------------------------------------------------------------
 
 
-    subroutine pack_inplace(array, mask, ninputs, noutputs)
+    subroutine pack_inplace(array, mask, ninputs)
 
         real(p), intent(inout) :: array(ninputs)
         logical*1, intent(in)  :: mask(ninputs)
-        integer, intent(in)    :: ninputs, noutputs
+        integer, intent(in)    :: ninputs
 
         integer :: ii, io
 
         io = 1
         do ii = 1, ninputs
-            if (mask(ii)) then
-                array(io) = 0
-            else
-                array(io) = array(ii)
-                io = io + 1
-            end if
+            if (mask(ii)) cycle
+            array(io) = array(ii)
+            io = io + 1
         end do
 
     end subroutine pack_inplace
