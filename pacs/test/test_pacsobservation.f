@@ -26,7 +26,7 @@ program test_pacsobservation
     integer                     :: first, last
  
     allocate (afilename(1))
-    allocate(pacsobs, obs)
+    allocate (pacsobs, obs)
 
     ! valid calls
     afilename(1) = filename
@@ -94,14 +94,14 @@ program test_pacsobservation
     deallocate (afilename)
 
     write (OUTPUT_UNIT,'(a)') 'Testing error...'
-    allocate(afilename(0))
+    allocate (afilename(0))
     call pacsobs%init(afilename, policy, status)
     if (status == 0) call failure('ainit2')
     write (OUTPUT_UNIT,'(a,/)') 'OK.'
     deallocate (afilename)
 
     ! calls with array
-    allocate(afilename(2))
+    allocate (afilename(2))
     afilename(1) = filename // '[3:100]'
     afilename(2) = filename // '[201:300]'
     call pacsobs%init(afilename, policy, status)
@@ -111,7 +111,7 @@ program test_pacsobservation
     if (first /= 3 .or. last /= 100) call failure('ainit1b')
     call get_first_last(pacsobs%slice(2)%p%removed, first, last)
     if (first /= 201 .or. last /= 300) call failure('ainit1c')
-    deallocate(afilename)
+    deallocate (afilename)
  
     ! test get_position_time
     call pacsobs2obs(pacsobs, 1, obs, status)
@@ -157,10 +157,10 @@ contains
     end subroutine failure
 
     subroutine pacsobs2obs(pacsobs, islice, obs, status)
-        class(PacsObservation), intent(in)           :: pacsobs
-        integer, intent(in)                          :: islice
-        class(Observation), allocatable, intent(out) :: obs
-        integer, intent(out)                         :: status
+        class(PacsObservation), intent(in) :: pacsobs
+        integer, intent(in)                :: islice
+        class(Observation), intent(out)    :: obs
+        integer, intent(out)               :: status
         
         call obs%init(pacsobs%slice(islice)%p%time, pacsobs%slice(islice)%p%ra, pacsobs%slice(islice)%p%dec,                       &
                       pacsobs%slice(islice)%p%pa, pacsobs%slice(islice)%p%chop, pacsobs%slice(islice)%p%masked,                    &
