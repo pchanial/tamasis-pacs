@@ -13,7 +13,7 @@ from pyoperators import (Operator, IdentityOperator, DiagonalOperator,
                          CompositionOperator, DistributionIdentityOperator,
                          MaskOperator, NumexprOperator)
 from pyoperators.decorators import (linear, orthogonal, real, square, symmetric,
-                                    unitary, inplace)
+                                    unitary, universal, inplace)
 from pyoperators.memory import allocate
 from pyoperators.utils import (isscalar, tointtuple, openmp_num_threads,
                                operation_assignment)
@@ -271,6 +271,7 @@ class BlackBodyFixedTemperatureOperator(NumexprOperator):
 @block_diagonal('factor', axisin=-1)
 @real
 @linear
+@universal
 class CompressionOperator(Operator):
     """
     Abstract class for compressing the input signal.
@@ -441,6 +442,7 @@ class InvNttUncorrelatedPythonOperator(Operator):
 @block_diagonal('left', 'right', axisin=-1)
 @real
 @linear
+@universal
 class PadOperator(Operator):
     """Pads before and after along the fast dimension of an ndarray."""
 
@@ -930,6 +932,7 @@ class ProjectionInMemoryOperator(ProjectionBaseOperator):
 @linear
 @square
 @inplace
+@universal
 class ConvolutionTruncatedExponentialOperator(Operator):
     """
     Apply a truncated exponential response to the signal
