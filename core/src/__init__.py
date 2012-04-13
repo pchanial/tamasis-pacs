@@ -1,12 +1,6 @@
 # Copyrights 2010-2011 Pierre Chanial
 # All rights reserved
 #
-try:
-    import pydebug
-    pydebug.listen()
-    del pydebug
-except:
-    pass
 
 # force gfortran's read statement to always use the dot sign as fraction
 # separator (PR47007)
