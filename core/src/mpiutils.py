@@ -290,9 +290,18 @@ def write_fits(filename, data, header, extension, extname, comm):
         header['NAXIS' + str(ndim)] = nglobal
         shdu = pyfits.StreamingHDU(filename, header)
         data_loc = shdu._datLoc
+        shdu._ffo.flush()
         shdu.close()
     else:
         data_loc = None
+
+    import time
+    t0 = time.time()
+    while not os.path.exists(filename):
+        if time.time() - t0 > 120:
+            raise IOError("File '{0}' has not been created.".format(filename))
+        print 'Rank: ', MPI.COMM_WORLD.rank, '... sleeping...'
+        time.sleep(1)
 
     data_loc = comm.bcast(data_loc)
 
@@ -303,7 +312,7 @@ def write_fits(filename, data, header, extension, extname, comm):
     group = comm.Get_group()
     group.Incl(range(rank_nowork))
     newcomm = comm.Create(group)
-    
+
     if comm.rank < rank_nowork:
         mtype = {1:MPI.BYTE, 4: MPI.FLOAT, 8:MPI.DOUBLE}[data.dtype.itemsize]
         ftype = mtype.Create_subarray([nglobal*chunk], [nlocal*chunk],
@@ -329,3 +338,4 @@ def write_fits(filename, data, header, extension, extname, comm):
             raise RuntimeError('File is not completely written')
 
     comm.Barrier()
+
