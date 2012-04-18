@@ -367,14 +367,14 @@ class InvNttOperator(Operator):
         filter_length = np.asarray(2**np.ceil(np.log2(np.array(nsamples) + \
                                    2 * ncorrelations)), int)
         fft_filters = []
-        for i, (n, l) in enumerate(zip(nsamples, filter_length)):
+        for i, n in enumerate(filter_length):
             i = min(i, nfilters-1)
-            fft_filter, status = tmf.fft_filter_uncorrelated(filter[i].T, l)
+            fft_filter, status = tmf.fft_filter_uncorrelated(filter[i].T, n)
             if status != 0: raise RuntimeError()
             np.maximum(fft_filter, 0, fft_filter)
             fft_filters.append(fft_filter.T)
         
-        norm = comm_tod.allreduce(max([np.max(f) for f in fft_filters]),
+        norm = comm_tod.allreduce(max(np.max(f) for f in fft_filters),
                                   op=MPI.MAX)
         for f in fft_filters:
             np.divide(f, norm, f)
