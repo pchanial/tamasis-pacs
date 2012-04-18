@@ -23,13 +23,13 @@ def test_save():
     obs.pointing.dec -= 0.1
     obs.pointing.pa += 20
     obs.pointing.chop = 0
-    tod = obs.get_tod(raw=True)
+    tod = obs.get_tod()
 
     filename = 'obs-' + uuid + '.fits'
     obs.save(filename, tod)
 
     obs2 = PacsObservation(filename, reject_bad_line=False)
-    tod2 = obs2.get_tod(raw=True)
+    tod2 = obs2.get_tod()
 
     assert all_eq(obs.pointing, obs2.pointing)
 
@@ -60,7 +60,7 @@ def test_header():
     assert all_eq(map_naive.tounit('Jy/arcsec^2'), map_naive3, 2.e-7)
 
     # test compatibility with photproject
-    tod = obs.get_tod(flatfielding=False, subtraction_mean=False)
+    tod = obs.get_tod()
     map_naive4 = mapper_naive(tod, projection)
     hdu_ref = pyfits.open(data_dir + 'frames_blue_map_hcss_photproject.fits')[1]
     map_ref = Map(hdu_ref.data, hdu_ref.header, unit=hdu_ref.header['qtty____']+'/pixel')
@@ -74,7 +74,7 @@ def test_detector_policy():
     obs.pointing.chop[:] = 0
     projection = ProjectionOperator(obs, header=map_naive_ref.header,
                                     downsampling=True, npixels_per_sample=6)
-    tod = obs.get_tod(flatfielding=False, subtraction_mean=False)
+    tod = obs.get_tod()
     masking = MaskOperator(tod.mask)
     model = masking * projection
     map_naive = mapper_naive(tod, model)
@@ -86,7 +86,7 @@ def test_detector_policy():
     obs_rem.pointing.chop[:] = 0
     projection_rem = ProjectionOperator(obs_rem, header=map_naive.header,
                                         downsampling=True, npixels_per_sample=7)
-    tod_rem = obs_rem.get_tod(flatfielding=False, subtraction_mean=False)
+    tod_rem = obs_rem.get_tod()
     masking_rem = MaskOperator(tod_rem.mask)
     model_rem = masking_rem * projection_rem
     map_naive_rem = mapper_naive(tod_rem, model_rem)
@@ -116,12 +116,12 @@ def test_npixels_per_sample_is_zero():
 
 def test_slice1():
     obs = PacsObservation(data_dir+'frames_blue.fits[11:20]')
-    tod = obs.get_tod(flatfielding=False)
+    tod = obs.get_tod()
 
     filename = 'obs-' + uuid + '.fits'
     obs.save(filename, tod)
     obs2 = PacsObservation(filename)
-    tod2 = obs2.get_tod(raw=True)
+    tod2 = obs2.get_tod()
     assert all_eq(obs.status[10:20], obs2.status)
     assert all_eq(tod, tod2)
 
@@ -134,8 +134,8 @@ def test_slice2():
     obs1.pointing.chop = 0
     obs2.pointing.chop = 0
 
-    tod1 = obs1.get_tod(subtraction_mean=False)
-    tod2 = obs2.get_tod(subtraction_mean=False)
+    tod1 = obs1.get_tod()
+    tod2 = obs2.get_tod()
     assert all_eq(tod1, tod2)
 
     header = obs1.get_map_header()
@@ -162,7 +162,7 @@ def test_pTx_pT1():
     obs1.pointing.chop = 0
     obs2.pointing.chop = 0
 
-    tod = obs1.get_tod(subtraction_mean=False)
+    tod = obs1.get_tod()
 
     model1 = ProjectionOperator(obs1, downsampling=True)
     m1 = mapper_naive(tod, model1, unit='Jy/arcsec^2')

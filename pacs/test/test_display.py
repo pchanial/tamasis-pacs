@@ -26,7 +26,7 @@ compression  = CompressionAverageOperator(4)
 model = compression * crosstalk * multiplexing * projection * telescope
 
 # read the Tod off the disk
-tod40Hz = pacs.get_tod()
+tod40Hz = pacs.get_tod(flatfielding=True, subtraction_mean=True)
 
 # remove drift
 tod40Hz_filtered = filter_polynomial(tod40Hz, 6)

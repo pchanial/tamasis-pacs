@@ -131,7 +131,7 @@ class Observation(object):
         return tuple([int(np.sum(~self.pointing[s.start:s.stop].removed)) \
                       for s in self.slice])
 
-    def get_tod(self, unit=None, flatfielding=True, subtraction_mean=True):
+    def get_tod(self, unit=None, flatfielding=False, subtraction_mean=False):
         """
         Return the Tod from this observation
         """

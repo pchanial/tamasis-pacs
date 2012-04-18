@@ -38,7 +38,7 @@ def test1():
         simul2 = PacsObservation(filename, policy_bad_detector='keep',
                                  policy_other='keep')
         status2 = simul2.status
-        tod2 = simul2.get_tod(raw=True)
+        tod2 = simul2.get_tod()
     finally:
         try:
             os.remove(filename)

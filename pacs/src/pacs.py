@@ -1049,19 +1049,15 @@ class PacsObservation(PacsBase):
 
     def get_tod(self,
                 unit='Jy/detector',
-                flatfielding=True,
-                subtraction_mean=True,
-                raw=False,
+                flatfielding=False,
+                subtraction_mean=False,
+                no_unit_conversion=False,
                 masks='activated'):
         """
         Returns the signal and mask timelines.
 
         By default, all activated masks will be combined.
         """
-
-        if raw:
-            flatfielding = False
-            subtraction_mean = False
 
         act_masks = set([m for slice in self.slice \
                          for i, m in enumerate(slice.mask_name) \
@@ -1129,7 +1125,7 @@ class PacsObservation(PacsBase):
 
         filter_nonfinite(tod, out=tod)
 
-        if not raw:
+        if not no_unit_conversion:
             tod.inunit(unit)
 
         return tod

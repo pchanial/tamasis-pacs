@@ -50,12 +50,12 @@ def mask_pmatrix(pmatrix, tod):
 
 obs1 = PacsObservation(data_dir + 'frames_blue.fits', reject_bad_line=False)
 obs1.pointing.chop = 0
-tod1 = obs1.get_tod(flatfielding=False, subtraction_mean=False)
+tod1 = obs1.get_tod()
 obs2 = PacsObservation([data_dir + 'frames_blue.fits[1:176]',
                         data_dir + 'frames_blue.fits[177:360]'],
                        reject_bad_line=False)
 obs2.pointing.chop = 0
-tod2 = obs2.get_tod(flatfielding=False, subtraction_mean=False)
+tod2 = obs2.get_tod()
 
 tolocal = DistributionGlobalOperator(map_ref_global.shape,
                                      attrin={'header':header_ref_global})

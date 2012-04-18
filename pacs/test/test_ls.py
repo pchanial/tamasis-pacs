@@ -14,7 +14,7 @@ tol = 1.e-6 if profile else 1.e-4
 maxiter = 10
 data_dir = os.path.dirname(__file__) + '/data/'
 obs = PacsObservation(data_dir + 'frames_blue.fits', fine_sampling_factor=1)
-tod = obs.get_tod(flatfielding=False)
+tod = obs.get_tod()
 
 telescope   = IdentityOperator()
 projection  = ProjectionOperator(obs, downsampling=True, npixels_per_sample=6)

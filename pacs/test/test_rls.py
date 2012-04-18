@@ -19,7 +19,7 @@ PacsInstrument.info.CALFILE_RESP = tamasis.var.path + '/pacs/PCalPhotometer_Re'\
 obs = PacsObservation(filename=data_dir+'frames_blue.fits',
                       fine_sampling_factor=1, reject_bad_line=False)
 obs.pointing.chop[:] = 0
-tod = obs.get_tod(flatfielding=False)
+tod = obs.get_tod(subtraction_mean=True)
 
 projection  = ProjectionOperator(obs, resolution=3.2, downsampling=True,
                                  npixels_per_sample=6)
@@ -37,7 +37,8 @@ map_rls = mapper_rls(tod, model, hyper=1., tol=1.e-4, profile=profile,
                      callback=None if tamasis.var.verbose else Callback(),
                      solver=cgs)
 
-print 'Elapsed time: ' + str(map_rls.header['TIME'])
+if profile is None:
+    print 'Elapsed time: ' + str(map_rls.header['TIME'])
 
 def test():
     assert map_rls.header['NITER'] < 49

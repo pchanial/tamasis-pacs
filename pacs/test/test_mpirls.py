@@ -25,7 +25,7 @@ comm_tod = MPI.COMM_SELF
 comm_map = MPI.COMM_SELF
 obs_ref = PacsObservation(data_dir + 'frames_blue.fits', comm=comm_tod)
 obs_ref.pointing.chop = 0
-tod_ref = obs_ref.get_tod(flatfielding=False, subtraction_mean=False)
+tod_ref = obs_ref.get_tod()
 model_ref = MaskOperator(tod_ref.mask) * \
             ProjectionOperator(obs_ref, downsampling=True, npixels_per_sample=6,
                                commout=comm_tod, commin=comm_map,
@@ -55,11 +55,11 @@ def check_map_local(m):
 
 obs1 = PacsObservation(data_dir + 'frames_blue.fits')
 obs1.pointing.chop = 0
-tod1 = obs1.get_tod(flatfielding=False, subtraction_mean=False)
+tod1 = obs1.get_tod()
 obs2 = PacsObservation([data_dir + 'frames_blue.fits[1:176]',
                         data_dir + 'frames_blue.fits[177:360]'])
 obs2.pointing.chop = 0
-tod2 = obs2.get_tod(flatfielding=False, subtraction_mean=False)
+tod2 = obs2.get_tod()
 
 # non-distributed map, distributed TOD
 def test1():

@@ -15,7 +15,7 @@ data_dir = os.path.dirname(__file__) + '/data/'
 obs = PacsObservation(filename=data_dir+'frames_blue.fits',
                       fine_sampling_factor=1)
 obs.pointing.chop[:] = 0
-tod = obs.get_tod(flatfielding=False)
+tod = obs.get_tod()
 
 projection   = ProjectionOperator(obs, resolution=3.2, downsampling=True,
                                   npixels_per_sample=6)

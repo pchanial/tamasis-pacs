@@ -7,7 +7,7 @@ class TestFailure(Exception): pass
 
 data_dir = os.path.dirname(__file__) + '/data/'
 obs = PacsObservation(data_dir+'frames_blue.fits', fine_sampling_factor=1)
-tod = obs.get_tod(flatfielding=False)
+tod = obs.get_tod()
 
 projection   = ProjectionOperator(obs, downsampling=True, npixels_per_sample=6)
 masking_tod  = MaskOperator(tod.mask)
