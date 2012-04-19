@@ -260,10 +260,12 @@ def write_fits(filename, data, header, extension, extname, comm):
 
     # we remove the file first to avoid an annoying pyfits informative message
     if not extension:
-        try:
-            os.remove(filename)
-        except:
-            pass
+        if comm.rank == 0:
+            try:
+                os.remove(filename)
+            except:
+                pass
+        comm.Barrier()
 
     # case without MPI communication
     if comm.size == 1:
@@ -279,12 +281,6 @@ def write_fits(filename, data, header, extension, extname, comm):
     nglobal = shape_global[0]
     s = distribute_slice(nglobal)
     nlocal = s.stop - s.start
-
-    if not extension:
-        try:
-            os.remove(filename)
-        except:
-            pass
 
     if comm.rank == 0:
         header['NAXIS' + str(ndim)] = nglobal
