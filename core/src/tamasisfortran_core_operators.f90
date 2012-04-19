@@ -9,6 +9,8 @@ module operators
     public :: diff
     public :: diffT
     public :: diffTdiff
+    public :: invntt_uncorrelated_inplace
+    public :: invntt_uncorrelated_outplace
     public :: pmatrix_intersects
     public :: pmatrix_intersects_axis2
     public :: pmatrix_intersects_axis3
@@ -882,6 +884,73 @@ contains
         !$omp end parallel do
 
     end subroutine xxx_diffTdiff_slow_outplace
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine invntt_uncorrelated_inplace(input, ninputs, nsamples, istride,  fft_filter, filter_length, ndetectors, fplan, bplan,&
+                                           left, right)
+
+        real(p), intent(inout) :: input(ninputs)
+        integer, intent(in)    :: ninputs
+        integer, intent(in)    :: nsamples, istride
+        integer, intent(in)    :: filter_length, ndetectors
+        real(p), intent(in)    :: fft_filter(filter_length, ndetectors)
+        integer*8, intent(in)  :: fplan, bplan
+        integer, intent(in)    :: left, right
+
+        real(p) :: buffer(filter_length)
+        integer :: i
+
+        !$omp parallel do private(buffer)
+        do i = 1, ndetectors
+            buffer(:left) = 0
+            buffer(left+1:filter_length-right) = input((i-1)*istride+1:(i-1)*istride+nsamples)
+            buffer(filter_length-right+1:) = 0
+            call dfftw_execute_r2r(fplan, buffer, buffer)
+            buffer = buffer * fft_filter(:,i)
+            call dfftw_execute_r2r(bplan, buffer, buffer)
+            input((i-1)*istride+1:(i-1)*istride+nsamples) = buffer(left+1:filter_length-right) / filter_length
+        end do
+        !$omp end parallel do
+
+    end subroutine invntt_uncorrelated_inplace
+
+
+    !-------------------------------------------------------------------------------------------------------------------------------
+
+
+    subroutine invntt_uncorrelated_outplace(input, ninputs, nsamples, istride, output, noutputs, ostride, fft_filter,              &
+                                            filter_length, ndetectors, fplan, bplan, left, right)
+
+        real(p), intent(in)    :: input(ninputs)
+        integer, intent(in)    :: ninputs
+        integer, intent(in)    :: nsamples, istride
+        real(p), intent(inout) :: output(noutputs)
+        integer, intent(in)    :: noutputs
+        integer, intent(in)    :: ostride
+        integer, intent(in)    :: filter_length, ndetectors
+        real(p), intent(in)    :: fft_filter(filter_length, ndetectors)
+        integer*8, intent(in)  :: fplan, bplan
+        integer, intent(in)    :: left, right
+
+        real(p) :: buffer(filter_length)
+        integer :: i
+
+        !$omp parallel do private(buffer)
+        do i = 1, ndetectors
+            buffer(:left) = 0
+            buffer(left+1:filter_length-right) = input((i-1)*istride+1:(i-1)*istride+nsamples)
+            buffer(filter_length-right+1:) = 0
+            call dfftw_execute_r2r(fplan, buffer, buffer)
+            buffer = buffer * fft_filter(:,i)
+            call dfftw_execute_r2r(bplan, buffer, buffer)
+            output((i-1)*ostride+1:(i-1)*ostride+nsamples) = buffer(left+1:filter_length-right) / filter_length
+        end do
+        !$omp end parallel do
+
+    end subroutine invntt_uncorrelated_outplace
 
 
     !-------------------------------------------------------------------------------------------------------------------------------

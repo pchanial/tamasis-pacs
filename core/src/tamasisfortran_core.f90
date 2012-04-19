@@ -469,45 +469,6 @@ end subroutine fft_plan_inplace
 !-----------------------------------------------------------------------------------------------------------------------------------
 
 
-subroutine invntt_uncorrelated(input, ninputs, nsamples, istride, output, noutputs, ostride, fft_filter, filter_length, ndetectors,&
-                               fplan, bplan, left, right)
-
-    use module_tamasis, only : p
-    implicit none
-
-    real(p), intent(in)    :: input(ninputs)
-    integer, intent(in)    :: ninputs
-    integer, intent(in)    :: nsamples, istride
-    real(p), intent(inout) :: output(noutputs)
-    integer, intent(in)    :: noutputs
-    integer, intent(in)    :: ostride
-    integer, intent(in)    :: filter_length, ndetectors
-    real(p), intent(in)    :: fft_filter(filter_length, ndetectors)
-    integer*8, intent(in)  :: fplan, bplan
-    integer, intent(in)    :: left, right
-
-    real(p) :: buffer(filter_length)
-
-    integer :: i
-
-    !$omp parallel do private(buffer)
-    do i = 1, ndetectors
-        buffer(:left) = 0
-        buffer(left+1:filter_length-right) = input((i-1)*istride+1:(i-1)*istride+nsamples)
-        buffer(filter_length-right+1:) = 0
-        call dfftw_execute_r2r(fplan, buffer, buffer)
-        buffer = buffer * fft_filter(:,i)
-        call dfftw_execute_r2r(bplan, buffer, buffer)
-        output((i-1)*ostride+1:(i-1)*ostride+nsamples) = buffer(left+1:filter_length-right)
-    end do
-    !$omp end parallel do
-
-end subroutine invntt_uncorrelated
-
-
-!-----------------------------------------------------------------------------------------------------------------------------------
-
-
 subroutine fft_plan_outplace(input, ninputs, ndetectors, isize, istride, output, noutputs, osize, ostride, plan)
 
     use module_tamasis, only : p

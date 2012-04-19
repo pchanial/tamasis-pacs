@@ -5,7 +5,7 @@ from pyoperators import Operator, AdditionOperator, CompositionOperator, BlockDi
 from pyoperators.utils import isscalar
 from pyoperators.utils.testing import assert_is_instance
 from numpy.testing import assert_equal, assert_almost_equal, assert_raises
-from tamasis.acquisitionmodels import BlackBodyOperator, ConvolutionOperator, CompressionAverageOperator, DdTddOperator, DiscreteDifferenceOperator, DownSamplingOperator, FftHalfComplexOperator, IdentityOperator, MaskOperator, PackOperator, PadOperator, ConvolutionTruncatedExponentialOperator, RollOperator, ShiftOperator, UnpackOperator, block_diagonal
+from tamasis.acquisitionmodels import BlackBodyOperator, ConvolutionOperator, CompressionAverageOperator, DdTddOperator, DiscreteDifferenceOperator, DownSamplingOperator, FftHalfComplexOperator, IdentityOperator, InvNttUncorrelatedOperator, InvNttUncorrelatedPythonOperator,  MaskOperator, PackOperator, PadOperator, ConvolutionTruncatedExponentialOperator, RollOperator, ShiftOperator, UnpackOperator, block_diagonal
 from tamasis.numpyutils import all_eq
 
 def test_partitioning():
@@ -223,6 +223,17 @@ def test_ffthalfcomplex3():
     assert np.allclose(b, b_)
     b = fft.T(fft(a))
     assert np.allclose(a, b)
+
+def test_invntt_uncorrelated():
+    filter = np.array([0., 0.2, 0.3, 0.4, 0.4, 0.3, 0.2, 0]).reshape((1,-1))
+    ncorrelations = 2
+    invntt = InvNttUncorrelatedOperator(filter, ncorrelations, 3)
+    invntt_todense = invntt.todense()
+    assert all_eq(invntt_todense, invntt.todense(inplace=True))
+    invntt2 = InvNttUncorrelatedPythonOperator(filter, ncorrelations, 3)
+    invntt2_todense = invntt2.todense()
+    assert all_eq(invntt2_todense, invntt2.todense(inplace=True))
+    assert all_eq(invntt_todense, invntt2_todense)
 
 def test_addition():
     def func(nops):

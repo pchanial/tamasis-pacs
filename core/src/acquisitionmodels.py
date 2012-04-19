@@ -409,8 +409,8 @@ class InvNttUncorrelatedOperator(Operator):
         array = np.empty(filter_length, dtype=var.FLOAT_DTYPE)
         self.fft_filter = fft_filter
         self.filter_length = filter_length
-        self.left = filter_length - nsamples - ncorrelations
-        self.right = ncorrelations
+        self.left = ncorrelations
+        self.right = filter_length - nsamples - ncorrelations
         self.fftw_flags = fftw_flags
         self.fplan = fftw3.Plan(array, direction='forward', flags=fftw_flags,
             realtypes=['halfcomplex r2c'], nthreads=1)
@@ -420,9 +420,16 @@ class InvNttUncorrelatedOperator(Operator):
         
     def direct(self, input, output):
         input_, ishape, istride = _ravel_strided(input)
+        if self.same_data(input, output):
+            tmf.operators.invntt_uncorrelated_inplace(input_, ishape[1],
+                istride, self.fft_filter.T, self.fplan._get_parameter(),
+                self.bplan._get_parameter(), self.left, self.right)
+            return
         output_, oshape, ostride = _ravel_strided(output)
-        tmf.invntt_uncorrelated(input_, ishape[1], istride, output_, ostride, self.fft_filter.T, self.fplan._get_parameter(), self.bplan._get_parameter(), self.left, self.right)
-       
+        tmf.operators.invntt_uncorrelated_outplace(input_, ishape[1], istride,
+            output_, ostride, self.fft_filter.T, self.fplan._get_parameter(),
+            self.bplan._get_parameter(), self.left, self.right)
+
 
 @real
 @symmetric
@@ -458,16 +465,12 @@ class PadOperator(Operator):
         Operator.__init__(self, **keywords)        
    
     def direct(self, input, output):
-        if hasattr(output, 'mask'):
-            output.mask = None
         right = -self.right if self.right != 0 else output.shape[-1]
         output[...,:self.left] = 0
         output[...,self.left:right] = input
         output[...,right:] = 0
    
     def transpose(self, input, output):
-        if hasattr(output, 'mask'):
-            output.mask = None
         right = -self.right if self.right != 0 else input.shape[-1]
         output[...] = input[...,self.left:right]
 
