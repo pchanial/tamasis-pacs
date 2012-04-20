@@ -157,8 +157,8 @@ def mapper_rls(tod, model, invntt=None, unpacking=None, hyper=1.0, x0=None,
 
     ntods = int(np.sum(~tod.mask)) if getattr(tod, 'mask', None) is not None \
             else tod.size
-    ntods = comm_tod.allreduce(ntods, op=MPI.SUM)
-    nmaps = A.shape[1] * comm_map.Get_size()
+    ntods = comm_tod.allreduce(ntods)
+    nmaps = comm_map.allreduce(A.shape[1])
 
     npriors = len(model.shapein)
     priors = [DiscreteDifferenceOperator(axis=axis, shapein=model.shapein,
@@ -214,8 +214,8 @@ def mapper_nl(tod, model, unpacking=None, priors=[], hypers=[], norms=[],
     hypers = np.asarray(hypers, dtype=var.FLOAT_DTYPE)
     ntods = int(np.sum(~tod.mask)) if getattr(tod, 'mask', None) is not None \
             else tod.size
-    ntods = comm_tod.allreduce(ntods, op=MPI.SUM)
-    nmaps = model.shape[1] * comm_map.Get_size()
+    ntods = comm_tod.allreduce(ntods)
+    nmaps = comm_map.allreduce(model.shape[1])
     hypers /= nmaps
     hypers = np.hstack([1/ntods, hypers])
     
@@ -272,7 +272,7 @@ def mapper_nl(tod, model, unpacking=None, priors=[], hypers=[], norms=[],
     header.update('criter', sum(Js))
     header.update('hyper', str(hypers))
     header.update('nsamples', ntods)
-    header.update('npixels', model.shape[1])
+    header.update('npixels', nmaps)
     header.update('time', time0)
     if hasattr(callback, 'niterations'):
         header.update('niter', callback.niterations)
@@ -335,7 +335,8 @@ def _solver(A, b, tod, model, invntt, priors=[], hyper=0, x0=None, tol=1.e-5,
 
     ntods = int(np.sum(~tod.mask)) if getattr(tod, 'mask', None) is not None \
             else tod.size
-    ntods = comm_tod.allreduce(ntods, op=MPI.SUM)
+    ntods = comm_tod.allreduce(ntods)
+    nmaps = comm_map.allreduce(A.shape[1])
 
     if hyper != 0:
         hc = np.hstack([1, npriors * [hyper]]) / ntods
@@ -420,7 +421,7 @@ def _solver(A, b, tod, model, invntt, priors=[], hyper=0, x0=None, tol=1.e-5,
     header.update('criter', sum(Js))
     header.update('hyper', hyper)
     header.update('nsamples', ntods)
-    header.update('npixels', A.shape[1])
+    header.update('npixels', nmaps)
     header.update('time', time0)
     if hasattr(callback, 'niterations'):
         header.update('niter', callback.niterations)
