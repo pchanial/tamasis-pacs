@@ -188,7 +188,6 @@ def mapper_rls(y, H, invntt=None, unpacking=None, hyper=1.0, x0=None,
 
     # get b
     b = (H.T * invntt)(tod)
-    b = b.ravel()
     if not np.all(np.isfinite(b)):
         raise ValueError('RHS contains not finite values.')
     if b.size != A.shape[1]:
@@ -197,18 +196,21 @@ def mapper_rls(y, H, invntt=None, unpacking=None, hyper=1.0, x0=None,
     if np.min(b) == np.max(b) == 0:
         print('Warning: in equation Ax=b, b is zero.')
 
-    if isinstance(M, DiagonalOperator):
-        filter_nonfinite(M.data, out=M.data)
-
+    # unpack input
     if unpacking is None:
         unpacking = IdentityOperator()
     A = unpacking.T * A * unpacking
-    b = unpacking.T(b)
+    b = unpacking.T(b).ravel()
     if x0 is not None:
-        x0 = unpacking.T(x0)
+        x0 = unpacking.T(x0).ravel()
     if M is not None:
+        if isinstance(M, DiagonalOperator):
+            filter_nonfinite(M.data, out=M.data)
         M = unpacking.T * M * unpacking
+    H = H * unpacking
+    priors = [p * unpacking for p in priors]
 
+    # criterion
     if hyper != 0:
         hc = np.hstack([1, npriors * [hyper]]) / ntods
     else:
@@ -216,8 +218,6 @@ def mapper_rls(y, H, invntt=None, unpacking=None, hyper=1.0, x0=None,
     norms = [norm2_ellipsoid(invntt)] + npriors * [norm2]
     comms = [comm_tod] + npriors * [comm_map]
 
-    H = H * unpacking
-    priors = [p * unpacking for p in priors]
     def criter(x):
         rs = [H*x - tod.view(np.ndarray).ravel()] + [p*x for p in priors]
         Js = [h * n(r,comm=c) for h, n, r, c in zip(hc, norms, rs, comms)]
