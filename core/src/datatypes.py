@@ -540,12 +540,12 @@ class Map(FitsArray):
             result.origin = origin
 
         if coverage is not None:
-            result.coverage = coverage
+            result.coverage = np.asanyarray(coverage)
         elif copy and result.coverage is not None:
             result.coverage = result.coverage.copy()
 
         if error is not None:
-            result.error = error
+            result.error = np.asanyarray(error)
         elif copy and result.error is not None:
             result.error = result.error.copy()
 
