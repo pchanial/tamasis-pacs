@@ -13,7 +13,8 @@ profile = None#'test_ls.png'
 tol = 1.e-6 if profile else 1.e-4
 maxiter = 10
 data_dir = os.path.dirname(__file__) + '/data/'
-obs = PacsObservation(data_dir + 'frames_blue.fits', fine_sampling_factor=1)
+obs = PacsObservation(data_dir + 'frames_blue.fits', fine_sampling_factor=1,
+                      reject_bad_line=False)
 tod = obs.get_tod()
 
 telescope   = IdentityOperator()
@@ -43,7 +44,6 @@ class Callback():
     def __call__(self, x):
         self.niterations += 1
 callback = Callback()
-
 import scipy
 
 map_iter2 = mapper_ls(tod, model,
