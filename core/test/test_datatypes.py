@@ -212,3 +212,16 @@ def test_ndarray_funcs():
             for axis in (None,) if func is np.round else axes:
                 for m in masks:
                     yield f, cls, func, axis, m
+
+def test_astype():
+    dtypes = np.int8, np.int32, np.int64, np.float32, np.float64
+    def func(d, e):
+        m = Map(np.array([1,2,3], dtype=d), coverage=np.array([0,1,0], dtype=d),
+                error=np.array([2,2,2], dtype=d))
+        m2 = m.astype(e)
+        assert m2.dtype == e
+        assert m2.coverage.dtype == e
+        assert m2.error.dtype == e
+    for d in dtypes:
+        for e in dtypes:
+            yield func, d, e

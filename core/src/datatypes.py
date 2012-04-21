@@ -567,6 +567,41 @@ class Map(FitsArray):
             item.error = item.error[key]
         return item
 
+    def astype(self, dtype):
+        """
+        m.astype(t)
+
+        Copy of the Map, cast to a specified type. The types of the coverage
+        and error attribute are also converted.
+
+        Parameters
+        ----------
+        t : str or dtype
+            Typecode or data-type to which the array is cast.
+
+        Raises
+        ------
+        ComplexWarning :
+            When casting from complex to float or int. To avoid this,
+            one should use ``m.real.astype(t)``.
+
+        Examples
+        --------
+        >>> x = Map([1, 2, 2.5], coverage=[0., 1., 1.])
+        >>> x2 = x.astype(int)
+        >>> x2
+        array([1, 2, 2])
+        >>> x2.coverage
+        array([0, 1, 1])
+
+        """
+        result = super(Map, self).astype(dtype)
+        if self.coverage is not None:
+            result.coverage = self.coverage.astype(dtype)
+        if self.error is not None:
+            result.error = self.error.astype(dtype)
+        return result
+
     @staticmethod
     def empty(shape, coverage=None, error=None, origin='lower', header=None,
               unit=None, derived_units=None, dtype=None, order=None):
