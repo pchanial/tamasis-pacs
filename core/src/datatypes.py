@@ -159,6 +159,38 @@ class FitsArray(Quantity):
         else:
             super(FitsArray,self).__setattr__(name, value)
 
+    def astype(self, dtype):
+        """
+        f.astype(t)
+
+        Copy of the FitsArray, cast to a specified type. The FITS keyword
+        BITPIX is updated accordingly.
+
+        Parameters
+        ----------
+        t : str or dtype
+            Typecode or data-type to which the array is cast.
+
+        Raises
+        ------
+        ComplexWarning :
+            When casting from complex to float or int. To avoid this,
+            one should use ``m.real.astype(t)``.
+
+        Examples
+        --------
+        >>> f = FitsArray([1, 2, 2.5])
+        >>> f.astype(int)
+        FitsArray([1 2 2], '')
+
+        """
+        result = super(FitsArray, self).astype(dtype)
+        if self._header is not None:
+            typename = np.dtype(dtype).name
+            result._header = self._header.copy()
+            result._header.update('BITPIX', pyfits.PrimaryHDU.ImgCode[typename])
+        return result
+
     @staticmethod
     def empty(shape, header=None, unit=None, derived_units=None, dtype=None,
               order=None):
