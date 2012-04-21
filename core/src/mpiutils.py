@@ -286,10 +286,11 @@ def write_fits(filename, data, header, extension, extname, comm):
         header['NAXIS' + str(ndim)] = nglobal
         shdu = pyfits.StreamingHDU(filename, header)
         data_loc = shdu._datLoc
-        shdu._ffo.flush()
         shdu.close()
     else:
         data_loc = None
+
+    comm.Barrier()
 
     import time
     t0 = time.time()
@@ -325,13 +326,13 @@ def write_fits(filename, data, header, extension, extname, comm):
         f.Close()
 
     if comm.rank == 0:
-        shdu._ffo = pyfits.file._File(filename, 'append')
-        shdu._ffo.getfile().seek(0,2)
-        pyfitstype = {8:'uint8', 16:'int16', 32:'int32', 64:'int64', -32:'float32', -64:'float64'}[header['BITPIX']]
-        completed = shdu.write(np.empty(0, dtype=pyfitstype))
-        shdu.close()
-        if not completed:
-            raise RuntimeError('File is not completely written')
+        datasize = nglobal * chunk * data.dtype.itemsize
+        BLOCK_SIZE = 2880
+        padding = BLOCK_SIZE - (datasize % BLOCK_SIZE)
+        with open(filename, 'a') as f:
+            if f.tell() - data_loc != datasize:
+                raise RuntimeError('Unexpected file size.')
+            f.write(padding * '\0')
 
     comm.Barrier()
 
