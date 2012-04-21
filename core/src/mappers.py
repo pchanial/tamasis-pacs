@@ -278,7 +278,9 @@ def mapper_rls(y, H, invntt=None, unpacking=None, hyper=1.0, x0=None,
 
     Js = criter(solution)
 
-    if unpacking is not None:
+    if isinstance(unpacking, IdentityOperator):
+        solution = solution.reshape(H.shapein)
+    else:
         solution = unpacking(solution)
 
     tod[...] = 1
@@ -304,7 +306,7 @@ def mapper_rls(y, H, invntt=None, unpacking=None, hyper=1.0, x0=None,
     header.update('tol', tol)
     header.update('solver', solver.__name__)
 
-    output = Map(solution.reshape(H.shapein),
+    output = Map(solution,
                  header=header,
                  coverage=coverage,
                  unit=unit,
