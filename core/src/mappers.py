@@ -8,11 +8,11 @@ import numpy as np
 import os
 import time
 
-from pyoperators import AdditionOperator, DiagonalOperator, IdentityOperator, MaskOperator, ReshapeOperator, asoperator
+from pyoperators import DiagonalOperator, IdentityOperator, MaskOperator
 from pyoperators.utils.mpi import MPI
 
 from . import var
-from .acquisitionmodels import DdTddOperator, DiscreteDifferenceOperator
+from .acquisitionmodels import DiscreteDifferenceOperator
 from .datatypes import Map, Tod
 from .linalg import Function, norm2, norm2_ellipsoid
 from .processing import filter_nonfinite
@@ -114,67 +114,204 @@ def mapper_naive(tod, model, unit=None):
 #-------------------------------------------------------------------------------
 
 
-def mapper_ls(tod, model, invntt=None, unpacking=None, x0=None, tol=1.e-5,
+def mapper_ls(y, H, invntt=None, unpacking=None, x0=None, tol=1.e-5,
               maxiter=300, M=None, solver=None, verbose=True, callback=None,
               criterion=True, profile=None):
+    """
+    Solve the linear equation
+        y = H(x)
+    where H is an Operator representing the  acquisition, and y is the observed
+    time series.
+    x is the least square solution as given by:
+        x = argmin (Hx-y)^T N^-1 (Hx-y)
+    or:
+        x = (H^T N^-1 H)^-1 H^T N^-1 y
 
-    comm_map = model.commin or MPI.COMM_WORLD
-    comm_tod = model.commout or comm_map
-
-    tod = _validate_tod(tod)
-
-    if invntt is None:
-        invntt = IdentityOperator()
-
-    A = model.T * invntt * model
-    b = (model.T * invntt)(tod)
-
-    if M is not None:
-        M = asoperator(M, shapein=model.shapein, shapeout=model.shapein)
-
-    return _solver(A, b, tod, model, invntt, hyper=0, x0=x0, tol=tol,
-                   maxiter=maxiter, M=M, solver=solver, verbose=verbose,
-                   callback=callback, criterion=criterion, profile=profile,
-                   unpacking=unpacking, comm_map=comm_map, comm_tod=comm_tod)
+    """
+    return mapper_rls(y, H, invntt=invntt, unpacking=unpacking, x0=x0,
+                      tol=tol, maxiter=maxiter, M=M, solver=solver, hyper=0,
+                      verbose=verbose, callback=callback, criterion=criterion,
+                      profile=profile)
 
 
 #-------------------------------------------------------------------------------
 
 
-def mapper_rls(tod, model, invntt=None, unpacking=None, hyper=1.0, x0=None,
+def mapper_rls(y, H, invntt=None, unpacking=None, hyper=1.0, x0=None,
                tol=1.e-5, maxiter=300, M=None, solver=None, verbose=True,
                callback=None, criterion=True, profile=None):
+    """
+    Solve the linear equation
+        y = H(x)
+    where H is an Operator representing the  acquisition, and y is the observed
+    time series.
+    x is the regularised least square solution as given by:
+        x = argmin (Hx-y)^T N^-1 (Hx-y) + h ||D(x)||^2
+    or:
+        x = (H^T N^-1 H + h D1^T D1 + h D2^T D2)^-1 H^T N^-1 y
 
-    comm_map = model.commin or MPI.COMM_WORLD
-    comm_tod = model.commout or comm_map
+    """
+    def pcomm(comm):
+        if comm is MPI.COMM_SELF:
+            return 'COMM_SELF'
+        elif comm is MPI.COMM_WORLD:
+            return 'COMM_WORLD'
+        return repr(comm)
+    comm_map = H.commin or MPI.COMM_WORLD
+    comm_tod = H.commout or comm_map
 
-    tod = _validate_tod(tod)
+    tod = _validate_tod(y)
 
+    ntods_ = int(np.sum(~tod.mask)) if getattr(tod, 'mask', None) is not None \
+            else tod.size
+    nmaps_ = unpacking.shape[1] if unpacking is not None else None
+    if nmaps_ is None:
+        nmaps_ = H.shape[1]
+    if nmaps_ is None:
+        raise ValueError('The model H has not an explicit shape input.')
+    ntods = comm_tod.allreduce(ntods_)
+    nmaps = comm_map.allreduce(nmaps_)
+    print MPI.COMM_WORLD.rank, 'ntods:', ntods_, ntods, pcomm(comm_tod), comm_tod.size
+    print MPI.COMM_WORLD.rank, 'nmaps:', nmaps_, nmaps, pcomm(comm_map), comm_map.size
+
+    # get A
     if invntt is None:
         invntt = IdentityOperator()
 
-    A = model.T * invntt * model
+    A = H.T * invntt * H
 
-    ntods = int(np.sum(~tod.mask)) if getattr(tod, 'mask', None) is not None \
-            else tod.size
-    ntods = comm_tod.allreduce(ntods)
-    nmaps = comm_map.allreduce(A.shape[1])
-
-    npriors = len(model.shapein)
-    priors = [DiscreteDifferenceOperator(axis=axis, shapein=model.shapein,
+    npriors = len(H.shapein)
+    priors = [DiscreteDifferenceOperator(axis=axis, shapein=H.shapein,
               commin=comm_map) for axis in range(npriors)]
-    prior = AdditionOperator([DdTddOperator(axis=axis, scalar=hyper * ntods / \
-                nmaps, commin=comm_map) for axis in range(npriors)])
-    if hyper != 0 and (comm_map.Get_rank() == 0 or comm_map.Get_size() > 1):
-        A += prior
+    if comm_map.rank == 0 or comm_map.size > 1:
+        A += sum((hyper * ntods / nmaps) * p.T * p for p in priors)
 
-    b = (model.T * invntt)(tod)
+    # get b
+    b = (H.T * invntt)(tod)
+    b = b.ravel()
+    if not np.all(np.isfinite(b)):
+        raise ValueError('RHS contains not finite values.')
+    if b.size != A.shape[1]:
+        raise ValueError("Incompatible size for RHS: '" + str(b.size) +
+                         "' instead of '" + str(A.shape[1]) + "'.")
+    if np.min(b) == np.max(b) == 0:
+        print('Warning: in equation Ax=b, b is zero.')
 
-    return _solver(A, b, tod, model, invntt, hyper=hyper, priors=priors, x0=x0,
-                   tol=tol, maxiter=maxiter, M=M, solver=solver,
-                   verbose=verbose, callback=callback, criterion=criterion,
-                   profile=profile, unpacking=unpacking, comm_map=comm_map,
-                   comm_tod=comm_tod)
+    if isinstance(M, DiagonalOperator):
+        filter_nonfinite(M.data, out=M.data)
+
+    if unpacking is None:
+        unpacking = IdentityOperator()
+    A = unpacking.T * A * unpacking
+    b = unpacking.T(b)
+    if x0 is not None:
+        x0 = unpacking.T(x0)
+    if M is not None:
+        M = unpacking.T * M * unpacking
+
+    if hyper != 0:
+        hc = np.hstack([1, npriors * [hyper]]) / ntods
+    else:
+        hc = [ 1 / ntods ]
+    norms = [norm2_ellipsoid(invntt)] + npriors * [norm2]
+    comms = [comm_tod] + npriors * [comm_map]
+
+    H = H * unpacking
+    priors = [p * unpacking for p in priors]
+    def criter(x):
+        rs = [H*x - tod.view(np.ndarray).ravel()] + [p*x for p in priors]
+        Js = [h * n(r,comm=c) for h, n, r, c in zip(hc, norms, rs, comms)]
+        return Js
+
+    if callback is None:
+        callback = CgCallback(verbose=verbose, objfunc=criter if criterion
+                              else None)
+
+    if solver is None:
+        solver = cg
+
+    if var.verbose or profile:
+        print('')
+        print('H:')
+        print(repr(A))
+        if M is not None:
+            print('Preconditioner:')
+            print(M)
+
+    time0 = time.time()
+
+    if profile is not None:
+
+        def run():
+            try:
+                solution, info = solver(A, b, x0=x0, tol=tol, maxiter=maxiter,
+                                        M=M, comm=comm_map)
+            except TypeError:
+                solution, info = solver(A, b, x0=x0, tol=tol, maxiter=maxiter,
+                                        M=M)
+            if info < 0:
+                print('Solver failure: info='+str(info))
+
+        cProfile.runctx('run()', globals(), locals(), profile+'.prof')
+        print('Profile time: '+str(time.time()-time0))
+        os.system('python -m gprof2dot -f pstats -o ' + profile +'.dot ' +
+                  profile + '.prof')
+        os.system('dot -Tpng ' + profile + '.dot > ' + profile)
+        os.system('rm -f ' + profile + '.prof' + ' ' + profile + '.dot')
+        return None
+
+    try:
+        solution, info = solver(A, b, x0=x0, tol=tol, maxiter=maxiter, M=M,
+                                callback=callback, comm=comm_map)
+    except TypeError:
+        solution, info = solver(A, b, x0=x0, tol=tol, maxiter=maxiter, M=M,
+                                callback=callback)
+
+    time0 = time.time() - time0
+    if info < 0:
+        raise RuntimeError('Solver failure (code=' + str(info) + ' after ' +
+                           str(callback.niterations) + ' iterations).')
+
+    if info > 0:
+        print('Warning: Solver reached maximum number of iterations without rea'
+              'ching specified tolerance.')
+
+    Js = criter(solution)
+
+    if unpacking is not None:
+        solution = unpacking(solution)
+
+    tod[...] = 1
+    coverage = H.T(tod)
+    unit = getattr(coverage, 'unit', None)
+    derived_units = getattr(coverage, 'derived_units', None)
+    coverage = coverage.view(Map)
+
+    header = getattr(coverage, 'header', None)
+    if header is None:
+        header = create_fitsheader(fromdata=coverage)
+    header.update('likeliho', Js[0])
+    header.update('criter', sum(Js))
+    header.update('hyper', hyper)
+    header.update('nsamples', ntods)
+    header.update('npixels', nmaps)
+    header.update('time', time0)
+    if hasattr(callback, 'niterations'):
+        header.update('niter', callback.niterations)
+    header.update('maxiter', maxiter)
+    if hasattr(callback, 'residual'):
+        header.update('residual', callback.residual)
+    header.update('tol', tol)
+    header.update('solver', solver.__name__)
+
+    output = Map(solution.reshape(H.shapein),
+                 header=header,
+                 coverage=coverage,
+                 unit=unit,
+                 derived_units=derived_units,
+                 copy=False)
+
+    return output
 
 
 #-------------------------------------------------------------------------------
@@ -304,141 +441,6 @@ def _validate_tod(tod):
 
 #-------------------------------------------------------------------------------
 
-
-def _solver(A, b, tod, model, invntt, priors=[], hyper=0, x0=None, tol=1.e-5,
-            maxiter=300, M=None, solver=None, verbose=True, callback=None,
-            criterion=True, profile=None, unpacking=None, comm_map=None,
-            comm_tod=None):
-
-    npriors = len(priors)
-
-    if isinstance(M, DiagonalOperator):
-        filter_nonfinite(M.data, out=M.data)
-
-    if unpacking is None:
-        unpacking = ReshapeOperator(b.size, b.shape)
-    A = unpacking.T * A * unpacking
-    b = unpacking.T(b)
-    if x0 is not None:
-        x0 = unpacking.T(x0)
-    if M is not None:
-        M = unpacking.T * M * unpacking
-
-    b = b.ravel()
-    if not np.all(np.isfinite(b)):
-        raise ValueError('RHS contains not finite values.')
-    if b.size != A.shape[1]:
-        raise ValueError("Incompatible size for RHS: '" + str(b.size) + \
-                         "' instead of '" + str(A.shape[1]) + "'.")
-    if np.min(b) == np.max(b) == 0:
-        print('Warning: in equation Ax=b, b is zero.')
-
-    ntods = int(np.sum(~tod.mask)) if getattr(tod, 'mask', None) is not None \
-            else tod.size
-    ntods = comm_tod.allreduce(ntods)
-    nmaps = comm_map.allreduce(A.shape[1])
-
-    if hyper != 0:
-        hc = np.hstack([1, npriors * [hyper]]) / ntods
-    else:
-        hc = [ 1 / ntods ]
-    norms = [norm2_ellipsoid(invntt)] + npriors * [norm2]
-    comms = [comm_tod] + npriors * [comm_map]
-    def criter(x):
-        x = unpacking(x)
-        rs = [model(x) - tod.view(np.ndarray) ] + [p(x) for p in priors]
-        Js = [h * n(r,comm=c) for h, n, r, c in zip(hc, norms, rs, comms)]
-        return Js
-
-    if callback is None:
-        callback = CgCallback(verbose=verbose, objfunc=criter if criterion \
-            else None)
-
-    if solver is None:
-        solver = cg
-
-    if var.verbose or profile:
-        print('')
-        print('Model:')
-        print(repr(A))
-        if M is not None:
-            print('Preconditioner:')
-            print(M)
-
-    time0 = time.time()
-
-    if profile is not None:
-
-        def run():
-            try:
-                solution, info = solver(A, b, x0=x0, tol=tol, maxiter=maxiter,
-                                        M=M, comm=comm_map)
-            except TypeError:
-                solution, info = solver(A, b, x0=x0, tol=tol, maxiter=maxiter,
-                                        M=M)
-            if info < 0:
-                print('Solver failure: info='+str(info))
-
-        cProfile.runctx('run()', globals(), locals(), profile+'.prof')
-        print('Profile time: '+str(time.time()-time0))
-        os.system('python -m gprof2dot -f pstats -o ' + profile +'.dot ' + \
-                  profile + '.prof')
-        os.system('dot -Tpng ' + profile + '.dot > ' + profile)
-        os.system('rm -f ' + profile + '.prof' + ' ' + profile + '.dot')
-        return None
-
-    try:
-        solution, info = solver(A, b, x0=x0, tol=tol, maxiter=maxiter, M=M,
-                                callback=callback, comm=comm_map)
-    except TypeError:
-        solution, info = solver(A, b, x0=x0, tol=tol, maxiter=maxiter, M=M,
-                                callback=callback)
-
-    time0 = time.time() - time0
-    if info < 0:
-        raise RuntimeError('Solver failure (code=' + str(info) + ' after ' + \
-                           str(callback.niterations) + ' iterations).')
-
-    if info > 0:
-        print('Warning: Solver reached maximum number of iterations without r' \
-              'eaching specified tolerance.')
-
-    Js = criter(solution)
-
-    if unpacking is not None:
-        solution = unpacking(solution)
-
-    tod[...] = 1
-    coverage = model.T(tod)
-    unit = getattr(coverage, 'unit', None)
-    derived_units = getattr(coverage, 'derived_units', None)
-    coverage = coverage.view(Map)
-
-    header = getattr(coverage, 'header', None)
-    if header is None:
-        header = create_fitsheader(fromdata=coverage)
-    header.update('likeliho', Js[0])
-    header.update('criter', sum(Js))
-    header.update('hyper', hyper)
-    header.update('nsamples', ntods)
-    header.update('npixels', nmaps)
-    header.update('time', time0)
-    if hasattr(callback, 'niterations'):
-        header.update('niter', callback.niterations)
-    header.update('maxiter', maxiter)
-    if hasattr(callback, 'residual'):
-        header.update('residual', callback.residual)
-    header.update('tol', tol)
-    header.update('solver', solver.__name__)
-
-    output = Map(solution.reshape(model.shapein),
-                 header=header,
-                 coverage=coverage,
-                 unit=unit,
-                 derived_units=derived_units,
-                 copy=False)
-
-    return output
 
 class CgCallback():
     def __init__(self, verbose=True, objfunc=None, comm=None):
