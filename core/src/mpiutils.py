@@ -9,7 +9,7 @@ import pyfits
 import sys
 
 from pyoperators.utils import openmp_num_threads, strshape
-from pyoperators.utils.mpi import MPI, combine, distribute_slice
+from pyoperators.utils.mpi import MPI, DTYPE_MAP, combine, distribute_slice
 from .wcsutils import create_fitsheader, has_wcs
 
 __all__ = []
@@ -213,7 +213,7 @@ def read_fits(filename, extname, comm):
 
 def write_fits(filename, data, header, extension, extname, comm):
     """
-    Write and combine local arrays into a FITS file.
+    Collectively write local arrays into a single FITS file.
 
     Parameters
     ----------
@@ -263,9 +263,8 @@ def write_fits(filename, data, header, extension, extname, comm):
         if comm.rank == 0:
             try:
                 os.remove(filename)
-            except:
+            except OSError:
                 pass
-        comm.Barrier()
 
     # case without MPI communication
     if comm.size == 1:
@@ -277,11 +276,13 @@ def write_fits(filename, data, header, extension, extname, comm):
         return
 
     # get global/local parameters
-    shape_global = (sum(s[0] for s in shapes),) + shapes[0][1:]
-    nglobal = shape_global[0]
+    nglobal = sum(s[0] for s in shapes)
     s = distribute_slice(nglobal)
     nlocal = s.stop - s.start
+    if data.shape[0] != nlocal:
+        raise ValueError('Local array has an invalid shape.')
 
+    # write FITS header
     if comm.rank == 0:
         header['NAXIS' + str(ndim)] = nglobal
         shdu = pyfits.StreamingHDU(filename, header)
@@ -289,42 +290,36 @@ def write_fits(filename, data, header, extension, extname, comm):
         shdu.close()
     else:
         data_loc = None
-
-    comm.Barrier()
-
-    import time
-    t0 = time.time()
-    while not os.path.exists(filename):
-        if time.time() - t0 > 120:
-            raise IOError("File '{0}' has not been created.".format(filename))
-        print 'Rank: ', MPI.COMM_WORLD.rank, '... sleeping...'
-        time.sleep(1)
-
     data_loc = comm.bcast(data_loc)
 
     # get a communicator excluding the processes which have no work to do
     # (Create_subarray does not allow 0-sized subarrays)
-    chunk = np.product(shape_global[1:])
+    chunk = np.product(data.shape[1:])
     rank_nowork = min(comm.size, nglobal)
     group = comm.Get_group()
     group.Incl(range(rank_nowork))
     newcomm = comm.Create(group)
 
+    # collectively write data
     if comm.rank < rank_nowork:
-        mtype = {1:MPI.BYTE, 4: MPI.FLOAT, 8:MPI.DOUBLE}[data.dtype.itemsize]
-        ftype = mtype.Create_subarray([nglobal*chunk], [nlocal*chunk],
-                                      [s.start*chunk])
-        ftype.Commit()
-        f = MPI.File.Open(newcomm, filename, amode=MPI.MODE_APPEND + \
-                          MPI.MODE_WRONLY + MPI.MODE_CREATE)
-        f.Set_view(data_loc, mtype, ftype, 'native', MPI.INFO_NULL)
         # mpi4py 1.2.2: pb with viewing data as big endian KeyError '>d'
         if sys.byteorder == 'little' and data.dtype.byteorder == '=' or \
            data.dtype.byteorder == '<':
-            data = data.byteswap().newbyteorder('=')
-        f.Write_all(data[0:nlocal])
+            data = data.byteswap()
+        data = data.newbyteorder('=')
+        mtype = DTYPE_MAP[data.dtype]
+        ftype = mtype.Create_subarray([nglobal*chunk], [nlocal*chunk],
+                                      [s.start*chunk])
+        ftype.Commit()
+        f = MPI.File.Open(newcomm, filename, amode=MPI.MODE_APPEND |
+                          MPI.MODE_WRONLY | MPI.MODE_CREATE)
+        f.Set_view(data_loc, mtype, ftype, 'native', MPI.INFO_NULL)
+        f.Write_all(data)
         f.Close()
+        ftype.Free()
+    newcomm.Free()
 
+    # pad FITS file with zeros
     if comm.rank == 0:
         datasize = nglobal * chunk * data.dtype.itemsize
         BLOCK_SIZE = 2880
