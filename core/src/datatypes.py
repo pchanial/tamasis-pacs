@@ -29,8 +29,10 @@ except:
 from functools import reduce
 from pyoperators.utils.mpi import MPI
 
+from . import tamasisfortran as tmf
 from .mpiutils import read_fits, write_fits
 from .quantities import Quantity
+from .utils import median
 from .wcsutils import create_fitsheader, has_wcs
 
 __all__ = [ 'FitsArray', 'Map', 'Tod' ]
@@ -936,6 +938,15 @@ class Tod(FitsArray):
         if self.mask is not None:
             mask = self.mask.view('uint8')
             write_fits(filename, mask, None, True, 'Mask', comm)
+
+    def median(self, axis=None):
+        result = Tod(median(self, mask=self.mask, axis=axis), copy=False,
+                     unit=self.unit)
+        result.mask = np.zeros_like(result, bool)
+        tmf.processing.filter_nonfinite_mask_inplace(result.ravel(),
+            result.mask.view(np.int8).ravel())
+        return result
+    median.__doc__ = median.__doc__
 
     def _wrap_func(self, func, unit, *args, **kw):
         self_ma = np.ma.MaskedArray(self.magnitude, mask=self.mask, copy=False)

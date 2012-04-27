@@ -224,6 +224,96 @@ def isscalar(data):
 #-------------------------------------------------------------------------------
 
 
+def median(x, mask=None, axis=None, out=None):
+    """
+    Return median of array.
+
+    Parameters
+    ----------
+    x : sequence or ndarray
+        The input array. NaN values are discarded. Complex and floats of
+        precision greater than 64 are not handled
+    mask : ndarray, optional
+        Boolean array mask whose True values indicate an element to be
+        discarded.
+    axis : {None, int}, optional
+        Axis along which the medians are computed. The default (axis=None)
+        is to compute the median along a flattened version of the array.
+    out : ndarray, optional
+        Alternative output array in which to place the result. It must
+        have the same shape and buffer length as the expected output,
+        but the type (of the output) will be cast if necessary.
+
+    Returns
+    -------
+    median : ndarray
+        A new array holding the result (unless `out` is specified, in
+        which case that array is returned instead).
+
+    Examples
+    --------
+    >>> a = np.array([[10, 7, 4], [3, 2, 1]])
+    >>> a
+    array([[10,  7,  4],
+           [ 3,  2,  1]])
+    >>> median(a)
+    3.0
+    >>> median(a, axis=1)
+    array([[ 7.],
+           [ 2.]])
+
+    """
+    x = np.asanyarray(x)
+    shape = x.shape
+    dtype = np.find_common_type([np.float64, x.dtype], [])
+    if dtype != np.float64:
+        raise TypeError("Invalid input type '{0}'.".format(dtype))
+    x = np.asanyarray(x, dtype)
+
+    if mask is None and hasattr(x, 'mask'):
+        mask = x.mask
+        if mask is not None and mask.shape != x.shape:
+            raise ValueError('Incompatible mask shape.')
+    if mask is not None:
+        mask = np.asarray(mask, bool).view(np.int8)
+
+    if axis is not None:
+        slow = product(shape[:axis])
+        fast = product(shape[axis+1:])
+        x = x.reshape((slow,-1,fast))
+        if mask is not None:
+            mask = mask.reshape((slow,-1,fast)).view(np.int8)
+        if out is not None:
+            if out.nbytes != slow * fast * dtype.itemsize:
+                raise ValueError('Incompatible output buffer length.')
+            if out.shape != shape[:axis] + shape[axis+1:]:
+                raise ValueError('Incompatible output shape.')
+            out.dtype = dtype
+        else:
+            out = np.empty(shape[:axis] + shape[axis+1:])
+        out_ = out.reshape((slow,fast))
+    else:
+        out = np.empty((), dtype=dtype)
+        out_ = out
+
+    if mask is axis is None:
+        tmf.math.median(x.ravel(), out)
+    elif axis is None:
+        tmf.math.median_mask(x.ravel(), mask.ravel(), out)
+    elif mask is None:
+        tmf.math.median_axis(x.T, out_.T)
+    else:
+        tmf.math.median_mask_axis(x.T, mask.T, out_.T)
+
+    if out.ndim == 0:
+        out = out.flat[0]
+
+    return out
+
+
+#-------------------------------------------------------------------------------
+
+
 def minmax(v):
     """Returns min and max values of an array, discarding NaN values."""
     v = np.asanyarray(v)

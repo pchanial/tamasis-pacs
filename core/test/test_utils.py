@@ -1,6 +1,9 @@
+import itertools
 import numpy as np
 
-from tamasis.utils import all_eq, any_neq, assert_all_eq, minmax, profile, diff, shift
+from pyoperators.utils import product
+from tamasis.utils import (all_eq, any_neq, assert_all_eq, diff, median,
+                           minmax, profile, shift)
 from tamasis.datautils import distance
 
 def test_any_neq1():
@@ -107,6 +110,68 @@ def test_diff():
         for axis in range(naxis):
             yield func, naxis, axis
 
+def _median(x, mask=None, axis=None):
+    x = np.asarray(x)
+    if mask is not None:
+        mask = np.asarray(mask, dtype=bool)
+        x = x.copy()
+        x[mask] = np.nan
+    if axis is None:
+        return np.median(x[np.isfinite(x)])
+    if np.all(np.isfinite(x)):
+        return np.median(x, axis=axis)
+    slow = product(x.shape[:axis])
+    fast = product(x.shape[axis+1:])
+    out = np.empty(x.shape[:axis] + x.shape[axis+1:])
+    out_ = out.reshape((slow,fast))
+    x_ = x.reshape((slow,-1,fast))
+    for i in range(slow):
+        for j in range(fast):
+            b = x_[i,:,j]
+            out_[i,j] = np.median(b[np.isfinite(b)])
+    return out
+
+def test_median():
+    def func(x, m, a):
+        assert all_eq(median(x, mask=m, axis=a), _median(x, m, a))
+
+    x = [0.2, 0.91, 0.9, 0.4, 0.5]
+    m = len(x) * [False]
+
+    iterator = itertools.chain(itertools.combinations(range(len(x)), 2),
+                               iter([()]), iter([(0,1,2,3,4)]))
+    for i in iterator:
+        x_ = list(x)
+        m_ = list(m)
+        for i_ in i:
+            x_[i_] = np.nan
+            m_[i_] = True
+        yield func, x_, None, None
+        yield func, x, m_, None
+
+    x = np.array([[2, 1, 3, 7, 4],
+                  [8, 3, 2, 4, 2],
+                  [3, 4, 1, 4, 8.]])
+    m = np.zeros_like(x, dtype=bool)
+
+    for a in range(2):
+        iterator = itertools.chain(itertools.combinations(range(x.shape[a]), 2),
+                                   iter([()]), iter([(0,1,2)]))
+        for i in iterator:
+            if len(i) == 3 and a == 1:
+                # don't remove 3 elements from axis=1, since medians differ
+                # for an odd number of elements
+                continue
+            for j in range(x.shape[1-a]):
+                x_ = x.copy()
+                m_ = m.copy()
+                for i_ in i:
+                    index = (i_,j) if a == 0 else (j,i_)
+                    x_[index] = np.nan
+                    m_[index] = True
+                yield func, x_, None, a
+                yield func, x, m_, a
+
 def test_shift1():
     def func(a, s):
         b = np.empty_like(a)
@@ -116,12 +181,12 @@ def test_shift1():
         for s in (10,11,100,-10,-11,-100):
             yield func, a, s
 
-def test_shif2():
+def test_shift2():
     a = np.array([[1.,1.,1.,1.],[2.,2.,2.,2.]])
     shift(a, a, [1,-1], axis=1)
     assert_all_eq(a, [[0,1,1,1],[2,2,2,0]])
 
-def test_shif3():
+def test_shift3():
     a = np.array([[0.,0,0],[0,1,0],[0,0,0]])
     b = np.empty_like(a)
     shift(a, b, 1, axis=0)
@@ -129,7 +194,7 @@ def test_shif3():
     shift(b, b, -2, axis=0)
     assert_all_eq(b, np.roll(a,-1,axis=0))
 
-def test_shif4():
+def test_shift4():
     a = np.array([[0.,0,0],[0,1,0],[0,0,0]])
     b = np.empty_like(a)
     shift(a, b, 1, axis=1)

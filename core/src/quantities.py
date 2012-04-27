@@ -8,7 +8,7 @@ import re
 
 from . import tamasisfortran as tmf
 from . import var
-from .utils import get_attributes
+from .utils import get_attributes, median
 
 __all__ = ['Quantity', 'UnitError', 'units']
 
@@ -670,6 +670,10 @@ ities of different units may have changed operands to common unit '" + \
     def mean(self, *args, **kw):
         return self._wrap_func(np.mean, self.unit, *args, **kw)
     mean.__doc__ = np.ndarray.mean.__doc__
+
+    def median(self, *args, **kw):
+        return self._wrap_func(median, self.unit, *args, **kw)
+    median.__doc__ = median.__doc__
 
     def ptp(self, *args, **kw):
         return self._wrap_func(np.ptp, self.unit, *args, **kw)

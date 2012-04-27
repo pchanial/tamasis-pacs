@@ -836,7 +836,7 @@ contains
         real(p)                :: median
         real(p), intent(inout) :: arr(0:)
         logical, intent(in)    :: remove_nan
-        logical*1, intent(in), optional :: mask(0:size(arr)-1)
+        logical*1, intent(inout), optional :: mask(0:size(arr)-1)
 
         integer :: low, high, imedian, middle, ll, hh
 
@@ -857,6 +857,9 @@ contains
                 cycle
                 ! we remove the element by copying the last one into it
 99              arr(ll) = arr(high)
+                if (present(mask)) then
+                    mask(ll) = mask(high)
+                end if
                 high = high - 1
             end do
         end if
