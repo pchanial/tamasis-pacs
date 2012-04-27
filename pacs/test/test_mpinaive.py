@@ -1,10 +1,11 @@
 import numpy as np
 import os
 import tamasis
-from pyoperators.utils.mpi import distribute_slice
+
 from pyoperators import DistributionGlobalOperator
+from pyoperators.utils.mpi import distribute_slice
 from tamasis import PacsInstrument, PacsObservation, Map, ProjectionOperator, UnpackOperator, mapper_naive, MPI
-from tamasis.numpyutils import assert_all_eq
+from tamasis.utils import assert_all_eq
 
 
 data_dir = os.path.dirname(__file__) + '/data/'

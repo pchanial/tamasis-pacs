@@ -6,6 +6,8 @@ import os
 import tamasisfortran as tmf
 from pyoperators.utils.mpi import MPI
 
+np.seterr(all='ignore')
+
 comm_tod = MPI.COMM_WORLD
 comm_map = MPI.COMM_SELF
 

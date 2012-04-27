@@ -1,9 +1,10 @@
 import os
 import tamasis
+
 from tamasis import (MPI, PacsObservation, DistributionGlobalOperator,
                      MaskOperator, ProjectionOperator, create_fitsheader,
                      mapper_rls)
-from tamasis.numpyutils import assert_all_eq
+from tamasis.utils import assert_all_eq
 
 
 #solver = scipy.sparse.linalg.bicgstab

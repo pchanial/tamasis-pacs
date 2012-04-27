@@ -2,9 +2,10 @@ import numpy as np
 import pyfits
 import os
 import tamasis
+
 from tamasis import (Tod, MadMap1Observation, DiagonalOperator, InvNttOperator,
                      PackOperator, ProjectionOperator, mapper_naive, mapper_ls)
-from tamasis.numpyutils import all_eq
+from tamasis.utils import all_eq
 
 tamasis.var.verbose = False
 profile=None#'test_madcap.png'

@@ -2,13 +2,14 @@ from __future__ import division
 
 import os
 import numpy as np
+
 from glob import glob
 from numpy.testing import assert_equal
 from pyoperators.utils.mpi import distribute, distribute_shape
-from tamasis import Map, MPI, create_fitsheader
-from tamasis.numpyutils import assert_all_eq
-from tamasis.mpiutils import gather_fitsheader, scatter_fitsheader
 from uuid import uuid1
+from tamasis import Map, MPI, create_fitsheader
+from tamasis.mpiutils import gather_fitsheader, scatter_fitsheader
+from tamasis.utils import assert_all_eq
 
 rank = MPI.COMM_WORLD.rank
 size = MPI.COMM_WORLD.size

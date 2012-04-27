@@ -4,7 +4,7 @@ import pyoperators
 
 from scipy.sparse.linalg import cgs
 from tamasis import *
-from tamasis.numpyutils import all_eq
+from tamasis.utils import all_eq
 
 pyoperators.memory.verbose = False
 tamasis.var.verbose = False

@@ -5,79 +5,179 @@
 from __future__ import division
 
 import numpy as np
-import scipy.special
 import tamasisfortran as tmf
-import scipy.signal
 
 from matplotlib import pyplot
 from pyoperators.utils.mpi import MPI
 
 from . import var
-from . import numpyutils as nu
-from .datatypes import Map
 
 __all__ = [ 
-    'airy_disk',
-    'aperture_circular',
-    'distance',
-    'ds9',
-    'gaussian',
     'hs',
-    'phasemask_fourquadrant',
+    'minmax',
     'plot_tod',
     'profile',
-    'psd2',
 ]
 
+def all_eq(a, b, rtol=None, atol=0.):
+    return not any_neq(a, b, rtol=rtol, atol=atol)
 
-class Ds9(object):
+def any_neq(a, b, rtol=None, atol=0.):
     """
-    Helper around the ds9 package.
+    Returns True if two arrays are element-wise equal within a tolerance.
+    Differs from numpy.allclose in two aspects: the default rtol values (10^-7 
+    and 10^-14 for single and double floats or complex) and the treatment of 
+    NaN values (do not return False if the two arrays have element-wise
+    both NaN value)
+    """
+
+    # for dictionaries, look up the items
+    if isinstance(a, dict):
+        if not isinstance(b, dict):
+            print('First argument is a dict and the second one is not.')
+            return True
+        if set([k for k in a]) != set([k for k in b]):
+            print('Arguments are dictionaries of different items.')
+            return True
+        for k in a:
+            if any_neq(a[k], b[k]):
+                print('Arguments are dictionaries of different values')
+                return True
+        return False
+
+    # restrict comparisons to some classes
+    class_ok = (np.ndarray, int, float, complex, list, tuple, str, unicode)
+    if not isinstance(a, class_ok) or not isinstance(b, class_ok):
+        return not isinstance(a, type(b)) and a is not None and \
+               not isinstance(b, type(a)) and b is not None
+
+    a = np.asanyarray(a)
+    b = np.asanyarray(b)
+
+    # get common base class to give some slack
+    cls = type(b)
+    while True:
+        if isinstance(a, cls):
+            break
+        cls = cls.__base__
+
+    a = a.view(cls)
+    b = b.view(cls)
     
-    Examples
-    --------
-    >>> ds9.open_in_new_window = False
-    >>> d = ds9.current
-    >>> d.set('scale linear')
-    >>> ds9(mynewmap, 'zoom to fit')
-    """
-    def __call__(self, array, xpamsg=None, origin=None, **keywords):
-        if not isinstance(array, str):
-            array = np.asanyarray(array)
-            dtype = array.dtype
+    akind = a.dtype.kind
+    bkind = b.dtype.kind
+
+    aattr = get_attributes(a)
+    battr = get_attributes(b)
+    if set(aattr) != set(battr):
+        print('The arguments do not have the same attributes.')
+        return True
+
+    for k in aattr:
+        if any_neq(getattr(a,k), getattr(b,k), rtol, atol):
+            print("The argument attributes '" + k + "' differ.")
+            return True
+
+    # then compare the values of the array
+    if akind not in 'biufc' or bkind not in 'biufc':
+        if akind != bkind:
+            print('The argument data types are incompatible.')
+            return True
+        if akind == 'S':
+            result = np.any(a != b)
+            if result:
+                print('String arguments differ.')
+            return result
+        if akind == 'V':
+            if set(a.dtype.names) != set(b.dtype.names):
+                print('The names of the argument dtypes are different.')
+                return True
+            result = False
+            for name in a.dtype.names:
+                result_ = any_neq(a[name], b[name])
+                if result_:
+                    print("Values for '{0}' are different.".format(name))
+                result = result or result_
+            return result
         else:
-            dtype = None
-        array = Map(array, dtype=dtype, copy=False, origin=origin)
-        array.ds9(xpamsg=xpamsg, new=self.open_in_new_window, **keywords)
+            raise NotImplementedError('Kind ' + akind + ' is not implemented.')
+    
+    if akind in 'biu' and bkind in 'biu':
+        result = np.any(a != b)
+        if result:
+            print('Integer arguments differ.')
+        return result
+    
+    if rtol is None:
+        asize = a.dtype.itemsize // 2 if akind == 'c' else a.dtype.itemsize
+        bsize = b.dtype.itemsize // 2 if bkind == 'c' else b.dtype.itemsize
+        precision = min(asize, bsize)
+        if precision == 8:
+            rtol = 1.e-14
+        elif precision == 4:
+            rtol = 1.e-7
+        else:
+            raise NotImplementedError('The inputs are not in single or double' \
+                                      ' precision.')
 
-    @property
-    def targets(self):
-        """
-        Returns a list of the ids of the running ds9 instances.
-        """
-        import ds9
-        return ds9.ds9_targets()
+    if a.ndim > 0 and b.ndim > 0 and a.shape != b.shape:
+        print('Argument shapes differ.')
+        return True
 
-    @property
-    def current(self):
-        """
-        Return current ds9 instance.
-        """
-        targets = self.targets
-        if targets is None:
-            return None
-        return self.get(targets[-1])
+    mask = np.isnan(a)
+    if np.any(mask != np.isnan(b)):
+        print('Argument NaNs differ.')
+        return True
+    if np.all(mask):
+        return False
 
-    def get(self, id):
-        """
-        Return ds9 instance matching a specified id.
-        """
-        import ds9
-        return ds9.ds9(id)
+    result = abs(a-b) > rtol * np.maximum(abs(a), abs(b)) + atol
+    if not np.isscalar(result):
+        result = np.any(result[~mask])
 
-    open_in_new_window = True
+    if result:
+        factor = np.nanmax(abs(a-b) / (rtol * np.maximum(abs(a),abs(b)) + atol))
+        print('Argument data difference exceeds tolerance by factor ' + \
+              str(factor) + '.')
 
-ds9 = Ds9()
+    return result
+
+
+#-------------------------------------------------------------------------------
+
+
+def assert_all_eq(a, b, rtol=None, atol=0., msg=None):
+    assert all_eq(a, b, rtol=rtol, atol=atol), msg
+
+
+#-------------------------------------------------------------------------------
+
+
+def get_attributes(obj):
+    try:
+        attributes = [ k for k in obj.__dict__ ]
+    except AttributeError:
+        attributes = []
+    if hasattr(obj.__class__, '__mro__'):
+        for cls in obj.__class__.__mro__:
+            for slot in cls.__dict__.get('__slots__', ()):
+                if hasattr(obj, slot):
+                    attributes.append(slot)
+    return sorted(attributes)
+
+
+#-------------------------------------------------------------------------------
+
+
+def get_type(data):
+    """Returns input's data type."""
+    data_ = np.asarray(data)
+    type_ = data_.dtype.type.__name__
+    if type_[-1] == '_':
+        type_ = type_[0:-1]
+    if type_ != 'object':
+        return type_
+    return type(data).__name__
 
 
 #-------------------------------------------------------------------------------
@@ -111,6 +211,25 @@ def hs(arg):
             value = value[0:-3] + '...'
         print(lname+value)
 
+
+#-------------------------------------------------------------------------------
+
+
+def isscalar(data):
+    """Hack around np.isscalar oddity"""
+    return data.ndim == 0 if isinstance(data, np.ndarray) else np.isscalar(data)
+
+
+#-------------------------------------------------------------------------------
+
+
+def minmax(v):
+    """Returns min and max values of an array, discarding NaN values."""
+    v = np.asanyarray(v)
+    if np.all(np.isnan(v)):
+        return np.array([np.nan, np.nan])
+    return np.array((np.nanmin(v), np.nanmax(v)))
+   
 
 #-------------------------------------------------------------------------------
 
@@ -183,41 +302,6 @@ def profile(input, origin=None, bin=1., nbins=None, histogram=False):
         return x, y, n
     else:
         return x, y
-
-
-#-------------------------------------------------------------------------------
-
-
-def psd2(input):
-    input = np.asanyarray(input)
-    s = np.abs(scipy.signal.fft2(input))
-    for axis, n in zip((-2,-1), s.shape[-2:]):
-        s = np.roll(s, n // 2, axis=axis)
-    return Map(s)
-
-
-#-------------------------------------------------------------------------------
-
-
-def airy_disk(shape, fwhm, origin=None, resolution=1.):
-    d  = distance(shape, origin=origin, resolution=resolution)
-    index = np.where(d == 0)
-    d[index] = 1.e-30
-    d *= 1.61633 / (fwhm / 2)
-    d  = (2 * scipy.special.jn(1,d) / d)**2
-    d /= np.sum(d)
-    return d
-
-
-#-------------------------------------------------------------------------------
-
-
-def aperture_circular(shape, diameter, origin=None, resolution=1.):
-    array = distance(shape, origin=origin, resolution=resolution)
-    m = array > diameter / 2
-    array[ m] = 0
-    array[~m] = 1
-    return array
 
 
 #-------------------------------------------------------------------------------
@@ -306,6 +390,7 @@ def diffT(input, output, axis=0, comm=None):
     status = tmf.operators_mpi.difft(input.ravel(), output.ravel(), ndim-axis,
         np.asarray(input.T.shape), inplace, comm.py2f())
     if status != 0: raise RuntimeError()
+
     
 #-------------------------------------------------------------------------------
 
@@ -408,113 +493,3 @@ def shift(input, output, n, axis=-1):
     else:
         tmf.shift(input.ravel(), output.ravel(), rank-axis,
                   np.asarray(input.T.shape), n)
-
-    
-#-------------------------------------------------------------------------------
-
-
-def distance(shape, origin=None, resolution=1.):
-    """
-    Returns an array whose values are the distances to a given origin.
-    
-    Parameters
-    ----------
-    shape : tuple of integer
-        dimensions of the output array. For a 2d array, the first integer
-        is for the Y-axis and the second one for the X-axis.
-    origin : array-like in the form of (x0, y0, ...), optional
-        The coordinates, according to the FITS convention (i.e. first
-        column and row is one), from which the distance is calculated.
-        Default value is the array center.
-    resolution : array-like in the form of (dx, dy, ...), optional
-        Inter-pixel distance. Default is one. If resolution is a Quantity, its
-        unit will be carried over to the returned distance array
-
-    Example
-    -------
-    nx, ny = 3, 3
-    print(distance((ny,nx)))
-    [[ 1.41421356  1.          1.41421356]
-    [ 1.          0.          1.        ]
-    [ 1.41421356  1.          1.41421356]]
-    """
-    if nu.isscalar(shape):
-        shape = (shape,)
-    else:
-        shape = tuple(shape)
-    shape = tuple(int(np.round(s)) for s in shape)
-    rank = len(shape)
-
-    if origin is None:
-        origin = (np.array(shape[::-1], dtype=var.FLOAT_DTYPE) + 1) / 2
-    else:
-        origin = np.ascontiguousarray(origin, dtype=var.FLOAT_DTYPE)
-
-    unit = getattr(resolution, '_unit', None)
-
-    if nu.isscalar(resolution):
-        resolution = np.resize(resolution, rank)
-    resolution = np.asanyarray(resolution, dtype=var.FLOAT_DTYPE)
-
-    if rank == 1:
-        d = tmf.distance_1d(shape[0], origin[0], resolution[0])
-    elif rank == 2:
-        d = tmf.distance_2d(shape[1], shape[0], origin, resolution).T
-    elif rank == 3:
-        d = tmf.distance_3d(shape[2], shape[1], shape[0], origin, resolution).T
-    else:
-        d = _distance_slow(shape, origin, resolution, var.FLOAT_DTYPE)
-
-    return Map(d, copy=False, unit=unit)
-
-
-#-------------------------------------------------------------------------------
-
-
-def _distance_slow(shape, origin, resolution, dtype):
-    """
-    Returns an array whose values are the distances to a given origin.
-
-    This routine is written using np.meshgrid routine. It is slower
-    than the Fortran-based `distance` routine, but can handle any number
-    of dimensions.
-
-    Refer to `tamasis.distance` for full documentation.
-    """
-
-    index = []
-    for n, o, r in zip(reversed(shape), origin, resolution):
-        index.append(slice(0,n))
-    d = np.asarray(np.mgrid[index], dtype=var.FLOAT_DTYPE).T
-    d -= np.asanyarray(origin) - 1.
-    d *= resolution
-    np.square(d, d)
-    d = Map(np.sqrt(np.sum(d, axis=d.shape[-1])), dtype=dtype, copy=False)
-    return d
-    
-
-#-------------------------------------------------------------------------------
-
-
-def gaussian(shape, fwhm, origin=None, resolution=1., unit=None):
-    if len(shape) == 2:
-        sigma = fwhm / np.sqrt(8*np.log(2))
-    else:
-        raise NotImplementedError()
-    d = distance(shape, origin=origin, resolution=resolution)
-    d.unit = ''
-    d = np.exp(-d**2 / (2*sigma**2))
-    d /= np.sum(d)
-    if unit:
-        d.unit = unit
-    return d
-
-
-#-------------------------------------------------------------------------------
-
-
-def phasemask_fourquadrant(shape, phase=-1):
-    array = Map.ones(shape, dtype=var.COMPLEX_DTYPE)
-    array[0:shape[0]//2,shape[1]//2:] = phase
-    array[shape[0]//2:,0:shape[1]//2] = phase
-    return array

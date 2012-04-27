@@ -5,7 +5,7 @@ import tamasis
 
 from glob import glob
 from tamasis import PacsInstrument, PacsObservation, PacsSimulation, Pointing, CompressionAverageOperator, ProjectionOperator, Map, MaskOperator, mapper_naive
-from tamasis.numpyutils import all_eq, minmax
+from tamasis.utils import all_eq, minmax
 from uuid import uuid1
 
 tamasis.var.verbose = True

@@ -1,7 +1,8 @@
 import numpy as np
+
 from kapteyn import wcs
 from numpy.testing import assert_almost_equal
-from tamasis.numpyutils import all_eq
+from tamasis.utils import all_eq
 from tamasis.wcsutils import angle_lonlat, barycenter_lonlat, combine_fitsheader, create_fitsheader, get_cdelt_pa, has_wcs, mean_degrees
 
 def test_mean_degrees():

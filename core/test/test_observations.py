@@ -1,7 +1,8 @@
 import numpy as np
+
 from numpy.testing import assert_raises
 from tamasis.observations import MaskPolicy
-from tamasis.numpyutils import all_eq
+from tamasis.utils import all_eq
 
 flags = ['bad', 'u1', 'u2']
 

@@ -8,9 +8,10 @@ import numpy as np
 import pyfits
 import tamasisfortran as tmf
 
-from . import var
-from . import numpyutils as nu
 from kapteyn import wcs
+from pyoperators.utils import isscalar
+
+from . import var
 
 __all__ = [ 
     'angle_lonlat',
@@ -241,7 +242,7 @@ def create_fitsheader(naxis=None, dtype=None, fromdata=None, extname=None,
     else:
         if cdelt is None:
             return header
-        if nu.isscalar(cdelt):
+        if isscalar(cdelt):
             cdelt = (-cdelt, cdelt)
         if pa is None:
             pa = 0.
@@ -264,7 +265,7 @@ def create_fitsheader(naxis=None, dtype=None, fromdata=None, extname=None,
     if ctype.size != 2:
         raise ValueError('CTYPE does not have two elements.')
 
-    if nu.isscalar(cunit):
+    if isscalar(cunit):
         cunit = (cunit, cunit)
     cunit = np.asarray(cunit, dtype=np.string_)
     if cunit.size != 2:

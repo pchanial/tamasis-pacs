@@ -5,7 +5,7 @@ import tamasis
 from tamasis import (PacsObservation, PacsSimulation,
                      CompressionAverageOperator, ProjectionOperator,
                      create_fitsheader, gaussian)
-from tamasis.numpyutils import all_eq
+from tamasis.utils import all_eq
 from uuid import uuid1
 
 tamasis.var.verbose = False

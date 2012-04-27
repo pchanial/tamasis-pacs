@@ -1,7 +1,7 @@
 import numpy as np
 
 from tamasis import Instrument
-from tamasis.numpyutils import all_eq
+from tamasis.utils import all_eq
 
 class MyInstrument(Instrument):
     def get_valid_detectors(self, masked=False):

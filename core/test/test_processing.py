@@ -2,7 +2,7 @@ import numpy as np
 
 from tamasis.datatypes import Tod
 from tamasis.processing import filter_polynomial, interpolate_linear, filter_nonfinite
-from tamasis.numpyutils import assert_all_eq
+from tamasis.utils import assert_all_eq
 
 
 def test_filter_polynomial():

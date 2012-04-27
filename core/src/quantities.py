@@ -2,12 +2,13 @@
 # All rights reserved
 #
 from __future__ import division
+
 import numpy as np
 import re
 import tamasisfortran as tmf
 
 from . import var
-from numpyutils import get_attributes
+from .utils import get_attributes
 
 __all__ = ['Quantity', 'UnitError', 'units']
 

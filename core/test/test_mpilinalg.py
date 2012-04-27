@@ -1,7 +1,8 @@
 import numpy as np
 import tamasis
+
 from tamasis import linalg as la, MPI
-from tamasis.numpyutils import assert_all_eq
+from tamasis.utils import assert_all_eq
 
 from nose.plugins.skip import SkipTest
 raise SkipTest

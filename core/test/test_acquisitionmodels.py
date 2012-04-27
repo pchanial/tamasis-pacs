@@ -1,12 +1,13 @@
 import numpy as np
 import scipy
+import scipy.signal
 
+from numpy.testing import assert_equal, assert_almost_equal, assert_raises
 from pyoperators import Operator, AdditionOperator, CompositionOperator, BlockDiagonalOperator, asoperator, decorators
 from pyoperators.utils import isscalar
 from pyoperators.utils.testing import assert_is_instance
-from numpy.testing import assert_equal, assert_almost_equal, assert_raises
 from tamasis.acquisitionmodels import BlackBodyOperator, ConvolutionOperator, CompressionAverageOperator, DdTddOperator, DiscreteDifferenceOperator, DownSamplingOperator, FftHalfComplexOperator, IdentityOperator, InvNttUncorrelatedOperator, InvNttUncorrelatedPythonOperator,  MaskOperator, PackOperator, PadOperator, ConvolutionTruncatedExponentialOperator, RollOperator, ShiftOperator, UnpackOperator, block_diagonal
-from tamasis.numpyutils import all_eq
+from tamasis.utils import all_eq
 
 def test_partitioning():
 
