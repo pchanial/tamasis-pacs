@@ -940,20 +940,31 @@ class Tod(FitsArray):
             write_fits(filename, mask, None, True, 'Mask', comm)
 
     def median(self, axis=None):
-        result = Tod(median(self, mask=self.mask, axis=axis), copy=False,
-                     unit=self.unit)
+        result = Tod(median(self, mask=self.mask, axis=axis),
+                     header=self.header.copy(), unit=self.unit,
+                     derived_units=self.derived_units, dtype=self.dtype, copy=False)
         result.mask = np.zeros_like(result, bool)
         tmf.processing.filter_nonfinite_mask_inplace(result.ravel(),
             result.mask.view(np.int8).ravel())
         return result
     median.__doc__ = median.__doc__
 
+    def ravel(self, order='c'):
+        mask = self.mask.ravel() if self.mask is not None else None
+        return Tod(self.magnitude.ravel(), mask=mask, header=self.header.copy(),
+                   unit=self.unit, derived_units=self.derived_units,
+                   dtype=self.dtype, copy=False)
+        
+    def sort(self, axis=-1, kind='quicksort', order=None):
+        self.magnitude.sort(axis, kind, order)
+        self.mask = None
+    
     def _wrap_func(self, func, unit, *args, **kw):
         self_ma = np.ma.MaskedArray(self.magnitude, mask=self.mask, copy=False)
         output = func(self_ma, *args, **kw)
         if not isinstance(output, np.ndarray):
             return type(self)(output, unit=unit, derived_units= \
-                              self.derived_units)
+                              self.derived_units, dtype=self.dtype)
         result = output.view(type(self))
         result.__array_finalize__(self)
         result.mask = output.mask if output.mask is not np.ma.nomask else None
