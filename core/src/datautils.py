@@ -3,9 +3,9 @@ from __future__ import division
 import numpy as  np
 import scipy.signal
 import scipy.special
-import tamasisfortran as tmf
 
 from pyoperators.utils import isscalar
+from . import tamasisfortran as tmf
 from . import var
 from .datatypes import Map
 

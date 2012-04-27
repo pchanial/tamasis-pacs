@@ -6,11 +6,11 @@ from __future__ import division
 
 import numpy as np
 import pyfits
-import tamasisfortran as tmf
 
 from kapteyn import wcs
 from pyoperators.utils import isscalar
 
+from . import tamasisfortran as tmf
 from . import var
 
 __all__ = [ 

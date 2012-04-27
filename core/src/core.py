@@ -1,9 +1,9 @@
 # Copyrights 2010-2011 Pierre Chanial
 # All rights reserved
 #
-import tamasisfortran as tmf
-import var
 from pyoperators.utils.mpi import MPI
+from . import tamasisfortran as tmf
+from . import var
 from .acquisitionmodels import *
 from .datatypes import *
 from .datautils import *

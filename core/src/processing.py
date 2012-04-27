@@ -6,9 +6,10 @@ from __future__ import division
 
 import numpy as np
 import scipy
-import tamasisfortran as tmf
 import time
+
 from pyoperators.utils import strelapsed
+from . import tamasisfortran as tmf
 from .acquisitionmodels import ProjectionBaseOperator
 
 __all__ = [ 'deglitch_l2std',

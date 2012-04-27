@@ -2,9 +2,9 @@ from __future__ import division
 
 import numpy as np
 import pyoperators as op
-import tamasisfortran as tmf
 
 from pyoperators.utils.mpi import MPI
+from . import tamasisfortran as tmf
 from . import var
 
 __all__ = []

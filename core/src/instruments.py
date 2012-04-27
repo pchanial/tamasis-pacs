@@ -1,12 +1,13 @@
 from __future__ import division
+
 import gc
 import numpy as np
-import tamasisfortran as tmf
+
 from kapteyn import wcs
 from matplotlib import pyplot
 from pyoperators.utils import strenum, strshape
 from pyoperators.utils.mpi import MPI
-
+from . import tamasisfortran as tmf
 from .acquisitionmodels import PointingMatrix
 from .datatypes import Map
 from .mpiutils import gather_fitsheader_if_needed

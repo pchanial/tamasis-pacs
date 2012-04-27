@@ -5,11 +5,11 @@
 from __future__ import division
 
 import numpy as np
-import tamasisfortran as tmf
 
 from matplotlib import pyplot
 from pyoperators.utils.mpi import MPI
 
+from . import tamasisfortran as tmf
 from . import var
 
 __all__ = [ 

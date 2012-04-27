@@ -6,8 +6,6 @@ import numpy as np
 import operator
 import pyoperators
 
-import tamasisfortran as tmf
-
 from pyoperators import (Operator, IdentityOperator, DiagonalOperator,
                          BlockColumnOperator, BlockDiagonalOperator,
                          CompositionOperator, DistributionIdentityOperator,
@@ -18,7 +16,7 @@ from pyoperators.memory import allocate
 from pyoperators.utils import (isscalar, tointtuple, openmp_num_threads,
                                operation_assignment)
 from pyoperators.utils.mpi import MPI, distribute_shape
-
+from . import tamasisfortran as tmf
 from . import var
 from .datatypes import Map, Tod
 from .quantities import Quantity, _divide_unit, _multiply_unit
