@@ -13,8 +13,8 @@ from pyoperators import (Operator, IdentityOperator, DiagonalOperator,
 from pyoperators.decorators import (linear, orthogonal, real, square, symmetric,
                                     unitary, universal, inplace)
 from pyoperators.memory import allocate
-from pyoperators.utils import (isscalar, tointtuple, openmp_num_threads,
-                               operation_assignment)
+from pyoperators.utils import (isscalar, openmp_num_threads,
+                               operation_assignment, product, tointtuple)
 from pyoperators.utils.mpi import MPI, distribute_shape
 from . import tamasisfortran as tmf
 from . import var
@@ -791,7 +791,7 @@ class ProjectionBaseOperator(Operator):
 
     def get_pTp(self, out=None):
         matrix = self.matrix
-        npixels = int(np.product(matrix.shape_input))
+        npixels = product(matrix.shape_input)
         if out is None:
             out = allocate((npixels,npixels), np.bool8, 'for pTp array')
             out[...] = 0
@@ -1032,7 +1032,7 @@ class DistributionLocalOperator(Operator):
         Operator.__init__(self, shapein=shapein, shapeout=shapeout,
                           commin=commin, commout=commout, **keywords)
         self.mask = mask
-        self.chunk_size = int(np.product(mask.shape[1:]))
+        self.chunk_size = product(mask.shape[1:])
         self.operator = operator
 
     def direct(self, input, output):
@@ -1199,7 +1199,7 @@ class FftOperator(Operator):
         Operator.__init__(self, shapein=shape,
                                 dtype=var.COMPLEX_DTYPE, **keywords)
         nthreads = min(nthreads or openmp_num_threads(), MAX_FFTW_NUM_THREADS)
-        self.n = np.product(shape)
+        self.n = product(shape)
         self._in  = np.zeros(shape, dtype=var.COMPLEX_DTYPE)
         self._out = np.zeros(shape, dtype=var.COMPLEX_DTYPE)
         self.forward_plan = fftw3.Plan(self._in, self._out, direction='forward',

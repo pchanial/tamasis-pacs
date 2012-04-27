@@ -10,6 +10,7 @@ import pyfits
 import re
 
 from . import tmf
+from pyoperators.utils import product
 from pyoperators.utils.mpi import MPI
 from tamasis.acquisitionmodels import PointingMatrix
 from tamasis.datatypes import Tod
@@ -124,9 +125,9 @@ class MadMap1Observation(Observation):
         header = gather_fitsheader_if_needed(header, comm=comm)
         shape_input = tuple(header['NAXIS' + str(i+1)]
                             for i in range(header['NAXIS']))[::-1]
-        if np.product(shape_input) > np.iinfo(np.int32).max:
+        if product(shape_input) > np.iinfo(np.int32).max:
             raise RuntimeError('The map is too large: pixel indices cannot be s'
-                'stored using 32 bits: {0}>{1}'.format(np.product(shape_input),
+                'stored using 32 bits: {0}>{1}'.format(product(shape_input),
                 np.iinfo(np.int32).max))
 
         pointing = self.pointing[section.start:section.stop]

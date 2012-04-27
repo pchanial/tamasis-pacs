@@ -7,6 +7,7 @@ from __future__ import division
 import numpy as np
 
 from matplotlib import pyplot
+from pyoperators.utils import product
 from pyoperators.utils.mpi import MPI
 
 from . import tamasisfortran as tmf
@@ -244,7 +245,7 @@ def plot_tod(tod, mask=None, **kw):
     if mask is None:
         mask = getattr(tod, 'mask', None)
 
-    ndetectors = int(np.product(tod.shape[0:-1]))
+    ndetectors = product(tod.shape[0:-1])
     tod = tod.view().reshape((ndetectors, -1))
     if mask is not None:
         mask = mask.view().reshape((ndetectors, -1))

@@ -14,8 +14,8 @@ import time
 
 from pyoperators import (Operator, HomothetyOperator, IdentityOperator,
                          MaskOperator, RoundOperator, ClipOperator, I)
-from pyoperators.utils import (isscalar, strelapsed, strenum, strplural,
-                               openmp_num_threads)
+from pyoperators.utils import (isscalar, openmp_num_threads, product,
+                               strelapsed, strenum, strplural)
 from pyoperators.utils.mpi import MPI
 
 from . import var
@@ -356,9 +356,9 @@ class PacsInstrument(Instrument):
         header = gather_fitsheader_if_needed(header, comm=comm)
         shape_input = tuple(header['NAXIS' + str(i+1)]
                             for i in range(header['NAXIS']))[::-1]
-        if np.product(shape_input) > np.iinfo(np.int32).max:
+        if product(shape_input) > np.iinfo(np.int32).max:
             raise RuntimeError('The map is too large: pixel indices cannot be s'
-                'stored using 32 bits: {0}>{1}'.format(np.product(shape_input),
+                'stored using 32 bits: {0}>{1}'.format(product(shape_input),
                 np.iinfo(np.int32).max))
 
         nvalids = int(np.sum(~pointing.removed))
@@ -1402,7 +1402,7 @@ def PacsConversionAdu(obs, gain='nominal', offset='direct'):
     a = obs.instrument.adu_converter_min[offset]
     z = obs.instrument.adu_converter_max[offset]
 
-    return np.product([
+    return product([
         ClipOperator(a, z), # ADU converter saturation
         RoundOperator(),    # ADU converter rounding
         I + o,              # ADU converter offset

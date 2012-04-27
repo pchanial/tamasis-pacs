@@ -8,7 +8,7 @@ import os
 import pyfits
 import sys
 
-from pyoperators.utils import openmp_num_threads, strshape
+from pyoperators.utils import openmp_num_threads, product, strshape
 from pyoperators.utils.mpi import MPI, DTYPE_MAP, combine, distribute_slice
 from .wcsutils import create_fitsheader, has_wcs
 
@@ -294,7 +294,7 @@ def write_fits(filename, data, header, extension, extname, comm):
 
     # get a communicator excluding the processes which have no work to do
     # (Create_subarray does not allow 0-sized subarrays)
-    chunk = np.product(data.shape[1:])
+    chunk = product(data.shape[1:])
     rank_nowork = min(comm.size, nglobal)
     group = comm.Get_group()
     group.Incl(range(rank_nowork))

@@ -5,7 +5,7 @@ import numpy as np
 
 from kapteyn import wcs
 from matplotlib import pyplot
-from pyoperators.utils import strenum, strshape
+from pyoperators.utils import product, strenum, strshape
 from pyoperators.utils.mpi import MPI
 from . import tamasisfortran as tmf
 from .acquisitionmodels import PointingMatrix
@@ -335,9 +335,9 @@ class Instrument(object):
         header = gather_fitsheader_if_needed(header, comm=comm)
         shape_input = tuple(header['NAXIS' + str(i+1)]
                             for i in range(header['NAXIS']))[::-1]
-        if np.product(shape_input) > np.iinfo(np.int32).max:
+        if product(shape_input) > np.iinfo(np.int32).max:
             raise RuntimeError('The map is too large: pixel indices cannot be s'
-                'stored using 32 bits: {0}>{1}'.format(np.product(shape_input),
+                'stored using 32 bits: {0}>{1}'.format(product(shape_input),
                 np.iinfo(np.int32).max))
 
         mask = ~pointing['removed']

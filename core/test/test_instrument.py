@@ -1,5 +1,6 @@
 import numpy as np
 
+from pyoperators.utils import product
 from tamasis import Instrument
 from tamasis.utils import all_eq
 
@@ -15,7 +16,7 @@ class MyInstrument(Instrument):
 
 def assert_pack_unpack(instrument):
     shape = instrument.detector.shape
-    u = np.arange(np.product(shape)*2.).reshape(shape + (2,))
+    u = np.arange(product(shape)*2.).reshape(shape + (2,))
     u.T[...] *= ~instrument.detector.removed.T
     p = instrument.pack(u)
     u2 = instrument.unpack(p)
