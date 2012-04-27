@@ -44,13 +44,23 @@ contains
         real(p)   :: input_(n)
         integer*8 :: i, j
 
+#ifdef IFORT
+        integer*8 :: k
+        !$omp parallel do private(i, j, input_)
+        do k = 1, size(input, 1) * size(input, 3)
+            i = mod(k - 1, size(input, 1)) + 1
+            j = (k - 1) / size(input, 1) + 1
+#else
         !$omp parallel do collapse(2) private(input_)
         do j = 1, size(input, 3)
             do i = 1, size(input, 1)
+#endif
                 input_ = input(i,:,j)
                 output(i,j) = median_nocopy(input_, .true.)
             end do
+#ifndef IFORT
         end do
+#endif
         !$omp end parallel do
 
     end subroutine median_axis
@@ -66,16 +76,25 @@ contains
         logical*1 :: mask_ (n)
         integer*8 :: i, j
 
+#ifdef IFORT
+        integer*8 :: k
+        !$omp parallel do private(i, j, input_, mask_)
+        do k = 1, size(input, 1) * size(input, 3)
+            i = mod(k - 1, size(input, 1)) + 1
+            j = (k - 1) / size(input, 1) + 1
+#else
         !$omp parallel do collapse(2) private(input_, mask_)
         do j = 1, size(input, 3)
             do i = 1, size(input, 1)
+#endif
                 input_ = input(i,:,j)
                 mask_  = mask (i,:,j)
                 output(i,j) = median_nocopy(input_, .true., mask_)
             end do
+#ifndef IFORT
         end do
+#endif
         !$omp end parallel do
-
     end subroutine median_mask_axis
 
 end module math
