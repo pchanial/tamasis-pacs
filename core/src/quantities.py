@@ -378,6 +378,9 @@ ities of different units may have changed operands to common unit '" + \
         if isinstance(key, np.ndarray):
             return item
 
+        if isinstance(key, list):
+            key = tuple(key)
+
         if not isinstance(key, tuple):
             key = (key,)
 

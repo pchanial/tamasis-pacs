@@ -263,7 +263,7 @@ def median(x, mask=None, axis=None, out=None):
            [ 2.]])
 
     """
-    x = np.asanyarray(x)
+    x = np.array(x, copy=False, order='c', subok=True)
     shape = x.shape
     dtype = np.find_common_type([np.float64, x.dtype], [])
     if dtype != np.float64:
@@ -275,7 +275,7 @@ def median(x, mask=None, axis=None, out=None):
         if mask is not None and mask.shape != x.shape:
             raise ValueError('Incompatible mask shape.')
     if mask is not None:
-        mask = np.asarray(mask, bool).view(np.int8)
+        mask = np.array(mask, dtype=bool, order='c', copy=False).view(np.int8)
 
     if axis is not None:
         slow = product(shape[:axis])
@@ -290,10 +290,10 @@ def median(x, mask=None, axis=None, out=None):
                 raise ValueError('Incompatible output shape.')
             out.dtype = dtype
         else:
-            out = np.empty(shape[:axis] + shape[axis+1:])
+            out = np.empty(shape[:axis] + shape[axis+1:], dtype)
         out_ = out.reshape((slow,fast))
     else:
-        out = np.empty((), dtype=dtype)
+        out = np.empty((), dtype)
         out_ = out
 
     if mask is axis is None:
