@@ -540,7 +540,7 @@ contains
             z = min(m, i * block)
             if (n == 1) then
                 if (isfirstrank_) then
-                    continue
+                    output(a:z,1) = input(a:z,1)
                 else if (islastrank_) then
                     output(a:z,1) = -boundary(a:z)
                 else
