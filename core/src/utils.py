@@ -8,7 +8,7 @@ import numpy as np
 
 from matplotlib import pyplot
 from pyoperators.utils import product
-from pyoperators.utils.mpi import MPI
+from pyoperators.utils.mpi import MPI, filter_comm
 
 from . import tamasisfortran as tmf
 from . import var
@@ -417,7 +417,6 @@ def diff(input, output, axis=0, comm=None):
         comm = MPI.COMM_WORLD
 
     ndim = input.ndim
-    
     if ndim == 0:
         output.flat = 0
         return
@@ -429,14 +428,20 @@ def diff(input, output, axis=0, comm=None):
     inplace = input.__array_interface__['data'][0] == \
               output.__array_interface__['data'][0]
 
-    if axis != 0 or comm.Get_size() == 1:
+    if axis != 0 or comm.size == 1:
+        if input.size == 0:
+            return
         tmf.operators.diff(input.ravel(), output.ravel(), ndim-axis,
                            np.asarray(input.T.shape), inplace)
         return
 
-    status = tmf.operators_mpi.diff(input.ravel(), output.ravel(), ndim-axis,
-        np.asarray(input.T.shape), inplace, comm.py2f())
-    if status != 0: raise RuntimeError()
+    if product(input.shape[1:]) == 0:
+        return
+    with filter_comm(input.shape[0] > 0, comm) as fcomm:
+        if fcomm is not None:
+            status = tmf.operators_mpi.diff(input.ravel(), output.ravel(),
+                ndim-axis, np.asarray(input.T.shape), inplace, fcomm.py2f())
+            if status != 0: raise RuntimeError()
 
 
 #-------------------------------------------------------------------------------
@@ -461,7 +466,6 @@ def diffT(input, output, axis=0, comm=None):
         comm = MPI.COMM_WORLD
 
     ndim = input.ndim
-
     if ndim == 0:
         output.flat = 0
         return
@@ -473,14 +477,20 @@ def diffT(input, output, axis=0, comm=None):
     inplace = input.__array_interface__['data'][0] == \
               output.__array_interface__['data'][0]
 
-    if axis != 0 or comm.Get_size() == 1:
+    if axis != 0 or comm.size == 1:
+        if input.size == 0:
+            return
         tmf.operators.difft(input.ravel(), output.ravel(), ndim-axis,
                             np.asarray(input.T.shape), inplace)
         return
 
-    status = tmf.operators_mpi.difft(input.ravel(), output.ravel(), ndim-axis,
-        np.asarray(input.T.shape), inplace, comm.py2f())
-    if status != 0: raise RuntimeError()
+    if product(input.shape[1:]) == 0:
+        return
+    with filter_comm(input.shape[0] > 0, comm) as fcomm:
+        if fcomm is not None:
+            status = tmf.operators_mpi.difft(input.ravel(), output.ravel(),
+                ndim-axis, np.asarray(input.T.shape), inplace, fcomm.py2f())
+            if status != 0: raise RuntimeError()
 
     
 #-------------------------------------------------------------------------------
@@ -506,7 +516,6 @@ def diffTdiff(input, output, axis=0, scalar=1., comm=None):
 
     scalar = np.asarray(scalar, var.FLOAT_DTYPE)
     ndim = input.ndim
-    
     if ndim == 0:
         output.flat = 0
         return
@@ -518,14 +527,21 @@ def diffTdiff(input, output, axis=0, scalar=1., comm=None):
     inplace = input.__array_interface__['data'][0] == \
               output.__array_interface__['data'][0]
 
-    if axis != 0 or comm.Get_size() == 1:
+    if axis != 0 or comm.size == 1:
+        if input.size == 0:
+            return
         tmf.operators.difftdiff(input.ravel(), output.ravel(), ndim-axis,
                                 np.asarray(input.T.shape), scalar, inplace)
         return
 
-    status = tmf.operators_mpi.difftdiff(input.ravel(), output.ravel(),
-        ndim-axis, np.asarray(input.T.shape), scalar, inplace, comm.py2f())
-    if status != 0: raise RuntimeError()
+    if product(input.shape[1:]) == 0:
+        return
+    with filter_comm(input.shape[0] > 0, comm) as fcomm:
+        if fcomm is not None:
+            status = tmf.operators_mpi.difftdiff(input.ravel(), output.ravel(),
+                ndim-axis, np.asarray(input.T.shape), scalar, inplace,
+                fcomm.py2f())
+            if status != 0: raise RuntimeError()
 
 
 #-------------------------------------------------------------------------------
