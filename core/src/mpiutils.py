@@ -280,7 +280,11 @@ def write_fits(filename, data, header, extension, extname, comm):
     s = distribute_slice(nglobal)
     nlocal = s.stop - s.start
     if data.shape[0] != nlocal:
-        raise ValueError('Local array has an invalid shape.')
+        raise ValueError("On rank {}, the local array shape '{}' is invalid. Th"
+            "e first dimension does not match the expected local number '{}' gi"
+            "ven the global number '{}'.{}".format(comm.rank, data.shape,
+            nlocal, nglobal, '' if comm.rank > 0 else ' Shapes are: {}.'.format(
+            shapes)))
 
     # write FITS header
     if comm.rank == 0:
