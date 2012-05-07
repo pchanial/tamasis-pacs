@@ -207,7 +207,7 @@ def mapper_rls(y, H, invntt=None, unpacking=None, hyper=1.0, x0=None,
         if isinstance(M, DiagonalOperator):
             filter_nonfinite(M.data, out=M.data)
         M = unpacking.T * M * unpacking
-    H = H * unpacking
+    H_ = H * unpacking
     priors = [p * unpacking for p in priors]
 
     # criterion
@@ -219,7 +219,7 @@ def mapper_rls(y, H, invntt=None, unpacking=None, hyper=1.0, x0=None,
     comms = [comm_tod] + npriors * [comm_map]
 
     def criter(x):
-        rs = [H*x - tod.view(np.ndarray).ravel()] + [p*x for p in priors]
+        rs = [H_*x - tod.view(np.ndarray).ravel()] + [p*x for p in priors]
         Js = [h * n(r,comm=c) for h, n, r, c in zip(hc, norms, rs, comms)]
         return Js
 
@@ -230,9 +230,9 @@ def mapper_rls(y, H, invntt=None, unpacking=None, hyper=1.0, x0=None,
     if solver is None:
         solver = cg
 
-    if var.verbose or profile:
+    if (verbose or profile) and comm_map.rank == 0:
         print('')
-        print('H:')
+        print('H.T * N^-1 * H:')
         print(repr(A))
         if M is not None:
             print('Preconditioner:')
@@ -272,7 +272,7 @@ def mapper_rls(y, H, invntt=None, unpacking=None, hyper=1.0, x0=None,
         raise RuntimeError('Solver failure (code=' + str(info) + ' after ' +
                            str(callback.niterations) + ' iterations).')
 
-    if info > 0:
+    if info > 0 and comm_map.rank == 0:
         print('Warning: Solver reached maximum number of iterations without rea'
               'ching specified tolerance.')
 
@@ -282,7 +282,7 @@ def mapper_rls(y, H, invntt=None, unpacking=None, hyper=1.0, x0=None,
         solution = solution.reshape(H.shapein)
     else:
         solution = unpacking(solution)
-
+ 
     tod[...] = 1
     coverage = H.T(tod)
     unit = getattr(coverage, 'unit', None)
