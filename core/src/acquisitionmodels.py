@@ -15,7 +15,7 @@ from pyoperators.decorators import (linear, orthogonal, real, square, symmetric,
 from pyoperators.memory import allocate
 from pyoperators.utils import (isscalar, openmp_num_threads,
                                operation_assignment, product, tointtuple)
-from pyoperators.utils.mpi import MPI, distribute_shape
+from pyoperators.utils.mpi import MPI, distribute_shape, distribute_shapes
 from . import tamasisfortran as tmf
 from . import var
 from .datatypes import Map, Tod
@@ -634,10 +634,11 @@ def ProjectionOperator(input, method=None, header=None, resolution=None,
         for i in input:
             i.pack(mask_global)
         if ismapdistributed:
-            shape = distribute_shape(mask_global.shape, comm=commin)
+            shapes = distribute_shapes(mask_global.shape, comm=commin)
+            shape = shapes[commin.rank]
             mask = np.empty(shape, bool)
             commin.Reduce_scatter([mask_global, MPI.BYTE], [mask, MPI.BYTE],
-                                  None, op=MPI.BAND)
+                                  [product(s) for s in shapes], op=MPI.BAND)
         else:
             mask = mask_global
 
