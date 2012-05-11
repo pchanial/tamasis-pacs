@@ -9,7 +9,7 @@ import pyoperators
 from pyoperators import (Operator, IdentityOperator, DiagonalOperator,
                          BlockColumnOperator, BlockDiagonalOperator,
                          CompositionOperator, DistributionIdentityOperator,
-                         MaskOperator, NumexprOperator)
+                         MaskOperator, NumexprOperator, ZeroOperator)
 from pyoperators.decorators import (linear, orthogonal, real, square, symmetric,
                                     unitary, universal, inplace)
 from pyoperators.memory import allocate
@@ -1001,6 +1001,11 @@ class DiscreteDifferenceOperator(Operator):
 @inplace
 class DdTddOperator(Operator):
     """Calculate operator dX.T dX along a given axis."""
+
+    def __new__(cls, axis=-1, scalar=1., **keywords):
+        if scalar == 0:
+            return ZeroOperator(flags='square', **keywords)
+        return Operator.__new__(cls)
 
     def __init__(self, axis=-1, scalar=1., **keywords):
         Operator.__init__(self, dtype=var.FLOAT_DTYPE, **keywords)
