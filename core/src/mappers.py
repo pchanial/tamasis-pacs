@@ -162,7 +162,7 @@ def mapper_rls(y, H, invntt=None, unpacking=None, hyper=1.0, x0=None,
     if nmaps_ is None:
         nmaps_ = H.shape[1]
     if nmaps_ is None:
-        raise ValueError('The model H has not an explicit shape input.')
+        raise ValueError('The model H has not an explicit input shape.')
     ntods = comm_tod.allreduce(ntods_)
     nmaps = comm_map.allreduce(nmaps_)
 
@@ -181,7 +181,7 @@ def mapper_rls(y, H, invntt=None, unpacking=None, hyper=1.0, x0=None,
     # get b
     b = (H.T * invntt)(tod)
     if not np.all(np.isfinite(b)):
-        raise ValueError('RHS contains not finite values.')
+        raise ValueError('RHS contains non-finite values.')
     if b.size != A.shape[1]:
         raise ValueError("Incompatible size for RHS: '" + str(b.size) +
                          "' instead of '" + str(A.shape[1]) + "'.")
