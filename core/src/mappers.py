@@ -151,12 +151,6 @@ def mapper_rls(y, H, invntt=None, unpacking=None, hyper=1.0, x0=None,
         x = (H^T N^-1 H + h D1^T D1 + h D2^T D2)^-1 H^T N^-1 y
 
     """
-    def pcomm(comm):
-        if comm is MPI.COMM_SELF:
-            return 'COMM_SELF'
-        elif comm is MPI.COMM_WORLD:
-            return 'COMM_WORLD'
-        return repr(comm)
     comm_map = H.commin or MPI.COMM_WORLD
     comm_tod = H.commout or comm_map
 
@@ -171,8 +165,6 @@ def mapper_rls(y, H, invntt=None, unpacking=None, hyper=1.0, x0=None,
         raise ValueError('The model H has not an explicit shape input.')
     ntods = comm_tod.allreduce(ntods_)
     nmaps = comm_map.allreduce(nmaps_)
-    print MPI.COMM_WORLD.rank, 'ntods:', ntods_, ntods, pcomm(comm_tod), comm_tod.size
-    print MPI.COMM_WORLD.rank, 'nmaps:', nmaps_, nmaps, pcomm(comm_map), comm_map.size
 
     # get A
     if invntt is None:
