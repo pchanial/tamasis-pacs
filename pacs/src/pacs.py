@@ -39,8 +39,10 @@ __all__ = [ 'PacsInstrument',
 p = var.path + '/pacs/'
 
 class PacsInfo(object):
+    CALFILE_ABSN = p + 'PCalPhotometer_Absorption_FM_v2.fits'
     CALFILE_BADP = p + 'PCalPhotometer_BadPixelMask_FM_v6.fits'
     CALFILE_TCST = p + 'PCalPhotometer_PhotTimeConstant_FM_v2.fits'
+    CALFILE_FLTT = p + 'PCalPhotometer_FilterTransmission_FM_v1.fits'
     CALFILE_GAIN = p + 'PCalPhotometer_Gain_FM_v1.fits'
     CALFILE_INVN = [p + 'PCalPhotometer_Invntt{0}_FM_v1.fits'.format(b)
                     for b in ('BS', 'BL', 'Red')]
@@ -432,25 +434,63 @@ class PacsInstrument(Instrument):
             derived_units=derived_units, downsampling=downsampling, comm=comm)
 
     def get_calibration(self, name):
+        """
+        Return data from the calibration file set.
+
+        Parameter
+        ---------
+        name : string
+            Calibration file identifier. It can be one of the following:
+                - absorption
+                - badpixel
+                - filter transmission
+                - total transmission
+                - gain
+                - invntt
+                - responsivity
+                - timeconstant
+                - stddev
+
+        """
         name = name.lower()
-        expected = ('badpixel', 'gain', 'invntt', 'responsivity',
+        expected = ('absorption', 'badpixel', 'filter transmission', 
+                    'total transmission', 'gain', 'invntt', 'responsivity',
                     'timeconstant', 'stddev')
         if name not in expected:
-            raise ValueError("Invalid calibration type '{0}'. Expected values a"
-                             "re {1}.".format(name, strenum(expected)))
+            raise ValueError("Invalid calibration identifier '{0}'. Expected va"
+                             "lues are {1}.".format(name, strenum(expected)))
 
+        if name == 'absorption':
+            hdus = self._get_calfile(self.info.CALFILE_ABSN, 1.0)
+            dtype = [('wavelength', float), ('transmission', float)]
+            data = np.empty(hdus[1].header['NAXIS1'],
+                            dtype=dtype).view(np.recarray)
+            data.wavelength = hdus[1].data
+            data.transmission = hdus[2].data
+            return data
+            
         if  name == 'badpixel':
-            hdus = self._get_calfile(self.info.CALFILE_BADP, 1.0)
+            hdus = self._get_calfile(self.info.CALFILE_BADP, 1)
             return Map(hdus[self.band].data, dtype=np.bool8, origin='upper')
 
+        if name == 'filter transmission':
+            return self._get_calfile(self.info.CALFILE_FLTT, 1)[self.band].data
+            
+        if name == 'total transmission':
+            a = self.get_calibration('absorption')
+            t = self.get_calibration('filter transmission')
+            t.transmission *= np.interp(t.wavelength, a.wavelength,
+                                        a.transmission)
+            return t
+
         if name == 'gain':
-            hdus = self._get_calfile(self.info.CALFILE_GAIN, 1.0)
+            hdus = self._get_calfile(self.info.CALFILE_GAIN, 1)
             return hdus['photGain'].data, hdus['photOffset'].data
 
         if name == 'invntt':
             filter = {'blue':0, 'green':1, 'red':2}[self.band]
             filename = self.info.CALFILE_INVN[filter]
-            hdus = self._get_calfile(filename, 1.0)
+            hdus = self._get_calfile(filename, 1)
             ncorrelations = hdus[1].header['NAXIS1'] - 1
             data, status = tmf.pacs_read_filter_uncorrelated(filename,
                 ncorrelations, self.get_ndetectors(),
@@ -459,7 +499,7 @@ class PacsInstrument(Instrument):
             return data.T
 
         if name == 'responsivity':
-            hdus = self._get_calfile(self.info.CALFILE_RESP, 2.0)
+            hdus = self._get_calfile(self.info.CALFILE_RESP, 2)
             filter = {'blue':6, 'green':4, 'red':2}[self.band]
             return Quantity(hdus[filter].data, 'V/Jy')
 
@@ -478,7 +518,7 @@ class PacsInstrument(Instrument):
         if isscalar(versions):
             versions = (versions,)
         if not os.path.isfile(filename):
-            raise IOError("The calibration '{0}' file does not exist or is "
+            raise IOError("The calibration file '{0}' does not exist or is "
                           "not a valid file.".format(filename))
 
         hdus = pyfits.open(filename)
