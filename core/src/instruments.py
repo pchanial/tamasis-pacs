@@ -387,7 +387,8 @@ class Instrument(object):
         # the specified one, redo the computation of the pointing matrix
         del pmatrix
         return self.get_pointing_matrix(pointing, header,
-            new_npixels_per_sample, method, downsampling, comm, **keywords)
+            new_npixels_per_sample, method, downsampling, units, derived_units,
+            comm, **keywords)
 
     @staticmethod
     def instrument2ad(coords, pointing):
