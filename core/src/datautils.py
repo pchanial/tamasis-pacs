@@ -20,11 +20,32 @@ __all__ = [
 ]
 
 
-def airy_disk(shape, fwhm, origin=None, resolution=1.):
+def airy_disk(shape, fwhm=None, r0=None, origin=None, resolution=1.):
+    """
+    Return a two-dimensional map with an Airy pattern.
+
+    Parameters
+    ----------
+    shape : tuple
+        The map shape
+    fwhw : float
+        The Full Width Half Maximum of the primary lobe.
+    f0 : float
+        The radius of the first dark ring, where the intensity is zero.
+    origin : tuple of float
+        The pattern center (FITS convention)
+    resolution : float
+        The pixel scale
+    """
+    if fwhm is None and r0 is None:
+        raise ValueError('No scale parameter.')
     d  = distance(shape, origin=origin, resolution=resolution)
     index = np.where(d == 0)
     d[index] = 1.e-30
-    d *= 1.61633 / (fwhm / 2)
+    if fwhm is not None:
+        d *= 1.61633 / (fwhm / 2)
+    else:
+        d *= 3.8317 / r0
     d  = (2 * scipy.special.jn(1,d) / d)**2
     d /= np.sum(d)
     return d
