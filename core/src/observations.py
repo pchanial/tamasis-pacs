@@ -234,8 +234,11 @@ class Observation(object):
         if detectors:
             d = self.instrument.detector
             coords = d.corner if 'corner' in d.dtype.names else d.center
-            first = self.pointing[mask.searchsorted(True)]
-            xy = self.instrument.instrument2xy(coords, first, header)
+            first = 0
+            while not mask[first]:
+                first += 1
+            xy = self.instrument.instrument2xy(coords, self.pointing[first],
+                                               header)
             if 'corner' in d.dtype.names:
                 Instrument.plot_grid(xy, update_axes=map is None)
             else:
