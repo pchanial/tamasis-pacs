@@ -20,6 +20,7 @@ import numpy as np
 import pickle
 import pyfits
 import StringIO
+import scipy.stats
 
 try:
     import ds9
@@ -27,6 +28,7 @@ except:
     ds9 = None
 
 from functools import reduce
+from pyoperators.utils import isscalar
 from pyoperators.utils.mpi import MPI
 
 from . import tamasisfortran as tmf
@@ -283,7 +285,8 @@ class FitsArray(Quantity):
         matplotlib.interactive(is_interactive)
 
     def imshow(self, mask=None, new_figure=True, title=None, xlabel='',
-               ylabel='', interpolation='nearest', colorbar=True, **keywords):
+               ylabel='', interpolation='nearest', colorbar=True,
+               percentile=0.01, **keywords):
         """
         A graphical display method specialising matplotlib's imshow.
 
@@ -306,23 +309,32 @@ class FitsArray(Quantity):
         colorbar : boolean, optional
             If True, plot an intensity color bar next to the display.
             Default is True.
+        percentile : float, tuple of two floats
+            As a float, percentile of values to be discarded, otherwise,
+            percentile of the minimum and maximum values to be displayed.
         **keywords : additional are keywords passed to matplotlib's imshow.
-        """
 
-        unfinite = ~np.isfinite(np.asarray(self))
+        """
+        if np.iscomplexobj(self):
+            data = abs(self.magnitude)
+        else:
+            data = self.magnitude.copy()
+        if isscalar(percentile):
+            percentile = percentile, 1-percentile
+            percentile = min(percentile), max(percentile)
+        unfinite = ~np.isfinite(self.magnitude)
         if mask is None:
             mask = unfinite
         else:
             mask = np.logical_or(mask, unfinite)
-
-        data = np.ma.MaskedArray(np.asarray(self), mask=mask, copy=False)
-        if np.iscomplexobj(data):
-            data = abs(data)
-        mean   = np.mean(data)
-        stddev = np.std(data)
-        # casting to float because of a bug numpy1.4 + matplotlib
-        minval = float(max(mean - 2*stddev, np.min(data)))
-        maxval = float(min(mean + 5*stddev, np.max(data)))
+        data_valid = data[~mask]
+        if isscalar(percentile):
+            percentile = percentile / 2, 100 - percentile / 2
+        minval = scipy.stats.scoreatpercentile(data_valid, percentile[0])
+        maxval = scipy.stats.scoreatpercentile(data_valid, percentile[1])
+        data[data < minval] = minval
+        data[data > maxval] = maxval
+        data[mask] = np.nan
 
         if new_figure:
             fig = pyplot.figure()
@@ -656,9 +668,10 @@ class Map(FitsArray):
 
     def imshow(self, mask=None, new_figure=True, title=None, xlabel='X',
                ylabel='Y', interpolation='nearest', origin=None, colorbar=True,
-               **keywords):
+               percentile=0.01, **keywords):
         if mask is None and self.coverage is not None:
             mask = self.coverage <= 0
+
         if origin is None:
             origin = self.origin
 
@@ -666,20 +679,27 @@ class Map(FitsArray):
         if not self.has_wcs():
             image = super(Map, self).imshow(mask=mask, new_figure=new_figure,
                           title=title, xlabel=xlabel, ylabel=ylabel,
-                          origin=origin, colorbar=colorbar, **keywords)
+                          origin=origin, colorbar=colorbar,
+                          percentile=percentile, **keywords)
             return image
 
-        data = np.ma.MaskedArray(np.asarray(self), mask=mask)
-        if np.iscomplexobj(data):
-            data = abs(data)
-        mean   = np.mean(data)
-        stddev = np.std(data)
-        minval = float(max(mean - 2*stddev, np.min(data)))
-        maxval = float(min(mean + 5*stddev, np.max(data)))
-        data[data > maxval] = maxval
+        if np.iscomplexobj(self):
+            data = abs(self.magnitude)
+        else:
+            data = self.magnitude.copy()
+        if isscalar(percentile):
+            percentile = percentile / 2, 100 - percentile / 2
+        unfinite = ~np.isfinite(self.magnitude)
+        if mask is None:
+            mask = unfinite
+        else:
+            mask = np.logical_or(mask, unfinite)
+        data_valid = data[~mask]
+        minval = scipy.stats.scoreatpercentile(data_valid, percentile[0])
+        maxval = scipy.stats.scoreatpercentile(data_valid, percentile[1])
         data[data < minval] = minval
-        if mask is not None:
-            data[mask] = np.nan
+        data[data > maxval] = maxval
+        data[mask] = np.nan
 
         #XXX FIX ME
         colorbar = False
@@ -907,11 +927,12 @@ class Tod(FitsArray):
                    derived_units, dtype, copy=False)
 
     def imshow(self, mask=None, xlabel='Sample', ylabel='Detector number',
-               aspect='auto', origin='upper', **keywords):
+               aspect='auto', origin='upper', percentile=0.01, **keywords):
         if mask is None:
             mask = self.mask
         return super(Tod, self).imshow(mask=mask, xlabel=xlabel, ylabel=ylabel,
-                     aspect=aspect, origin=origin, **keywords)
+                     aspect=aspect, origin=origin, percentile=percentile,
+                     **keywords)
 
     def __str__(self):
         if np.rank(self) == 0:

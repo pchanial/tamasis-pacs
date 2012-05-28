@@ -206,7 +206,7 @@ class Observation(object):
         return scan
 
     def plot_scan(self, map=None, header=None, detectors=True, new_figure=True,
-                  **keywords):
+                  percentile=0.01, **keywords):
         """
         map : ndarray of dim 2
             The optional map to be displayed as background.
@@ -216,13 +216,18 @@ class Observation(object):
             If true, plot the detector array's footprint on the sky.
         new_figure : boolean
             If true, plot the scan in a new window.
+        percentile : float, tuple of two floats
+            As a float, percentile of values to be discarded, otherwise,
+            percentile of the minimum and maximum values to be displayed.
+
         """
         if header is None:
             header = getattr(map, 'header', None)
             if header is None:
                 header = self.pointing.get_map_header(naxis=1)
         annim = self.pointing[self.slice[0].start:self.slice[0].stop].plot(
-            map=map, header=header, new_figure=new_figure, **keywords)
+            map=map, header=header, new_figure=new_figure,
+            percentile=percentile, **keywords)
 
         mask = ~self.pointing.removed & ~self.pointing.masked
         if np.max(mask) == 0:

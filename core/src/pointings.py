@@ -149,7 +149,7 @@ class Pointing(FitsArray):
                                  crpix=2*[naxis//2+1])
 
     def plot(self, map=None, header=None, title=None, new_figure=True,
-             linewidth=2, **kw):
+             linewidth=2, percentile=0.01, **kw):
         """
         Plot the pointings' celestial coordinates.
 
@@ -165,6 +165,9 @@ class Pointing(FitsArray):
             If true, the display will be done in a new window.
         linewidth : float
             The scan line width.
+        percentile : float, tuple of two floats
+            As a float, percentile of values to be discarded, otherwise,
+            percentile of the minimum and maximum values to be displayed.
         """
 
         mask = ~self.masked & ~self.removed
@@ -179,7 +182,8 @@ class Pointing(FitsArray):
             map = Map(map, header=header, copy=False)
 
         if isinstance(map, Map) and map.has_wcs():
-            image = map.imshow(title=title, new_figure=new_figure)
+            image = map.imshow(title=title, new_figure=new_figure,
+                               percentile=percentile, **kw)
             _plot_scan(image, ra, dec, linewidth=linewidth, **kw)
             return image
 
