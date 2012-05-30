@@ -309,6 +309,20 @@ class PacsInstrument(Instrument):
 
         return new_npixels_per_sample, out
 
+    def get_derived_units(self):
+        volt = Quantity(1/self.responsivity, 'Jy')
+        return (
+            {
+                'detector_reference': Quantity(1 / \
+                    self.active_fraction, 'detector'),
+                'detector[rightward]' : Quantity(self.pack(
+                    self.detector.area), 'arcsec^2'),
+                'V' : volt,
+            },{
+                'V' : volt
+            }
+            )
+
     def get_pointing_matrix(self, pointing, header, npixels_per_sample=0,
                             method='sharp', downsampling=False,
                             compression_factor=None, delay=0., units=None,
@@ -369,8 +383,10 @@ class PacsInstrument(Instrument):
                 raise ValueError('The compression factor is missing.')
             nvalids *= self.fine_sampling_factor * compression_factor
 
-        ndetectors = self.get_ndetectors()
-        shape = (ndetectors, nvalids, npixels_per_sample)
+        if units is None:
+            units = ('/detector,', '/pixel')
+        if derived_units is None:
+            derived_units = self.get_derived_units()
         info = {'header':header,
                 'method':method,
                 'units':units,
@@ -379,6 +395,8 @@ class PacsInstrument(Instrument):
                 'outside':False,
                 'npixels_per_sample_min':0}
 
+        ndetectors = self.get_ndetectors()
+        shape = (ndetectors, nvalids, npixels_per_sample)
         try:
             pmatrix = PointingMatrix.empty(shape, shape_input, info=info,
                                            verbose=False)
@@ -542,20 +560,6 @@ class PacsBase(Observation):
                       ('masked', np.bool8), ('removed', np.bool8)]
     SAMPLING_PERIOD = PacsInstrument.SAMPLING_PERIOD
 
-    def get_derived_units(self):
-        volt = Quantity(1/self.instrument.responsivity, 'Jy')
-        return (
-            {
-                'detector_reference': Quantity(1 / \
-                    self.instrument.active_fraction, 'detector'),
-                'detector[rightward]' : Quantity(self.pack(
-                    self.instrument.detector.area), 'arcsec^2'),
-                'V' : volt,
-            },{
-                'V' : volt
-            }
-            )
-
     def get_filter_uncorrelated(self):
         """
         Return the inverse noise time-time correlation coefficients.
@@ -604,9 +608,8 @@ class PacsBase(Observation):
 
         return super(PacsBase, self).get_pointing_matrix(header,
             npixels_per_sample, method, downsampling, compression_factor=
-            section.compression_factor, delay=section.delay, units=
-            ('/detector', '/pixel'), derived_units=self.get_derived_units(),
-            section=section, comm=comm)
+            section.compression_factor, delay=section.delay, section=section,
+            comm=comm)
 
     def get_random(self, flatfielding=True, subtraction_mean=True):
         """
