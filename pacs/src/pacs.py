@@ -639,7 +639,7 @@ class PacsBase(Observation):
         irandom = np.random.random_integers(0,iend-istart-nsamples_tot)
         result = Tod(data[:,:,irandom:irandom+nsamples_tot],
                      unit='Jy/detector',
-                     derived_units=self.get_derived_units()[0])
+                     derived_units=self.instrument.get_derived_units()[0])
         if subtraction_mean:
             result.T[:] -= np.mean(result, axis=1)
         if flatfielding:
@@ -1139,7 +1139,7 @@ class PacsObservation(PacsBase):
         tod = Tod.empty((ndetectors, nsamples_tot),
                         mask=np.empty((ndetectors, nsamples_tot), np.bool8),
                         unit=self.slice[0].unit,
-                        derived_units=self.get_derived_units()[0])
+                        derived_units=self.instrument.get_derived_units()[0])
 
         time0 = time.time()
         first = 1
