@@ -839,7 +839,7 @@ class ProjectionBaseOperator(Operator):
 
         """
         matrix = self.matrix
-        axes = [1] + matrix.shape_input[:0:-1]
+        axes = (1,) + matrix.shape_input[:0:-1]
         index = np.array(fitscoords) - 1
         index = int(np.sum(index * np.cumproduct(axes)))
 
