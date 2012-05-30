@@ -384,7 +384,7 @@ class PacsInstrument(Instrument):
             nvalids *= self.fine_sampling_factor * compression_factor
 
         if units is None:
-            units = ('/detector,', '/pixel')
+            units = ('/detector', '/pixel')
         if derived_units is None:
             derived_units = self.get_derived_units()
         info = {'header':header,
