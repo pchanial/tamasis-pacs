@@ -284,10 +284,13 @@ class Instrument(object):
         headers = self.comm.allgather(header)
         return combine_fitsheader(headers)
 
+    def get_derived_units(self):
+        return None, None
+
     def get_pointing_matrix(self, pointing, header, npixels_per_sample=0,
                             method=None, downsampling=False,
                             units=('/detector', '/pixel'),
-                            derived_units=(None,None), comm=MPI.COMM_WORLD,
+                            derived_units=None, comm=MPI.COMM_WORLD,
                             **keywords):
         """
         Return the pointing matrix for a given set of pointings.
@@ -349,6 +352,7 @@ class Instrument(object):
 
         # Allocate memory for the pointing matrix
         ndetectors = self.get_ndetectors()
+        derived_units = self.get_derived_units()
         shape = (ndetectors, nvalids, npixels_per_sample)
         info = {'header':header,
                 'method':method,
