@@ -14,7 +14,7 @@ from waflib.Configure import conf
 from waflib.Context import Context
 
 APPNAME = 'tamasis'
-VERSION = '4.2-dev'
+VERSION = '4.2'
 
 top = '.'
 out = 'build'
