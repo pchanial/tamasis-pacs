@@ -9,20 +9,23 @@ What's new ?
 * update for pyoperators 0.4 & pyfits 3.x
 * bring back map-making with distributed maps
 * comprehensive MPI testing of the naive, ls and rls mapper.
-* wscript: preprocess var.py.in file to include configuration options and version name.
-* wscript: make waf loc display Python/Fortran/Total lines of code. Remove loc-fortran and loc-python.
-* wscript: run test-mpi test suite with np = 1 even if --enable-mpi has not been set
+* PACS: API Change: change PACS's get_tod default behaviour, by not applying the flatfield correction and subtracting the mean value. To do so, the appropriate keywords must be set to True
+* PACS: make the PacsInstrument class be instanciated and used without a PacsObservation
+* PACS: gather calibration files in PacsInfo class. Implement get_calibration methods, which centralise calibration file handling. Make Responsivity and BadPixelMask calibration files handled from Python. Add access to Absorption and FilterTransmission calibration files. Update calibration files to HCSS 8.
+* PACS: fix masking of temporal jumps
+* PACS: flag as 'other' all pointings before the first inscan one.
 * datatypes: add fast median method in Quantity. (Tod takes mask into account)
-* datatypes: getitem should also handle list of items. Implement FitsArray(Map, Tod).astype. Fix wrapping of ndarray's methods in Tod and Map
+* datatypes: getitem should also handle list of items.
+* datatypes: Add astype method, fix wrapping of some ndarray's methods in Tod and Map
 * datatypes: implement rightward/leftward broadcasting in derived units.
-* add class PointingMatrix which contain the pointing matrix information and info about the input map. Make ProjectionOperator handle PointingMatrix inputs and the get_pointing_matrix routines return a PointingMatrix object. As a consequence, pointing matrices can be manipulated before being used to initialise a ProjectionOperator. Make get_mask work for MPI-distributed maps and TODs. Make get_ptp work for block column projections. Remove header, npixels_per_sample attributes
-* new methods intersects, apply_mask, get_pTx_pT1 (can significantly speed up naive maps) in ProjectionOperator. Remove _matrix attribute in projections.
-* remove 3rd dimension in pointing_matrix_mask/pack. During packing, reject PointingElements with a negative weight.
-* in InvNttOperator, fix filter_length if the operator has several blocks.
-* PackOperator and UnpackOperator: add unary and binary rules. Hence remove transpose methods. Rework Fortran routines to differentiate in-place and out-of-place operations. Add comprehensive test cases.
-* in DdTddOperator, if the the scalar argument is zero, return a ZeroOperator.
-* make DiscreteDifferenceOperator work even if there are more MPI processes than elements along the first dimension. Fix MPI outplace diffT case.
-* make the block_diagonal decorator handle implicit partitions, take the usual partitionin and axisin keywords instead of partition and axis.
+* acquisitionmodels: add class PointingMatrix which contain the pointing matrix information and info about the input map. Make ProjectionOperator handle PointingMatrix inputs and the get_pointing_matrix routines return a PointingMatrix object. As a consequence, pointing matrices can be manipulated before being used to initialise a ProjectionOperator. Make get_mask work for MPI-distributed maps and TODs. Make get_ptp work for block column projections. Remove header, npixels_per_sample attributes
+* acquisitionmodels: new methods intersects, apply_mask, get_pTx_pT1 (can significantly speed up naive maps) in ProjectionOperator. Remove _matrix attribute in projections.
+* acquisitionmodels: remove 3rd dimension in pointing_matrix_mask/pack. During packing, reject PointingElements with a negative weight.
+* acquisitionmodels: in InvNttOperator, fix filter_length if the operator has several blocks.
+* acquisitionmodels: PackOperator and UnpackOperator: add unary and binary rules. Hence remove transpose methods. Rework Fortran routines to differentiate in-place and out-of-place operations. Add comprehensive test cases.
+* acquisitionmodels: in DdTddOperator, if the the scalar argument is zero, return a ZeroOperator.
+* acquisitionmodels: make DiscreteDifferenceOperator work even if there are more MPI processes than elements along the first dimension. Fix MPI outplace diffT case.
+* acquisitionmodels: make the block_diagonal decorator handle implicit partitions, take the usual partitionin and axisin keywords instead of partition and axis.
 * API change: remove_nonfinite -> filter_nonfinite, add outplace operations, with and without a mask, Add processing Fortran interface.
 * interpolate_linear, filter_median, filter_nonfinite, filter_polynomial: add 'out' keyword. Use partition instead of nsamples.
 * inplace filter_polynomial
@@ -33,12 +36,10 @@ What's new ?
 * move all information messages to Python. Group info messages for block column projection operators.
 * refactor mapper_ls and mapper_rls, by relying on algebraic rules and by removing the use of ReshapeOperator.
 * in write_fits, fix MPI case. Do not rely on pyfits private methods and do the padding ourselves.
-* rename numpyutils.py -> utils.py and utils.py -> datautils.py.
-* general: improve error messages
 * add argument r0 in airy_disk function to specify first zero, as an alternative to fwhm.
 * in imshow, discard outliers by using a percentile of the valid values.
-* PACS: API Change: change PACS's get_tod default: explicitly set flatfielding and subtraction_mean to true to perform the operation.
-* PACS: fix masking of temporal jumps
-* PACS: flag as 'other' all pointings before the first inscan one.
-* PACS: make the PacsInstrument class instanciable
-* PACS: gather calibration files in PacsInfo class. Implement get_calibration methods, which centralise calibration file handling. Make Responsivity and BadPixelMask calibration files handled from Python. Add access to Absorption and FilterTransmission calibration files. Update calibration files to HCSS 8.
+* general: improve error messages
+* rename numpyutils.py -> utils.py and utils.py -> datautils.py.
+* wscript: preprocess var.py.in file to include configuration options and version name.
+* wscript: make waf loc display Python/Fortran/Total lines of code. Remove loc-fortran and loc-python.
+* wscript: run test-mpi test suite with np = 1 even if --enable-mpi has not been set
