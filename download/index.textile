@@ -79,7 +79,7 @@ ulimit -s unlimited
 
 h1. Troubleshooting
 
-* If you're using the Enthought Python Distribution, there symbol conflicts between the fftw3 library and the mkl library. Since the mkl library does not provide a backend for half complex operations, these will fail. To force the fftw library to be loaded before the mkl library, I set the following environment variable (check the fftw3 installation path):
+* If you're using the Enthought Python Distribution, there are symbol conflicts between the fftw3 library and the mkl library. Since the mkl library does not provide a backend for half complex operations, these will fail. To force the fftw library to be loaded before the mkl library, I set the following environment variable (check the fftw3 installation path):
 
 bc. export LD_PRELOAD=/usr/local/lib/libfftw3.so:/usr/local/lib/libfftw3f.so
 
