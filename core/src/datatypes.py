@@ -286,7 +286,7 @@ class FitsArray(Quantity):
 
     def imshow(self, mask=None, new_figure=True, title=None, xlabel='',
                ylabel='', interpolation='nearest', colorbar=True,
-               percentile=0.01, **keywords):
+               percentile=1, **keywords):
         """
         A graphical display method specialising matplotlib's imshow.
 
@@ -309,7 +309,7 @@ class FitsArray(Quantity):
         colorbar : boolean, optional
             If True, plot an intensity color bar next to the display.
             Default is True.
-        percentile : float, tuple of two floats
+        percentile : float, tuple of two floats in range [0,100]
             As a float, percentile of values to be discarded, otherwise,
             percentile of the minimum and maximum values to be displayed.
         **keywords : additional are keywords passed to matplotlib's imshow.
@@ -320,16 +320,13 @@ class FitsArray(Quantity):
         else:
             data = self.magnitude.copy()
         if isscalar(percentile):
-            percentile = percentile, 1-percentile
-            percentile = min(percentile), max(percentile)
+            percentile = percentile / 2, 100 - percentile / 2
         unfinite = ~np.isfinite(self.magnitude)
         if mask is None:
             mask = unfinite
         else:
             mask = np.logical_or(mask, unfinite)
         data_valid = data[~mask]
-        if isscalar(percentile):
-            percentile = percentile / 2, 100 - percentile / 2
         minval = scipy.stats.scoreatpercentile(data_valid, percentile[0])
         maxval = scipy.stats.scoreatpercentile(data_valid, percentile[1])
         data[data < minval] = minval
@@ -668,7 +665,7 @@ class Map(FitsArray):
 
     def imshow(self, mask=None, new_figure=True, title=None, xlabel='X',
                ylabel='Y', interpolation='nearest', origin=None, colorbar=True,
-               percentile=0.01, **keywords):
+               percentile=1, **keywords):
         if mask is None and self.coverage is not None:
             mask = self.coverage <= 0
 
@@ -927,7 +924,7 @@ class Tod(FitsArray):
                    derived_units, dtype, copy=False)
 
     def imshow(self, mask=None, xlabel='Sample', ylabel='Detector number',
-               aspect='auto', origin='upper', percentile=0.01, **keywords):
+               aspect='auto', origin='upper', percentile=1, **keywords):
         if mask is None:
             mask = self.mask
         return super(Tod, self).imshow(mask=mask, xlabel=xlabel, ylabel=ylabel,
