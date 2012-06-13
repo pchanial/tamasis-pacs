@@ -6,3 +6,4 @@ baseurl: /tamasis-map
 package: Tamasis/PACS
 meta_keywords: Pierre Chanial, Tamasis, Map-making, Herschel, PACS, Astrophysics
 menu: <a href="http://pchanial.github.com/pyoperators">PyOperators</a>
+version_stable: 4.2

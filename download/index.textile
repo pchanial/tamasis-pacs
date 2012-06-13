@@ -6,58 +6,62 @@ excerpt: Download Tamasis package
 
 h1. {{ page.title }}
 
-The current stable version of the Tamasis/PACS package is 4.0.
+The current stable version of the Tamasis/PACS package is {{ site.version_stable }}.
 The project is hosted at "github":https://github.com/pchanial/tamasis-map/ and there are two ways to obtain it.
   
 * Either by retrieving an archive
-    - as a "tar file":https://github.com/pchanial/tamasis-map/tarball/v4.0/
-    - or a "zip file":https://github.com/pchanial/tamasis-map/zipball/v4.0/.
+    - as a "tar file":https://github.com/pchanial/tamasis-map/tarball/v{{ site.version_stable }}/
+    - or a "zip file":https://github.com/pchanial/tamasis-map/zipball/v{{ site.version_stable }}/.
 <br/>
 * Alternatively, by cloning the project, using the version control system "Git":http://git-scm.com/:
 
-bc. $ git clone git://github.com/pchanial/tamasis-map.git
+bc. $ git clone git://github.com/pchanial/tamasis-map.git tamasis-{{ site.version_stable }} --branch=v{{ site.version_stable }}
 
-The second method is more convenient to make updates (if you've just cloned the repository, you will obviously not get anything new)
+The second method is more convenient to make updates of the branch (if you've just cloned the repository, you will obviously not get anything new) or (without specifying the @--branch=v{{ site.version_stable }}@ option) to follow developments on or contribute to the master branch.
 
-bc. $ cd tamasis-map
+bc. $ cd tamasis-{{ site.version_stable }}
 $ git pull
 Already up-to-date.
 
 This method is also required if you are to test tamasis' development branch.
 
 
-h1. Software dependencies
+h1. Setting up a scientific Python environment
 
-h2. Python modules
+Installing a Python environment for scientific purposes can be a hassle. I recommend installing a dedicated distribution such as "Enthought":http://www.enthought.com or "Python":http://www.pythonxy.com **(x,y)**. If you're up to the challenge of setting it up by yourself, you should install the following packages:
 
+* "python":www.python.org >= 2.6 (< 3)
 * "numpy":http://numpy.scipy.org >= 1.6
 * "scipy":http://www.scipy.org >= 0.9
-* "pyoperators":http://pchanial.github.com/pyoperators >= 0.2
 * "matplotlib":http://matplotlib.sourceforge.net >= 0.99
-* "pyfftw":https://launchpad.net/pyfftw/ >= 0.2.1
 * "numexpr":http://code.google.com/p/numexpr >= 2.0
 * "pyfits":http://www.stsci.edu/resources/software_hardware/pyfits >= 3.0
-* "kapteyn":http://www.astro.rug.nl/software/kapteyn >= 2.0.2
+* optional, but recommended: "ipython":http://ipython.org
 
-<h3>Optional:</h3>
-* "ds9":http://hea-www.harvard.edu/saord/ds9/pyds9
-* "mpi4py":http://mpi4py.scipy.org
+h1. Tamasis dependencies
 
-h2. Other
+h2. Compiler
 
-* "gfortran":http://gcc.gnu.org >= 4.5 or ifort >= 11.1
+* either "gfortran":http://gcc.gnu.org >= 4.5
+* or "ifort":http://software.intel.com/en-us/articles/intel-composer-xe >= 11.1
+
+h2. External libraries
+
 * "cfitsio":http://heasarc.gsfc.nasa.gov/fitsio >= 3.23
 * "FFTW":http://www.fftw.org >= 3.2.2 (compiled with options @--enable-threads@ and @--enable-shared@)
 
-<h3>Optional:</h3>
+<!-- * "wcslib":http://www.atnf.csiro.au/people/mcalabre/WCS >= 4.4.4 -->
+* optional, for a distributed installation: "openmpi":http://www.open-mpi.org or "mpich":http://www.mcs.anl.gov/research/projects/mpich2
 
-* "wcslib":http://www.atnf.csiro.au/people/mcalabre/WCS >= 4.4.4
-* "openmpi":http://www.open-mpi.org or "mpich":http://www.mcs.anl.gov/research/projects/mpich2
+h2. Python modules
 
+* "pyoperators":http://pchanial.github.com/pyoperators >= 0.4
+* "pyfftw":https://launchpad.net/pyfftw/ >= 0.2.1
+* "kapteyn":http://www.astro.rug.nl/software/kapteyn >= 2.0.2
 
-h1. Upgrading from Tamasis/PACS 3.2
+* optional, for a ds9 interface: "pyds9":http://hea-www.harvard.edu/saord/ds9/pyds9
+* optional, for a distributed installation: "mpi4py":http://mpi4py.scipy.org
 
-Note for users upgrading from version 3.2: the Python packages numexpr and PyOperators must be installed and the package pyfits must be upgraded.
 
 h1. Installation
 
@@ -74,6 +78,11 @@ ulimit -s unlimited
 
 
 h1. Troubleshooting
+
+* If you're using the Enthought Python Distribution, there symbol conflicts between the fftw3 library and the mkl library. Since the mkl library does not provide a backend for half complex operations, these will fail. To force the fftw library to be loaded before the mkl library, I set the following environment variable (check the fftw3 installation path):
+
+bc. export LD_PRELOAD=/usr/local/lib/libfftw3.so:/usr/local/lib/libfftw3f.so
+
 
 * if you have installed libraries in a non-standard location, make sure that the environment variable @LD_LIBRARY_PATH@ (Linux) or @DYLD_LIBRARY_PATH@ (MacOSX) contains the path of these libraries.
 
