@@ -7,8 +7,10 @@ from __future__ import division
 import numpy as np
 import pyfits
 
-from kapteyn import wcs
-from pyoperators.utils import isscalar
+from kapteyn import wcs as kwcs
+from pyoperators import Operator
+from pyoperators.decorators import real, square, inplace
+from pyoperators.utils import isscalar, operation_assignment
 
 from . import tamasisfortran as tmf
 from . import var
@@ -17,6 +19,8 @@ __all__ = [
     'angle_lonlat',
     'create_fitsheader',
     'str2fitsheader',
+    'WCSToPixelOperator',
+    'WCSToWorldOperator',
 ]
 
 def angle_lonlat(lon1, lat1, lon2=None, lat2=None):
@@ -114,10 +118,10 @@ def combine_fitsheader(headers, cdelt=None, pa=None):
                                 crval=crval)
 
     # then, 'enlarge' it to make it fit the edges of each header
-    proj0 = wcs.Projection(header0)
+    proj0 = kwcs.Projection(header0)
     xy0 = []
     for h in headers:
-        proj = wcs.Projection(h)
+        proj = kwcs.Projection(h)
         nx = h['NAXIS1']
         ny = h['NAXIS2']
         x  = h['CRPIX1']
@@ -378,3 +382,71 @@ def str2fitsheader(string):
         cards.append(pyfits.Card().fromstring(line))
         iline += 1
     return header
+
+
+#-------------------------------------------------------------------------------
+
+
+@real
+@square
+@inplace
+class _WCSKapteynOperator(Operator):
+    def __init__(self, wcs, **keywords):
+        """
+        wcs : FITS header or Kapteyn wcs.Projection instance
+            Representation of the world coordinate system
+        """
+        if isinstance(wcs, pyfits.Header):
+            wcs = kwcs.Projection(wcs)
+        if 'dtype' not in keywords:
+            keywords['dtype'] = float
+        wcs.allow_invalid = True
+        Operator.__init__(self, **keywords)
+        self.wcs = wcs
+
+    def validatein(self, shapein):
+        if len(shapein) == 0:
+            raise ValueError('Invalid scalar input.')
+        if shapein[-1] != 2:
+            raise ValueError("Invalid last dimension: '{0}'.".format(
+                             shapein[-1]))
+
+
+class WCSToPixelOperator(_WCSKapteynOperator):
+    """
+    Operator for WCS world-to-pixel transforms.
+    
+    Example
+    -------
+    >>> header = pyfits.open('myfile.fits')
+    >>> w = WCSToPixelOperator(header)
+    >>> pix = w((ra0,dec0))
+
+    """
+    def __init__(self, wcs, **keywords):
+        _WCSKapteynOperator.__init__(self, wcs, **keywords)
+        self.set_rule('.I', lambda s: WCSToWorldOperator(s.wcs))
+    __init__.__doc__ = _WCSKapteynOperator.__init__.__doc__
+
+    def direct(self, input, output, operation=operation_assignment):
+        operation(output, self.wcs.topixel(input))
+
+
+class WCSToWorldOperator(_WCSKapteynOperator):
+    """
+    Operator for WCS pixel-to-world transforms.
+    
+    Example
+    -------
+    >>> header = pyfits.open('myfile.fits')
+    >>> w = WCSToWorldOperator(header)
+    >>> radec = w((x,y))
+
+    """
+    def __init__(self, wcs, **keywords):
+        _WCSKapteynOperator.__init__(self, wcs, **keywords)
+        self.set_rule('.I', lambda s: WCSToPixelOperator(s.wcs))
+    __init__.__doc__ = _WCSKapteynOperator.__init__.__doc__
+
+    def direct(self, input, output, operation=operation_assignment):
+        operation(output, self.wcs.toworld(input))
