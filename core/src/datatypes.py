@@ -980,8 +980,11 @@ class Tod(FitsArray):
     def _wrap_func(self, func, unit, *args, **kw):
         self_ma = np.ma.MaskedArray(self.magnitude, mask=self.mask, copy=False)
         output = func(self_ma, *args, **kw)
+        if isinstance(output, np.ma.core.MaskedConstant):
+            return type(self)(np.nan, mask=True, unit=unit, derived_units=
+                              self.derived_units, dtype=self.dtype)
         if not isinstance(output, np.ndarray):
-            return type(self)(output, unit=unit, derived_units= \
+            return type(self)(output, unit=unit, derived_units=
                               self.derived_units, dtype=self.dtype)
         result = output.view(type(self))
         result.__array_finalize__(self)
