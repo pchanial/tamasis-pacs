@@ -78,7 +78,7 @@ def test_detector_policy():
     masking = MaskOperator(tod.mask)
     model = masking * projection
     map_naive = mapper_naive(tod, model)
-    assert all_eq(map_naive, map_naive_ref, 1.e-11)
+    assert all_eq(map_naive, map_naive_ref, tol)
 
     obs_rem = PacsObservation(data_dir + 'frames_blue.fits',
                               policy_bad_detector='remove',
@@ -90,7 +90,7 @@ def test_detector_policy():
     masking_rem = MaskOperator(tod_rem.mask)
     model_rem = masking_rem * projection_rem
     map_naive_rem = mapper_naive(tod_rem, model_rem)
-    assert all_eq(map_naive, map_naive_rem, 1.e-11)
+    assert all_eq(map_naive, map_naive_rem, tol)
 
 def test_pack():
     for channel, nrows, ncolumns in ('red',16,32), ('blue',32,64):
@@ -161,24 +161,25 @@ def test_pTx_pT1():
                             data_dir + 'frames_blue.fits[44:360]'])
     obs1.pointing.chop = 0
     obs2.pointing.chop = 0
+    header = obs1.get_map_header()
 
     tod = obs1.get_tod()
 
-    model1 = ProjectionOperator(obs1, downsampling=True)
-    m1 = mapper_naive(tod, model1, unit='Jy/arcsec^2')
+    model1 = ProjectionOperator(obs1, downsampling=True, header=header)
+    ref = mapper_naive(tod, model1, unit='Jy/arcsec^2')
 
     model1.apply_mask(tod.mask)
     tod.inunit('Jy/arcsec^2')
-    b2, w2 = model1.get_pTx_pT1(tod)
-    m2 = b2 / w2
-    assert all_eq(m1, m2, tol)
+    b1, w1 = model1.get_pTx_pT1(tod)
+    m1 = b1 / w1
+    assert all_eq(ref, m1, tol)
 
-    model3 = ProjectionOperator(obs2, downsampling=True)
-    model3.apply_mask(tod.mask)
+    model2 = ProjectionOperator(obs2, downsampling=True, header=header)
+    model2.apply_mask(tod.mask)
     
-    b3, w3 = model3.get_pTx_pT1(tod)
-    m3 = b3 / w3
-    assert all_eq(m1, m3, tol)
+    b2, w2 = model2.get_pTx_pT1(tod)
+    m2 = b2 / w2
+    assert all_eq(ref, m2, tol)
 
     
 def teardown():
