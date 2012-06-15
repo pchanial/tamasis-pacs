@@ -772,8 +772,8 @@ class ProjectionBaseOperator(Operator):
             attr['_derived_units'] = self.duin
 
     def set_attrout(self, attr):
-        if 'header' in attr:
-            del attr['header']
+        if '_header' in attr:
+            del attr['_header']
         unitin = attr['_unit'] if '_unit' in attr else {}
         if unitin:
             attr['_unit'] = _multiply_unit(unitin, self.unit)
