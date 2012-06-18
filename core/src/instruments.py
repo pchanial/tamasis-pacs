@@ -503,7 +503,7 @@ class Instrument(object):
             Detector size, in the same units as the focal distance.
         active_fraction : float
             Fraction of the detector surface that transmits light.
-        focal_distance : float
+        focal_distance : float, optional
             The focal distance, in the same units as the detector size.
         inversion : boolean
             If set the true, the detector positions are inversed through
@@ -529,10 +529,11 @@ class Instrument(object):
                     corners[i,j,:,0] = (corners[i,j,:,0] - u0) * coef + u0
                     corners[i,j,:,1] = (corners[i,j,:,1] - v0) * coef + v0
 
-        corners[...,0], corners[...,1] = \
-            np.rad2deg(corners[...,0] / focal_distance), \
-            np.rad2deg(corners[...,1] / focal_distance)
-        corners *= 3600
+        if focal_distance is not None:
+            corners[...,0], corners[...,1] = \
+                np.rad2deg(corners[...,0] / focal_distance), \
+                np.rad2deg(corners[...,1] / focal_distance)
+            corners *= 3600
 
         if inversion:
             corners = -corners
