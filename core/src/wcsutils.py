@@ -6,6 +6,7 @@ from __future__ import division
 
 import numpy as np
 import pyfits
+import scipy.interpolate as interp
 
 from kapteyn import wcs as kwcs
 from pyoperators import Operator
@@ -19,6 +20,7 @@ __all__ = [
     'angle_lonlat',
     'create_fitsheader',
     'str2fitsheader',
+    'DistortionOperator',
     'WCSToPixelOperator',
     'WCSToWorldOperator',
 ]
@@ -389,6 +391,46 @@ def str2fitsheader(string):
 
 @real
 @square
+class DistortionOperator(Operator):
+    """
+    Distortion operator.
+
+    The interpolation is performed using the Clough-Tocher method. 
+    Interpolation of points outside the object plane coordinates convex hull
+    will return NaN.
+
+    Parameters
+    ----------
+    xin : array of shape (npoints, ndims)
+       Coordinates in the object plane.
+    xout : array of shape (npoints, ndims)
+       Coordinates in the image plane.
+
+    """
+    def __init__(self, xin, xout, **keywords):
+        xin = np.asarray(xin)
+        xout = np.asarray(xout)
+        if xin.shape[-1] != 2:
+            raise ValueError('The shape of the object plane coordinates should '
+                             'be (npoints,ndims), where ndims is only implement'
+                             'ed for 2.')
+        if xin.shape != xout.shape:
+            raise ValueError('The object and image coordinates do not have the '
+                             'same shape.')
+
+        keywords['dtype'] = float
+        Operator.__init__(self, **keywords)
+        self.interp0 = interp.CloughTocher2DInterpolator(xin, xout[...,0])
+        self.interp1 = interp.CloughTocher2DInterpolator(xin, xout[...,1])
+        self.set_rule('.I', lambda s:DistortionOperator(xout, xin))
+
+    def direct(self, input, output):
+        output[...,0] = self.interp0(input)
+        output[...,1] = self.interp1(input)
+
+
+@real
+@square
 @inplace
 class _WCSKapteynOperator(Operator):
     def __init__(self, wcs, **keywords):
@@ -450,3 +492,4 @@ class WCSToWorldOperator(_WCSKapteynOperator):
 
     def direct(self, input, output, operation=operation_assignment):
         operation(output, self.wcs.toworld(input))
+
