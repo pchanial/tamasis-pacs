@@ -7,15 +7,15 @@ excerpt: Download Tamasis package
 h1. {{ page.title }}
 
 The current stable version of the Tamasis/PACS package is {{ site.version_stable }}.
-The project is hosted at "github":https://github.com/pchanial/tamasis-map/ and there are two ways to obtain it.
+The project is hosted at "github":https://github.com/pchanial/tamasis-pacs/ and there are two ways to obtain it.
   
 * Either by retrieving an archive
-    - as a "tar file":https://github.com/pchanial/tamasis-map/tarball/v{{ site.version_stable }}/
-    - or a "zip file":https://github.com/pchanial/tamasis-map/zipball/v{{ site.version_stable }}/.
+    - as a "tar file":https://github.com/pchanial/tamasis-pacs/tarball/v{{ site.version_stable }}/
+    - or a "zip file":https://github.com/pchanial/tamasis-pacs/zipball/v{{ site.version_stable }}/.
 <br/>
 * Alternatively, by cloning the project, using the version control system "Git":http://git-scm.com/:
 
-bc. $ git clone git://github.com/pchanial/tamasis-map.git tamasis-{{ site.version_stable }} --branch=v{{ site.version_stable }}
+bc. $ git clone git://github.com/pchanial/tamasis-pacs.git tamasis-{{ site.version_stable }} --branch=v{{ site.version_stable }}
 
 The second method is more convenient to make updates of the branch (if you've just cloned the repository, you will obviously not get anything new) or (without specifying the @--branch=v{{ site.version_stable }}@ option) to follow developments on or contribute to the master branch.
 

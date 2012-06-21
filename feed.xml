@@ -5,10 +5,10 @@ layout: nil
 <feed xmlns="http://www.w3.org/2005/Atom">
  
  <title>Tamasis/PACS</title>
- <link href="http://pchanial.github.com/tamasis-map/feed/" rel="self"/>
- <link href="http://pchanial.github.com/tamasis-map/"/>
+ <link href="http://pchanial.github.com/tamasis-pacs/feed/" rel="self"/>
+ <link href="http://pchanial.github.com/tamasis-pacs/"/>
  <updated>{{ site.time | date_to_xmlschema }}</updated>
- <id>http://pchanial.github.com/tamasis-map/</id>
+ <id>http://pchanial.github.com/tamasis-pacs/</id>
  <author>
    <name>Tamasis/PACS</name>
    <email></email>
@@ -17,9 +17,9 @@ layout: nil
  {% for post in site.posts %}
  <entry>
    <title>{{ post.title }}</title>
-   <link href="http://pchanial.github.com/tamasis-map{{ post.url }}"/>
+   <link href="http://pchanial.github.com/tamasis-pacs{{ post.url }}"/>
    <updated>{{ post.date | date_to_xmlschema }}</updated>
-   <id>http://pchanial.github.com/tamasis-map{{ post.id }}</id>
+   <id>http://pchanial.github.com/tamasis-pacs{{ post.id }}</id>
    <content type="html">{{ post.content | xml_escape }}</content>
  </entry>
  {% endfor %}

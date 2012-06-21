@@ -5,49 +5,49 @@ layout: none
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 
    <url>
-      <loc>http://pchanial.github.com/tamasis-map/</loc>
+      <loc>http://pchanial.github.com/tamasis-pacs/</loc>
       <lastmod>{{ site.time | date: '%Y-%m-%d' }}</lastmod>
       <changefreq>daily</changefreq>
       <priority>1</priority>
    </url>
 
    <url>
-      <loc>http://pchanial.github.com/tamasis-map/download/</loc>
+      <loc>http://pchanial.github.com/tamasis-pacs/download/</loc>
       <lastmod>{{ site.time | date: '%Y-%m-%d' }}</lastmod>
       <changefreq>weekly</changefreq>
       <priority>0.7</priority>
    </url>
 
    <url>
-      <loc>http://pchanial.github.com/tamasis-map/installation/</loc>
+      <loc>http://pchanial.github.com/tamasis-pacs/installation/</loc>
       <lastmod>{{ site.time | date: '%Y-%m-%d' }}</lastmod>
       <changefreq>weekly</changefreq>
       <priority>0.7</priority>
    </url>
 
    <url>
-      <loc>http://pchanial.github.com/tamasis-map/faq/</loc>
+      <loc>http://pchanial.github.com/tamasis-pacs/faq/</loc>
       <lastmod>{{ site.time | date: '%Y-%m-%d' }}</lastmod>
       <changefreq>weekly</changefreq>
       <priority>0.7</priority>
    </url>
 
    <url>
-      <loc>http://pchanial.github.com/tamasis-map/contact/</loc>
+      <loc>http://pchanial.github.com/tamasis-pacs/contact/</loc>
       <lastmod>{{ site.time | date: '%Y-%m-%d' }}</lastmod>
       <changefreq>weekly</changefreq>
       <priority>0.1</priority>
    </url>
 
    <url>
-      <loc>http://pchanial.github.com/tamasis-map/archive</loc>
+      <loc>http://pchanial.github.com/tamasis-pacs/archive</loc>
       <lastmod>{{ site.time | date: '%Y-%m-%d' }}</lastmod>
       <changefreq>daily</changefreq>
       <priority>0.1</priority>
    </url>
 {% for post in site.posts %}
    <url>
-      <loc>http://pchanial.github.com/tamasis-map{{ post.url }}/</loc>
+      <loc>http://pchanial.github.com/tamasis-pacs{{ post.url }}/</loc>
       <lastmod>{{ post.date | date: '%Y-%m-%d' }}</lastmod>
       <changefreq>weekly</changefreq>
       <priority>0.8</priority>
