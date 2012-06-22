@@ -59,11 +59,13 @@ def options(opt):
                    action='store',
                    default='8',
                    choices=['4', '8', '16'],
-                   help='precision of reals: single (4), double (8)or quadruple precision (16)')
+                   help='precision of reals: single (4), double (8) or quadrupl'
+                        'e precision (16)')
     opt.add_option('--debug',
                    action='store_true',
                    default=False,
-                   help='use compiler flags for debugging (export symbols, add checks...)')
+                   help='use compiler flags for debugging (export symbols, add '
+                        'checks...)')
     opt.add_option('--np',
                    action='store',
                    help='number of MPI copies')
@@ -255,7 +257,7 @@ end program test
               '8' : 'complex_double',
               '16': 'complex_long_double'}[p]
     os.system("echo {\\'real\\':{\\'p\\':\\'" + ctype + \
-        "\\'}, \\'complex\\':{\\'p\\':\\'" + cctype + "\\'}} > %s/.f2py_f2cmap"\
+        "\\'}, \\'complex\\':{\\'p\\':\\'" + cctype + "\\'}} > %s/.f2py_f2cmap"
         % out)
 
 
@@ -281,13 +283,14 @@ def build(bld):
     
     # Python extension tamasisfortran.so
     target = 'tamasisfortran.so'
-    source = [bld.srcnode.find_node('%s/src/tamasisfortran_%s.f90' % (s,s)) for s in subdirs]
+    source = [bld.srcnode.find_node('%s/src/tamasisfortran_%s.f90' % (s,s))
+              for s in subdirs]
     additional_interfaces = ['math', 'operators', 'pointing', 'processing']
     if bld.env.HAVE_MPI:
         additional_interfaces += [ 'mpi' ]
     for a in additional_interfaces:
-        source += bld.srcnode.ant_glob('core/src/tamasisfortran_core_{0}.f90' \
-                                       .format(a))
+        source += bld.srcnode.ant_glob('core/src/tamasisfortran_core_{0}.f90'.
+                                       format(a))
 
     #XXX this should be a Task...
     cmd = ''
@@ -307,7 +310,8 @@ def build(bld):
 
     bld(rule=cmd,
         color='YELLOW',
-        source=source + [bld.env.fcstlib_PATTERN%('tamasis'+s) for s in subdirs],
+        source=source + [bld.env.fcstlib_PATTERN%('tamasis' + s)
+                         for s in subdirs],
         target=target,
         use=libraries)
 
@@ -344,7 +348,8 @@ def build(bld):
         if node is not None:
             bld.install_files('${SHAREDIR}/tamasis/'+subdir, node.ant_glob('*'))
 
-    bld.install_files('${LIBDIR}/jython/tamasishcss', bld.srcnode.ant_glob('pacs/hcss/tamasishcss/*py'))
+    bld.install_files('${LIBDIR}/jython/tamasishcss', bld.srcnode.ant_glob(
+                      'pacs/hcss/tamasishcss/*py'))
 
 
 
@@ -459,7 +464,8 @@ class test_mpi(BuildContext):
 def test_mpi_fun(bld):
 
     if not bld.env.HAVE_MPI:
-        Logs.pprint('RED', 'The package is not configured to use MPI. Use --enable-mpi option.')
+        Logs.pprint('RED', 'The package is not configured to use MPI. Use --ena'
+                    'ble-mpi option.')
         return
 
     if bld.options.np is None:
@@ -470,10 +476,10 @@ def test_mpi_fun(bld):
         files = bld.path.ant_glob(subdir+'/test/test_mpi*.py')
         for file in files:
             for n in ns:
-                bld(rule='export OMP_NUM_THREADS=1; mpirun -n ' + str(n) + \
-                    ' ${NOSETESTS} ' + file.abspath() + (' > /dev/null' \
-                if bld.options.verbose == 0 else '') + '; unset OMP' \
-                    '_NUM_THREADS', always=True)
+                bld(rule='export OMP_NUM_THREADS=1; mpirun -n ' + str(n) +
+                    ' ${NOSETESTS} ' + file.abspath() + (' > /dev/null' if bld.
+                    options.verbose == 0 else '') + '; unset OMP_NUM_THREADS',
+                    always=True)
                 bld.add_group()
 
 
