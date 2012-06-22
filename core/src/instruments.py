@@ -31,7 +31,8 @@ class Instrument(object):
     """
     def __init__(self, name, shape, removed=None, masked=None,
                  detector_center=None, detector_corner=None,
-                 default_resolution=None, dtype=None, comm=MPI.COMM_WORLD):
+                 default_resolution=None, origin='upper', dtype=None,
+                 comm=MPI.COMM_WORLD):
 
         self.name = str(name)
         shape = tuple(shape)
@@ -71,7 +72,7 @@ class Instrument(object):
         if dtype is None:
             dtype = dtype_default
 
-        self.detector = Map.zeros(shape, dtype=dtype, origin='upper')
+        self.detector = Map.zeros(shape, dtype=dtype, origin=origin)
         
         self.detector.masked = masked
         self.detector.removed = removed
