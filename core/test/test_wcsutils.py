@@ -79,3 +79,15 @@ def test_has_wcs():
     assert not has_wcs(header)
     header = create_fitsheader([2,4], cdelt=1)
     assert has_wcs(header)
+
+def test_create_fitsheader():
+    shapes = [ (), (1,), (1,2), (0,1), (1,0), (2,3)]
+    arrays = [np.ones(()) for s in shapes ]
+    def func(a):
+        h1 = create_fitsheader(a.shape, dtype=float)
+        h2 = create_fitsheader(fromdata=a)
+        assert h1 == h2
+        assert h1['NAXIS'] == max(a.ndim, 1)
+        assert h1['NAXIS1'] == a.shape[-1] if a.ndim > 0 else 1
+    for a in arrays:
+        yield func, a

@@ -194,22 +194,24 @@ def create_fitsheader(naxis=None, dtype=None, fromdata=None, extname=None,
     >>> map.header = create_fitsheader(fromdata=map)
     """
 
+    if naxis is not None and fromdata is not None or naxis is None and \
+       fromdata is None:
+        raise ValueError("Either keyword 'naxis' or 'fromdata' must be specifie"
+                         "d.")
+
     if fromdata is None:
-        if naxis is None:
-            raise ValueError("Keywords 'naxis' or 'fromdata' must be specifie" \
-                             'd.')
-        if isinstance(naxis, np.ndarray) and naxis.size > 8:
+        naxis = np.array(naxis, ndmin=1)
+        naxis = tuple(naxis)
+        if len(naxis) > 8:
             raise ValueError('First argument is naxis=(NAXIS1,NAXIS2,...)')
         if dtype is not None:
+            dtype = np.dtype(dtype)
             typename = dtype.name
         else:
             typename = 'float64'
     else:
-        array = fromdata
-        if not isinstance(array, np.ndarray):
-            raise TypeError('The input is not an ndarray.')
-        if naxis is None:
-            naxis = tuple(reversed(array.shape))
+        array = np.array(fromdata, copy=False)
+        naxis = tuple(reversed(array.shape))
         if dtype is not None:
             array = array.astype(dtype)
         if array.dtype.itemsize == 1:
@@ -219,8 +221,10 @@ def create_fitsheader(naxis=None, dtype=None, fromdata=None, extname=None,
         else:
             typename = array.dtype.name
 
-    if type(naxis) not in (list, tuple):
-        naxis = (naxis,)
+    # FITS format does not handle scalar values
+    if len(naxis) == 0:
+        naxis = (1,)
+
     numaxis = len(naxis)
 
     if extname is None:
@@ -242,28 +246,29 @@ def create_fitsheader(naxis=None, dtype=None, fromdata=None, extname=None,
         header.update('extname', extname)
 
     if cd is not None:
-        cd = np.asarray(cd, dtype=np.float64)
+        cd = np.asarray(cd, dtype=float)
         if cd.shape != (2,2):
             raise ValueError('The CD matrix is not a 2x2 matrix.')
     else:
         if cdelt is None:
             return header
+        cdelt = np.array(cdelt, float)
         if isscalar(cdelt):
-            cdelt = (-cdelt, cdelt)
+            cdelt = np.array([-cdelt, cdelt])
         if pa is None:
             pa = 0.
         theta=np.deg2rad(-pa)
         cd = np.diag(cdelt).dot(np.array([[ np.cos(theta), np.sin(theta)],
                                           [-np.sin(theta), np.cos(theta)]]))
 
-    crval = np.asarray(crval, dtype=np.float64)
+    crval = np.asarray(crval, float)
     if crval.size != 2:
         raise ValueError('CRVAL does not have two elements.')
 
     if crpix is None:
         crpix = (np.array(naxis) + 1) / 2
     else:
-        crpix = np.asarray(crpix, dtype=np.float64)
+        crpix = np.asarray(crpix, float)
     if crpix.size != 2:
         raise ValueError('CRPIX does not have two elements.')
 

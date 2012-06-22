@@ -223,7 +223,7 @@ class FitsArray(Quantity):
     @property
     def header(self):
         if self._header is None and not np.iscomplexobj(self):
-            self._header = create_fitsheader(self.shape[::-1], fromdata=self)
+            self._header = create_fitsheader(fromdata=self)
         return self._header
 
     @header.setter
