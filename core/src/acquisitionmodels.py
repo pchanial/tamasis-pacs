@@ -205,6 +205,7 @@ class BlackBodyOperator(Operator):
     """
     Instanceless class whose __new__ method specialises in
     BlackBodyFixedTemperatureOperator and BlackBodyFreeTemperatureOperator.
+
     """
     def __new__(cls, wavelength=None, wavelength0=None, temperature=None,
                 beta=0.):
@@ -219,6 +220,7 @@ class BlackBodyFixedTemperatureOperator(NumexprOperator):
     """
     Diagonal operator whose normalised values follow the Planck equation,
     optionnally modified by a power-law emissivity of given slope.
+
     """
     def __new__(cls, temperature=None, wavelength=None, wavelength0=None,
                 beta=0.):
@@ -242,6 +244,7 @@ class BlackBodyFixedTemperatureOperator(NumexprOperator):
         beta : float
             Slope of the emissivity (the spectrum is multiplied by nu**beta)
             The default value is 0 (non-modified black body).
+
         """
         self.temperature = np.array(temperature, float, copy=False)
         self.wavelength = float(wavelength)
@@ -274,8 +277,8 @@ class CompressionOperator(Operator):
     """
     Abstract class for compressing the input signal.
     Compression is operated on the fastest axis.
-    """
 
+    """
     def __new__(cls, factor=None, shapein=None, **keywords):
         if factor == 1:
             op = IdentityOperator(shapein=shapein, dtype=float, **keywords)
@@ -307,8 +310,8 @@ class CompressionOperator(Operator):
 class CompressionAverageOperator(CompressionOperator):
     """
     Compress the input signal by averaging blocks of specified size.
-    """
 
+    """
     def direct(self, input, output):
         input_, ishape, istride = _ravel_strided(input)
         output_, oshape, ostride = _ravel_strided(output)
@@ -326,8 +329,8 @@ class DownSamplingOperator(CompressionOperator):
     """
     Downsample the input signal by picking up one sample out of a number
     specified by the compression factor
-    """
 
+    """
     def direct(self, input, output):
         input_, ishape, istride = _ravel_strided(input)
         output_, oshape, ostride = _ravel_strided(output)
@@ -449,8 +452,10 @@ class InvNttUncorrelatedPythonOperator(Operator):
 @linear
 @universal
 class PadOperator(Operator):
-    """Pads before and after along the fast dimension of an ndarray."""
+    """
+    Pads before and after along the fast dimension of an ndarray.
 
+    """
     def __init__(self, left=0, right=0., **keywords):
         left = int(left)
         right = int(right)
@@ -784,6 +789,7 @@ class ProjectionBaseOperator(Operator):
         """
         Set pointing matrix values to zero following an input mask of shape
         the operator output shape.
+
         """
         raise NotImplementedError()
 
@@ -944,8 +950,8 @@ class ConvolutionTruncatedExponentialOperator(Operator):
     
     tau: number
         Time constant divided by the signal sampling period.
-    """
-    
+
+    """    
     def __init__(self, tau, **keywords):
         """
         """
@@ -978,8 +984,8 @@ class DiscreteDifferenceOperator(Operator):
     Discrete difference operator.
 
     Calculate the nth order discrete difference along given axis.
-    """
 
+    """
     def __init__(self, axis=-1, **keywords):
         Operator.__init__(self, dtype=var.FLOAT_DTYPE, **keywords)
         self.axis = axis
@@ -1000,8 +1006,10 @@ class DiscreteDifferenceOperator(Operator):
 @symmetric
 @inplace
 class DdTddOperator(Operator):
-    """Calculate operator dX.T dX along a given axis."""
+    """
+    Calculate operator dX.T dX along a given axis.
 
+    """
     def __new__(cls, axis=-1, scalar=1., **keywords):
         if scalar == 0:
             return ZeroOperator(flags='square', **keywords)
@@ -1028,8 +1036,8 @@ class DistributionLocalOperator(Operator):
     """
     Scatter a distributed map to different MPI processes under the control of a
     local non-distributed mask.
-    """
 
+    """
     def __init__(self, mask, operator=MPI.SUM, commin=MPI.COMM_WORLD,
                  **keywords):
         commout = commin
@@ -1082,8 +1090,8 @@ class PackOperator(Operator):
     """
     Convert an nd array in a 1d map, under the control of a mask.
     The elements for which the mask is true are discarded.
-    """
 
+    """
     def __init__(self, mask, **keywords):
         mask = np.array(mask, np.bool8, copy=False)
         Operator.__init__(self, shapein=mask.shape, shapeout=np.sum(mask == 0),
@@ -1124,8 +1132,8 @@ class UnpackOperator(Operator):
     """
     Convert an nd array in a 1d map, under the control of a mask.
     The elements for which the mask is true are set to zero.
-    """
 
+    """
     def __init__(self, mask, **keywords):
         mask = np.array(mask, np.bool8, copy=False)
         Operator.__init__(self, shapein=np.sum(mask == 0), shapeout=mask.shape,
@@ -1199,8 +1207,8 @@ class RollOperator(Operator):
 class FftOperator(Operator):
     """
     Performs complex fft
-    """
 
+    """
     def __init__(self, shape, flags=['measure'], nthreads=None, **keywords):
         Operator.__init__(self, shapein=shape,
                                 dtype=var.COMPLEX_DTYPE, **keywords)
@@ -1229,8 +1237,8 @@ class FftOperator(Operator):
 class FftHalfComplexOperator(Operator):
     """
     Performs real-to-half-complex fft
-    """
 
+    """
     def __init__(self, size, fftw_flags=['measure', 'unaligned'], **keywords):
         size = int(size)
         array1 = np.empty(size, dtype=var.FLOAT_DTYPE)
