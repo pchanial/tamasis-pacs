@@ -58,9 +58,9 @@ subroutine pacs_info_instrument_init(filename, nfilenames, band, transparent_mod
         if (status /= 0) return
 
         if (camname == 'Blue Photometer') then
-            if (blue == 'blue1' .or. blue == 'blue70um') then
+            if (blue == 'blue1' .or. blue == 'blue1&' .or. blue == 'blue70um') then
                 band_ = 'blue'
-            else if (blue == 'blue2' .or. blue == 'green100um') then
+            else if (blue == 'blue2' .or. blue == 'blue2&' .or. blue == 'green100um') then
                 band_ = 'green'
             else
                 write (ERROR_UNIT, '(a)') "Error: Invalid blue camera identifier '" // trim(blue) // "' in file '" //              &
