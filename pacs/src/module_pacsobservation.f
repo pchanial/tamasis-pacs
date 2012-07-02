@@ -372,9 +372,9 @@ contains
         if (status /= 0) return
 
         if (camname == 'Blue Photometer') then
-            if (blue == 'blue1' .or. blue == 'blue70um') then
+            if (blue == 'blue1' .or. blue == 'blue1&' .or. blue == 'blue70um') then
                 this%band = 'blue'
-            else if (blue == 'blue2' .or. blue == 'green100um') then
+            else if (blue == 'blue2' .or. blue == 'blue2&' .or. blue == 'green100um') then
                 this%band = 'green'
             else
                 write (ERROR_UNIT, '(a)') "Error: Invalid blue camera identifier '" // trim(blue) // "' in file '" //              &
