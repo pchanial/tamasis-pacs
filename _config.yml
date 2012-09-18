@@ -5,5 +5,5 @@ pygments: true
 baseurl: /tamasis-pacs
 package: Tamasis/PACS
 meta_keywords: Pierre Chanial, Tamasis, Map-making, Herschel, PACS, Astrophysics
-menu: <a href="http://pchanial.github.com/pyoperators">PyOperators</a>
+menu: <a href="http://pchanial.github.com/pyoperators">PyOperators</a><br><a href="http://pchanial.github.com/pysimulators">PySimulators</a>
 version_stable: 4.2
