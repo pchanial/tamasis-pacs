@@ -285,7 +285,8 @@ def build(bld):
     target = 'tamasisfortran.so'
     source = [bld.srcnode.find_node('%s/src/tamasisfortran_%s.f90' % (s,s))
               for s in subdirs]
-    additional_interfaces = ['math', 'operators', 'pointing', 'processing']
+    additional_interfaces = ['math', 'operators', 'pointing', 'processing',
+                             'wcsutils']
     if bld.env.HAVE_MPI:
         additional_interfaces += [ 'mpi' ]
     for a in additional_interfaces:
