@@ -12,7 +12,11 @@ from pyoperators import (Operator, IdentityOperator, DiagonalOperator,
                          MaskOperator, NumexprOperator, ZeroOperator)
 from pyoperators.decorators import (linear, orthogonal, real, square, symmetric,
                                     unitary, universal, inplace)
-from pyoperators.memory import allocate
+try:
+    from pyoperators.memory import empty
+except:
+    from pyoperators.memory import allocate as empty
+
 from pyoperators.utils import (isscalar, openmp_num_threads,
                                operation_assignment, product, tointtuple)
 from pyoperators.utils.mpi import MPI, distribute_shape, distribute_shapes
@@ -503,14 +507,14 @@ class PointingMatrix(np.ndarray):
 
     @classmethod
     def empty(cls, shape, shape_input, info=None, verbose=True):
-        buffer = allocate(shape, cls.DTYPE, 'for the pointing matrix',
-                          verbose=verbose)
+        buffer = empty(shape, cls.DTYPE, 'for the pointing matrix',
+                       verbose=verbose)
         return PointingMatrix(buffer, shape_input, info=info, copy=False)
 
     @classmethod
     def zeros(cls, shape, shape_input, info=None, verbose=True):
-        buffer = allocate(shape, cls.DTYPE, 'for the pointing matrix',
-                          verbose=verbose)
+        buffer = empty(shape, cls.DTYPE, 'for the pointing matrix',
+                       verbose=verbose)
         buffer.value = 0
         buffer.index = -1
         return PointingMatrix(buffer, shape_input, info=info, copy=False)
@@ -529,7 +533,7 @@ class PointingMatrix(np.ndarray):
 
     def get_mask(self, out=None):
         if out is None:
-            out = allocate(self.shape_input, np.bool8, 'as new mask')
+            out = empty(self.shape_input, np.bool8, 'as new mask')
             out[...] = True
             out = Map(out, header=self.info.get('header', None), copy=False,
                       dtype=bool)
@@ -800,7 +804,7 @@ class ProjectionBaseOperator(Operator):
         matrix = self.matrix
         npixels = product(matrix.shape_input)
         if out is None:
-            out = allocate((npixels,npixels), np.bool8, 'for pTp array')
+            out = empty((npixels,npixels), np.bool8, 'for pTp array')
             out[...] = 0
         elif out.dtype != np.bool8:
             raise TypeError('The output ptp argument has an invalid type.')
