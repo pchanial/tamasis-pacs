@@ -10,6 +10,7 @@ import time
 
 from pyoperators import DiagonalOperator, IdentityOperator, MaskOperator
 from pyoperators.utils.mpi import MPI
+from pyoperators.iterative import AbnormalStopIteration, IterativeAlgorithm
 
 from . import var
 from .acquisitionmodels import DiscreteDifferenceOperator
@@ -192,9 +193,13 @@ def mapper_rls(y, H, invntt=None, unpacking=None, hyper=1.0, x0=None,
     if unpacking is None:
         unpacking = IdentityOperator()
     A = unpacking.T * A * unpacking
-    b = unpacking.T(b).ravel()
+    b = unpacking.T(b)
     if x0 is not None:
         x0 = unpacking.T(x0).ravel()
+    if type(solver) is not type or not issubclass(solver, IterativeAlgorithm):
+        b = b.ravel()
+        if x0 is not None:
+            x0 = x0.ravel()
     if M is not None:
         if isinstance(M, DiagonalOperator):
             filter_nonfinite(M.data, out=M.data)
@@ -216,8 +221,11 @@ def mapper_rls(y, H, invntt=None, unpacking=None, hyper=1.0, x0=None,
         return Js
 
     if callback is None:
-        callback = CgCallback(verbose=verbose, objfunc=criter if criterion
-                              else None)
+        if type(solver) is type and issubclass(solver, IterativeAlgorithm):
+            callback = NewCgCallback(verbose=verbose, comm=comm_map)
+        else:
+            callback = CgCallback(verbose=verbose, objfunc=criter if criterion
+                                  else None)
 
     if solver is None:
         solver = cg
@@ -235,15 +243,23 @@ def mapper_rls(y, H, invntt=None, unpacking=None, hyper=1.0, x0=None,
     if profile is not None:
 
         def run():
-            try:
-                solution, info = solver(A, b, x0=x0, tol=tol, maxiter=maxiter,
-                                        M=M, comm=comm_map)
-            except TypeError:
-                solution, info = solver(A, b, x0=x0, tol=tol, maxiter=maxiter,
-                                        M=M)
-            if info < 0:
+            if type(solver) is type and issubclass(solver, IterativeAlgorithm):
+                a = solver(A, b, x0=x0, M=M, tol=tol, maxiter=maxiter)
+                try:
+                    a.run()
+                    info = 0
+                except AbnormalStopIteration as e:
+                    info = str(e)
+            else:
+                try:
+                    solution, info = solver(A, b, x0=x0, M=M, tol=tol,
+                                            maxiter=maxiter, comm=comm_map)
+                except TypeError:
+                    solution, info = solver(A, b, x0=x0, M=M, tol=tol,
+                                            maxiter=maxiter)
+            if info != 0:
                 print('Solver failure: info='+str(info))
-
+                    
         cProfile.runctx('run()', globals(), locals(), profile+'.prof')
         print('Profile time: '+str(time.time()-time0))
         os.system('python -m gprof2dot -f pstats -o ' + profile +'.dot ' +
@@ -252,21 +268,41 @@ def mapper_rls(y, H, invntt=None, unpacking=None, hyper=1.0, x0=None,
         os.system('rm -f ' + profile + '.prof' + ' ' + profile + '.dot')
         return None
 
-    try:
-        solution, info = solver(A, b, x0=x0, tol=tol, maxiter=maxiter, M=M,
-                                callback=callback, comm=comm_map)
-    except TypeError:
-        solution, info = solver(A, b, x0=x0, tol=tol, maxiter=maxiter, M=M,
-                                callback=callback)
+    if type(solver) is type and issubclass(solver, IterativeAlgorithm):
+        algo = solver(A, b, x0=x0, M=M, tol=tol, maxiter=maxiter,
+                      callback=callback)
+        try:
+            solution = algo.run()
+            info = 0
+        except AbnormalStopIteration as e:
+            info = str(e)
+            solution = algo.x
+    else:
+        try:
+            solution, info = solver(A, b, x0=x0, tol=tol, maxiter=maxiter, M=M,
+                                    callback=callback, comm=comm_map)
+        except TypeError:
+            solution, info = solver(A, b, x0=x0, tol=tol, maxiter=maxiter, M=M,
+                                    callback=callback)
 
     time0 = time.time() - time0
-    if info < 0:
-        raise RuntimeError('Solver failure (code=' + str(info) + ' after ' +
-                           str(callback.niterations) + ' iterations).')
+    if not isinstance(info, str):
+        if info < 0:
+            raise RuntimeError('Solver failure (code=' + str(info) + ' after ' +
+                               str(callback.niterations) + ' iterations).')
 
-    if info > 0 and comm_map.rank == 0:
-        print('Warning: Solver reached maximum number of iterations without rea'
-              'ching specified tolerance.')
+        if info > 0 and comm_map.rank == 0:
+            print('Warning: Solver reached maximum number of iterations without'
+                  ' reaching specified tolerance.')
+    else:
+        print('Warning: ' + info)
+
+    if type(solver) is type and issubclass(solver, IterativeAlgorithm):
+        niterations = algo.niterations
+        error = algo.error
+    else:
+        niterations = getattr(callback, 'niterations', None)
+        error = getattr(callback, 'residual', None)
 
     Js = criter(solution)
 
@@ -290,11 +326,12 @@ def mapper_rls(y, H, invntt=None, unpacking=None, hyper=1.0, x0=None,
     header.update('nsamples', ntods)
     header.update('npixels', nmaps)
     header.update('time', time0)
-    if hasattr(callback, 'niterations'):
-        header.update('niter', callback.niterations)
+
+    if niterations is not None:
+        header.update('niter', niterations)
     header.update('maxiter', maxiter)
-    if hasattr(callback, 'residual'):
-        header.update('residual', callback.residual)
+    if error is not None:
+        header.update('error', error)
     header.update('tol', tol)
     header.update('solver', solver.__name__)
 
@@ -481,3 +518,16 @@ class CgCallback():
                     print("%s (%s)\t%s\t%s" % (str(self.niterations).rjust(9),
                          str(niterls), str(self.residual), Jstr))
 
+
+class NewCgCallback():
+    def __init__(self, verbose=True, comm=None):
+        self.verbose = verbose
+        self.comm = comm or MPI.COMM_WORLD
+    def __call__(self, s):
+        if not self.verbose:
+            return
+        if self.comm is not None and self.comm.rank > 0:
+            return
+        print '{0:4}: {1}'.format(s.niterations, s.error)
+    
+    
