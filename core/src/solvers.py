@@ -11,42 +11,42 @@ from .linalg import dot, norm2
 
 __all__ = []
 
-def cg(A, b, x0, tol=1.e-5, maxiter=300, callback=None, M=None, comm=None):
-    """OpenMPI/MPI hybrid conjugate gradient solver with preconditioning."""
-
-    if comm is None:
-        comm = MPI.COMM_WORLD
+def cg(A, b, x0=None, tol=1.e-5, maxiter=300, M=None, disp=False,
+       callback=None):
+    """ OpenMPI/MPI hybrid conjugate gradient solver with preconditioning. """
 
     A = asoperator(A)
+    comm = A.commin or MPI.COMM_WORLD
+
     if M is None:
         M = IdentityOperator()
     M = asoperator(M)
 
     maxRelError = tol**2
 
-    n = b.size
-    x = np.empty(n)
-    d = np.empty(n)
-    q = np.empty(n)
-    r = np.empty(n)
-    s = np.empty(n)
-    xfinal = np.zeros(n)
+    shape = b.shape
+    x = np.empty(shape)
+    d = np.empty(shape)
+    q = np.empty(shape)
+    r = np.empty(shape)
+    s = np.empty(shape)
+    xfinal = np.zeros(shape)
 
     if x0 is None:
-        x[:] = 0
+        x[...] = 0
     else:
-        x[:] = x0.ravel()
+        x[...] = x0
 
     norm = norm2(b, comm=comm)
     if norm == 0:
         return xfinal, 0
 
-    r[:] = b
-    r -= A.matvec(x)
+    r[...] = b
+    r -= A(x)
     epsilon = norm2(r, comm=comm) / norm
     minEpsilon = epsilon
 
-    M.matvec(r, d)
+    M(r, d)
     delta0 = dot(r, d, comm=comm)
     deltaNew = delta0
 
@@ -54,23 +54,24 @@ def cg(A, b, x0, tol=1.e-5, maxiter=300, callback=None, M=None, comm=None):
         if epsilon <= maxRelError:
             break
         
-        A.matvec(d, q)
+        A(d, q)
 
         alpha = deltaNew / dot(d, q, comm=comm)
         x += alpha * d
         r -= alpha * q
         epsilon = norm2(r, comm=comm) / norm
+        if disp:
+            print '{0:4}: {1}'.format(iter_ + 1, np.sqrt(epsilon))
 
         if callback is not None:
             resid = np.sqrt(epsilon)
             callback(x)
 
         if epsilon < minEpsilon:
-            xfinal[:] = x
+            xfinal[...] = x
             minEpsilon = epsilon
 
-        qnorm = np.sqrt(norm2(q, comm=comm))
-        M.matvec(r, s)
+        M(r, s)
 
         deltaOld = deltaNew
 
@@ -82,7 +83,7 @@ def cg(A, b, x0, tol=1.e-5, maxiter=300, callback=None, M=None, comm=None):
     minEpsilon  = np.sqrt(minEpsilon)
     maxRelError = np.sqrt(maxRelError)
 
-    return xfinal, int(minEpsilon > maxRelError)
+    return xfinal.reshape(b.shape), int(minEpsilon > maxRelError)
 
 def nlcg(objfunc, n, linesearch, descent_method='pr', x0=None, M=None,
          tol=1.e-6, maxiter=500, callback=None, comm=None):
