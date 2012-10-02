@@ -11,12 +11,8 @@ from pyoperators import (Operator, IdentityOperator, DiagonalOperator,
                          CompositionOperator, DistributionIdentityOperator,
                          MaskOperator, NumexprOperator, ZeroOperator)
 from pyoperators.decorators import (linear, orthogonal, real, square, symmetric,
-                                    unitary, universal, inplace)
-try:
-    from pyoperators.memory import empty
-except:
-    from pyoperators.memory import allocate as empty
-
+                                    unitary, contiguous, inplace, separable)
+from pyoperators.memory import empty
 from pyoperators.utils import (isscalar, openmp_num_threads,
                                operation_assignment, product, tointtuple)
 from pyoperators.utils.mpi import MPI, distribute_shape, distribute_shapes
@@ -276,7 +272,7 @@ class BlackBodyFixedTemperatureOperator(NumexprOperator):
 @block_diagonal('factor', axisin=-1)
 @real
 @linear
-@universal
+@separable
 class CompressionOperator(Operator):
     """
     Abstract class for compressing the input signal.
@@ -311,6 +307,7 @@ class CompressionOperator(Operator):
                self.factor)
 
 
+@contiguous
 class CompressionAverageOperator(CompressionOperator):
     """
     Compress the input signal by averaging blocks of specified size.
@@ -329,6 +326,7 @@ class CompressionAverageOperator(CompressionOperator):
             istride, output_, oshape[1], ostride, self.factor)
 
 
+@contiguous
 class DownSamplingOperator(CompressionOperator):
     """
     Downsample the input signal by picking up one sample out of a number
@@ -425,7 +423,7 @@ class InvNttUncorrelatedOperator(Operator):
         
     def direct(self, input, output):
         input_, ishape, istride = _ravel_strided(input)
-        if self.same_data(input, output):
+        if self.isalias(input, output):
             tmf.operators.invntt_uncorrelated_inplace(input_, ishape[1],
                 istride, self.fft_filter.T, self.fplan._get_parameter(),
                 self.bplan._get_parameter(), self.left, self.right)
@@ -454,7 +452,7 @@ class InvNttUncorrelatedPythonOperator(Operator):
 @block_diagonal('left', 'right', axisin=-1)
 @real
 @linear
-@universal
+@separable
 class PadOperator(Operator):
     """
     Pads before and after along the fast dimension of an ndarray.
@@ -507,13 +505,13 @@ class PointingMatrix(np.ndarray):
 
     @classmethod
     def empty(cls, shape, shape_input, info=None, verbose=True):
-        buffer = empty(shape, cls.DTYPE, 'for the pointing matrix',
+        buffer = empty(shape, cls.DTYPE, description='for the pointing matrix',
                        verbose=verbose)
         return PointingMatrix(buffer, shape_input, info=info, copy=False)
 
     @classmethod
     def zeros(cls, shape, shape_input, info=None, verbose=True):
-        buffer = empty(shape, cls.DTYPE, 'for the pointing matrix',
+        buffer = empty(shape, cls.DTYPE, description='for the pointing matrix',
                        verbose=verbose)
         buffer.value = 0
         buffer.index = -1
@@ -533,7 +531,7 @@ class PointingMatrix(np.ndarray):
 
     def get_mask(self, out=None):
         if out is None:
-            out = empty(self.shape_input, np.bool8, 'as new mask')
+            out = empty(self.shape_input, np.bool8, description='as new mask')
             out[...] = True
             out = Map(out, header=self.info.get('header', None), copy=False,
                       dtype=bool)
@@ -804,7 +802,7 @@ class ProjectionBaseOperator(Operator):
         matrix = self.matrix
         npixels = product(matrix.shape_input)
         if out is None:
-            out = empty((npixels,npixels), np.bool8, 'for pTp array')
+            out = empty((npixels,npixels), bool, description='for pTp array')
             out[...] = 0
         elif out.dtype != np.bool8:
             raise TypeError('The output ptp argument has an invalid type.')
@@ -944,7 +942,7 @@ class ProjectionInMemoryOperator(ProjectionBaseOperator):
 @linear
 @square
 @inplace
-@universal
+@separable
 class ConvolutionTruncatedExponentialOperator(Operator):
     """
     Apply a truncated exponential response to the signal
@@ -983,6 +981,7 @@ class ConvolutionTruncatedExponentialOperator(Operator):
 @linear
 @square
 @inplace
+@contiguous
 class DiscreteDifferenceOperator(Operator):
     """
     Discrete difference operator.
@@ -1009,6 +1008,7 @@ class DiscreteDifferenceOperator(Operator):
 @real
 @symmetric
 @inplace
+@contiguous
 class DdTddOperator(Operator):
     """
     Calculate operator dX.T dX along a given axis.
@@ -1090,6 +1090,7 @@ class DistributionLocalOperator(Operator):
 @real
 @linear
 @inplace
+@contiguous
 class PackOperator(Operator):
     """
     Convert an nd array in a 1d map, under the control of a mask.
@@ -1107,7 +1108,7 @@ class PackOperator(Operator):
 
     def direct(self, input, output):
         mask = self.mask.view(np.int8).ravel()
-        if self.same_data(input, output):
+        if self.isalias(input, output):
             tmf.operators.pack_inplace(input.ravel(), mask, input.size)
         else:
             tmf.operators.pack_outplace(input.ravel(), mask, output)
@@ -1132,6 +1133,7 @@ class PackOperator(Operator):
 @real
 @linear
 @inplace
+@contiguous
 class UnpackOperator(Operator):
     """
     Convert an nd array in a 1d map, under the control of a mask.
@@ -1147,7 +1149,7 @@ class UnpackOperator(Operator):
 
     def direct(self, input, output):
         mask = self.mask.view(np.int8).ravel()
-        if self.same_data(input, output):
+        if self.isalias(input, output):
             tmf.operators.unpack_inplace(output.ravel(), mask, input.size)
         else:
             tmf.operators.unpack_outplace(input, mask, output.ravel())
@@ -1157,6 +1159,7 @@ class UnpackOperator(Operator):
 @linear
 @square
 @inplace
+@contiguous
 class ShiftOperator(Operator):
 
     def __init__(self, n, axis=None, **keywords):
@@ -1238,6 +1241,7 @@ class FftOperator(Operator):
 @real
 @orthogonal
 @inplace
+@contiguous
 class FftHalfComplexOperator(Operator):
     """
     Performs real-to-half-complex fft
@@ -1265,7 +1269,7 @@ class FftHalfComplexOperator(Operator):
 
     def direct(self, input, output):
         input_, ishape, istride = _ravel_strided(input)
-        if self.same_data(input, output):
+        if self.isalias(input, output):
             tmf.fft_plan_inplace(input_, ishape[0], ishape[1], istride,
                                  self.ifplan._get_parameter())
             return
@@ -1275,7 +1279,7 @@ class FftHalfComplexOperator(Operator):
 
     def transpose(self, input, output):
         input_, ishape, istride = _ravel_strided(input)
-        if self.same_data(input, output):
+        if self.isalias(input, output):
             tmf.fft_plan_inplace(input_, ishape[0], ishape[1], istride,
                                  self.ibplan._get_parameter())
         else:
