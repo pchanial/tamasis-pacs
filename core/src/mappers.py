@@ -8,9 +8,8 @@ import numpy as np
 import os
 import time
 
-from pyoperators import DiagonalOperator, IdentityOperator, MaskOperator
+from pyoperators import DiagonalOperator, IdentityOperator, MaskOperator, pcg
 from pyoperators.utils.mpi import MPI
-from pyoperators.iterative import AbnormalStopIteration, IterativeAlgorithm
 
 from . import var
 from .acquisitionmodels import DiscreteDifferenceOperator
@@ -155,6 +154,10 @@ def mapper_rls(y, H, invntt=None, unpacking=None, hyper=1.0, x0=None,
     comm_map = H.commin or MPI.COMM_WORLD
     comm_tod = H.commout or comm_map
 
+    if solver is None:
+        solver = cg
+    new_solver = solver in (pcg,)
+
     tod = _validate_tod(y)
 
     ntods_ = int(np.sum(~tod.mask)) if getattr(tod, 'mask', None) is not None \
@@ -183,7 +186,7 @@ def mapper_rls(y, H, invntt=None, unpacking=None, hyper=1.0, x0=None,
     b = (H.T * invntt)(tod)
     if not np.all(np.isfinite(b)):
         raise ValueError('RHS contains non-finite values.')
-    if b.size != A.shape[1]:
+    if b.shape != A.shapein:
         raise ValueError("Incompatible size for RHS: '" + str(b.size) +
                          "' instead of '" + str(A.shape[1]) + "'.")
     if np.min(b) == np.max(b) == 0:
@@ -195,8 +198,8 @@ def mapper_rls(y, H, invntt=None, unpacking=None, hyper=1.0, x0=None,
     A = unpacking.T * A * unpacking
     b = unpacking.T(b)
     if x0 is not None:
-        x0 = unpacking.T(x0).ravel()
-    if type(solver) is not type or not issubclass(solver, IterativeAlgorithm):
+        x0 = unpacking.T(x0)
+    if not new_solver and solver is not cg:
         b = b.ravel()
         if x0 is not None:
             x0 = x0.ravel()
@@ -221,14 +224,11 @@ def mapper_rls(y, H, invntt=None, unpacking=None, hyper=1.0, x0=None,
         return Js
 
     if callback is None:
-        if type(solver) is type and issubclass(solver, IterativeAlgorithm):
-            callback = NewCgCallback(verbose=verbose, comm=comm_map)
+        if new_solver:
+            callback = NewCgCallback(disp=verbose, comm=comm_map)
         else:
             callback = CgCallback(verbose=verbose, objfunc=criter if criterion
                                   else None)
-
-    if solver is None:
-        solver = cg
 
     if (verbose or profile) and comm_map.rank == 0:
         print('')
@@ -243,22 +243,15 @@ def mapper_rls(y, H, invntt=None, unpacking=None, hyper=1.0, x0=None,
     if profile is not None:
 
         def run():
-            if type(solver) is type and issubclass(solver, IterativeAlgorithm):
-                a = solver(A, b, x0=x0, M=M, tol=tol, maxiter=maxiter)
-                try:
-                    a.run()
-                    info = 0
-                except AbnormalStopIteration as e:
-                    info = str(e)
+            result = solver(A, b, x0=x0, M=M, tol=tol, maxiter=maxiter)
+            if new_solver:
+                solution = result['x']
+                if not result['success']:
+                    print('Solver failure: ' + result['message'])
             else:
-                try:
-                    solution, info = solver(A, b, x0=x0, M=M, tol=tol,
-                                            maxiter=maxiter, comm=comm_map)
-                except TypeError:
-                    solution, info = solver(A, b, x0=x0, M=M, tol=tol,
-                                            maxiter=maxiter)
-            if info != 0:
-                print('Solver failure: info='+str(info))
+                solution, info = result
+                if info != 0:
+                    print('Solver failure: info='+str(info))
                     
         cProfile.runctx('run()', globals(), locals(), profile+'.prof')
         print('Profile time: '+str(time.time()-time0))
@@ -268,25 +261,18 @@ def mapper_rls(y, H, invntt=None, unpacking=None, hyper=1.0, x0=None,
         os.system('rm -f ' + profile + '.prof' + ' ' + profile + '.dot')
         return None
 
-    if type(solver) is type and issubclass(solver, IterativeAlgorithm):
-        algo = solver(A, b, x0=x0, M=M, tol=tol, maxiter=maxiter,
-                      callback=callback)
-        try:
-            solution = algo.run()
-            info = 0
-        except AbnormalStopIteration as e:
-            info = str(e)
-            solution = algo.x
-    else:
-        try:
-            solution, info = solver(A, b, x0=x0, tol=tol, maxiter=maxiter, M=M,
-                                    callback=callback, comm=comm_map)
-        except TypeError:
-            solution, info = solver(A, b, x0=x0, tol=tol, maxiter=maxiter, M=M,
-                                    callback=callback)
-
+    result = solver(A, b, x0=x0, M=M, tol=tol, maxiter=maxiter,
+                    callback=callback)
     time0 = time.time() - time0
-    if not isinstance(info, str):
+
+    if new_solver:
+        solution = result['x']
+        if not result['success']:
+            print('Solver failure: ' + result['message'])
+        niterations = result['niterations']
+        error = result['error']
+    else:
+        solution, info = result
         if info < 0:
             raise RuntimeError('Solver failure (code=' + str(info) + ' after ' +
                                str(callback.niterations) + ' iterations).')
@@ -294,13 +280,6 @@ def mapper_rls(y, H, invntt=None, unpacking=None, hyper=1.0, x0=None,
         if info > 0 and comm_map.rank == 0:
             print('Warning: Solver reached maximum number of iterations without'
                   ' reaching specified tolerance.')
-    else:
-        print('Warning: ' + info)
-
-    if type(solver) is type and issubclass(solver, IterativeAlgorithm):
-        niterations = algo.niterations
-        error = algo.error
-    else:
         niterations = getattr(callback, 'niterations', None)
         error = getattr(callback, 'residual', None)
 
@@ -520,11 +499,11 @@ class CgCallback():
 
 
 class NewCgCallback():
-    def __init__(self, verbose=True, comm=None):
-        self.verbose = verbose
+    def __init__(self, disp=True, comm=None):
+        self.disp = disp
         self.comm = comm or MPI.COMM_WORLD
     def __call__(self, s):
-        if not self.verbose:
+        if not self.disp:
             return
         if self.comm is not None and self.comm.rank > 0:
             return
