@@ -1,15 +1,15 @@
 import numpy as np
 import pyoperators
 import os
-import tamasis
+import scipy
 from tamasis import (PacsObservation, CompressionAverageOperator,
                      DiagonalOperator, IdentityOperator, MaskOperator,
                      ProjectionOperator, UnpackOperator, mapper_ls,
                      mapper_naive)
 
 pyoperators.memory.verbose = False
-tamasis.var.verbose = False
 profile = None#'test_ls.png'
+solver = scipy.sparse.linalg.bicgstab
 tol = 1.e-6 if profile else 1.e-4
 maxiter = 10
 data_dir = os.path.dirname(__file__) + '/data/'
@@ -44,14 +44,14 @@ class Callback():
     def __call__(self, x):
         self.niterations += 1
 callback = Callback()
-import scipy
+#callback=None
 
 map_iter2 = mapper_ls(tod, model,
                       tol=tol,
                       maxiter=maxiter,
                       M=DiagonalOperator(masking_map(1./map_naive.coverage)),
                       callback=callback,
-                      solver=scipy.sparse.linalg.bicgstab,
+                      solver=solver,
                       profile=profile)
 if profile is None:
     print 'Elapsed time:', map_iter2.header['TIME']
