@@ -10,10 +10,10 @@ import time
 
 from pyoperators import DiagonalOperator, IdentityOperator, MaskOperator, pcg
 from pyoperators.utils.mpi import MPI
+from pysimulators import Map, Tod
 
 from . import var
 from .acquisitionmodels import DiscreteDifferenceOperator
-from .datatypes import Map, Tod
 from .linalg import Function, norm2, norm2_ellipsoid
 from .processing import filter_nonfinite
 from .solvers import cg, nlcg, QuadraticStep

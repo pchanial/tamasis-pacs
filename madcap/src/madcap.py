@@ -12,10 +12,8 @@ import re
 from . import tmf
 from pyoperators.utils import product
 from pyoperators.utils.mpi import MPI
-from tamasis.acquisitionmodels import PointingMatrix
-from tamasis.datatypes import Tod
-from tamasis.instruments import Instrument
-from tamasis.observations import Observation
+from pysimulators import Instrument, Observation, PointingMatrix, Tod
+
 from tamasis.mpiutils import gather_fitsheader_if_needed
 
 __all__ = [ 'MadMap1Observation' ]

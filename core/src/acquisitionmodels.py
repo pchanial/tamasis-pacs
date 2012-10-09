@@ -16,10 +16,11 @@ from pyoperators.memory import empty
 from pyoperators.utils import (isalias, isscalar, openmp_num_threads,
                                operation_assignment, product, tointtuple)
 from pyoperators.utils.mpi import MPI, distribute_shape, distribute_shapes
+from pysimulators import Map, Quantity, Tod
+from pysimulators.quantities import _divide_unit, _multiply_unit
+
 from . import tamasisfortran as tmf
 from . import var
-from .datatypes import Map, Tod
-from .quantities import Quantity, _divide_unit, _multiply_unit
 from .utils import diff, diffT, diffTdiff, shift
 from .wcsutils import str2fitsheader
 from .mpiutils import gather_fitsheader_if_needed, scatter_fitsheader

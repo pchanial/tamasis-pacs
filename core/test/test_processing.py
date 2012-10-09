@@ -1,6 +1,6 @@
 import numpy as np
 
-from tamasis.datatypes import Tod
+from pysimulators.datatypes import Tod
 from tamasis.processing import filter_polynomial, interpolate_linear, filter_nonfinite
 from tamasis.utils import assert_all_eq
 

@@ -3,10 +3,9 @@ from __future__ import division
 import kapteyn
 import numpy as np
 from matplotlib import pyplot
+from pysimulators import FitsArray, Map, Quantity
 
 from . import var
-from .datatypes import FitsArray, Map
-from .quantities import Quantity
 from .wcsutils import angle_lonlat, barycenter_lonlat, create_fitsheader
 
 __all__ = ['Pointing']
