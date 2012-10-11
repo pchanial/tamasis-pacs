@@ -2,7 +2,8 @@ import numpy as np
 import tamasis
 
 from nose.plugins.skip import SkipTest
-from tamasis import FitsArray, Map, Tod, MPI
+from pyoperators.utils.mpi import MPI
+from pysimulators import FitsArray, Map, Tod
 from tamasis.utils import assert_all_eq
 
 raise SkipTest

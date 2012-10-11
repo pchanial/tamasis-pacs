@@ -9,6 +9,7 @@ locale.setlocale(locale.LC_NUMERIC, 'POSIX')
 del locale
 
 from pyoperators import *
+from pysimulators import *
 from .core import *
 from .madcap import *
 from .pacs import *

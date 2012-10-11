@@ -1,12 +1,13 @@
+from __future__ import division
+
 import numpy as np
 import os
 import tamasis
 
-from tamasis import (PacsObservation, PacsSimulation,
-                     CompressionAverageOperator, ProjectionOperator,
-                     create_fitsheader, gaussian)
-from tamasis.utils import all_eq
 from uuid import uuid1
+from pyoperators.utils.testing import assert_eq
+from pysimulators import ProjectionOperator, gaussian, create_fitsheader
+from tamasis import PacsObservation, PacsSimulation, CompressionAverageOperator
 
 tamasis.var.verbose = False
 
@@ -47,9 +48,9 @@ def test1():
 
     for field in simul.status.dtype.names:
         if field == 'BAND': continue
-        assert all_eq(simul.status[field], status2[field])
+        assert_eq(simul.status[field], status2[field])
 
-    assert all_eq(tod, tod2)
+    assert_eq(tod, tod2)
     fields = [x for x in simul.slice.dtype.names if x not in ('filename','unit')]
     for field in fields:
         if getattr(simul.slice[0], field) != getattr(simul2.slice[0], field):
@@ -139,12 +140,12 @@ def test_multiple_pointings():
     simul = PacsSimulation(pointings, 'blue')
     s = simul.slice
     assert len(s) == 2
-    assert all_eq(s.ra, ra)
-    assert all_eq(s.dec, dec)
-    assert all_eq(s.instrument_angle, instrument_angle)
-    assert all_eq(s.scan_angle, scan_angle)
-    assert all_eq(s.scan_length, scan_length)
-    assert all_eq(s.scan_nlegs, scan_nlegs)
-    assert all_eq(s.scan_step, scan_step)
-    assert all_eq(s.scan_speed, scan_speed)
-    assert all_eq(s.compression_factor, compression_factor)
+    assert_eq(s.ra, ra)
+    assert_eq(s.dec, dec)
+    assert_eq(s.instrument_angle, instrument_angle)
+    assert_eq(s.scan_angle, scan_angle)
+    assert_eq(s.scan_length, scan_length)
+    assert_eq(s.scan_nlegs, scan_nlegs)
+    assert_eq(s.scan_step, scan_step)
+    assert_eq(s.scan_speed, scan_speed)
+    assert_eq(s.compression_factor, compression_factor)

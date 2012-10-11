@@ -1,9 +1,11 @@
 import os
 import tamasis
 
-from tamasis import (MPI, PacsObservation, DiagonalOperator,
-                     DistributionGlobalOperator, MaskOperator,
-                     ProjectionOperator, mapper_ls, mapper_naive)
+from pyoperators import (DiagonalOperator, DistributionGlobalOperator,
+                         MaskOperator)
+from pyoperators.utils.mpi import MPI
+from pysimulators import ProjectionOperator
+from tamasis import PacsObservation, mapper_ls, mapper_naive
 from tamasis.utils import assert_all_eq
 
 

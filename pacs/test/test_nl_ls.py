@@ -1,7 +1,8 @@
 import os
 import tamasis
-from tamasis import (PacsObservation, DiagonalOperator, MaskOperator,
-                     ProjectionOperator, mapper_naive, mapper_nl)
+from pyoperators import DiagonalOperator, MaskOperator
+from pysimulators import ProjectionOperator
+from tamasis import PacsObservation, mapper_naive, mapper_nl
 
 class TestFailure(Exception): pass
 

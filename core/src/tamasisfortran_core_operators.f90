@@ -2,7 +2,6 @@ module operators
 
     ! This module contains optimised operator routines
 
-    use module_pointingmatrix, only : PointingElement
     use module_tamasis, only : p
     implicit none
 
@@ -11,9 +10,6 @@ module operators
     public :: diffTdiff
     public :: invntt_uncorrelated_inplace
     public :: invntt_uncorrelated_outplace
-    public :: pmatrix_intersects
-    public :: pmatrix_intersects_axis2
-    public :: pmatrix_intersects_axis3
     public :: pack_inplace
     public :: pack_outplace
     public :: unpack_inplace
@@ -951,110 +947,6 @@ contains
         !$omp end parallel do
 
     end subroutine invntt_uncorrelated_outplace
-
-
-    !-------------------------------------------------------------------------------------------------------------------------------
-
-
-    subroutine pmatrix_intersects(pmatrix, pixel, npixels_per_sample, nsamples, ndetectors, out)
-        !f2py integer*8, dimension(npixels_per_sample*nsamples*ndetectors), intent(in) :: pmatrix
-
-        integer*8, intent(in)                     :: nsamples
-        type(PointingElement), intent(in)         :: pmatrix(npixels_per_sample, nsamples, ndetectors)
-        integer(kind(pmatrix%weight)), intent(in) :: pixel
-        integer, intent(in)                       :: npixels_per_sample
-        integer, intent(in)                       :: ndetectors
-        logical*1, intent(out)                    :: out
-        
-        out = any(pmatrix%pixel == pixel)
-
-    end subroutine pmatrix_intersects
-
-
-    !-------------------------------------------------------------------------------------------------------------------------------
-
-
-    subroutine pmatrix_intersects_openmp2(pmatrix, pixel, npixels_per_sample, nsamples, ndetectors, out)
-        !f2py integer*8, dimension(npixels_per_sample*nsamples*ndetectors), intent(in) :: pmatrix
-
-        integer*8, intent(in)                     :: nsamples
-        type(PointingElement), intent(in)         :: pmatrix(npixels_per_sample, nsamples, ndetectors)
-        integer(kind(pmatrix%weight)), intent(in) :: pixel
-        integer, intent(in)                       :: npixels_per_sample
-        integer, intent(in)                       :: ndetectors
-        logical*1, intent(out)                    :: out
-        
-        !$omp parallel workshare
-        out = any(pmatrix%pixel == pixel)
-        !$omp end parallel workshare
-
-    end subroutine pmatrix_intersects_openmp2
-
-
-    !-------------------------------------------------------------------------------------------------------------------------------
-
-
-    subroutine pmatrix_intersects_axis2(pmatrix, pixel, npixels_per_sample, nsamples, ndetectors, out)
-        !f2py integer*8, dimension(npixels_per_sample*nsamples*ndetectors), intent(in) :: pmatrix
-
-        integer*8, intent(in)                     :: nsamples
-        type(PointingElement), intent(in)         :: pmatrix(npixels_per_sample, nsamples, ndetectors)
-        integer(kind(pmatrix%weight)), intent(in) :: pixel
-        integer, intent(in)                       :: npixels_per_sample
-        integer, intent(in)                       :: ndetectors
-        logical*1, intent(out)                    :: out(ndetectors)
-
-        integer   :: idetector, ipixel
-        integer*8 :: isample
-
-        out = .false.
-        !$omp parallel do schedule(guided)
-        loop_detector: do idetector = 1, ndetectors
-            do isample = 1, nsamples
-                do ipixel = 1, npixels_per_sample
-                    if (pmatrix(ipixel,isample,idetector)%pixel == pixel) then
-                        out(idetector) = .true.
-                        cycle loop_detector
-                    end if
-                end do
-            end do
-        end do loop_detector
-        !$omp end parallel do
-
-    end subroutine pmatrix_intersects_axis2
-
-
-    !-------------------------------------------------------------------------------------------------------------------------------
-
-
-    subroutine pmatrix_intersects_axis3(pmatrix, pixel, npixels_per_sample, nsamples, ndetectors, out)
-        !f2py integer*8, dimension(npixels_per_sample*nsamples*ndetectors), intent(in) :: pmatrix
-
-        integer*8, intent(in)                     :: nsamples
-        type(PointingElement), intent(in)         :: pmatrix(npixels_per_sample, nsamples, ndetectors)
-        integer(kind(pmatrix%weight)), intent(in) :: pixel
-        integer, intent(in)                       :: npixels_per_sample
-        integer, intent(in)                       :: ndetectors
-        logical*1, intent(out)                    :: out(nsamples)
-
-        integer   :: idetector, ipixel
-        integer*8 :: isample
-
-        out = .false.
-        !$omp parallel do schedule(guided)
-        loop_sample: do isample = 1, nsamples
-            do idetector = 1, ndetectors
-                do ipixel = 1, npixels_per_sample
-                    if (pmatrix(ipixel,isample,idetector)%pixel == pixel) then
-                        out(isample) = .true.
-                        cycle loop_sample
-                    end if
-                end do
-            end do
-        end do loop_sample
-        !$omp end parallel do
-
-    end subroutine pmatrix_intersects_axis3
 
 
     !-------------------------------------------------------------------------------------------------------------------------------

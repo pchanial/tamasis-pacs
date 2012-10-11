@@ -17,13 +17,13 @@ from pyoperators import (Operator, HomothetyOperator, IdentityOperator,
 from pyoperators.utils import (isscalar, openmp_num_threads, product,
                                strelapsed, strenum, strplural)
 from pyoperators.utils.mpi import MPI
+from pysimulators import ProjectionOperator, PointingMatrix, Map, Quantity, Tod
 
 from . import var
-from tamasis.core import (Quantity, Map, Tod, MaskPolicy, Instrument, Pointing,
-                          tmf, CompressionAverageOperator, ProjectionOperator,
-                          PointingMatrix, create_fitsheader, filter_nonfinite)
+from tamasis.core import (Instrument, Observation, Pointing,
+                          MaskPolicy, tmf, CompressionAverageOperator,
+                          create_fitsheader, filter_nonfinite)
 from tamasis.mpiutils import distribute_observation, gather_fitsheader_if_needed
-from tamasis.observations import Observation
 
 __all__ = [ 'PacsInstrument',
             'PacsObservation',

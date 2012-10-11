@@ -3,8 +3,10 @@ import pyfits
 import os
 import tamasis
 
-from tamasis import (Tod, MadMap1Observation, DiagonalOperator, InvNttOperator,
-                     PackOperator, ProjectionOperator, mapper_naive, mapper_ls)
+from pyoperators import DiagonalOperator
+from pysimulators import ProjectionOperator, Tod
+from tamasis import (MadMap1Observation, InvNttOperator, PackOperator,
+                     mapper_naive, mapper_ls)
 from tamasis.utils import all_eq
 
 tamasis.var.verbose = False

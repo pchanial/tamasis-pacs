@@ -3,8 +3,9 @@ import os
 import tamasis
 
 from pyoperators import DistributionGlobalOperator
-from pyoperators.utils.mpi import distribute_slice
-from tamasis import PacsInstrument, PacsObservation, Map, ProjectionOperator, UnpackOperator, mapper_naive, MPI
+from pyoperators.utils.mpi import MPI, distribute_slice
+from pysimulators import ProjectionOperator, Map
+from tamasis import PacsInstrument, PacsObservation, UnpackOperator, mapper_naive
 from tamasis.utils import assert_all_eq
 
 

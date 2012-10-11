@@ -6,7 +6,8 @@ import tamasis
 from pyoperators import BlockColumnOperator, MaskOperator
 from pyoperators.iterative.algorithms import StopCondition
 from pyoperators.iterative.dli import DoubleLoopAlgorithm
-from tamasis import PacsObservation, DiscreteDifferenceOperator, ProjectionOperator, mapper_naive
+from pysimulators import ProjectionOperator
+from tamasis import PacsObservation, DiscreteDifferenceOperator, mapper_naive
 
 pyoperators.memory.verbose=False
 tamasis.var.verbose = True

@@ -9,8 +9,8 @@ import scipy
 import time
 
 from pyoperators.utils import strelapsed
+from pysimulators.acquisitionmodels import ProjectionBaseOperator
 from . import tamasisfortran as tmf
-from .acquisitionmodels import ProjectionBaseOperator
 
 __all__ = [ 'deglitch_l2std',
             'deglitch_l2mad',

@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 import os
 from   matplotlib.pyplot import plot
+from pyoperators import IdentityOperator, MaskOperator
+from pysimulators import ProjectionOperator, plot_tod
 from   tamasis import (PacsObservation, CompressionAverageOperator,
-                       IdentityOperator, MaskOperator, ProjectionOperator,
                        deglitch_l2mad, filter_median, filter_polynomial,
-                       mapper_naive, plot_tod)
+                       mapper_naive)
 
 datadir  = os.getenv('PACS_DATA', '')+'/transpScan/'
 datafile = [datadir+'1342184598_blue_PreparedFrames.fits',

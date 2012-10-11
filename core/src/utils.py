@@ -6,7 +6,6 @@ from __future__ import division
 
 import numpy as np
 
-from matplotlib import pyplot
 from pyoperators.utils import product
 from pyoperators.utils.mpi import MPI, filter_comm
 
@@ -16,8 +15,6 @@ from . import var
 __all__ = [ 
     'hs',
     'minmax',
-    'plot_tod',
-    'profile',
 ]
 
 def all_eq(a, b, rtol=None, atol=0.):
@@ -320,79 +317,6 @@ def minmax(v):
     if np.all(np.isnan(v)):
         return np.array([np.nan, np.nan])
     return np.array((np.nanmin(v), np.nanmax(v)))
-   
-
-#-------------------------------------------------------------------------------
-
-
-def plot_tod(tod, mask=None, **kw):
-    """Plot the signal timelines in a Tod and show masked samples.
-
-    Plotting every detector timelines may be time consuming, so it is
-    recommended to use this method on one or few detectors like this:
-    >>> plot_tod(tod[idetector])
-    """
-    if mask is None:
-        mask = getattr(tod, 'mask', None)
-
-    ndetectors = product(tod.shape[0:-1])
-    tod = tod.view().reshape((ndetectors, -1))
-    if mask is not None:
-        mask = mask.view().reshape((ndetectors, -1))
-        if np.all(mask):
-            print('There is no valid sample.')
-            return
-
-    for idetector in range(ndetectors):
-        pyplot.plot(tod[idetector], **kw)
-        if mask is not None:
-            index=np.where(mask[idetector])
-            pyplot.plot(index, tod[idetector,index],'ro')
-
-    unit = getattr(tod, 'unit', '')
-    if unit:
-        pyplot.ylabel('Signal [' + unit + ']')
-    else:
-        pyplot.ylabel('Signal')
-    pyplot.xlabel('Time sample')
-
-
-#-------------------------------------------------------------------------------
-
-
-def profile(input, origin=None, bin=1., nbins=None, histogram=False):
-    """
-    Returns axisymmetric profile of a 2d image.
-    x, y[, n] = profile(image, [origin, bin, nbins, histogram])
-
-    Parameters
-    ----------
-    input: array
-        2d input array
-    origin: (x0,y0)
-        center of the profile. (Fits convention). Default is the image center
-    bin: number
-        width of the profile bins (in unit of pixels)
-    nbins: integer
-        number of profile bins
-    histogram: boolean
-        if set to True, return the histogram
-    """
-    input = np.ascontiguousarray(input, var.FLOAT_DTYPE)
-    if origin is None:
-        origin = (np.array(input.shape[::-1], var.FLOAT_DTYPE) + 1) / 2
-    else:
-        origin = np.ascontiguousarray(origin, var.FLOAT_DTYPE)
-    
-    if nbins is None:
-        nbins = int(max(input.shape[0]-origin[1], origin[1],
-                        input.shape[1]-origin[0], origin[0]) / bin)
-
-    x, y, n = tmf.profile_axisymmetric_2d(input.T, origin, bin, nbins)
-    if histogram:
-        return x, y, n
-    else:
-        return x, y
 
 
 #-------------------------------------------------------------------------------

@@ -2,8 +2,9 @@ import os
 import tamasis
 import pyoperators
 
-from tamasis import (PacsObservation, DiagonalOperator, MaskOperator,
-                     ProjectionOperator, mapper_nl)
+from pyoperators import DiagonalOperator, MaskOperator
+from pysimulators import ProjectionOperator
+from tamasis import PacsObservation, mapper_nl
 from tamasis.linalg import norm2, norm2_ellipsoid
 
 class TestFailure(Exception): pass

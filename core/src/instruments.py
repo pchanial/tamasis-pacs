@@ -8,9 +8,9 @@ from matplotlib import pyplot
 from pyoperators.utils import product, strenum, strshape
 from pyoperators.utils.mpi import MPI
 from pysimulators import Map
+from pysimulators.acquisitionmodels import PointingMatrix
 
 from . import tamasisfortran as tmf
-from .acquisitionmodels import PointingMatrix
 from .mpiutils import gather_fitsheader_if_needed
 from .wcsutils import barycenter_lonlat, combine_fitsheader, create_fitsheader
 

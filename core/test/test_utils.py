@@ -3,8 +3,7 @@ import numpy as np
 
 from pyoperators.utils import product
 from tamasis.utils import (all_eq, any_neq, assert_all_eq, diff, median,
-                           minmax, profile, shift)
-from tamasis.datautils import distance
+                           minmax, shift)
 
 def test_any_neq1():
     assert all_eq(1, 1+1.e-15)
@@ -77,24 +76,6 @@ def test_any_neq3():
             yield func2, a, b
         b = a.copy()
         assert all_eq(a,b)
-
-def test_profile():
-    def profile_slow(input, origin=None, bin=1.):
-        d = distance(input.shape, origin=origin)
-        d /= bin
-        d = d.astype(int)
-        m = np.max(d)
-        p = np.ndarray(int(m+1))
-        n = np.zeros(m+1, int)
-        for i in range(m+1):
-            p[i] = np.mean(input[d == i])
-            n[i] = np.sum(d==i)
-        return p, n
-    d = distance((10,20))
-    x, y, n = profile(d, origin=(4,5), bin=2., histogram=True)
-    y2, n2 = profile_slow(d, origin=(4,5), bin=2.)
-    assert all_eq(y, y2[0:y.size])
-    assert all_eq(n, n2[0:n.size])
 
 def test_diff():
     def func(naxis, axis):

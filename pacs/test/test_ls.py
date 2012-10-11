@@ -2,10 +2,10 @@ import numpy as np
 import pyoperators
 import os
 import scipy
+from pyoperators import DiagonalOperator, IdentityOperator, MaskOperator
+from pysimulators import ProjectionOperator
 from tamasis import (PacsObservation, CompressionAverageOperator,
-                     DiagonalOperator, IdentityOperator, MaskOperator,
-                     ProjectionOperator, UnpackOperator, mapper_ls,
-                     mapper_naive)
+                     UnpackOperator, mapper_ls, mapper_naive)
 
 pyoperators.memory.verbose = False
 profile = None#'test_ls.png'

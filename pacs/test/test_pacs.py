@@ -4,7 +4,10 @@ import os
 import tamasis
 
 from glob import glob
-from tamasis import PacsInstrument, PacsObservation, PacsSimulation, Pointing, CompressionAverageOperator, ProjectionOperator, Map, MaskOperator, mapper_naive
+from pyoperators import MaskOperator
+from pyoperators.utils.testing import assert_eq
+from pysimulators import ProjectionOperator, Map
+from tamasis import PacsInstrument, PacsObservation, PacsSimulation, Pointing, CompressionAverageOperator, mapper_naive
 from tamasis.utils import all_eq, minmax
 from uuid import uuid1
 

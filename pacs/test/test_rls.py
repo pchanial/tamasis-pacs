@@ -2,8 +2,10 @@ import os
 import tamasis
 import pyoperators
 
+from pyoperators import MaskOperator
+from pysimulators import ProjectionOperator, Map
 from scipy.sparse.linalg import cgs
-from tamasis import *
+from tamasis import PacsInstrument, PacsObservation, mapper_rls
 from tamasis.utils import all_eq
 
 pyoperators.memory.verbose = False
