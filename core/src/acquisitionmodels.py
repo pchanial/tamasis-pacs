@@ -3,20 +3,24 @@ from __future__ import division
 import functools
 import numpy as np
 
-from pyoperators import (Operator, IdentityOperator, DiagonalOperator,
-                         BlockDiagonalOperator, CompositionOperator, 
-                         MaskOperator, ZeroOperator)
+from pyoperators import (BlockColumnOperator, BlockDiagonalOperator,
+                         CompositionOperator, DiagonalOperator,
+                         DistributionIdentityOperator, IdentityOperator,
+                         Operator, MaskOperator, ZeroOperator)
 from pyoperators.decorators import (linear, orthogonal, real, square, symmetric,
                                     contiguous, inplace, separable)
 from pyoperators.utils import (isalias, isscalar, openmp_num_threads,
                                product)
-from pyoperators.utils.mpi import MPI, distribute_shape
-from pysimulators import ProjectionOperator
-from pysimulators.acquisitionmodels import block_diagonal
+from pyoperators.utils.mpi import MPI, distribute_shape, distribute_shapes
+from pysimulators import Map
+from pysimulators.acquisitionmodels import (block_diagonal, PointingMatrix,
+         ProjectionInMemoryOperator, ProjectionOnFlyOperator)
+from pysimulators.wcsutils import fitsheader2shape, str2fitsheader
 
 from . import tamasisfortran as tmf
 from . import var
 from .utils import diff, diffT, diffTdiff, shift
+from .mpiutils import gather_fitsheader_if_needed, scatter_fitsheader
 
 try:
     import fftw3
@@ -41,6 +45,7 @@ __all__ = [
     'PackOperator',
     'PadOperator',
     'Projection', # obsolete
+    'ProjectionOperator',
     'ResponseTruncatedExponential', # obsolete
     'ConvolutionTruncatedExponentialOperator',
     'ShiftOperator',
@@ -263,6 +268,212 @@ class PadOperator(Operator):
        
     def reshapeout(self, shapeout):
         return shapeout[:-1] + (shapeout[-1] - self.left - self.right,)
+
+
+def ProjectionOperator(input, method=None, header=None, resolution=None,
+                       npixels_per_sample=0, units=None, derived_units=None,
+                       downsampling=False, packed=False, commin=MPI.COMM_WORLD,
+                       commout=MPI.COMM_WORLD, onfly_func=None, onfly_ids=None,
+                       onfly_shapeouts=None, **keywords):
+    """
+    Projection operator factory, to handle operations by one or more pointing
+    matrices.
+
+    It is assumed that each pointing matrix row has at most 'npixels_per_sample'
+    non-null elements, or in other words, an output element can only intersect
+    a fixed number of input elements.
+
+    Given an input vector x and an output vector y, y = P(x) translates into:
+        y[i] = sum(P.matrix[i,:].value * x[P.matrix[i,:].index])
+
+    If the input is not MPI-distributed unlike the output, the projection
+    operator is automatically multiplied by the operator DistributionIdentity-
+    Operator, to enable MPI reductions.
+
+    If the input is MPI-distributed, this operator is automatically packed (see
+    below) and multiplied by the operator DistributionLocalOperator, which
+    takes the local input as argument.
+
+    Arguments
+    ---------
+    input : pointing matrix (or sequence of) or observation (deprecated)
+    method : deprecated
+    header : deprecated
+    resolution : deprecated
+    npixels_per_sample : deprecated
+    downsampling : deprecated
+    packed deprecated
+
+    """
+    # check if there is only one pointing matrix
+    isonfly = input is None
+    isobservation = hasattr(input, 'get_pointing_matrix')
+    if isobservation:
+        if hasattr(input, 'slice'):
+            nmatrices = len(input.slice)
+        else:
+            nmatrices = 1
+        commout = input.instrument.comm
+    elif isonfly:
+        nmatrices = len(onfly_ids)
+    else:
+        if isinstance(input, PointingMatrix):
+            input = (input,)
+        if any(not isinstance(i, PointingMatrix) for i in input):
+            raise TypeError('The input is not a PointingMatrix, (nor a sequence'
+                            ' of).')
+        nmatrices = len(input)
+
+    ismapdistributed = commin.size > 1
+    istoddistributed = commout.size > 1
+
+    # get the pointing matrix from the input observation
+    if isobservation:
+        if header is None:
+            if not hasattr(input, 'get_map_header'):
+                raise AttributeError("No map header has been specified and "
+                    "the observation has no 'get_map_header' method.")
+            header_global = input.get_map_header(resolution=resolution,
+                                                 downsampling=downsampling)
+        else:
+            if isinstance(header, str):
+                header = str2fitsheader(header)
+            header_global = gather_fitsheader_if_needed(header, comm=commin)
+        #XXX we should hand over the local header
+        input = input.get_pointing_matrix(header_global, npixels_per_sample,
+                    method=method, downsampling=downsampling, comm=commin)
+        if isinstance(input, PointingMatrix):
+            input = (input,)
+    elif isonfly:
+        header_global = header
+    else:
+        header_global = input[0].info['header']
+
+    # check shapein
+    if not isonfly:
+        shapeins = [i.shape_input for i in input]
+        if any(s != shapeins[0] for s in shapeins):
+            raise ValueError('The pointing matrices do not have the same input '
+                             "shape: {0}.".format(', '.join(str(shapeins))))
+        shapein = shapeins[0]
+    else:
+        shapein = fitsheader2shape(header_global)
+
+    # the output is simply a ProjectionOperator instance
+    if nmatrices == 1 and not ismapdistributed and not istoddistributed \
+       and not packed:
+        return ProjectionInMemoryOperator(input[0], units=units, derived_units=
+            derived_units, commin=commin, commout=commout, **keywords)
+
+    if packed or ismapdistributed:
+        if isonfly:
+            raise NotImplementedError()
+        # compute the map mask before this information is lost while packing
+        mask_global = Map.ones(shapein, dtype=np.bool8, header=header_global)
+        for i in input:
+            i.get_mask(out=mask_global)
+        for i in input:
+            i.pack(mask_global)
+        if ismapdistributed:
+            shapes = distribute_shapes(mask_global.shape, comm=commin)
+            shape = shapes[commin.rank]
+            mask = np.empty(shape, bool)
+            commin.Reduce_scatter([mask_global, MPI.BYTE], [mask, MPI.BYTE],
+                                  [product(s) for s in shapes], op=MPI.BAND)
+        else:
+            mask = mask_global
+
+    if isonfly:
+        place_holder = {}
+        operands = [ProjectionOnFlyOperator(place_holder, id, onfly_func,
+                                            shapein=shapein, shapeout=shapeout,
+                                            units=units,
+                                            derived_units=derived_units)
+                    for id, shapeout in zip(onfly_ids, onfly_shapeouts)]
+    else:
+        operands = [ProjectionInMemoryOperator(i, units=units, derived_units=
+                    derived_units, commout=commout, **keywords) for i in input]
+    result = BlockColumnOperator(operands, axisout=-1)
+
+    if nmatrices > 1:
+        def apply_mask(self, mask):
+            mask = np.asarray(mask, np.bool8)
+            dest = 0
+            if mask.shape != self.shapeout:
+                raise ValueError("The mask shape '{0}' is incompatible with tha"
+                    "t of the projection operator '{1}'.".format(mask.shape,
+                    self.shapeout))
+            if any(isinstance(p, ProjectionOnFlyOperator)
+                   for p in self.operands):
+                blocks = self.copy()
+                self.__class__ = CompositionOperator
+                self.__init__([MaskOperator(mask), blocks])
+                return
+            for p in self.operands:
+                n = p.matrix.shape[1]
+                p.apply_mask(mask[...,dest:dest+n])
+                dest += n
+        def get_mask(self, out=None):
+            for p in self.operands:
+                out = p.get_mask(out=out)
+            return out
+        def get_pTp(self, out=None):
+            for p in self.operands:
+                out = p.get_pTp(out=out)
+            return out
+        def get_pTx_pT1(self, x, out=None, mask=None):
+            dest = 0
+            for p in self.operands:
+                n = p.matrix.shape[1]
+                out = p.get_pTx_pT1(x[...,dest:dest+n], out=out, mask=mask)
+                dest += n
+            return out
+        def intersects(self, out=None):
+            raise NotImplementedError('email-me')
+
+        result.apply_mask = apply_mask.__get__(result)
+        result.get_mask = get_mask.__get__(result)
+        result.get_pTp = get_pTp.__get__(result)
+        result.get_pTx_pT1 = get_pTx_pT1.__get__(result)
+        result.intersects = intersects.__get__(result)
+
+    if not istoddistributed and not ismapdistributed and not packed:
+        return result
+
+    if packed or ismapdistributed:
+        def get_mask(self, out=None):
+            if out is not None:
+                out &= mask
+            else:
+                out = mask
+            return out
+        if ismapdistributed:
+            header = scatter_fitsheader(header_global, comm=commin)
+            result *= DistributionLocalOperator(mask_global, commin=commin,
+                                                attrin={'header':header})
+        elif packed:
+            result *= PackOperator(mask)
+        result.get_mask = get_mask.__get__(result)
+
+    if istoddistributed and not ismapdistributed:
+        def get_mask(self, out=None):
+            out = self.operands[0].get_mask(out=out)
+            commout.Allreduce(MPI.IN_PLACE, [out, MPI.BYTE], op=MPI.BAND)
+            return out        
+        result *= DistributionIdentityOperator(commout=commout)
+        result.get_mask = get_mask.__get__(result)
+
+    def not_implemented(out=None):
+        raise NotImplementedError('email-me')
+
+    def apply_mask(self, mask):
+        self.operands[0].apply_mask(mask)
+    result.apply_mask = apply_mask.__get__(result)
+    result.get_pTp = not_implemented
+    result.get_pTx_pT1 = not_implemented
+    result.intersects = not_implemented
+
+    return result
 
 
 @real
