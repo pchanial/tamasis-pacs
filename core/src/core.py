@@ -5,7 +5,6 @@ from pyoperators.utils.mpi import MPI
 from . import tamasisfortran as tmf
 from . import var
 from .acquisitionmodels import *
-from .instruments import *
 from .linalg import *
 from .mappers import *
 from .mpiutils import *
