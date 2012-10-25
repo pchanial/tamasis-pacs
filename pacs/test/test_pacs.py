@@ -6,8 +6,8 @@ import tamasis
 from glob import glob
 from pyoperators import MaskOperator
 from pyoperators.utils.testing import assert_eq
-from pysimulators import Map
-from tamasis import PacsInstrument, PacsObservation, PacsSimulation, Pointing, CompressionAverageOperator, mapper_naive
+from pysimulators import Map, Pointing
+from tamasis import PacsInstrument, PacsObservation, PacsSimulation, CompressionAverageOperator, mapper_naive
 from tamasis.utils import all_eq, minmax
 from uuid import uuid1
 

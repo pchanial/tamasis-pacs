@@ -9,7 +9,6 @@ from .instruments import *
 from .linalg import *
 from .mappers import *
 from .mpiutils import *
-from .pointings import *
 from .processing import *
 from .solvers import *
 from .utils import *
