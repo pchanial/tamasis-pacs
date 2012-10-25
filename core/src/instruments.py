@@ -9,10 +9,10 @@ from pyoperators.utils import product, strenum, strshape
 from pyoperators.utils.mpi import MPI
 from pysimulators import Map
 from pysimulators.acquisitionmodels import PointingMatrix
+from pysimulators.wcsutils import barycenter_lonlat, combine_fitsheader, create_fitsheader
 
 from . import tamasisfortran as tmf
 from .mpiutils import gather_fitsheader_if_needed
-from .wcsutils import barycenter_lonlat, combine_fitsheader, create_fitsheader
 
 __all__ = ['Instrument']
 

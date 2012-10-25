@@ -10,7 +10,7 @@ import sys
 
 from pyoperators.utils import openmp_num_threads, product, strshape
 from pyoperators.utils.mpi import MPI, DTYPE_MAP, combine, distribute_slice
-from .wcsutils import create_fitsheader, has_wcs
+from pysimulators.wcsutils import create_fitsheader, has_wcs
 
 __all__ = []
 

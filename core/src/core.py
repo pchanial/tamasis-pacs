@@ -13,7 +13,6 @@ from .processing import *
 from .solvers import *
 from .utils import *
 from .var import __version__
-from .wcsutils import *
 
 __all__ = [x for x in dir() if not x.startswith('_') or x == '__version__']
 

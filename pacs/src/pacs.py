@@ -17,17 +17,18 @@ from pyoperators import (ClipOperator, HomothetyOperator, IdentityOperator,
 from pyoperators.utils import (isscalar, openmp_num_threads, product,
                                strelapsed, strenum, strplural)
 from pyoperators.utils.mpi import MPI
-from pysimulators import Map, MaskPolicy, Observation, Pointing, Quantity, Tod
+from pysimulators import (Map, MaskPolicy, Observation, Pointing, Quantity, Tod,
+                          create_fitsheader)
 from pysimulators.acquisitionmodels import (
          ProjectionBaseOperator, ProjectionInMemoryOperator, PointingMatrix)
 from pysimulators.datautils import airy_disk, gaussian
 
 from . import var
-from tamasis.core import (Instrument,
-                          tmf, CompressionAverageOperator, ProjectionOperator,
-                          create_fitsheader, filter_nonfinite)
+from tamasis.core import Instrument, tmf
+from tamasis.acquisitionmodels import CompressionAverageOperator, ProjectionOperator
 from tamasis.mappers import mapper_naive, mapper_rls
 from tamasis.mpiutils import distribute_observation, gather_fitsheader_if_needed
+from tamasis.processing import filter_nonfinite
 
 __all__ = [ 'PacsInstrument',
             'PacsObservation',
@@ -1774,7 +1775,7 @@ def _hcss_fits_keyword(header, keyword, *args):
 
 def _write_mask(obs, mask, filename):
 
-    header = create_fitsheader(naxis=(), extname='Mask')
+    header = create_fitsheader(naxes=(), extname='Mask')
     header.update('DSETS___', 1)
     header.update('DS_0', 4)
     pyfits.append(filename, None, header)

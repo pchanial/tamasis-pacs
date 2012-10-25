@@ -10,14 +10,13 @@ import time
 
 from pyoperators import DiagonalOperator, IdentityOperator, MaskOperator, pcg
 from pyoperators.utils.mpi import MPI
-from pysimulators import Map, Tod
+from pysimulators import Map, Tod, create_fitsheader
 
 from . import var
 from .acquisitionmodels import DiscreteDifferenceOperator
 from .linalg import Function, norm2, norm2_ellipsoid
 from .processing import filter_nonfinite
 from .solvers import cg, nlcg, QuadraticStep
-from .wcsutils import create_fitsheader
 
 __all__ = [ 'mapper_naive',
             'mapper_ls',
