@@ -17,14 +17,13 @@ from pyoperators import (ClipOperator, HomothetyOperator, IdentityOperator,
 from pyoperators.utils import (isscalar, openmp_num_threads, product,
                                strelapsed, strenum, strplural)
 from pyoperators.utils.mpi import MPI
-from pysimulators import (Map, MaskPolicy, Observation, Pointing, Quantity, Tod,
-                          create_fitsheader)
-from pysimulators.acquisitionmodels import (
-         ProjectionBaseOperator, ProjectionInMemoryOperator, PointingMatrix)
+from pysimulators import (Instrument, Map, MaskPolicy, Observation, Pointing,
+                          Quantity, Tod, create_fitsheader)
+from pysimulators.acquisitionmodels import (ProjectionBaseOperator,
+         ProjectionInMemoryOperator, PointingMatrix)
 from pysimulators.datautils import airy_disk, gaussian
 
-from . import var
-from tamasis.core import Instrument, tmf
+from . import var, tmf
 from tamasis.acquisitionmodels import CompressionAverageOperator, ProjectionOperator
 from tamasis.mappers import mapper_naive, mapper_rls
 from tamasis.mpiutils import distribute_observation, gather_fitsheader_if_needed
