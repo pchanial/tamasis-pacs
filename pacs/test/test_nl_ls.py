@@ -1,7 +1,6 @@
 import os
 import tamasis
 from pyoperators import DiagonalOperator, MaskOperator
-from pysimulators import ProjectionOperator
 from tamasis import PacsObservation, mapper_naive, mapper_nl
 
 class TestFailure(Exception): pass
@@ -10,7 +9,8 @@ data_dir = os.path.dirname(__file__) + '/data/'
 obs = PacsObservation(data_dir+'frames_blue.fits', fine_sampling_factor=1)
 tod = obs.get_tod()
 
-projection   = ProjectionOperator(obs, downsampling=True, npixels_per_sample=6)
+projection   = obs.get_projection_operator(downsampling=True,
+                                           npixels_per_sample=6)
 masking_tod  = MaskOperator(tod.mask)
 masking_map  = MaskOperator(projection.get_mask())
 

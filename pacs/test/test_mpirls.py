@@ -3,7 +3,6 @@ import tamasis
 
 from pyoperators import DistributionGlobalOperator, MaskOperator
 from pyoperators.utils.mpi import MPI
-from pysimulators import ProjectionOperator
 from tamasis import PacsObservation, create_fitsheader, mapper_rls
 from tamasis.utils import assert_all_eq
 
@@ -28,10 +27,9 @@ comm_map = MPI.COMM_SELF
 obs_ref = PacsObservation(data_dir + 'frames_blue.fits', comm=comm_tod)
 obs_ref.pointing.chop = 0
 tod_ref = obs_ref.get_tod()
-model_ref = MaskOperator(tod_ref.mask) * \
-            ProjectionOperator(obs_ref, downsampling=True, npixels_per_sample=6,
-                               commout=comm_tod, commin=comm_map,
-                               header=header_ref_global)
+model_ref = MaskOperator(tod_ref.mask) * obs_ref.get_projection_operator(
+            downsampling=True, npixels_per_sample=6, commin=comm_map,
+            header=header_ref_global)
 map_ref_global = mapper_rls(tod_ref, model_ref, tol=tol, maxiter=maxiter,
                             solver=solver, hyper=hyper)
 header_ref_global = map_ref_global.header
@@ -65,13 +63,13 @@ tod2 = obs2.get_tod()
 
 # non-distributed map, distributed TOD
 def test1():
-    comm_tod = MPI.COMM_WORLD
     comm_map = MPI.COMM_SELF
     for obs, tod in ((obs1,tod1), (obs2,tod2)):
         masking = MaskOperator(tod.mask)
-        proj = ProjectionOperator(obs, downsampling=True, npixels_per_sample=6,
-                                  header=header_ref_global, commin=comm_map,
-                                  commout=comm_tod)
+        proj = obs.get_projection_operator(downsampling=True,
+                                           npixels_per_sample=6,
+                                           header=header_ref_global,
+                                           commin=comm_map)
         model = masking * proj
         m = mapper_rls(tod, model, tol=tol, maxiter=maxiter, solver=solver,
                        hyper=hyper)
@@ -79,13 +77,13 @@ def test1():
 
 # non-distributed map, packed projection, distributed TOD
 def test2():
-    comm_tod = MPI.COMM_WORLD
     comm_map = MPI.COMM_SELF
     for obs, tod in ((obs1, tod1), (obs2, tod2)):
         masking = MaskOperator(tod.mask)
-        proj = ProjectionOperator(obs, downsampling=True, npixels_per_sample=6,
-                                  header=header_ref_global, commin=comm_map,
-                                  commout=comm_tod, packed=True)
+        proj = obs.get_projection_operator(downsampling=True,
+                                           npixels_per_sample=6,
+                                           header=header_ref_global,
+                                           commin=comm_map, packed=True)
         model = masking * proj
         m = mapper_rls(tod, model, tol=tol, maxiter=maxiter, solver=solver,
                        hyper=hyper)
@@ -93,13 +91,13 @@ def test2():
 
 # distributed map, distributed TOD
 def test3():
-    comm_tod = MPI.COMM_WORLD
     comm_map = MPI.COMM_WORLD
     for obs, tod in ((obs1,tod1), (obs2,tod2)):
         masking = MaskOperator(tod.mask)
-        proj = ProjectionOperator(obs, downsampling=True, npixels_per_sample=6,
-                                  header=header_ref_global, commin=comm_map,
-                                  commout=comm_tod)
+        proj = obs.get_projection_operator(downsampling=True,
+                                           npixels_per_sample=6,
+                                           header=header_ref_global,
+                                           commin=comm_map)
         model = masking * proj
         m = mapper_rls(tod, model, tol=tol, maxiter=maxiter, solver=solver,
                        hyper=hyper)
@@ -107,13 +105,13 @@ def test3():
 
 # same map for all processes but also distributed as local maps, distributed TOD
 def test4():
-    comm_tod = MPI.COMM_WORLD
     comm_map = MPI.COMM_SELF
     for obs, tod in ((obs1,tod1), (obs2,tod2)):
         masking = MaskOperator(tod.mask)
-        proj = ProjectionOperator(obs, downsampling=True, npixels_per_sample=6,
-                                  header=header_ref_global,
-                                  commin=MPI.COMM_WORLD, commout=comm_tod)
+        proj = obs.get_projection_operator(downsampling=True,
+                                           npixels_per_sample=6,
+                                           header=header_ref_global,
+                                           commin=MPI.COMM_WORLD)
         model = masking * proj * tolocal
         m = mapper_rls(tod, model, tol=tol, maxiter=maxiter, solver=solver,
                        hyper=hyper)

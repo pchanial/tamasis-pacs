@@ -2,7 +2,7 @@
 import os
 from   matplotlib.pyplot import plot
 from pyoperators import IdentityOperator, MaskOperator
-from pysimulators import ProjectionOperator, plot_tod
+from pysimulators import plot_tod
 from   tamasis import (PacsObservation, CompressionAverageOperator,
                        deglitch_l2mad, filter_median, filter_polynomial,
                        mapper_naive)
@@ -19,7 +19,8 @@ pacs = PacsObservation([datafile[0]+'[6065:20000]', datafile[1]+'[6066:20001]'],
                         fine_sampling_factor=1, calblock_extension_time=0.)
 
 telescope    = IdentityOperator()
-projection   = ProjectionOperator(pacs, resolution=3.2, npixels_per_sample=5)
+projection   = pacs.get_projection_operator(resolution=3.2,
+                                            npixels_per_sample=5)
 multiplexing = CompressionAverageOperator(1)
 crosstalk    = IdentityOperator()
 compression  = CompressionAverageOperator(4)

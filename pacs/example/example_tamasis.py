@@ -33,11 +33,10 @@ tod = obs.get_tod(flatfielding=True,
 # 'downsampling=True' means that the acquisition model will not
 # sample at the instrument frequency of 40Hz, but at the compressed frequency
 # (10Hz for prime mode, 5Hz for parallel mode)
-projection = ProjectionOperator(obs.get_pointing_matrix(
-                 header=obs.get_map_header(),
-                 npixels_per_sample=5,
+projection = obs.get_projection_operator(
+                 downsampling=True,
                  method='sharp',
-                 downsampling=True))
+                 npixels_per_sample=5)
 
 # Map-level deglitching using the MAD (median absolute deviation to
 # the mean). We highpass filter the Tod using a short filtering 
@@ -85,13 +84,14 @@ obs.save('obs_preprocessed.fits', tod)
 # and H the acquisition model.
 # To take into account bad samples such as glitches, we solve
 # M y == M H x, M is the mask operator which sets bad samples values to 0
-projection = ProjectionOperator(obs.get_pointing_matrix(
-                 header=obs.get_map_header(resolution=3.2),
+projection = obs.get_projection_operator(
+                 header=obs.get_map_header(),
+                 method='sharp',
                  npixels_per_sample=5,
-                 method='sharp'))
+                 storage='in memory')
 response = ConvolutionTruncatedExponentialOperator(obs.pack(
                obs.instrument.detector.time_constant) / 
-               obs.instrument.SAMPLING_PERIOD)
+               bs.instrument.SAMPLING_PERIOD)
 compression = CompressionAverageOperator(obs.slice.compression_factor)
 masking = MaskOperator(tod.mask)
 model = masking * compression * response * projection

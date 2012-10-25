@@ -1,4 +1,4 @@
-!!#-------------------------------------------------------------
+#-------------------------------------------------------------
 # Creation of a map using the regularised least square method
 #-------------------------------------------------------------
 import os
@@ -25,10 +25,10 @@ tod = obs.get_tod(flatfielding=True,
 # 'downsampling=True' means that the acquisition model will not
 # sample at the instrument frequency of 40Hz, but at the compressed frequency
 # (10Hz for prime mode, 5Hz for parallel mode)
-projection = ProjectionOperator(obs,
-                                method='sharp',
-                                downsampling=True,
-                                npixels_per_sample=6)
+projection = obs.get_projection_operator(
+                 downsampling=True,
+                 method='sharp',
+                 npixels_per_sample=5)
 
 # Remove low frequency drifts. The specified window length is the
 # number of samples used to compute the median (unlike HCSS, where

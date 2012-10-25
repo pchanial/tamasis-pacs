@@ -3,7 +3,6 @@ import tamasis
 import pyoperators
 
 from pyoperators import DiagonalOperator, MaskOperator
-from pysimulators import ProjectionOperator
 from tamasis import PacsObservation, mapper_nl
 from tamasis.linalg import norm2, norm2_ellipsoid
 
@@ -18,9 +17,9 @@ obs = PacsObservation(filename=data_dir+'frames_blue.fits',
 obs.pointing.chop[:] = 0
 tod = obs.get_tod()
 
-projection   = ProjectionOperator(obs, resolution=3.2, downsampling=True,
-                                  npixels_per_sample=6)
-masking_tod  = MaskOperator(tod.mask)
+projection = obs.get_projection_operator(resolution=3.2, downsampling=True,
+                                         npixels_per_sample=6)
+masking_tod = MaskOperator(tod.mask)
 
 model = masking_tod * projection
 

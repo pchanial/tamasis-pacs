@@ -12,17 +12,21 @@ import re
 import scipy
 import time
 
-from pyoperators import (Operator, HomothetyOperator, IdentityOperator,
-                         MaskOperator, RoundOperator, ClipOperator, I)
+from pyoperators import (ClipOperator, HomothetyOperator, IdentityOperator,
+                         MaskOperator, Operator, RoundOperator, I)
 from pyoperators.utils import (isscalar, openmp_num_threads, product,
                                strelapsed, strenum, strplural)
 from pyoperators.utils.mpi import MPI
-from pysimulators import ProjectionOperator, PointingMatrix, Map, Quantity, Tod
+from pysimulators import Map, Quantity, Tod
+from pysimulators.acquisitionmodels import (
+         ProjectionBaseOperator, ProjectionInMemoryOperator, PointingMatrix)
+from pysimulators.datautils import airy_disk, gaussian
 
 from . import var
-from tamasis.core import (Instrument, Observation, Pointing,
-                          MaskPolicy, tmf, CompressionAverageOperator,
+from tamasis.core import (Instrument, Observation, Pointing, MaskPolicy,
+                          tmf, CompressionAverageOperator, ProjectionOperator,
                           create_fitsheader, filter_nonfinite)
+from tamasis.mappers import mapper_naive, mapper_rls
 from tamasis.mpiutils import distribute_observation, gather_fitsheader_if_needed
 
 __all__ = [ 'PacsInstrument',
@@ -617,6 +621,47 @@ class PacsBase(Observation):
             section.compression_factor, delay=section.delay, section=section,
             comm=comm)
 
+    def get_projection_operator(self, header=None, npixels_per_sample=0,
+                                method=None, downsampling=False,
+                                resolution=None, storage='in memory',
+                                packed=False, commin=MPI.COMM_WORLD):
+        if not isinstance(storage, str):
+            raise TypeError('Invalid storage method.')
+        if header is None:
+            header = self.get_map_header(downsampling=downsampling,
+                                         resolution=resolution)
+
+        # if there is only one projection, on fly storage does not make sense
+        nslices = len(self.slice)
+        if nslices == 1 and storage == 'on fly':
+            storage = 'in memory'
+
+        storage = storage.lower()
+        if storage == 'in memory':
+            matrix = self.get_pointing_matrix(header, npixels_per_sample,
+                                              method, downsampling, comm=commin)
+            return ProjectionOperator(matrix, packed=packed, commin=commin,
+                                      commout=self.instrument.comm)
+        elif storage == 'on fly':
+            func = lambda id_: self.get_pointing_matrix(header, \
+                               npixels_per_sample, method, downsampling, \
+                               section=self.slice[id_], comm=commin)
+            ids = range(nslices)
+            nvalids = self.get_nsamples()
+            if not downsampling:
+                nvalids = [n * c * self.instrument.fine_sampling_factor for n, c
+                           in zip(nvalids, self.slice.compression_factor)]
+            shapes = [(self.get_ndetectors(), n) for n in nvalids]
+            units = ('/detector', '/pixel')
+            dus = self.instrument.get_derived_units()
+            return ProjectionOperator(None, header=header, onfly_ids=ids,
+                                      onfly_func=func, onfly_shapeouts=shapes,
+                                      units=units, derived_units=dus)
+        else:
+            storages = ('in memory', 'on fly')
+            raise ValueError('Invalid storage method. Expected values are {0}.'
+                             .format(strenum(storages)))
+        
     def get_random(self, flatfielding=True, subtraction_mean=True):
         """
         Return noise data from a random slice of a real pointed observation.
@@ -1485,11 +1530,8 @@ def pacs_preprocess(obs, tod,
     deglitch, filter and potentially compress if the observation is in
     transparent mode
     """
-    projection = ProjectionOperator(obs,
-                            method='sharp',
-                            header=header,
-                            downsampling=True,
-                            npixels_per_sample=npixels_per_sample)
+    projection = obs.get_projection_operator(method='sharp', header=header,
+                     downsampling=True, npixels_per_sample=npixels_per_sample)
     tod_filtered = filter_median(tod, deglitching_hf_length)
     tod.mask = deglitch_l2mad(tod_filtered,
                               projection,
@@ -1502,11 +1544,9 @@ def pacs_preprocess(obs, tod,
     if projection is None or projection_method != 'sharp' or \
        not downsampling and np.any(obs.slice.compression_factor * \
        obs.instrument.fine_sampling_factor > 1):
-        projection = ProjectionOperator(obs,
-                                method=projection_method,
-                                downsampling=downsampling,
-                                header=header,
-                                npixels_per_sample=npixels_per_sample)
+        projection = obs.get_projection_operator(method=projection_method,
+                         downsampling=downsampling, header=header,
+                         npixels_per_sample=npixels_per_sample)
 
     # bail out if not in transparent mode
     if all(obs.slice[0].compression_factor != 1) or \
@@ -1528,7 +1568,6 @@ def pacs_preprocess(obs, tod,
     mask = compression(tod.mask)
     mask[mask != 0] = 1
     todc.mask = np.array(mask, dtype='uint8')
-    maskingc = MaskOperator(todc.mask)
 
     model = compression * projection
     map_mask = model.T(tod.mask)
@@ -1623,16 +1662,18 @@ def pacs_compute_delay(obs, tod, model, invntt=None, tol_delay=1.e-3,
 
         def substitute_projection(model):
             for i, c in enumerate(model.operands):
-                if isinstance(c, ProjectionOperator):
-                    model.operands[i] = ProjectionOperator(obs, method=c.method,
-                       header=c.header, npixels_per_sample=c.npixels_per_sample)
+                if isinstance(c, ProjectionBaseOperator):
+                    model.operands[i] = obs.get_projection_operator(
+                        method=c.method, header=c.header,
+                        npixels_per_sample=c.npixels_per_sample,
+                        storage='in memory' if isinstance(c, ProjectionInMemoryOperator) else 'on fly')
                     return True
                 elif hasattr(c, 'operands'):
                     if substitute_projection(c):
                         return True
             return False
 
-        if isinstance(model, ProjectionOperator):
+        if isinstance(model, ProjectionBaseOperator):
             return ProjectionOperator(obs, method=model.method, header= \
                 model.header, npixels_per_sample=model.npixels_per_sample)
         if hasattr(model, 'operands'):
@@ -1942,10 +1983,9 @@ def step_deglitching(obs, tod, length=100, nsigma=25., method="mad"):
         raise ValueError("Unrecognized deglitching method.")
 
     # special deglitching projector
-    proj_glitch = tm.ProjectionOperator(obs,
-                                        method='sharp',
-                                        downsampling=True,
-                                        npixels_per_sample=6)
+    proj_glitch = obs.get_projection_operator(method='sharp',
+                                              downsampling=True,
+                                              npixels_per_sample=6)
     # filter tod with narrow window
     tod_glitch = tm.filter_median(tod, length=length)
     # actual degltiching according to selected method (mad or std)

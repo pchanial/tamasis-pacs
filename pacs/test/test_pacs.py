@@ -6,7 +6,7 @@ import tamasis
 from glob import glob
 from pyoperators import MaskOperator
 from pyoperators.utils.testing import assert_eq
-from pysimulators import ProjectionOperator, Map
+from pysimulators import Map
 from tamasis import PacsInstrument, PacsObservation, PacsSimulation, Pointing, CompressionAverageOperator, mapper_naive
 from tamasis.utils import all_eq, minmax
 from uuid import uuid1
@@ -47,8 +47,8 @@ def test_header():
     obs = PacsObservation(data_dir+'frames_blue.fits', reject_bad_line=False)
     obs.pointing.chop = 0
     header = obs.get_map_header()
-    projection = ProjectionOperator(obs, header=header, downsampling=True,
-                                    npixels_per_sample=6)
+    projection = obs.get_projection_operator(header=header, downsampling=True,
+                                             npixels_per_sample=6)
     tod = obs.get_tod()
 
     map_naive = mapper_naive(tod, projection)
@@ -56,7 +56,7 @@ def test_header():
     header2 = header.copy()
     header2['NAXIS1'] += 500
     header2['CRPIX1'] += 250
-    projection2 = ProjectionOperator(obs, header=header2, downsampling=True)
+    projection2 = obs.get_projection_operator(header=header2, downsampling=True)
     map_naive2 = mapper_naive(tod, MaskOperator(tod.mask) * projection2)
     map_naive2.inunit('Jy/arcsec^2')
     map_naive3 = map_naive2[:,250:header['NAXIS1']+250]
@@ -75,8 +75,9 @@ def test_detector_policy():
     map_naive_ref = Map(data_dir + '../../../core/test/data/frames_blue_map_naive.fits')
     obs = PacsObservation(data_dir + 'frames_blue.fits', reject_bad_line=False)
     obs.pointing.chop[:] = 0
-    projection = ProjectionOperator(obs, header=map_naive_ref.header,
-                                    downsampling=True, npixels_per_sample=6)
+    projection = obs.get_projection_operator(header=map_naive_ref.header,
+                                             downsampling=True,
+                                             npixels_per_sample=6)
     tod = obs.get_tod()
     masking = MaskOperator(tod.mask)
     model = masking * projection
@@ -87,8 +88,9 @@ def test_detector_policy():
                               policy_bad_detector='remove',
                               reject_bad_line=False)
     obs_rem.pointing.chop[:] = 0
-    projection_rem = ProjectionOperator(obs_rem, header=map_naive.header,
-                                        downsampling=True, npixels_per_sample=7)
+    projection_rem = obs_rem.get_projection_operator(header=map_naive.header,
+                                                     downsampling=True,
+                                                     npixels_per_sample=7)
     tod_rem = obs_rem.get_tod()
     masking_rem = MaskOperator(tod_rem.mask)
     model_rem = masking_rem * projection_rem
@@ -110,7 +112,7 @@ def test_npixels_per_sample_is_zero():
     obs = PacsObservation(data_dir + 'frames_blue.fits')
     header = obs.get_map_header()
     header['crval1'] += 1
-    proj2 = ProjectionOperator(obs, header=header)
+    proj2 = obs.get_projection_operator(header=header)
     assert proj2.matrix.shape[-1] == 0
     t = proj2(np.ones((header['NAXIS2'],header['NAXIS1'])))
     assert all_eq(minmax(t), [0,0])
@@ -143,19 +145,27 @@ def test_slice2():
 
     header = obs1.get_map_header()
 
-    proj1 = ProjectionOperator(obs1, header=header)
-    proj2 = ProjectionOperator(obs2, header=header)
+    proj1 = obs1.get_projection_operator(header=header)
+    proj2 = obs2.get_projection_operator(header=header)
+    proj3 = obs2.get_projection_operator(header=header, storage='on fly')
     assert all_eq(proj1.get_mask(), proj2.get_mask())
+    assert all_eq(proj1.get_mask(), proj3.get_mask())
     assert all_eq(proj1.matrix, np.concatenate([p.matrix for p in \
                   proj2.operands], axis=1))
+    assert all_eq(proj1.matrix, np.concatenate([p.matrix for p in \
+                  proj3.operands], axis=1))
 
     model1 = CompressionAverageOperator(obs1.slice.compression_factor) * proj1
     model2 = CompressionAverageOperator(obs2.slice.compression_factor) * proj2
+    model3 = CompressionAverageOperator(obs2.slice.compression_factor) * proj3
     
     m1 = model1.T(tod1)
     m2 = model2.T(tod2)
+    m3 = model3.T(tod2)
     assert all_eq(m1, m2, tol)
+    assert all_eq(m1, m3, tol)
     assert all_eq(model1(m1), model2(m1))
+    assert all_eq(model1(m1), model3(m1))
 
 def test_pTx_pT1():
     obs1 = PacsObservation(data_dir + 'frames_blue.fits')
@@ -168,7 +178,7 @@ def test_pTx_pT1():
 
     tod = obs1.get_tod()
 
-    model1 = ProjectionOperator(obs1, downsampling=True, header=header)
+    model1 = obs1.get_projection_operator(downsampling=True, header=header)
     ref = mapper_naive(tod, model1, unit='Jy/arcsec^2')
 
     model1.apply_mask(tod.mask)
@@ -177,12 +187,19 @@ def test_pTx_pT1():
     m1 = b1 / w1
     assert all_eq(ref, m1, tol)
 
-    model2 = ProjectionOperator(obs2, downsampling=True, header=header)
+    model2 = obs2.get_projection_operator(downsampling=True, header=header)
     model2.apply_mask(tod.mask)
     
     b2, w2 = model2.get_pTx_pT1(tod)
     m2 = b2 / w2
     assert all_eq(ref, m2, tol)
+
+    model3 = obs2.get_projection_operator(downsampling=True, header=header,
+                                          storage='on fly')
+    MaskOperator(tod.mask)(tod, tod)
+    b3, w3 = model3.get_pTx_pT1(tod)
+    m3 = b3 / w3
+    assert all_eq(ref, m3, tol)
 
     
 def teardown():

@@ -6,7 +6,6 @@ import tamasis
 from pyoperators import BlockColumnOperator, MaskOperator
 from pyoperators.iterative.algorithms import StopCondition
 from pyoperators.iterative.dli import DoubleLoopAlgorithm
-from pysimulators import ProjectionOperator
 from tamasis import PacsObservation, DiscreteDifferenceOperator, mapper_naive
 
 pyoperators.memory.verbose=False
@@ -16,8 +15,9 @@ obs = PacsObservation(filename=data_dir+'frames_blue.fits')
 obs.pointing.chop[:] = 0
 tod = obs.get_tod()
 
-projection  = ProjectionOperator(obs, resolution=3.2, downsampling=True,
-                                 npixels_per_sample=6)
+projection = obs.get_projection_operator(resolution=3.2,
+                                         downsampling=True,
+                                         npixels_per_sample=6)
 masking_tod = MaskOperator(tod.mask)
 model = masking_tod * projection
 

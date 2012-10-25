@@ -4,8 +4,9 @@ import tamasis
 
 from pyoperators import DistributionGlobalOperator
 from pyoperators.utils.mpi import MPI, distribute_slice
-from pysimulators import ProjectionOperator, Map
-from tamasis import PacsInstrument, PacsObservation, UnpackOperator, mapper_naive
+from pysimulators import Map
+from tamasis import (PacsInstrument, PacsObservation, UnpackOperator,
+                     mapper_naive)
 from tamasis.utils import assert_all_eq
 
 
@@ -27,28 +28,17 @@ map_ref_global = Map(data_dir + '../../../core/test/data/frames_blue_map_naive.f
 mask_ref_global = map_ref_global.coverage == 0
 header_ref_global = map_ref_global.header
 
-def check_map_global(m, mask):
+def check_map_global(m):
     assert_all_eq(m.magnitude, map_ref_global.magnitude, 1e-10)
     assert_all_eq(m.coverage, map_ref_global.coverage, 1e-10)
-    assert_all_eq(mask, mask_ref_global)
     assert_all_eq(m.tounit('Jy/arcsec^2'), map_ref_global.tounit('Jy/arcsec^2'),
                   1e-10)
 
-def check_map_local(m, mask):
+def check_map_local(m):
     assert_all_eq(m.magnitude, map_ref_local.magnitude, 1e-10)
     assert_all_eq(m.coverage, map_ref_local.coverage, 1e-10)
-    assert_all_eq(mask, mask_ref_local)
     assert_all_eq(m.tounit('Jy/arcsec^2'), map_ref_local.tounit('Jy/arcsec^2'),
                   1e-10)
-
-def mask_pmatrix(pmatrix, tod):
-    if not isinstance(pmatrix, (list, tuple)):
-        pmatrix = (pmatrix,)
-    dest = 0
-    for p in pmatrix:
-        n = p.shape[-2]
-        p.value.T[...] *= 1 - tod[:,dest:dest+n].mask.T
-        dest += n
 
 obs1 = PacsObservation(data_dir + 'frames_blue.fits', reject_bad_line=False)
 obs1.pointing.chop = 0
@@ -64,45 +54,39 @@ tolocal = DistributionGlobalOperator(map_ref_global.shape,
 
 # non-distributed map, distributed TOD
 def test1():
-    comm_tod = MPI.COMM_WORLD
     comm_map = MPI.COMM_SELF
     for obs, tod in ((obs1, tod1), (obs2, tod2)):
-        pmatrix = obs.get_pointing_matrix(header=map_ref_global.header,
-                      downsampling=True, npixels_per_sample=6)
-        mask_pmatrix(pmatrix, tod)
-        proj = ProjectionOperator(pmatrix, commin=comm_map, commout=comm_tod)
+        proj = obs.get_projection_operator(downsampling=True,
+                   npixels_per_sample=6, header=map_ref_global.header,
+                   commin=comm_map)
+        proj.apply_mask(tod.mask)
         m = mapper_naive(tod, proj)
-        mask = proj.get_mask()
-        yield check_map_global, m, mask
+        yield check_map_global, m
+        assert_all_eq(proj.get_mask(), mask_ref_global)
 
 # non-distributed map, packed projection, distributed TOD
 def test2():
-    comm_tod = MPI.COMM_WORLD
     comm_map = MPI.COMM_SELF
     for obs, tod in ((obs1, tod1), (obs2, tod2)):
-        pmatrix = obs.get_pointing_matrix(header=map_ref_global.header,
-                      downsampling=True, npixels_per_sample=6)
-        mask_pmatrix(pmatrix, tod)
-        proj = ProjectionOperator(pmatrix, commin=comm_map, commout=comm_tod,
-                                  packed=True)
+        proj = obs.get_projection_operator(downsampling=True,
+                   npixels_per_sample=6, header=map_ref_global.header,
+                   packed=True, commin=comm_map)
+        proj.apply_mask(tod.mask)
         m = mapper_naive(tod, proj)
-        mask = proj.get_mask()
-        yield check_map_global, m, mask
+        yield check_map_global, m
 
 # distributed map, distributed TOD
 def test3():
-    comm_tod = MPI.COMM_WORLD
     comm_map = MPI.COMM_WORLD
     for obs, tod in ((obs1, tod1), (obs2, tod2)):
-        pmatrix = obs.get_pointing_matrix(header=map_ref_local.header,
-                      downsampling=True, npixels_per_sample=6)
-        mask_pmatrix(pmatrix, tod)
-        proj = ProjectionOperator(pmatrix, commin=comm_map, commout=comm_tod)
+        proj = obs.get_projection_operator(downsampling=True,
+                   npixels_per_sample=6, header=map_ref_global.header,
+                   commin=comm_map)
+        proj.apply_mask(tod.mask)
         m = mapper_naive(tod, proj)
-        mask = proj.get_mask()
-        yield check_map_local, m, mask
+        yield check_map_local, m
 
-        if size <= 1:
+        if size == 1:
             continue
 
         mlocal = m
@@ -117,14 +101,11 @@ def test3():
 
 # same map for all processors and distributed as local maps, distributed TOD
 def test4():
-    comm_tod = MPI.COMM_WORLD
-    comm_map = MPI.COMM_SELF
     for obs, tod in ((obs1, tod1), (obs2, tod2)):
-        pmatrix = obs.get_pointing_matrix(header=header_ref_local,
-                      downsampling=True, npixels_per_sample=6)
-        mask_pmatrix(pmatrix, tod)
-        proj = ProjectionOperator(pmatrix, commin=MPI.COMM_WORLD,
-                                  commout=comm_tod)
+        proj = obs.get_projection_operator(downsampling=True,
+                   npixels_per_sample=6, header=map_ref_local.header,
+                   commin=MPI.COMM_WORLD)
+        proj.apply_mask(tod.mask)
         model = proj * tolocal
         m = mapper_naive(tod, model)
-        yield check_map_global, m, tolocal.T((proj.get_mask()))
+        yield check_map_global, m

@@ -159,7 +159,7 @@ def pipeline_wrls(filenames, output_file, keywords, verbose=False):
     # median filtering
     tod = tm.filter_median(tod, **keywords["filter_median"])
     # define projector
-    projection = tm.ProjectionOperator(obs, **keywords["Projection"])
+    projection = obs.get_projection_operator(**keywords["Projection"])
     # build instrument model
     response = tm.ResponseTruncatedExponentialOperator(obs.pack(
                    obs.instrument.detector.time_constant) / 

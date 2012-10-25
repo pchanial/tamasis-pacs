@@ -4,7 +4,7 @@ import os
 import tamasis
 
 from pyoperators import DiagonalOperator
-from pysimulators import ProjectionOperator, Tod
+from pysimulators import Tod
 from tamasis import (MadMap1Observation, InvNttOperator, PackOperator,
                      mapper_naive, mapper_ls)
 from tamasis.utils import all_eq
@@ -18,7 +18,7 @@ obs = MadMap1Observation(path+'todSpirePsw_be', path+'invnttSpirePsw_be',
 obs.instrument.name = 'SPIRE/PSW'
 
 tod = obs.get_tod(unit='Jy/beam')
-projection = ProjectionOperator(obs)
+projection = obs.get_projection_operator()
 packing = PackOperator(obs.info.mapmask)
 
 model = projection*packing

@@ -3,7 +3,7 @@ import tamasis
 import pyoperators
 
 from pyoperators import MaskOperator
-from pysimulators import ProjectionOperator, Map
+from pysimulators import Map
 from scipy.sparse.linalg import cgs
 from tamasis import PacsInstrument, PacsObservation, mapper_rls
 from tamasis.utils import all_eq
@@ -23,8 +23,8 @@ obs = PacsObservation(filename=data_dir+'frames_blue.fits',
 obs.pointing.chop[:] = 0
 tod = obs.get_tod(subtraction_mean=True)
 
-projection  = ProjectionOperator(obs, resolution=3.2, downsampling=True,
-                                 npixels_per_sample=6)
+projection  = obs.get_projection_operator(resolution=3.2, downsampling=True,
+                                          npixels_per_sample=6)
 masking_tod = MaskOperator(tod.mask)
 model = masking_tod * projection
 

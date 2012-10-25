@@ -22,9 +22,10 @@ obs = PacsObservation(frames_files,
 # 'downsampling=True' means that the acquisition model will not
 # sample at the instrument frequency of 40Hz, but at the compressed frequency
 # (10Hz for prime mode, 5Hz for parallel mode)
-projection = ProjectionOperator(obs, 
-                                downsampling=True,
-                                npixels_per_sample=6)
+projection = obs.get_projection_operator(
+                 downsampling=True,
+                 method='sharp',
+                 npixels_per_sample=5)
 
 # Read the Time Ordered Data: the signal and mask
 tod = obs.get_tod(flatfielding=True,

@@ -3,7 +3,6 @@ import pyoperators
 import os
 import scipy
 from pyoperators import DiagonalOperator, IdentityOperator, MaskOperator
-from pysimulators import ProjectionOperator
 from tamasis import (PacsObservation, CompressionAverageOperator,
                      UnpackOperator, mapper_ls, mapper_naive)
 
@@ -18,7 +17,7 @@ obs = PacsObservation(data_dir + 'frames_blue.fits', fine_sampling_factor=1,
 tod = obs.get_tod()
 
 telescope   = IdentityOperator()
-projection  = ProjectionOperator(obs, downsampling=True, npixels_per_sample=6)
+projection = obs.get_projection_operator(downsampling=True,npixels_per_sample=6)
 compression = CompressionAverageOperator(obs.slice.compression_factor)
 masking_tod = MaskOperator(tod.mask)
 masking_map = MaskOperator(projection.get_mask())

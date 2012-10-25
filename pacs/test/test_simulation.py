@@ -6,7 +6,7 @@ import tamasis
 
 from uuid import uuid1
 from pyoperators.utils.testing import assert_eq
-from pysimulators import ProjectionOperator, gaussian, create_fitsheader
+from pysimulators import gaussian, create_fitsheader
 from tamasis import PacsObservation, PacsSimulation, CompressionAverageOperator
 
 tamasis.var.verbose = False
@@ -27,7 +27,7 @@ def test1():
 
     # build the acquisition model
     model = CompressionAverageOperator(simul.slice.compression_factor) * \
-            ProjectionOperator(simul, header=header, npixels_per_sample=49)
+            simul.get_projection_operator(header=header, npixels_per_sample=49)
 
     # get the noiseless tod
     tod = model(mymap)

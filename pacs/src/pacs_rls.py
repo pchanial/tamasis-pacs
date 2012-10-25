@@ -142,7 +142,7 @@ def pipeline_rls(filenames, output_file, keywords, verbose=False):
     tod = obs.get_tod(**tod_keys)
     # define projector
     proj_keys = keywords.get("Projection", {})
-    projection = tm.ProjectionOperator(obs, **proj_keys)
+    projection = obs.get_projection_operator(**proj_keys)
     # define mask
     masking_tod  = tm.MaskOperator(tod.mask)
     # define full model

@@ -27,10 +27,10 @@ tod = obs.get_tod(flatfielding=True,
 # 'downsampling=True' means that the acquisition model will not
 # sample at the instrument frequency of 40Hz, but at the compressed frequency
 # (10Hz for prime mode, 5Hz for parallel mode)
-projection = ProjectionOperator(obs,
-                                method='sharp',
-                                downsampling=True,
-                                npixels_per_sample=6)
+projection = obs.get_projection_operator(
+                 downsampling=True,
+                 method='sharp',
+                 npixels_per_sample=5)
 
 # Remove low frequency drifts. The specified window length is the
 # number of samples used to compute the median (unlike HCSS, where
@@ -52,9 +52,10 @@ tod.save('tod_preprocessed.fits')
 # and H the acquisition model.
 # To take into account bad samples such as glitches, we solve
 # M y == M H x, M is the mask operator which sets bad samples values to 0
-projection = ProjectionOperator(obs,
-                                method='nearest',
-                                downsampling=True)
+projection = obs.get_projection_operator(
+                 downsampling=True,
+                 method='nearest',
+                 npixels_per_sample=5)
 masking = MaskOperator(tod.mask)
 model = masking * projection
 

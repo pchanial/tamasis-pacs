@@ -13,7 +13,7 @@ from . import tmf
 from pyoperators.utils import product
 from pyoperators.utils.mpi import MPI
 from pysimulators import PointingMatrix, Tod
-from tamasis.core import Instrument, Observation
+from tamasis.core import Instrument, Observation, ProjectionOperator
 from tamasis.mpiutils import gather_fitsheader_if_needed
 
 __all__ = [ 'MadMap1Observation' ]
@@ -158,6 +158,12 @@ class MadMap1Observation(Observation):
             pmatrix.ravel().view(np.int64))
         if status != 0: raise RuntimeError()
         return pmatrix
+
+    def get_projection_operator(self, method=None, commin=MPI.COMM_WORLD):
+        header = self.get_map_header()
+        pmatrix = self.get_pointing_matrix(header, method=method, comm=commin)
+        return ProjectionOperator(pmatrix, commin=commin,
+                                  commout=self.instrument.comm)
 
     def get_tod(self, unit=None):
         """
