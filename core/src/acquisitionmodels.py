@@ -5,7 +5,7 @@ import numpy as np
 
 from pyoperators import (BlockColumnOperator, BlockDiagonalOperator,
                          CompositionOperator, DiagonalOperator,
-                         DistributionIdentityOperator, IdentityOperator,
+                         MPIDistributionIdentityOperator, IdentityOperator,
                          Operator, MaskOperator, ZeroOperator)
 from pyoperators.decorators import (linear, orthogonal, real, square, symmetric,
                                     contiguous, inplace, separable)
@@ -32,7 +32,7 @@ except:
 __all__ = [
     'CompressionAverage', # obsolete
     'CompressionAverageOperator',
-    'DistributionLocalOperator',
+    'MPIDistributionLocalOperator',
     'DdTdd', # Obsolete
     'DdTddOperator',
     'DiscreteDifference', # obsolete
@@ -287,11 +287,11 @@ def ProjectionOperator(input, method=None, header=None, resolution=None,
         y[i] = sum(P.matrix[i,:].value * x[P.matrix[i,:].index])
 
     If the input is not MPI-distributed unlike the output, the projection
-    operator is automatically multiplied by the operator DistributionIdentity-
-    Operator, to enable MPI reductions.
+    operator is automatically multiplied by the operator MPIDistributionIdenti-
+    tyOperator, to enable MPI reductions.
 
     If the input is MPI-distributed, this operator is automatically packed (see
-    below) and multiplied by the operator DistributionLocalOperator, which
+    below) and multiplied by the operator MPIDistributionLocalOperator, which
     takes the local input as argument.
 
     Arguments
@@ -449,8 +449,8 @@ def ProjectionOperator(input, method=None, header=None, resolution=None,
             return out
         if ismapdistributed:
             header = scatter_fitsheader(header_global, comm=commin)
-            result *= DistributionLocalOperator(mask_global, commin=commin,
-                                                attrin={'header':header})
+            result *= MPIDistributionLocalOperator(mask_global, commin=commin,
+                                                   attrin={'header':header})
         elif packed:
             result *= PackOperator(mask)
         result.get_mask = get_mask.__get__(result)
@@ -460,7 +460,7 @@ def ProjectionOperator(input, method=None, header=None, resolution=None,
             out = self.operands[0].get_mask(out=out)
             commout.Allreduce(MPI.IN_PLACE, [out, MPI.BYTE], op=MPI.BAND)
             return out        
-        result *= DistributionIdentityOperator(commout=commout)
+        result *= MPIDistributionIdentityOperator(commout=commout)
         result.get_mask = get_mask.__get__(result)
 
     def not_implemented(out=None):
@@ -574,7 +574,7 @@ class DdTddOperator(Operator):
 
 @real
 @linear
-class DistributionLocalOperator(Operator):
+class MPIDistributionLocalOperator(Operator):
     """
     Scatter a distributed map to different MPI processes under the control of a
     local non-distributed mask.
