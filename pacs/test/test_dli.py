@@ -29,7 +29,7 @@ prior = BlockColumnOperator([DiscreteDifferenceOperator(axis, shapein=(103,97)) 
 stop_condition = StopCondition(maxiter=2)
 dli = DoubleLoopAlgorithm(model, tod, prior, stop_condition=stop_condition, lanczos={'maxiter':5}, fmin_args={'maxiter':2})
 
-#map_dli = dli()
+map_dli = dli.run()
 
 def test():
     pass
