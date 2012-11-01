@@ -2,7 +2,7 @@ import numpy as np
 import os
 import tamasis
 
-from pyoperators import DistributionGlobalOperator
+from pyoperators import MPIDistributionGlobalOperator
 from pyoperators.utils.mpi import MPI, distribute_slice
 from pysimulators import Map
 from tamasis import (PacsInstrument, PacsObservation, UnpackOperator,
@@ -49,8 +49,8 @@ obs2 = PacsObservation([data_dir + 'frames_blue.fits[1:176]',
 obs2.pointing.chop = 0
 tod2 = obs2.get_tod()
 
-tolocal = DistributionGlobalOperator(map_ref_global.shape,
-                                     attrin={'header':header_ref_global})
+tolocal = MPIDistributionGlobalOperator(map_ref_global.shape,
+                                        attrin={'header':header_ref_global})
 
 # non-distributed map, distributed TOD
 def test1():

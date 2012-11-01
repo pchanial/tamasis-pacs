@@ -1,7 +1,7 @@
 import os
 import tamasis
 
-from pyoperators import DistributionGlobalOperator, MaskOperator
+from pyoperators import MaskOperator, MPIDistributionGlobalOperator
 from pyoperators.utils.mpi import MPI
 from tamasis import PacsObservation, create_fitsheader, mapper_rls
 from tamasis.utils import assert_all_eq
@@ -35,8 +35,8 @@ map_ref_global = mapper_rls(tod_ref, model_ref, tol=tol, maxiter=maxiter,
 header_ref_global = map_ref_global.header
 cov_ref_global = map_ref_global.coverage
 mask_ref_global = map_ref_global.coverage == 0
-tolocal = DistributionGlobalOperator(map_ref_global.shape,
-                                     attrin={'header':header_ref_global})
+tolocal = MPIDistributionGlobalOperator(map_ref_global.shape,
+                                        attrin={'header':header_ref_global})
 map_ref_local = tolocal(map_ref_global)
 cov_ref_local = tolocal(map_ref_global.coverage)
 mask_ref_local = tolocal(mask_ref_global)
