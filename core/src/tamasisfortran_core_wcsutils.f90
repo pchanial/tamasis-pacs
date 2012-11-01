@@ -62,10 +62,10 @@ contains
 
     subroutine coordinate_boundary_inplace(input, boundary, ndims, ncoords)
         !f2py threadsafe
+        integer*8              :: ncoords
         real(p), intent(inout) :: input(ndims, ncoords)
         real(p), intent(in)    :: boundary(ndims, 2)
         integer                :: ndims
-        integer*8              :: ncoords
 
         integer*8 :: i, j
 
@@ -81,11 +81,11 @@ contains
 
     subroutine coordinate_boundary_outplace(input, output, boundary, ndims, ncoords)
         !f2py threadsafe
+        integer*8            :: ncoords
         real(p), intent(in)  :: input(ndims, ncoords)
         real(p), intent(out) :: output(ndims, ncoords)
         real(p), intent(in)  :: boundary(ndims, 2)
         integer              :: ndims
-        integer*8            :: ncoords
 
         integer*8 :: i, j
 
