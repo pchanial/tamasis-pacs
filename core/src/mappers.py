@@ -218,7 +218,7 @@ def mapper_rls(y, H, invntt=None, unpacking=None, hyper=1.0, x0=None,
     comms = [comm_tod] + npriors * [comm_map]
 
     def criter(x):
-        rs = [H_*x - tod.view(np.ndarray).ravel()] + [p*x for p in priors]
+        rs = [H_.matvec(x) - tod.view(np.ndarray).ravel()] + [p.matvec(x) for p in priors]
         Js = [h * n(r,comm=c) for h, n, r, c in zip(hc, norms, rs, comms)]
         return Js
 

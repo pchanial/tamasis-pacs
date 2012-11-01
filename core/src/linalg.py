@@ -309,12 +309,12 @@ class norm2_ellipsoid(Function):
             
             if outwork is not None:
                 if len(outwork) == 0:
-                    outwork.append(self.A * x)
+                    outwork.append(self.A.matvec(x))
                 else:
-                    outwork[0][...] = self.A * x
+                    outwork[0][...] = self.A.matvec(x)
                 Ax = outwork[0]
             else:
-                Ax = self.A * x
+                Ax = self.A.matvec(x)
             out.flat = dot(x, Ax, comm=comm)
             return float(out)
         def df(x, out=None, inwork=None, outwork=None, comm=None):
@@ -323,7 +323,7 @@ class norm2_ellipsoid(Function):
             if inwork is not None:
                 Ax = inwork[0]
             else:
-                Ax = self.A * x
+                Ax = self.A.matvec(x)
             if out is not None:
                 out[:] = 2 * Ax
                 return out
