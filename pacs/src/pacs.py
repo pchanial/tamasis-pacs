@@ -189,7 +189,7 @@ class PacsInstrument(Instrument):
     get_valid_detectors.__doc__ = Instrument.get_valid_detectors.__doc__
 
     def get_centers(self):
-        return self.detector.centers.copy()
+        return self.detector.center.copy()
 
     def get_vertices(self):
         return self.detector.corner.copy()
