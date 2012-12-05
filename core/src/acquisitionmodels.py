@@ -26,8 +26,10 @@ try:
     import fftw3
     MAX_FFTW_NUM_THREADS = 1 if fftw3.planning.lib_threads is None \
         else openmp_num_threads()
-except:
+except ImportError:
     print('Warning: Library PyFFTW3 is not installed.')
+except:
+    print('Warning: Problem loading PyFFTW3.')
 
 __all__ = [
     'CompressionAverage', # obsolete
