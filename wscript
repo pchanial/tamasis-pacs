@@ -30,7 +30,7 @@ libraries = ['CFITSIO', 'FFTW3', 'OPENMP']
 required_modules = ['numpy>=1.6',
                     'scipy>=0.9',
                     'pyoperators>=0.7',
-                    'pysimulators>=0.2',
+                    'pysimulators>=0.3',
                     'matplotlib',
                     'fftw3',
                     'pyfits>=3.0',
