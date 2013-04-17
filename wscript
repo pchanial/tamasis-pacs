@@ -34,7 +34,6 @@ required_modules = ['numpy>=1.6',
                     'matplotlib',
                     'fftw3',
                     'pyfits>=3.0',
-                    'kapteyn',
                     'numexpr>=2.0']
 
 
