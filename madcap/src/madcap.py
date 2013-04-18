@@ -4,9 +4,9 @@
 
 from __future__ import division
 
+import astropy.io.fits as pyfits
 import gc
 import numpy as np
-import pyfits
 import re
 
 from . import tmf

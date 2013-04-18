@@ -1,5 +1,5 @@
+import astropy.io.fits as pyfits
 import numpy as np
-import pyfits
 import os
 import tamasis
 

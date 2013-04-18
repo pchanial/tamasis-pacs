@@ -3,9 +3,9 @@
 #
 from __future__ import division
 
+import astropy.io.fits as pyfits
 import numpy as np
 import os
-import pyfits
 import sys
 
 from pyoperators.utils import openmp_num_threads, product, strshape
