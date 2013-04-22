@@ -1760,8 +1760,6 @@ def _hcss_fits_keyword(header, keyword, *args):
     if len(args) > 1:
         raise ValueError('Invalid number of arguments.')
     for k in header.keys():
-        # XXX Hack around https://github.com/spacetelescope/PyFITS/issues/6
-        k = k.lstrip()
         if not k.startswith('key.'):
             continue
         if header[k] == keyword:
@@ -1894,8 +1892,7 @@ def _write_status(obs, filename, fitskw=None):
     status.CHOPFPUANGLE = obs.pointing.chop[v]
     hdu = pyfits.BinTableHDU(status, None, name='STATUS')
     fits.append(hdu)
-    # XXX Hack around https://github.com/spacetelescope/PyFITS/issues/7
-    fits.writeto(filename, clobber=True, output_verify='ignore')
+    fits.writeto(filename, clobber=True)
 
 
 #-------------------------------------------------------------------------------
